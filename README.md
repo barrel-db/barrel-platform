@@ -7,22 +7,22 @@ Apache CouchDB 1.3.
 
 ## Features
 
-- compatible with the COUCHDB HTTP Api
+- compatible with the CouchDB HTTP API
 - **view changes**: Get changes and replicate from a view index of your database
 - optimised for mobile usage
 - easily extendable for your own needs
-- Fully opensource. All the sources are on refuge GIT repository
-  (http://github.com/refuge) under Apache License 2.
+- Fully opensource. All the sources are on barrel GIT repository
+  (http://github.com/barrel) under the Apache License, Version 2.0.
 
 
 ## BARREL Project Goals
 
-Barrel is an effort to maintain the COUCHDB HTTP API along with modern features
+Barrel is an effort to maintain the CouchDB HTTP API along with modern features
 such as the view changes based replication, full Erlang OTP support, a revised
-storage, P2P distribution... Underpinning, all this work is efficient for
+storage, P2P distribution... Underpinning, all this work is efficiency for
 small and large data systems -- something rare among database systems.
 
-Barrel must also be able to work in unreliable conditions were sometimes the
+Barrel must also be able to work in unreliable conditions where sometimes the
 quorum can't be achieved (because it is working offline or in other
 condtions).
 
@@ -32,7 +32,7 @@ possible to make these radical changes as part of an incremental process.
 
 
 
-main BARREL website is http://barrel-db.org
+The main BARREL website is http://barrel-db.org
 
 ## Requirements
 
@@ -49,9 +49,9 @@ Installation is pretty simple. Just run the command line:
 
     $ make rel
 
-and it will generate an rcouch release in `_build/prod/rel/barrel`. 
+and it will generate an barrel release in `_build/prod/rel/barrel`. 
 
-To Builds a compressed tar archive of release built of project, run the
+To build a compressed tar archive of a release build of project, run the
 following command line:
 
     $ make tar
@@ -63,15 +63,15 @@ root). Running Erlang as root is not recommended so some configuration
 will need to be done so that rcouch can bind port 80.
 
 If you run a recent Linux kernel with capabilities you can give Erlang
-the privilege using the setcap command (you may need to install a
-package named lxc or similar to obtain this command).
+the necessary privilege using the setcap command (you may need to install a
+package named lxc, libcap2-bin or similar to obtain this command).
 
     $ setcap 'cap_net_bind_service=+ep' /path/to/rel/refuge/erts-5.8.5/bin/beam`
     $ setcap 'cap_net_bind_service=+ep' /path/to/rel/refuge/erts-5.8.5/bin/beam.smp
 
 On FreeBSD all ports can be made accessible to all users by issuing:
 
-$ sysctl net.inet.ip.portrange.reservedhigh=0
+    $ sysctl net.inet.ip.portrange.reservedhigh=0
 
 
 ## Ownership and License
@@ -79,7 +79,7 @@ $ sysctl net.inet.ip.portrange.reservedhigh=0
 The contributors are listed in AUTHORS. This project uses the Apache License 2
 license, see LICENSE.
 
-rcouch uses the [C4.1 (Collective Code Construction
+Barrel uses the [C4.1 (Collective Code Construction
 Contract)](http://rfc.zeromq.org/spec:22) process for contributions.
 
 ## Development
