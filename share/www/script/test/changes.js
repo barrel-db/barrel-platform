@@ -425,9 +425,6 @@ couchTests.changes = function(debug) {
   T(resp.results.length === 1);
   T(resp.results[0].id === "blah");
 
-  var req = CouchDB.request("GET", '/test_suite_db/_changes?filter=_view&view=changes_filter/blah&key="test"');
-  TEquals(400, req.status, "should return 400 for when seq_indexed=false");
-
   // test filter on view function (map) with seq_indexed = true
   //
 
@@ -443,15 +440,6 @@ couchTests.changes = function(debug) {
   var resp = JSON.parse(req.responseText);
   T(resp.results.length === 1);
   T(resp.results[0].id === "blah");
-
-   var req = CouchDB.request("GET", "/test_suite_db/_changes?filter=_view&view=changes_seq_indexed/blah&use_index=no");
-  var resp = JSON.parse(req.responseText);
-  T(resp.results.length === 1);
-  T(resp.results[0].id === "blah");
-
-  var req = CouchDB.request("GET", '/test_suite_db/_changes?filter=_view&view=changes_seq_indexed/blah&key="test"&use_index=no');
-  TEquals(400, req.status, "should return 400 for when use_index=no");
-
 
   T(db.save({"_id":"blah2", "bop" : "plankton"}).ok);
 
@@ -514,7 +502,7 @@ couchTests.changes = function(debug) {
 
   // test with erlang filter function
   run_on_modified_server([{
-    section: "native_query_servers",
+    section: "query_servers",
     key: "erlang",
     value: "{couch_native_process, start_link, []}"
   }], function() {
