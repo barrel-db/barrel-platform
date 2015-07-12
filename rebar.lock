@@ -32,7 +32,7 @@
   1},
  {<<"jiffy">>,
   {git,"https://github.com/rcouch/jiffy.git",
-       {ref,"550cc7152b6aeeb563cabea5ce8d485f8f7f4e1f"}},
+       {ref,"0a2e56228dd66befc1d2ea70e7f65f8bfb5e44e3"}},
   1},
  {<<"ibrowse">>,
   {git,"https://github.com/rcouch/ibrowse",
@@ -80,5 +80,5 @@
   0},
  {<<"couch">>,
   {git,"https://github.com/rcouch/couch.git",
-       {ref,"cde9701754426a5f7db279445e6466e102dfb9e7"}},
+       {ref,"dd43981d66937cf51b5c563d1b7c834b6eb3b76f"}},
   0}].
