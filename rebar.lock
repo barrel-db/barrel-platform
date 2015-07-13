@@ -64,7 +64,7 @@
   0},
  {<<"couch_index">>,
   {git,"https://github.com/rcouch/couch_index.git",
-       {ref,"27d4d89b2d45d5b62cb8acbf052e2fe8400e3d89"}},
+       {ref,"44f04827f526ebc6d8c7a49482a813cf3d750ce5"}},
   0},
  {<<"couch_httpd">>,
   {git,"https://github.com/rcouch/couch_httpd.git",
