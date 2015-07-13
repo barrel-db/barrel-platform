@@ -442,7 +442,7 @@ couchTests.list_views = function(debug) {
   };
 
   run_on_modified_server([{
-    section: "native_query_servers",
+    section: "query_servers",
     key: "erlang",
     value: "{couch_native_process, start_link, []}"
   }], erlViewTest);
