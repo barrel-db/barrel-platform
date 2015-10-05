@@ -1,0 +1,18 @@
+{application, couch_dbupdates,
+ [
+  {description, ""},
+  {vsn, "1.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  lager,
+                  crypto,
+                  public_key,
+                  sasl,
+                  ssl,
+                  couch,
+                  couch_httpd
+                 ]},
+  {env, []}
+ ]}.

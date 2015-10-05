@@ -1,0 +1,12 @@
+{application, 'couch_changes',
+ [{description, "An OTP library"},
+  {vsn, "1.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib,
+    couch_httpd
+   ]},
+  {env,[]},
+  {modules, []}
+ ]}.
