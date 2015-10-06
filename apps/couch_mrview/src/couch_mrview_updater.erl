@@ -89,8 +89,8 @@ purge(_Db, PurgeSeq, PurgedIdRevs, State) ->
         {ok, SeqBtree2, KSeqBtree2} =
         case IsPurged of
             true ->
-                SToRem = dict:find(ViewId, SeqsToRemove, []),
-                KSToRem = dict:find(ViewId, KSeqsToRemove, []),
+                SToRem = couch_util:dict_find(ViewId, SeqsToRemove, []),
+                KSToRem = couch_util:dict_find(ViewId, KSeqsToRemove, []),
                 {ok, SBt} = couch_btree:add_remove(View#mrview.seq_btree, [],
                                                    SToRem),
                 {ok, KSBt} = couch_btree:add_remove(View#mrview.kseq_btree, [],
