@@ -221,7 +221,7 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq, GSeq},
     ReduceFun =
         fun(reduce, KVs) ->
             KVs2 = detuple_kvs(expand_dups(KVs, []), []),
-            KVs3 = [[K, V] || [K, {V, _Seq}] <- KVs2, V /= removed],
+            KVs3 = [[K, V] || [K, V] <- KVs2, V /= removed],
             {ok, Result} = couch_query_servers:reduce(Lang, FunSrcs, KVs3),
             {length(KVs3), Result};
         (rereduce, Reds) ->
@@ -373,7 +373,7 @@ fold_reduce({NthRed, Lang, View}, Fun,  Acc, Options) ->
     ReduceFun = fun
         (reduce, KVs0) ->
             KVs1 = detuple_kvs(expand_dups(KVs0, []), []),
-            KVs2 = [[K, V] || [K, {V, _Seq}] <- KVs1, V /= removed],
+            KVs2 = [[K, V] || [K, V] <- KVs1, V /= removed],
             {ok, Red} = couch_query_servers:reduce(Lang, [FunSrc], KVs2),
             {0, LPad ++ Red ++ RPad};
         (rereduce, Reds) ->
