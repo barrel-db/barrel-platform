@@ -41,41 +41,66 @@ remove(Hook, DbName, Module, Fun, Prio) ->
 
 
 run(Hook, Args) ->
-    lists:foreach(fun({M, F}) ->
-                          erlang:apply(M, F, Args)
-                  end, ets:select(?HOOKS, [{{{{g, '$1'}, '_', '_'}, $2},
-                                            [{'==', '$1', Hook}],
-                                            ['$2']}])).
+    couch_log:info("call hook~p with args~p~n",[Hook, Args]),
+    Hooks = ets:select(?HOOKS, [{{{{g, '$1'}, '_', '_'}, '$2'},
+                       [{'==', '$1', Hook}], ['$2']}]),
+    run1(Hooks, Args, Hook).
 
 run(Hook, DbName, Args) ->
-    lists:foreach(fun({M, F}) ->
-                          erlang:apply(M, F, Args)
-                  end, ets:select(?HOOKS,
-                                  [{{{{db, '$1', '$2'}, '_', '_'}, '$3'},
+    Hooks = ets:select(?HOOKS, [{{{{db, '$1', '$2'}, '_', '_'}, '$3'},
                                     [{'==', '$1', Hook},
                                      {'orelse',
                                       {'==', '$2', DbName},
                                       {'==', '$2', all}}],
-                                    ['$3']}])).
+                                    ['$3']}]),
+    run1(Hooks, Args, Hook).
 
+
+
+
+run1([], _Args, _Hook) ->
+    ok;
+run1([{M, F} | Rest], Args, Hook) ->
+    Ret = (catch apply(M, F, Args)),
+    case Ret of
+        {'EXIT', Reason} ->
+            couch_log:error("~p~nrunning hook ~p~n", [Reason, Hook]),
+            run1(Rest, Args, Hook);
+        stop ->
+            ok;
+        _ ->
+            run1(Rest, Args, Hook)
+    end.
 
 run_fold(Hook, Args, Acc) ->
-    lists:foreach(fun({M, F}, Acc1) ->
-                          erlang:apply(M, F, Args ++ [Acc1])
-                  end, Acc, ets:select(?HOOKS, [{{{{g, '$1'}, '_', '_'}, $2},
-                                            [{'==', '$1', Hook}],
-                                            ['$2']}])).
+    Hooks = ets:select(?HOOKS, [{{{{g, '$1'}, '_', '_'}, '$2'},
+                       [{'==', '$1', Hook}], ['$2']}]),
+    run_fold1(Hooks, Args, Hook, Acc).
 
 run_fold(Hook, DbName, Args, Acc) ->
-    lists:foreach(fun({M, F}, Acc1) ->
-                          erlang:apply(M, F, Args ++ [Acc1])
-                  end, Acc, ets:select(?HOOKS,
-                                       [{{{{db, '$1', '$2'}, '_', '_'}, '$3'},
-                                         [{'==', '$1', Hook},
-                                          {'orelse',
-                                           {'==', '$2', DbName},
-                                           {'==', '$2', all}}],
-                                         ['$3']}])).
+    Hooks = ets:select(?HOOKS, [{{{{db, '$1', '$2'}, '_', '_'}, '$3'},
+                                    [{'==', '$1', Hook},
+                                     {'orelse',
+                                      {'==', '$2', DbName},
+                                      {'==', '$2', all}}],
+                                    ['$3']}]),
+    run_fold1(Hooks, Args, Hook, Acc).
+
+run_fold1([], _Args, _Hook, Acc) ->
+    Acc;
+run_fold1([{M, F} | Rest], Args, Hook, Acc) ->
+    Ret = (catch apply(M, F, Args ++ [Acc])),
+    case Ret of
+        {'EXIT', Reason} ->
+            couch_log:error("~p~nrunning hook ~p~n", [Reason, Hook]),
+            run_fold1(Rest, Args, Hook, Ret);
+        stop ->
+            Acc;
+        {stop, NewAcc} ->
+            NewAcc;
+        _ ->
+            run_fold1(Rest, Args, Hook, Ret)
+    end.
 
 
 init_hooks() ->
