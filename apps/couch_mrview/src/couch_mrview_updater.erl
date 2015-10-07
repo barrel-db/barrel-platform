@@ -274,7 +274,7 @@ insert_results(DocId, Seq, Rev, [KVs | RKVs], [{Id, VKVs} | RVKVs], VKVAcc,
             {[{Key, {dups, [{Val, GroupSeq3} | Vals]}} | Rest], IdKeys, GroupSeq3};
         ({Key, Val1}, {[{Key, Val2} | Rest], IdKeys, GroupSeq1}) ->
             GroupSeq3 = GroupSeq1 + 2,
-            Dups = [{Val1, GroupSeq1 +1}, {Val2, GroupSeq3}],
+            Dups = [{Val1, GroupSeq3}, Val2],
             {[{Key, {dups, Dups}} | Rest], IdKeys, GroupSeq3};
         ({Key, Value}, {Rest, IdKeys, GroupSeq1}) ->
             GroupSeq3 = GroupSeq1 + 1,

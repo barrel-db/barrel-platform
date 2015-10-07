@@ -764,10 +764,10 @@ detuple_kvs([KV | Rest], Acc) ->
 expand_dups([], Acc) ->
     lists:reverse(Acc);
 expand_dups([{Key, {dups, Vals}} | Rest], Acc) ->
-    Expanded = [{Key, Val} || Val <- Vals],
+    Expanded = [{Key, Val} || {Val, _Seq} <- Vals],
     expand_dups(Rest, Expanded ++ Acc);
-expand_dups([KV | Rest], Acc) ->
-    expand_dups(Rest, [KV | Acc]).
+expand_dups([{K, {V, _Seq}}=KV| Rest], Acc) ->
+    expand_dups(Rest, [{K, V} | Acc]).
 
 
 changes_expand([], _Type, Acc) ->

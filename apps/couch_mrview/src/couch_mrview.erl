@@ -340,7 +340,7 @@ map_fold(_KV, _Offset, #mracc{limit=0}=Acc) ->
     {stop, Acc};
 map_fold({{_Key, _Id}, {removed, _Seq}}, _Offset, Acc) ->
     {ok, Acc#mracc{last_go=ok}};
-map_fold({{Key, Id}, Val0}, _Offset, Acc) ->
+map_fold({{Key, Id}, Val}, _Offset, Acc) ->
     #mracc{
         db=Db,
         limit=Limit,
@@ -349,11 +349,6 @@ map_fold({{Key, Id}, Val0}, _Offset, Acc) ->
         user_acc=UAcc0,
         args=Args
     } = Acc,
-    Val = case Val0 of
-              {Val1, _Seq} -> Val1;
-              _ -> Val0
-          end,
-
     Doc = case DI of
         #doc_info{} -> couch_mrview_util:maybe_load_doc(Db, DI, Args);
         _ -> couch_mrview_util:maybe_load_doc(Db, Id, Val, Args)
