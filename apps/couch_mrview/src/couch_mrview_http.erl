@@ -311,15 +311,23 @@ view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
     couch_httpd:send_chunk(Resp, Chunk),
     {ok, Acc#vacc{resp=Resp, prepend=""}};
 view_cb({row, Row}, #vacc{resp=undefined}=Acc) ->
-    % Reduce function starting
-    Headers = [{"ETag", Acc#vacc.etag}],
-    {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
-    couch_httpd:send_chunk(Resp, ["{\"rows\":[\r\n", row_to_json(Row)]),
-    {ok, #vacc{resp=Resp, prepend=",\r\n"}};
+    case is_removed(Row) of
+        true -> {ok, Acc};
+        false ->
+            % Reduce function starting
+            Headers = [{"ETag", Acc#vacc.etag}],
+            {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
+            couch_httpd:send_chunk(Resp, ["{\"rows\":[\r\n", row_to_json(Row)]),
+            {ok, #vacc{resp=Resp, prepend=",\r\n"}}
+    end;
 view_cb({row, Row}, Acc) ->
-    % Adding another row
-    couch_httpd:send_chunk(Acc#vacc.resp, [Acc#vacc.prepend, row_to_json(Row)]),
-    {ok, Acc#vacc{prepend=",\r\n"}};
+    case is_removed(Row) of
+        true -> {ok, Acc};
+        false ->
+            % Adding another row
+            couch_httpd:send_chunk(Acc#vacc.resp, [Acc#vacc.prepend, row_to_json(Row)]),
+            {ok, Acc#vacc{prepend=",\r\n"}}
+    end;
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
     % Nothing in view
     {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
@@ -336,6 +344,9 @@ view_cb(complete, #vacc{resp=Resp}=Acc) ->
         _ ->
             {ok, Acc#vacc{resp=Resp, prepend=",\r\n"}}
     end.
+
+is_removed(Row) ->
+    proplists:get_value(value, Row) =:= removed.
 
 row_to_json(Row) ->
     Id = couch_util:get_value(id, Row),
