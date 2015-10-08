@@ -304,7 +304,18 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
                                                                       RemKVs]),
         ToAdd = KVs ++ RemKVs,
         {ToFind, SKVs, KSKVs, Seqs} =
-        lists:foldl(fun({{Key, DocId}=K, {Val, Seq}},{Keys1, SKVs1, KSKVs1, Seqs1}) ->
+        lists:foldl(fun
+            ({{Key, DocId}=K, {dups, Vals}}, {Keys1, SKVs1, KSKVs1, Seqs1}) ->
+                            lists:foldl(fun({Val, Seq}, {Keys3, SKVs3, KSKVs3, Seqs3}) ->
+                                                SRow = {Seq, {Val, Key, DocId}},
+                                                KSRow = {{Key, Seq}, {Val, DocId}},
+                                                SKVs2 = [SRow | SKVs3],
+                                                KSKVs2 = [KSRow | KSKVs3],
+                                                Keys2 = [K | Keys3],
+                                                Seqs2 = [Seq | Seqs3],
+                                                {Keys2, SKVs2, KSKVs2, Seqs2}
+                                    end, {Keys1, SKVs1, KSKVs1, Seqs1}, Vals);
+            ({{Key, DocId}=K, {Val, Seq}}, {Keys1, SKVs1, KSKVs1, Seqs1}) ->
                             SRow = {Seq, {Val, Key, DocId}},
                             KSRow = {{Key, Seq}, {Val, DocId}},
                             SKVs2 = [SRow | SKVs1],

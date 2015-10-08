@@ -491,8 +491,16 @@ view_changes_enumerator({{Seq, _Key, DocId}, Val}, Acc) ->
     case couch_db:get_doc_info(Db, DocId) of
         {ok, DocInfo} when Val /= removed ->
            changes_enumerator(DocInfo, Acc, Seq);
-        {ok, _DocInfo} ->
-            {ok, Acc};
+        {ok, DocInfo} ->
+            #doc_info{revs=[#rev_info{deleted= Del}=RevInfo | Rest]} = DocInfo,
+            case Del of
+                true -> 
+                    changes_enumerator(DocInfo, Acc, Seq);
+                _ -> 
+                    RevInfo2 = RevInfo#rev_info{deleted= removed},
+                    DocInfo2 = DocInfo#doc_info{revs = [RevInfo2 | Rest]},
+                    changes_enumerator(DocInfo2, Acc, Seq)
+            end;
         {error, not_found} ->
             {ok, Acc};
         not_found ->
@@ -593,6 +601,7 @@ changes_row(Results, DocInfo, Acc, Seq) ->
         end}.
 
 deleted_item(true) -> [{<<"deleted">>, true}];
+deleted_item(removed) -> [{<<"removed">>, true}];
 deleted_item(_) -> [].
 
 use_seq(Seq, nil) -> Seq;

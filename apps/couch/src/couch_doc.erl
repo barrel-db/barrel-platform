@@ -46,6 +46,9 @@ to_json_rev(Start, [FirstRevId|_]) ->
 
 to_json_body(true, {Body}) ->
     Body ++ [{<<"_deleted">>, true}];
+%% only for view changes
+to_json_body(removed, {Body}) ->
+    Body ++ [{<<"_removed">>, true}];
 to_json_body(false, {Body}) ->
     Body.
 
