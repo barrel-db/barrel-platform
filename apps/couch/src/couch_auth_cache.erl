@@ -201,7 +201,11 @@ handle_info({couch_event, db_updated, {_, Event}}=Ev, State) ->
                       true = ets:insert(?STATE, {auth_db, reopen_auth_db(AuthDb)})
               end),
             {noreply, State};
-        _Else   -> {noreply, State}
+        deleted ->
+            {noreply, reinit_cache(State)};
+        _Else   -> 
+            couch_log:info("got else ~p~n", [_Else]),
+            {noreply, State}
     end;
 
 handle_info(_Info, State) ->
