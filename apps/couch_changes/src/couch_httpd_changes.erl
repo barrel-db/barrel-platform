@@ -144,6 +144,8 @@ parse_changes_query(Req, Db) ->
             Args#changes_args{timeout=list_to_integer(Value)};
         {"include_docs", "true"} ->
             Args#changes_args{include_docs=true};
+        {"include_removed_docs", "true"} ->
+            Args#changes_args{include_removed_docs=false};
         {"attachments", "true"} ->
             Opts = Args#changes_args.doc_options,
             Args#changes_args{doc_options=[attachments|Opts]};

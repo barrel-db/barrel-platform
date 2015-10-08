@@ -9,6 +9,7 @@
     filter = "",
     filter_fun,
     filter_args = [],
+    include_removed_docs = true,
     include_docs = false,
     doc_options = [],
     conflicts = false,

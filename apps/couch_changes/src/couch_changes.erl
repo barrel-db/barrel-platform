@@ -31,6 +31,7 @@
     resp_type,
     limit,
     include_docs,
+    include_removed_docs = true,
     doc_options,
     conflicts,
     timeout,
@@ -305,6 +306,7 @@ start_sending_changes(Callback, UserAcc, ResponseType) ->
 build_acc(Args, Callback, UserAcc, Db, StartSeq, Prepend, Timeout, TimeoutFun) ->
     #changes_args{
         include_docs = IncludeDocs,
+        include_removed_docs = IncludeRemovedDocs,
         doc_options = DocOpts,
         conflicts = Conflicts,
         limit = Limit,
@@ -321,6 +323,7 @@ build_acc(Args, Callback, UserAcc, Db, StartSeq, Prepend, Timeout, TimeoutFun) -
         resp_type = ResponseType,
         limit = Limit,
         include_docs = IncludeDocs,
+        include_removed_docs = IncludeRemovedDocs,
         doc_options = DocOpts,
         conflicts = Conflicts,
         timeout = Timeout,
@@ -484,22 +487,23 @@ end_sending_changes(Callback, UserAcc, EndSeq, ResponseType) ->
     Callback({stop, EndSeq}, ResponseType, UserAcc).
 
 view_changes_enumerator({{Seq, _Key, DocId}, Val}, Acc) ->
-    #changes_acc{db = Db0} = Acc,
+    #changes_acc{db = Db0, include_removed_docs=IncludeRemovedDocs} = Acc,
     {ok, Db} = couch_db:reopen(Db0),
-
 
     case couch_db:get_doc_info(Db, DocId) of
         {ok, DocInfo} when Val /= removed ->
            changes_enumerator(DocInfo, Acc, Seq);
         {ok, DocInfo} ->
             #doc_info{revs=[#rev_info{deleted= Del}=RevInfo | Rest]} = DocInfo,
-            case Del of
-                true -> 
+            case {Del, IncludeRemovedDocs} of
+                {true, _} -> 
                     changes_enumerator(DocInfo, Acc, Seq);
-                _ -> 
+                {false, true} -> 
                     RevInfo2 = RevInfo#rev_info{deleted= removed},
                     DocInfo2 = DocInfo#doc_info{revs = [RevInfo2 | Rest]},
-                    changes_enumerator(DocInfo2, Acc, Seq)
+                    changes_enumerator(DocInfo2, Acc, Seq);
+                {false, false} ->
+                    {ok, Acc}
             end;
         {error, not_found} ->
             {ok, Acc};
@@ -683,7 +687,7 @@ parse_view_param1(ViewParam) ->
 parse_view_options([], _JsonReq, Acc) ->
     Acc;
 
-parse_view_options(Options, true, Acc) ->
+parse_view_options(Options, true, _Acc) ->
      %% get list of view attributes
     ViewFields0 = [couch_util:to_binary(F) || F <- record_info(fields,  mrargs)],
     ViewFields = [<<"key">> | ViewFields0],
@@ -744,6 +748,10 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
             [{group_level, couch_mrview_http:parse_pos_int(V)} | Acc];
         <<"inclusive_end">> ->
             [{inclusive_end, couch_mrview_http:parse_boolean(V)}];
+        <<"inclusive_docs">> ->
+            [{include_docs, couch_mrview_http:parse_boolean(V)}];
+        <<"inclusive_removed_docs">> ->
+            [{include_removed_docs, couch_mrview_http:parse_boolean(V)}];
         _ ->
             Acc
     end,
