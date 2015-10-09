@@ -420,6 +420,8 @@ changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
     {QArgs, Method, Body, Headers} = case DocIds of
     undefined ->
         QArgs1 = maybe_add_changes_filter_q_args(BaseQArgs, Options),
+
+
         {QArgs1, get, [], Headers1};
     _ when is_list(DocIds) ->
         Headers2 = [{"Content-Type", "application/json"} | Headers1],
@@ -492,7 +494,7 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         ViewFields = ["key" | ViewFields0],
 
         {Params} = get_value(query_params, Options, {[]}),
-        [{"filter", ?b2l(FilterName)} | lists:foldl(
+        QS = [{"filter", ?b2l(FilterName)} | lists:foldl(
             fun({K, V}, QSAcc) ->
                 Ks = couch_util:to_list(K),
                 case lists:keymember(Ks, 1, QSAcc) of
@@ -508,7 +510,14 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
                     [{Ks, couch_util:to_list(V)} | QSAcc]
                 end
             end,
-            BaseQS, Params)]
+            BaseQS, Params)],
+        %% when using a view vchanges feed we don't want to received removed documents
+        if
+            FilterName =:= <<"_view">> ->
+                [{"include_removed_docs", false} | QS];
+            true ->
+                QS
+        end
     end.
 
 parse_changes_feed(Options, UserFun, DataStreamFun) ->
