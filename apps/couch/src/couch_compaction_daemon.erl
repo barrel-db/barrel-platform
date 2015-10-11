@@ -137,15 +137,15 @@ maybe_compact_db(DbName, Config) ->
         true ->
             {ok, DbCompactPid} = couch_db:start_compact(Db),
             TimeLeft = compact_time_left(Config),
-            case Config#config.parallel_view_compact of
+            {ViewsCompactPid, ViewsMonRef} = case Config#config.parallel_view_compact of
             true ->
-                ViewsCompactPid = spawn_link(fun() ->
+                Pid = spawn_link(fun() ->
                     maybe_compact_views(DbName, DDocNames, Config)
                 end),
-                ViewsMonRef = erlang:monitor(process, ViewsCompactPid);
+                MRef = erlang:monitor(process, Pid),
+                {Pid, MRef};
             false ->
-                ViewsCompactPid = nil,
-                ViewsMonRef = nil
+                {nil, nil}
             end,
             DbMonRef = erlang:monitor(process, DbCompactPid),
             receive
