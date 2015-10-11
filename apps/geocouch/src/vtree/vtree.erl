@@ -68,7 +68,7 @@ add_remove(Fd, Pos, TargetTreeHeight, AddKeyValues, KeysToRemove) ->
 %                {Mbr, #node{type=leaf}, Value}),
 %        {CurPos2, TreeHeight}
 %    end, {NewPos, 0}, AddKeyValues),
-    %{_Megaseconds,Seconds,_Microseconds} = erlang:now(),
+    %{_Megaseconds,Seconds,_Microseconds} = os:timestamp(),
 %    AddKeyValues2 = lists:foldl(fun({{Mbr, DocId}, Value}, Acc) ->
 %        [{Mbr, #node{type=leaf}, {DocId, Value}}|Acc]
 %    end, [], AddKeyValues),
