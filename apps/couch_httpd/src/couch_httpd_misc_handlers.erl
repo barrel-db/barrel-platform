@@ -93,7 +93,7 @@ handle_all_dbs_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
 
-all_dbs_fun(DbName, {Acc, Skip, 0}) ->
+all_dbs_fun(_DbName, {Acc, Skip, 0}) ->
     {stop, {Acc, Skip, 0}};
 all_dbs_fun(DbName, {Acc, 0, Limit}) ->
     {ok, {[DbName | Acc], 0, Limit - 1}};

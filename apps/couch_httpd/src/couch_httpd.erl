@@ -209,8 +209,6 @@ handle_request_int(MochiReq, DefaultFun,
     RawUri = MochiReq:get(raw_path),
     {"/" ++ Path, _, _} = mochiweb_util:urlsplit_path(RawUri),
 
-    Headers = MochiReq:get(headers),
-
     % get requested path
     RequestedPath = case MochiReq:get_header_value("x-couchdb-vhost-path") of
         undefined ->
@@ -578,7 +576,7 @@ verify_is_server_admin(#user_ctx{roles=Roles}) ->
     false -> throw({unauthorized, <<"You are not a server admin.">>})
     end.
 
-log_request(#httpd{mochi_req=MochiReq,peer=Peer}=Req, Code) ->
+log_request(#httpd{mochi_req=MochiReq,peer=Peer}, Code) ->
     ?LOG_INFO("~s - - ~s ~s ~B", [
         Peer,
         MochiReq:get(method),
