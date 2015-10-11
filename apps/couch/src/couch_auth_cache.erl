@@ -189,7 +189,7 @@ handle_cast({cache_hit, UserName}, State) ->
     end,
     {noreply, State}.
 
-handle_info({couch_event, db_updated, {_, Event}}=Ev, State) ->
+handle_info({couch_event, db_updated, {_, Event}}, State) ->
     case Event of
         created ->
             catch erlang:demonitor(State#state.db_mon_ref, [flush]),
@@ -204,7 +204,6 @@ handle_info({couch_event, db_updated, {_, Event}}=Ev, State) ->
         deleted ->
             {noreply, reinit_cache(State)};
         _Else   -> 
-            couch_log:info("got else ~p~n", [_Else]),
             {noreply, State}
     end;
 

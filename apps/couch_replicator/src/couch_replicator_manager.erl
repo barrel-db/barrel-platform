@@ -548,7 +548,7 @@ update_rep_doc(RepDb, #doc{body = {RepDocBody}} = RepDoc, KVs) ->
 % RFC3339 timestamps.
 % Note: doesn't include the time seconds fraction (RFC3339 says it's optional).
 timestamp() ->
-    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(now()),
+    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(os:timestamp()),
     UTime = erlang:universaltime(),
     LocalTime = calendar:universal_time_to_local_time(UTime),
     DiffSecs = calendar:datetime_to_gregorian_seconds(LocalTime) -
