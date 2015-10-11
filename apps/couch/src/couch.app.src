@@ -15,8 +15,8 @@
 
 
 {application, couch, [
-    {description, "RCOUCH core based on Apache CouchDB"},
-    {vsn, "1.8.3"},
+    {description, "Barrel core based on Apache CouchDB"},
+    {vsn, "1.8.4"},
     {registered, [
         couch_config,
         couch_db_update,
