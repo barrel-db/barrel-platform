@@ -535,7 +535,7 @@ changes_json_req(_Db, "", _QueryParams, _Options) ->
     {[]};
 changes_json_req(_Db, "_doc_ids", _QueryParams, Options) ->
     {[{<<"doc_ids">>, get_value(doc_ids, Options)}]};
-changes_json_req(Db, FilterName, {QueryParams}, Options) ->
+changes_json_req(Db, FilterName, {QueryParams}, _Options) ->
     {ok, Info} = couch_db:get_db_info(Db),
     % simulate a request to db_name/_changes
     {[
