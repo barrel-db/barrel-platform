@@ -12,43 +12,34 @@
 
 -module(couch_index_api).
 
-get(Field, State) ->
-    ok.
+-include_lib("apps/couch/include/couch_db.hrl").
 
-init(Db, Ddoc) ->
-    ok.
+-type db() :: #db{}.
 
-open(Db, State) ->
-    ok.
+-callback get(Field::atom(), State::any()) -> ok | {error, term()}.
 
-close(State) ->
-    ok.
+-callback init(Db::db(), Ddoc::binary()) -> ok | {error, term()}.
 
-delete(State) ->
-    ok.
+-callback open(Db::db(), State::any()) -> ok | {error, term()}.
 
-reset(State) ->
-    ok.
+-callback close(State::any()) -> ok | {error, term()}.
 
+-callback delete(State::any()) -> ok | {error, term()}.
 
-start_update(State, PurgedState, NumChanges) ->
-    {ok, State}.
+-callback reset(State::any()) -> ok | {error, term()}.
 
-purge(Db, PurgeSeq, PurgedIdRevs, State) ->
-    ok.
+-callback start_update(State::any(), PurgedState::any(), NumChanges::integer()) 
+    -> {ok, State::any()} | {error, term()}.
 
-process_doc(Doc, Seq, State) ->
-    ok.
+-callback purge(Db::db(), PurgeSeq::integer(), PurgedIdRevs::[any()], State::any()) 
+    -> ok | {error, term()}.
 
-finish_update(State) ->
-    {ok, State}.
+-callback process_doc(Doc::{[]}, Seq::integer(), State::any()) -> ok | {error, term()}.
 
-commit(State) ->
-    ok.
+-callback finish_update(State::any()) -> {ok, State::any()} | {error, term()}.
 
+-callback commit(State::any()) -> ok | {error, term()}.
 
-compact(Parent, State, Opts) ->
-    ok.
+-callback compact(Parent::pid(), State::any(), Opts::list()) -> ok | {error, term()}.
 
-swap_compacted(OldState, NewState) ->
-    ok.
+-callback swap_compacted(OldState::any(), NewState::any()) -> ok | {error, term()}.
