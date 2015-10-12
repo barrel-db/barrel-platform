@@ -766,7 +766,7 @@ expand_dups([], Acc) ->
 expand_dups([{Key, {dups, Vals}} | Rest], Acc) ->
     Expanded = [{Key, Val} || {Val, _Seq} <- Vals],
     expand_dups(Rest, Expanded ++ Acc);
-expand_dups([{K, {V, _Seq}}=KV| Rest], Acc) ->
+expand_dups([{K, {V, _Seq}}| Rest], Acc) ->
     expand_dups(Rest, [{K, V} | Acc]).
 
 

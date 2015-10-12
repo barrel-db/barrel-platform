@@ -132,7 +132,7 @@ terminate_loop(State) ->
     ok.
 
 
-loop(#vst{notifier=Pid, since=Since, callback=Callback,
+loop(#vst{since=Since, callback=Callback,
           acc=Acc, timeout=Timeout, heartbeat=Heartbeat,
           stream=Stream}=State) ->
     receive
