@@ -17,7 +17,7 @@
 
 {application, couch_randomdoc, [
     {description, "couch random doc handler"},
-    {vsn, "1.0.1"},
+    {vsn, "1.0.2"},
     {modules, []},
     {applications, [kernel, stdlib, crypto, couch]}
 ]}.
