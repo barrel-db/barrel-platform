@@ -100,7 +100,6 @@ handle_changes(Args1, Req, Db0) ->
     true ->
         fun(CallbackAcc) ->
             {Callback, UserAcc} = get_callback_acc(CallbackAcc),
-            Self = self(),
 
             {Event, DDocId} = case FilterName of
                 "_view" ->
@@ -162,10 +161,10 @@ handle_changes(Args1, Req, Db0) ->
         end
     end.
 
-make_view_args(#httpd{method=Method}=Req) ->
+make_view_args(#httpd{}=Req) ->
     Query = couch_httpd:qs(Req),
     parse_view_options(Query, false, []);
-make_view_args({json_req, {Props}}=Req) ->
+make_view_args({json_req, {Props}}) ->
     {Query} = couch_util:get_value(<<"query">>, Props, {[]}),
     parse_view_options(Query, true, []).
 
@@ -183,7 +182,7 @@ make_filter_fun(FilterName, Style, Req, Db) ->
 
 
 no_filter_fun(Style) ->
-    fun(Db, #doc_info{revs=Revs}) ->
+    fun(_Db, #doc_info{revs=Revs}) ->
         builtin_results(Style, Revs)
     end.
 
