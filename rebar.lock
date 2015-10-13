@@ -32,7 +32,7 @@
   0},
  {<<"jiffy">>,
   {git,"https://github.com/barrel-db/jiffy.git",
-       {ref,"7e2b3a99795a665009b3eff15a42677e70e1c984"}},
+       {ref,"6b400290b18f25e6e97f1eaeac2b3506b35a79cc"}},
   0},
  {<<"ibrowse">>,
   {git,"https://github.com/rcouch/ibrowse",
