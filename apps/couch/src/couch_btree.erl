@@ -300,10 +300,9 @@ chunkify([InElement | RestInList], ChunkThreshold, OutList, OutListSize, OutputC
     end.
 
 modify_node(Bt, RootPointerInfo, Actions, QueryOutput) ->
-    {NodeType, NodeList} = case RootPointerInfo of
-    nil -> 
+    {NodeType, NodeList} = case RootPointerInfo of
+    nil ->
         {kv_node, []};
-
     _Tuple ->
         Pointer = element(1, RootPointerInfo),
         get_node(Bt, Pointer)
