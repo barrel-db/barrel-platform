@@ -1,0 +1,56 @@
+--- configure.in.orig	2012-06-13 21:24:15.000000000 +0200
++++ configure.in	2012-06-13 21:29:10.000000000 +0200
+@@ -1038,17 +1038,6 @@
+     dnl /usr/bin/g(cc|++)-$GCC_VERSION.
+     MOZ_PATH_PROGS(PBBUILD, pbbuild xcodebuild pbxbuild)
+ 
+-    case "$PBBUILD" in
+-      *xcodebuild*)
+-        changequote(,)
+-        XCODEBUILD_VERSION=`$PBBUILD -version 2>/dev/null | xargs | sed -e 's/.*DevToolsCore-\([0-9]*\).*/\1/'`
+-        changequote([,])
+-        if test -n "$XCODEBUILD_VERSION" && test "$XCODEBUILD_VERSION" -ge 620 ; then
+-          HAS_XCODE_2_1=1;
+-        fi
+-      ;;
+-    esac
+-
+     dnl sdp was formerly in /Developer/Tools.  As of Mac OS X 10.4 (Darwin 8),
+     dnl it has moved into /usr/bin.
+     MOZ_PATH_PROG(SDP, sdp, :, [$PATH:/usr/bin:/Developer/Tools])
+@@ -1056,8 +1045,6 @@
+ esac
+ 
+ AC_SUBST(GCC_VERSION)
+-AC_SUBST(XCODEBUILD_VERSION)
+-AC_SUBST(HAS_XCODE_2_1)
+ 
+ dnl The universal machinery sets UNIVERSAL_BINARY to inform packager.mk
+ dnl that a universal binary is being produced.
+@@ -4656,6 +4643,12 @@
+ 
+ dnl Setup default CPU arch for arm target
+ case "$target_cpu" in
++  armv5*)
++    MOZ_ARM_ARCH=armv5
++  ;;
++  armv6*)
++    MOZ_ARM_ARCH=armv6
++  ;;
+   arm*)
+     MOZ_ARM_ARCH=armv7
+   ;;
+@@ -4716,6 +4709,13 @@
+   esac
+ else
+   case "$target_cpu" in
++    armv6*)
++      if test "$GNU_CC"; then
++        CFLAGS="$CFLAGS -march=armv6j -mthumb-interwork -msoft-float"
++        CXXFLAGS="$CXXFLAGS -march=armv6j -mthumb-interwork -msoft-float"
++        ASFLAGS="$ASFLAGS -march=armv6j -mthumb-interwork -msoft-float"
++      fi
++      ;;
+     arm*)
+       if test "$GNU_CC"; then
+         CFLAGS="$CFLAGS -march=armv5te -mthumb-interwork -msoft-float"

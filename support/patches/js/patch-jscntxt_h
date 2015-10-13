@@ -1,0 +1,10 @@
+--- jscntxt.h.orig	2011-10-08 12:18:14.000000000 +0200
++++ jscntxt.h	2011-10-08 12:18:18.000000000 +0200
+@@ -44,6 +44,7 @@
+  * JS execution context.
+  */
+ #include <string.h>
++#include <sys/types.h>
+ 
+ /* Gross special case for Gecko, which defines malloc/calloc/free. */
+ #ifdef mozilla_mozalloc_macro_wrappers_h

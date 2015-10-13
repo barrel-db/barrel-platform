@@ -51,6 +51,13 @@ Installation is pretty simple. Just run the command line:
 
 and it will generate an barrel release in `_build/prod/rel/barrel`. 
 
+> to build with an embedded version of spidermonkey and not rely on system dependencies that are sometimes missing or are badly installed, run the following command line:
+
+    $ JS_COMPILE=static make rel
+
+> also you can ovveride the makefile variables `JSCFLAGS` and `JSLIBS` to link to a custom installation of spidermonkey.
+
+
 To build a compressed tar archive of a release build of project, run the
 following command line:
 
@@ -93,8 +100,8 @@ Under C4.1 process, you are more than welcome to help us by:
 * the repository and have your own fixes send us pull requests and even
 * star this project ^_^
 
-To  run the test suite:
+To build a development release, run the following command
 
 ```
-    $ make test
+    $ make devrel
 ```

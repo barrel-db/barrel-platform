@@ -17,3 +17,5 @@ _plugins
 _tdeps
 logs
 _build
+.libs
+.dists
