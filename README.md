@@ -52,9 +52,9 @@ Installation is pretty simple. Just run the command line:
 and it will generate an barrel release in `_build/prod/rel/barrel`. 
 
 > to build with an embedded version of spidermonkey and not rely on system dependencies that are sometimes missing or are badly installed, run the following command line:
-
-    $ JS_COMPILE=static make rel
-
+>
+>    $ JS_COMPILE=static make rel
+>
 > also you can ovveride the makefile variables `JSCFLAGS` and `JSLIBS` to link to a custom installation of spidermonkey.
 
 
