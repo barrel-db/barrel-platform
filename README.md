@@ -55,7 +55,7 @@ and it will generate an barrel release in `_build/prod/rel/barrel`.
 >
 >    $ JS_COMPILE=static make rel
 >
-> also you can ovveride the makefile variables `JSCFLAGS` and `JSLIBS` to link to a custom installation of spidermonkey.
+> also you can override the makefile variables `JSCFLAGS` and `JSLIBS` to link to a custom installation of spidermonkey.
 
 
 To build a compressed tar archive of a release build of project, run the
