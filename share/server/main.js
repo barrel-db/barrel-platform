@@ -1413,6 +1413,27 @@ var Views = (function() {
 // WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 // License for the specific language governing permissions and limitations under
 // the License.
+//
+// Copyright 2015 (c) Benoît Chesneau
+
+Script = {
+
+	run: function(source, ddoc, args) {
+		var fun = Couch.compileFunction(source, ddoc, "rewrite");
+		Res = fun.apply(ddoc, args),
+		respond(Res);
+	}
+};// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License. You may obtain a copy of
+// the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+// License for the specific language governing permissions and limitations under
+// the License.
 
 var sandbox = null;
 var filter_sandbox = null;
@@ -1467,7 +1488,8 @@ var DDoc = (function() {
     "views"     : Filter.filter_view,
     "updates"  : Render.update,
     "validate_doc_update" : Validate.validate,
-    "validate_doc_read" : Validate.validate
+    "validate_doc_read" : Validate.validate,
+    "run": Script.run
   };
   var ddocs = {};
   return {
@@ -1492,6 +1514,12 @@ var DDoc = (function() {
         // the first member of the fun path determines the type of operation
         var funArgs = args.shift();
         if (ddoc_dispatch[cmd]) {
+
+          if (cmd == "run") {
+            var src = funPath[1];
+            return Script.run(src, ddoc, funArgs);
+          } 
+
           // get the function, call the command with it
           var point = ddoc;
           for (var i=0; i < funPath.length; i++) {

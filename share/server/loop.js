@@ -63,7 +63,8 @@ var DDoc = (function() {
     "views"     : Filter.filter_view,
     "updates"  : Render.update,
     "validate_doc_update" : Validate.validate,
-    "validate_doc_read" : Validate.validate
+    "validate_doc_read" : Validate.validate,
+    "run": Script.run
   };
   var ddocs = {};
   return {
@@ -88,6 +89,12 @@ var DDoc = (function() {
         // the first member of the fun path determines the type of operation
         var funArgs = args.shift();
         if (ddoc_dispatch[cmd]) {
+
+          if (cmd == "run") {
+            var src = funPath[1];
+            return Script.run(src, ddoc, funArgs);
+          } 
+
           // get the function, call the command with it
           var point = ddoc;
           for (var i=0; i < funPath.length; i++) {

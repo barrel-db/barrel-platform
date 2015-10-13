@@ -26,6 +26,8 @@
 % For 210-os-proc-pool.t
 -export([get_os_process/1, ret_os_process/1]).
 
+-export([run_script/4]).
+
 -include("couch_db.hrl").
 
 -record(proc, {
@@ -265,6 +267,16 @@ filter_docs(Req, Db, DDoc, FName, Docs) ->
     [true, Passes] = ddoc_prompt(DDoc, [<<"filters">>, FName],
         [JsonDocs, JsonReq]),
     {ok, Passes}.
+
+run_script(Req, Db, DDoc, Src) ->
+    JsonReq = case Req of
+                    {json_req, JsonObj} ->
+                        JsonObj;
+                    #httpd{} = HttpReq ->
+                        couch_httpd_external:json_req_obj(HttpReq, Db)
+              end,
+
+    ddoc_prompt(DDoc, [<<"run">>, Src], [JsonReq]).
 
 ddoc_proc_prompt({Proc, DDocId}, FunPath, Args) ->
     proc_prompt(Proc, [<<"ddoc">>, DDocId, FunPath, Args]).
