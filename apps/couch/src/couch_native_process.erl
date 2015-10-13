@@ -169,6 +169,9 @@ run(_, Unknown) ->
     ?LOG_ERROR("Native Process: Unknown command: ~p~n", [Unknown]),
     throw({error, unknown_command}).
     
+ddoc(State, {DDoc}, [Source, Args]) ->
+    Fun = makefun(State, Source),
+    {State, (catch apply(Fun, Args))};
 ddoc(State, {DDoc}, [FunPath, Args]) ->
     % load fun from the FunPath
     BFun = lists:foldl(fun

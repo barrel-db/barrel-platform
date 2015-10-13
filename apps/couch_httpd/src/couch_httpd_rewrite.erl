@@ -112,7 +112,7 @@
 handle_rewrite_req(#httpd{
         path_parts=[DbName, <<"_design">>, DesignName, _Rewrite|PathParts],
         method=Method,
-        mochi_req=MochiReq}=Req, _Db, DDoc) ->
+        mochi_req=MochiReq}=Req, Db, DDoc) ->
 
     % we are in a design handler
     DesignId = <<"_design/", DesignName/binary>>,
@@ -140,7 +140,7 @@ handle_rewrite_req(#httpd{
                 <<"Rewrite rules are a String. They must be a JSON Array.">>);
         Rules ->
             % create dispatch list from rules
-            DispatchList =  [make_rule(Rule) || {Rule} <- Rules],
+            DispatchList =  process_rules(Rules, Req, Db, DDoc, []),
             Method1 = couch_util:to_binary(Method),
 
             % get raw path by matching url to a rule. Throws not_found.
@@ -394,8 +394,19 @@ normalize_path1([Path|Rest], Acc) ->
     normalize_path1(Rest, [Path|Acc]).
 
 
+process_rules([], _Req, _Db, _DDoc, Routes) ->
+    lists:reverse(Routes);
+process_rules([Source | Rest], Req, Db, DDoc, Routes) when is_binary(Source) ->
+    NewRules= couch_query_servers:run_script(Req, Db, DDoc, Source),
+    NewRoutes = process_rules(NewRules, Req, Db, DDoc, []),
+    couch_log:info("routes ~p~n", [NewRoutes]),
+    process_rules(Rest, Req, Db, DDoc, NewRoutes ++ Routes);
+process_rules([Rule | Rest], Req, Db, DDoc, Routes) ->
+    process_rules(Rest, Req, Db, DDoc, [make_rule(Rule) | Routes]).
+
 %% @doc transform json rule in erlang for pattern matching
-make_rule(Rule) ->
+make_rule({Rule}) ->
+    couch_log:info("to ~p~n", [Rule]),
     Method = case couch_util:get_value(<<"method">>, Rule) of
         undefined -> ?MATCH_ALL;
         M -> to_binding(M)
