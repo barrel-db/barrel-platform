@@ -514,7 +514,7 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         %% when using a view vchanges feed we don't want to received removed documents
         if
             FilterName =:= <<"_view">> ->
-                [{"include_removed_docs", false} | QS];
+                [{"include_removed_docs", false} | QS];
             true ->
                 QS
         end

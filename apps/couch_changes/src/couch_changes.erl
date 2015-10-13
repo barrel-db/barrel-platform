@@ -495,11 +495,11 @@ view_changes_enumerator({{Seq, _Key, DocId}, Val}, Acc) ->
         {ok, DocInfo} ->
             #doc_info{revs=[#rev_info{deleted= Del}=RevInfo | Rest]} = DocInfo,
             case {Del, IncludeRemovedDocs} of
-                {true, _} -> 
+                {true, _} ->
                     changes_enumerator(DocInfo, Acc, Seq);
-                {false, true} -> 
+		{false, true} ->
                     RevInfo2 = RevInfo#rev_info{deleted= removed},
-                    DocInfo2 = DocInfo#doc_info{revs = [RevInfo2 | Rest]},
+                    DocInfo2 = DocInfo#doc_info{revs = [RevInfo2 | Rest]},
                     changes_enumerator(DocInfo2, Acc, Seq);
                 {false, false} ->
                     {ok, Acc}
