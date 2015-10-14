@@ -563,7 +563,7 @@ function $$(node) {
   $.futon.storage.declare("recent", {scope: "cookie", defaultValue: ""});
 
   $(function() {
-    document.title = "Apache CouchDB - Futon: " + document.title;
+    document.title = "Barrel - Futon: " + document.title;
     if ($.futon.storage.get("sidebar") == "hidden") {
       // doing this as early as possible prevents flickering
       $(document.body).addClass("fullwidth");
