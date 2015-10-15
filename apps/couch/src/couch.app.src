@@ -16,7 +16,7 @@
 
 {application, couch, [
     {description, "Barrel core based on Apache CouchDB"},
-    {vsn, "1.8.5"},
+    {vsn, "1.8.6"},
     {registered, [
         couch_config,
         couch_db_update,

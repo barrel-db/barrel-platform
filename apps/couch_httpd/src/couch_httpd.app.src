@@ -12,7 +12,7 @@
 
 {application, couch_httpd, [
         {description, "CouchDB HTTP API"},
-        {vsn, "1.2.5"},
+        {vsn, "1.2.6"},
         {modules, []},
         {registered, [couch_httpd_sup]},
         {applications, [kernel,

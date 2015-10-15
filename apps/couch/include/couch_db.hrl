@@ -10,6 +10,8 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
+-define(SERVER_VERSION, "barrel/011").
+
 -define(LOCAL_DOC_PREFIX, "_local/").
 -define(DESIGN_DOC_PREFIX0, "_design").
 -define(DESIGN_DOC_PREFIX, "_design/").
