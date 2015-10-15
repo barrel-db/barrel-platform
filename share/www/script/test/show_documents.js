@@ -182,7 +182,7 @@ couchTests.show_documents = function(debug) {
 
 
   // Fix for COUCHDB-379
-  T(equals(xhr.getResponseHeader("Server").substr(0,6), "RCOUCH"));
+  T(equals(xhr.getResponseHeader("Server").substr(0,6), "barrel"));
 
   // // error stacktraces
   // xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/render-error/"+docid);

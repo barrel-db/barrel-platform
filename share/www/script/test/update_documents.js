@@ -121,7 +121,7 @@ couchTests.update_documents = function(debug) {
   T(doc.world == "hello");
 
   // Fix for COUCHDB-379
-  T(equals(xhr.getResponseHeader("Server").substr(0,6), "RCOUCH"));
+  T(equals(xhr.getResponseHeader("Server").substr(0,6), "barrel"));
 
   // hello update world (no docid)
   xhr = CouchDB.request("POST", "/test_suite_db/_design/update/_update/hello");
