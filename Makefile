@@ -11,6 +11,9 @@ all: compile
 compile:
 	@$(REBAR) compile
 
+update:
+	@$(REBAR) update
+
 devrel:
 	@$(REBAR) release
 

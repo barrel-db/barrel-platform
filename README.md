@@ -47,6 +47,7 @@ The main BARREL website is http://barrel-db.org
 
 Installation is pretty simple. Just run the command line:
 
+    $ make update
     $ make rel
 
 and it will generate an barrel release in `_build/prod/rel/barrel`. 
