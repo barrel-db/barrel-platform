@@ -145,7 +145,7 @@ parse_changes_query(Req, Db) ->
         {"include_docs", "true"} ->
             Args#changes_args{include_docs=true};
         {"include_removed_docs", "true"} ->
-            Args#changes_args{include_removed_docs=false};
+            Args#changes_args{include_removed_docs=true};
         {"attachments", "true"} ->
             Opts = Args#changes_args.doc_options,
             Args#changes_args{doc_options=[attachments|Opts]};

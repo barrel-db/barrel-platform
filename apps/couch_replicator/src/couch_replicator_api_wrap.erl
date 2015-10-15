@@ -494,7 +494,7 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         ViewFields = ["key" | ViewFields0],
 
         {Params} = get_value(query_params, Options, {[]}),
-        QS = [{"filter", ?b2l(FilterName)} | lists:foldl(
+        [{"filter", ?b2l(FilterName)} | lists:foldl(
             fun({K, V}, QSAcc) ->
                 Ks = couch_util:to_list(K),
                 case lists:keymember(Ks, 1, QSAcc) of
@@ -510,14 +510,7 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
                     [{Ks, couch_util:to_list(V)} | QSAcc]
                 end
             end,
-            BaseQS, Params)],
-        %% when using a view vchanges feed we don't want to received removed documents
-        if
-            FilterName =:= <<"_view">> ->
-                [{"include_removed_docs", false} | QS];
-            true ->
-                QS
-        end
+            BaseQS, Params)]
     end.
 
 parse_changes_feed(Options, UserFun, DataStreamFun) ->

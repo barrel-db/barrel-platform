@@ -31,7 +31,7 @@
     resp_type,
     limit,
     include_docs,
-    include_removed_docs = true,
+    include_removed_docs = false,
     doc_options,
     conflicts,
     timeout,
@@ -749,7 +749,7 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
             [{inclusive_end, couch_mrview_http:parse_boolean(V)}];
         <<"inclusive_docs">> ->
             [{include_docs, couch_mrview_http:parse_boolean(V)}];
-        <<"inclusive_removed_docs">> ->
+        <<"include_removed_docs">> ->
             [{include_removed_docs, couch_mrview_http:parse_boolean(V)}];
         _ ->
             Acc
