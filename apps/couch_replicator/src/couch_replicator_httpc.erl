@@ -36,7 +36,7 @@ setup(#httpdb{httpc_pool = nil, url = Url, http_connections = MaxConns} = Db) ->
 
 send_req(HttpDb, Params1, Callback) ->
     Params2 = ?replace(Params1, qs,
-        [{K, ?b2l(couch_util:to_binary(V))} || {K, V} <- get_value(qs, Params1, [])]),
+                       [{K, ?b2l(to_param(V))} || {K, V} <- get_value(qs, Params1, [])]),
     Params = ?replace(Params2, ibrowse_options,
         lists:keysort(1, get_value(ibrowse_options, Params2, []))),
     {Worker, Response, IsChanges} = send_ibrowse_req(HttpDb, Params),
@@ -58,6 +58,14 @@ send_req(HttpDb, Params1, Callback) ->
         _ ->
             Ret
     end.
+
+
+to_param(false) ->
+    <<"false">>;
+to_param(true) ->
+    <<"true">>;
+to_param(V) ->
+    iolist_to_binary(V).
 
 
 send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
