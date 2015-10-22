@@ -148,9 +148,10 @@ get_info(Db, DDoc) ->
 
 
 %% get informations on a view
-get_view_info(Db, DDoc, VName) ->
-    {ok, {_, View}, _, _Args} = couch_mrview_util:get_view(Db, DDoc, VName,
-                                                              #mrargs{}),
+get_view_info(#db{name=DbName}, DDoc, VName) ->
+    get_view_info(DbName, DDoc, VName);
+get_view_info(DbName, DDoc, VName) ->
+    {ok, {_, View}, _, Args} = couch_mrview_util:get_view(DbName, DDoc, VName, #mrargs{direction=rev}),
     %% get the total number of rows
     {ok, TotalRows} =  couch_mrview_util:get_row_count(View),
 
@@ -164,6 +165,7 @@ get_view_info(Db, DDoc, VName) ->
 
     {ok, [{update_seq, View#mrview.update_seq},
           {purge_seq, View#mrview.purge_seq},
+          {last_seq, View#mrview.group_seq},
           {group_seq, View#mrview.group_seq},
           {total_rows, TotalRows},
           {total_seqs, TotalSeqs}]}.

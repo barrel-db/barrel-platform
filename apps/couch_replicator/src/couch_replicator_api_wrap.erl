@@ -149,7 +149,7 @@ get_view_info(#httpdb{} = Db, DDocId, ViewName) ->
         end);
 get_view_info(#db{name = DbName}, DDocId, ViewName) ->
     {ok, Info} = couch_mrview:get_view_info(DbName, DDocId, ViewName),
-    {ok, [{<<"last_seq">>, get_value(update_seq, Info)}]}.
+    {ok, [{<<"last_seq">>, get_value(last_seq, Info)}]}.
 
 
 ensure_full_commit(#httpdb{} = Db) ->
@@ -843,11 +843,14 @@ json_to_doc_info({Props}) ->
         _ -> RevsInfo0
     end,
 
-    #doc_info{
+    Seq = get_value(<<"seq">>, Props),
+
+    DocInfo = #doc_info{
         id = get_value(<<"id">>, Props),
         high_seq = get_value(<<"seq">>, Props),
         revs = RevsInfo
-    }.
+    }, 
+    {DocInfo, Seq}.
 
 
 bulk_results_to_errors(Docs, {ok, Results}, interactive_edit) ->
