@@ -251,7 +251,8 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         start_seq = {_Ts, StartSeq},
         source_seq = SourceCurSeq,
         committed_seq = {_, CommittedSeq},
-        checkpoint_interval = CheckpointInterval
+        checkpoint_interval = CheckpointInterval,
+        type = Type
     } = State = init_state(Rep),
 
     NumWorkers = get_value(worker_processes, Options),
@@ -262,7 +263,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
     ]),
     % This starts the _changes reader process. It adds the changes from
     % the source db to the ChangesQueue.
-    ChangesReader = spawn_changes_reader(StartSeq, Source, ChangesQueue, Options),
+    ChangesReader = spawn_changes_reader(StartSeq, Source, ChangesQueue, Options, Type),
     % Changes manager - responsible for dequeing batches from the changes queue
     % and deliver them to the worker processes.
     ChangesManager = spawn_changes_manager(self(), ChangesQueue, BatchSize),
@@ -646,23 +647,27 @@ fold_replication_logs([Db | Rest] = Dbs, Vsn, LogId, NewId, Rep, Acc) ->
     end.
 
 
-spawn_changes_reader(StartSeq, #httpdb{} = Db, ChangesQueue, Options) ->
+spawn_changes_reader(StartSeq, #httpdb{} = Db, ChangesQueue, Options, Type) ->
     spawn_link(fun() ->
         put(last_seq, StartSeq),
         put(retries_left, Db#httpdb.retries),
-        read_changes(StartSeq, Db#httpdb{retries = 0}, ChangesQueue, Options)
+        read_changes(StartSeq, Db#httpdb{retries = 0}, ChangesQueue, Options, Type)
     end);
-spawn_changes_reader(StartSeq, Db, ChangesQueue, Options) ->
+spawn_changes_reader(StartSeq, Db, ChangesQueue, Options, Type) ->
     spawn_link(fun() ->
-        read_changes(StartSeq, Db, ChangesQueue, Options)
+        read_changes(StartSeq, Db, ChangesQueue, Options, Type)
     end).
 
-read_changes(StartSeq, Db, ChangesQueue, Options) ->
+last_seq(view, _Seq, ChangeSeq) -> ChangeSeq;
+last_seq(_, Seq, _ChangeSeq) -> Seq.
+
+read_changes(StartSeq, Db, ChangesQueue, Options, Type) ->
     try
         couch_replicator_api_wrap:changes_since(Db, all_docs, StartSeq, fun
-            (#doc_info{high_seq = Seq, revs = []}) ->
-                put(last_seq, Seq);
-            (#doc_info{high_seq = Seq, id = Id} = DocInfo) ->
+            ({#doc_info{high_seq = Seq, revs = []}, ChangeSeq}) ->
+                put(last_seq, last_seq(Type, Seq, ChangeSeq));
+            ({#doc_info{high_seq = Seq, id = Id} = DocInfo, ChangeSeq}) ->
+                LastSeq = last_seq(Type, Seq, ChangeSeq),
                 case Id of
                 <<>> ->
                     % Previous CouchDB releases had a bug which allowed a doc
@@ -670,11 +675,11 @@ read_changes(StartSeq, Db, ChangesQueue, Options) ->
                     % is impossible to GET.
                     ?LOG_ERROR("Replicator: ignoring document with empty ID in "
                         "source database `~s` (_changes sequence ~p)",
-                        [couch_replicator_api_wrap:db_uri(Db), Seq]);
+                        [couch_replicator_api_wrap:db_uri(Db), LastSeq]);
                 _ ->
-                    ok = couch_work_queue:queue(ChangesQueue, DocInfo)
+                    ok = couch_work_queue:queue(ChangesQueue, {DocInfo, LastSeq})
                 end,
-                put(last_seq, Seq)
+                put(last_seq, LastSeq)
             end, Options),
         couch_work_queue:close(ChangesQueue)
     catch exit:{http_request_failed, _, _, _} = Error ->
@@ -694,7 +699,7 @@ read_changes(StartSeq, Db, ChangesQueue, Options) ->
                     " with since=~p", [couch_replicator_api_wrap:db_uri(Db), LastSeq]),
                 Db
             end,
-            read_changes(LastSeq, Db2, ChangesQueue, Options);
+            read_changes(LastSeq, Db2, ChangesQueue, Options, Type);
         _ ->
             exit(Error)
         end
@@ -712,8 +717,9 @@ changes_manager_loop_open(Parent, ChangesQueue, BatchSize, Ts) ->
         case couch_work_queue:dequeue(ChangesQueue, BatchSize) of
         closed ->
             From ! {closed, self()};
-        {ok, Changes} ->
-            #doc_info{high_seq = Seq} = lists:last(Changes),
+        {ok, Changes0} ->
+            {_DocInfo, Seq} = lists:last(Changes0),
+            Changes = [DocInfo || {DocInfo, _Seq} <- Changes0],
             ReportSeq = {Ts, Seq},
             ok = gen_server:cast(Parent, {report_seq, ReportSeq}),
             From ! {changes, self(), Changes, ReportSeq}
