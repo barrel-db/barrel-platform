@@ -181,8 +181,8 @@ init([]) ->
     ets:new(couch_sys_dbs, [set, private, named_table]),
 
     %% register db hook
-    couch_hooks:add(db_updated, all, ?MODULE, db_updated, 0),
-    couch_hooks:add(ddoc_updated, all, ?MODULE, ddoc_updated, 0),
+    hooks:reg(db_updated, ?MODULE, db_updated, 2),
+    hooks:reg(ddoc_updated, ?MODULE, ddoc_updated, 2),
 
 
     process_flag(trap_exit, true),
@@ -192,8 +192,8 @@ init([]) ->
 
 terminate(_Reason, _Srv) ->
     %% unregister db hooks
-    couch_hooks:remove(db_updated, all, ?MODULE, db_updated, 0),
-    couch_hooks:remove(ddoc_updated, all, ?MODULE, ddoc_updated, 0),
+    hooks:unreg(db_updated, ?MODULE, db_updated, 2),
+    hooks:unreg(ddoc_updated, ?MODULE, ddoc_updated, 2),
 
     lists:foreach(
         fun({_, Pid}) ->
@@ -241,7 +241,7 @@ do_open_db(DbName, Server, Options, {FromPid, _}) ->
             Reply = (catch couch_db:open_ref_counted(DbPid, FromPid)),
             case lists:member(create, Options) of
             true ->
-                    couch_hooks:run(db_updated, DbName, [DbName, created]);
+                    hooks:run(db_updated, [DbName, created]);
             false ->
                  ok
             end,
@@ -303,7 +303,7 @@ handle_call({delete, DbName, _Options}, _From, Server) ->
 
         case couch_file:delete(Server#server.root_dir, FullFilepath) of
         ok ->
-            couch_hooks:run(db_updated, DbName, [DbName, deleted]),
+            hooks:run(db_updated, [DbName, deleted]),
             {reply, ok, Server2};
         {error, enoent} ->
             {reply, not_found, Server2};

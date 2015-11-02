@@ -110,8 +110,8 @@ init([]) ->
 
     %% initiase index hooks
     %%
-    couch_hooks:add(index_update, all, ?MODULE, index_update, 0),
-    couch_hooks:add(index_reset, all, ?MODULE, index_reset, 0),
+    hooks:reg(index_update, ?MODULE, index_update, 3),
+    hooks:reg(index_reset, ?MODULE, index_reset, 3),
 
     RootDir = couch_index_util:root_dir(),
     couch_file:init_delete_dir(RootDir),
@@ -120,8 +120,8 @@ init([]) ->
 
 terminate(_Reason, _State) ->
     %% unregister hooks
-    couch_hooks:remove(index_update, all, ?MODULE, index_update, 0),
-    couch_hooks:remove(index_reset, all, ?MODULE, index_reset, 0),
+    hooks:unreg(index_update, ?MODULE, index_update, 3),
+    hooks:unreg(index_reset, ?MODULE, index_reset, 3),
     %% kil index processes
     Pids = [Pid || {Pid, _} <- ets:tab2list(?BY_PID)],
     lists:map(fun couch_util:shutdown_sync/1, Pids),

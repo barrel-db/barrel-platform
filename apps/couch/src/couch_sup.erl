@@ -23,8 +23,6 @@
 -export([init/1]).
 
 start_link(IniFiles) ->
-    _ = couch_hooks:init_hooks(),
-
     case whereis(couch_sup) of
     undefined ->
         start_server(IniFiles);

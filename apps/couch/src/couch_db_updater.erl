@@ -64,7 +64,7 @@ handle_call(full_commit, _From,  Db) ->
 handle_call(increment_update_seq, _From, Db) ->
     Db2 = commit_data(Db#db{update_seq=Db#db.update_seq+1}),
     ok = notify_db_updated(Db2),
-    couch_hooks:run(db_udpated, Db#db.name, [Db#db.name, updated]),
+    hooks:run(db_udpated, [Db#db.name, updated]),
     {reply, {ok, Db2#db.update_seq}, Db2};
 
 handle_call({set_security, NewSec}, _From, #db{compression = Comp} = Db) ->
@@ -149,7 +149,7 @@ handle_call({purge_docs, IdRevs}, _From, Db) ->
             header=Header#db_header{purge_seq=PurgeSeq+1, purged_docs=Pointer}}),
 
     ok = notify_db_updated(Db2),
-    couch_hooks:run(db_updated, [Db#db.name, updated]),
+    hooks:run(db_updated, [Db#db.name, updated]),
     {reply, {ok, (Db2#db.header)#db_header.purge_seq, IdRevsPurged}, Db2};
 handle_call(start_compact, _From, Db) ->
     case Db#db.compactor_pid of
@@ -203,8 +203,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
         close_db(Db),
         NewDb3 = refresh_validate_doc_funs(NewDb2),
         ok = notify_db_updated(NewDb3),
-        couch_hooks:run(db_updated, NewDb3#db.name, [NewDb3#db.name,
-                                                     compacted]),
+        hooks:run(db_updated, [NewDb3#db.name, compacted]),
         ?LOG_INFO("Compaction for db \"~s\" completed.", [Db#db.name]),
         {reply, ok, NewDb3#db{compactor_pid=nil}};
     false ->
@@ -238,12 +237,12 @@ handle_info({update_docs, Client, GroupedDocs, NonRepDocs, MergeConflicts,
     {ok, Db2, UpdatedDDocIds} ->
         ok = notify_db_updated(Db2),
         if Db2#db.update_seq /= Db#db.update_seq ->
-            couch_hooks:run(db_updated, Db2#db.name, [Db2#db.name, updated]);
+            hooks:run(db_updated, [Db2#db.name, updated]);
         true -> ok
         end,
         [catch(ClientPid ! {done, self()}) || ClientPid <- Clients],
         lists:foreach(fun(DDocId) ->
-            couch_hooks:run(ddoc_updated, Db2#db.name,[Db#db.name, DDocId])
+            hooks:run(ddoc_updated, [Db#db.name, DDocId])
         end, UpdatedDDocIds),
         {noreply, Db2}
     catch
