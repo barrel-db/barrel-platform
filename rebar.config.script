@@ -1,3 +1,4 @@
+%% static config
 STATIC_CONFIG = [{pre_hooks, [{compile, "./support/build_spidermonkey.sh"},
 							  {"(linux|darwin|solaris)", compile, "make -C apps/couch/c_src/couch_js"},
 							  {"(freebsd|netbsd|openbsd)", compile, "gmake -C apps/couch/c_src/couch_js"}]},
@@ -7,6 +8,7 @@ STATIC_CONFIG = [{pre_hooks, [{compile, "./support/build_spidermonkey.sh"},
 				 			   {compile, "escript support/build_js.escript"}]}],
 
 JS_COMPILE=os:getenv("JS_COMPILE"),
+
 if 
 	JS_COMPILE =:= "static" ->
 		lists:keymerge(1, CONFIG, STATIC_CONFIG);
