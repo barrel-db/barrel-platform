@@ -1,12 +1,17 @@
 language: erlang
+
 otp_release:
     - 18.0
     - 18.1
+
 before_script:
     - "./support/bootstrap_travis.sh"
-script: "./rebar3 compile"
+
+
+script: "make"
+
 notifications:
     irc:
         - "irc.freenode.org#barreldb"
-recipients:
-    - "bchesneay@gmail.com"
+    recipients:
+        - "bchesneay@gmail.com"
