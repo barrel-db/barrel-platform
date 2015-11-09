@@ -33,30 +33,29 @@ stop(_State) ->
 
 
 
-
 init_config(Args) ->
-	 IniFiles = case proplists:get_value(inifiles, Args) of
-	 	undefined -> 
-    		ConfDir =  filename:join([code:root_dir(), "./etc"]),
-    		ConfigFiles = application:get_env(barrel, config_files, ?CONF_FILES),
-			lists:map(fun(FName) ->
-				filename:join(ConfDir, FName)
-			end, ConfigFiles);
-	 	[IniFilesStr] ->
-	 		re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
-	 end,
-	 barrel_config:init(IniFiles).
+    IniFiles = case proplists:get_value(inifiles, Args) of
+                   undefined ->
+                       ConfDir =  filename:join([code:root_dir(), "etc"]),
+                       ConfigFiles = application:get_env(barrel, config_files, ?CONF_FILES),
+                       lists:map(fun(FName) ->
+                                         filename:join(ConfDir, FName)
+                                 end, ConfigFiles);
+                   [IniFilesStr] ->
+                       re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
+               end,
+    barrel_config:init(IniFiles).
 
 
 maybe_set_pidfile(Args) ->
-	 case proplists:get_value(pidfile, Args) of
-	 	undefined -> ok;
-    	[PidFile] ->
-        	case file:write_file(PidFile, os:getpid()) of
-        		ok -> 
-        			ok;
-        		{error, Reason} ->
-            		error_logger:error_msg("Failed to write PID file ~s: ~s", [PidFile, Reason]),
-            		ok
-        	end
+    case proplists:get_value(pidfile, Args) of
+        undefined -> ok;
+        [PidFile] ->
+            case file:write_file(PidFile, os:getpid()) of
+                ok ->
+                    ok;
+                {error, Reason} ->
+                    error_logger:error_msg("Failed to write PID file ~s: ~s", [PidFile, Reason]),
+                    ok
+            end
     end.
