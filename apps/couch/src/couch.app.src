@@ -35,7 +35,7 @@
     {mod, {couch_app, []}},
     {env, []},
     {applications, [kernel, stdlib, lager, crypto, sasl, asn1, public_key,
-                    ssl, os_mon, inets, gproc, hooks]},
+                    ssl, os_mon, inets, gproc, barrel, ibrowse]},
     {included_applications, [snappy, jiffy]}
 ]}.
 

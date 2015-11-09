@@ -22,7 +22,6 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    couch_util:start_app_deps(couch_replicator),
     couch_replicator_sup:start_link().
 
 stop(_State) ->

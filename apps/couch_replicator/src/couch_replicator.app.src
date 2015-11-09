@@ -19,7 +19,7 @@
         couch_replicator_job_sup,
         couch_replicator_sup
     ]},
-    {applications, [kernel, stdlib, crypto, sasl, inets, oauth, ibrowse,
+    {applications, [kernel, stdlib, crypto, sasl, asn1, public_key, ssl, inets, oauth, ibrowse,
                    couch, couch_httpd, couch_changes]},
 
     {mod, { couch_replicator_app, []}},

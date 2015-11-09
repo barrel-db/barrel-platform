@@ -14,13 +14,15 @@
 -behaviour(gen_server).
 
 % public API
--export([start_link/0, config_change/3]).
+-export([start_link/0]).
+-export([config_change/3]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3, terminate/2]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -define(CONFIG_ETS, couch_compaction_daemon_config).
 
@@ -41,30 +43,36 @@
     to = nil
 }).
 
+-define(DEFAULT_CHECK_INTERVAL, 300).
+-define(DEFAULT_MIN_FILESIZE, 131072).
+
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 
+config_change("compactions", DbName, Type) ->
+    gen_server:cast(?MODULE, {config_update, DbName, Type});
+config_change(_, _, _) ->
+    ok.
+
+init_hooks() ->
+    hooks:reg(config_key_update, ?MODULE, config_change, 3).
+
 init(_) ->
     process_flag(trap_exit, true),
     ?CONFIG_ETS = ets:new(?CONFIG_ETS, [named_table, set, protected]),
-    ok = couch_config:register(fun ?MODULE:config_change/3),
-    load_config(),
-    Server = self(),
-    Loop = spawn_link(fun() -> compact_loop(Server) end),
-    {ok, #state{loop_pid = Loop}}.
+    self() ! init,
+    {ok, #state{}}.
 
 
-config_change("compactions", DbName, NewValue) ->
-    ok = gen_server:cast(?MODULE, {config_update, DbName, NewValue}).
 
-
-handle_cast({config_update, DbName, deleted}, State) ->
+handle_cast({config_update, DbName, delete}, State) ->
     true = ets:delete(?CONFIG_ETS, ?l2b(DbName)),
     {noreply, State};
 
-handle_cast({config_update, DbName, Config}, #state{loop_pid = Loop} = State) ->
+handle_cast({config_update, DbName, _}, #state{loop_pid = Loop} = State) ->
+    Config = ?cfget("compactions", DbName),
     case parse_config(DbName, Config) of
     {ok, NewConfig} ->
         WasEmpty = (ets:info(?CONFIG_ETS, size) =:= 0),
@@ -84,6 +92,12 @@ handle_cast({config_update, DbName, Config}, #state{loop_pid = Loop} = State) ->
 handle_call(Msg, _From, State) ->
     {stop, {unexpected_call, Msg}, State}.
 
+handle_info(init, State) ->
+    init_hooks(),
+    load_config(),
+    Server = self(),
+    Pid = spawn_link(fun() -> compact_loop(Server) end),
+    {noreply, State#state{loop_pid=Pid}};
 
 handle_info({'EXIT', Pid, Reason}, #state{loop_pid = Pid} = State) ->
     {stop, {compaction_loop_died, Reason}, State}.
@@ -122,8 +136,7 @@ compact_loop(Parent) ->
     true ->
         receive {Parent, have_config} -> ok end;
     false ->
-        PausePeriod = list_to_integer(
-            couch_config:get("compaction_daemon", "check_interval", "300")),
+        PausePeriod = ?cfget_int("compaction_daemon", "check_interval", ?DEFAULT_CHECK_INTERVAL),
         ok = timer:sleep(PausePeriod * 1000)
     end,
     compact_loop(Parent).
@@ -297,7 +310,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
         false ->
             false;
         true ->
-            Free = free_space(couch_config:get("couchdb", "database_dir")),
+            Free = free_space(?cfget("couchdb", "database_dir")),
             case Free >= SpaceRequired of
             true ->
                 true;
@@ -365,8 +378,7 @@ check_frag(Threshold, Frag) ->
 
 frag(Props) ->
     FileSize = couch_util:get_value(disk_size, Props),
-    MinFileSize = list_to_integer(
-        couch_config:get("compaction_daemon", "min_file_size", "131072")),
+    MinFileSize = ?cfget_int("compaction_daemon", "min_file_size", ?DEFAULT_MIN_FILESIZE),
     case FileSize < MinFileSize of
     true ->
         {0, FileSize};
@@ -398,7 +410,7 @@ load_config() ->
                 ok
             end
         end,
-        couch_config:get("compactions")).
+        ?cfget("compactions")).
 
 parse_config(DbName, ConfigString) ->
     case (catch do_parse_config(ConfigString)) of

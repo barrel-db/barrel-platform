@@ -16,9 +16,11 @@
 -export([load_doc/3, sort_lib/1, hexsig/1]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 root_dir() ->
-  couch_config:get("couchdb", "view_index_dir").
+  ?cfget("couchdb", "view_index_dir").
 
 
 index_dir(Module, DbName) when is_binary(DbName) ->

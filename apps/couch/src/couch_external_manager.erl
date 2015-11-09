@@ -13,10 +13,12 @@
 -module(couch_external_manager).
 -behaviour(gen_server).
 
--export([start_link/0, execute/2, config_change/2]).
+-export([start_link/0, execute/2, config_change/3]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2, handle_info/2]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 start_link() ->
     gen_server:start_link({local, couch_external_manager},
@@ -31,7 +33,7 @@ execute(UrlName, JsonReq) ->
         couch_external_server:execute(Pid, JsonReq)
     end.
 
-config_change("external", UrlName) ->
+config_change("external", UrlName, _) ->
     gen_server:call(couch_external_manager, {config, UrlName}).
 
 % gen_server API
@@ -39,7 +41,7 @@ config_change("external", UrlName) ->
 init([]) ->
     process_flag(trap_exit, true),
     Handlers = ets:new(couch_external_manager_handlers, [set, private]),
-    couch_config:register(fun ?MODULE:config_change/2),
+    hooks:reg(config_key_update, ?MODULE, config_change, 2),
     {ok, Handlers}.
 
 terminate(_Reason, Handlers) ->
@@ -52,7 +54,7 @@ terminate(_Reason, Handlers) ->
 handle_call({get, UrlName}, _From, Handlers) ->
     case ets:lookup(Handlers, UrlName) of
     [] ->
-        case couch_config:get("external", UrlName, nil) of
+        case ?cfget("external", UrlName, nil) of
         nil ->
             Msg = lists:flatten(
                 io_lib:format("No server configured for ~p.", [UrlName])),

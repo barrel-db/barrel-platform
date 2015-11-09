@@ -14,6 +14,7 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("couch/include/couch_js_functions.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -export([oauth_authentication_handler/1, handle_oauth_req/1]).
 
@@ -310,17 +311,17 @@ oauth_credentials_info(Token, ConsumerKey) ->
         Result;
     nil ->
         {
-            case couch_config:get("oauth_consumer_secrets", ConsumerKey) of
+            case ?cfget("oauth_consumer_secrets", ConsumerKey) of
             undefined -> [];
             ConsumerSecret -> [{<<"consumer_secret">>, ?l2b(ConsumerSecret)}]
             end
             ++
-            case couch_config:get("oauth_token_secrets", Token) of
+            case ?cfget("oauth_token_secrets", Token) of
             undefined -> [];
             TokenSecret -> [{<<"token_secret">>, ?l2b(TokenSecret)}]
             end
             ++
-            case couch_config:get("oauth_token_users", Token) of
+            case ?cfget("oauth_token_users", Token) of
             undefined -> [];
             User -> [{<<"username">>, ?l2b(User)}]
             end
@@ -329,7 +330,7 @@ oauth_credentials_info(Token, ConsumerKey) ->
 
 
 use_auth_db() ->
-    case couch_config:get("couch_httpd_oauth", "use_users_db", "false") of
+    case ?cfget("couch_httpd_oauth", "use_users_db", "false") of
     "false" ->
         nil;
     "true" ->
@@ -339,7 +340,7 @@ use_auth_db() ->
 
 
 open_auth_db() ->
-    DbName = ?l2b(couch_config:get("couch_httpd_auth", "authentication_db")),
+    DbName = ?cfget_bin("couch_httpd_auth", "authentication_db", <<"_users">>),
     DbOptions = [{user_ctx, #user_ctx{roles = [<<"_admin">>]}}],
     {ok, AuthDb} = couch_db:open_int(DbName, DbOptions),
     AuthDb.

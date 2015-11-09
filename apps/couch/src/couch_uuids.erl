@@ -11,6 +11,7 @@
 % the License.
 -module(couch_uuids).
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -behaviour(gen_server).
 
@@ -19,6 +20,8 @@
 
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
+
+-export([config_change/3]).
 
 start() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -43,10 +46,14 @@ utc_suffix(Suffix) ->
     Prefix = io_lib:format("~14.16.0b", [(Nowsecs - Then) * 1000000 + Micro]),
     list_to_binary(Prefix ++ Suffix).
 
+config_change("uuids", _, _) ->
+    gen_server:cast(?MODULE, change);
+config_change(_, _, _) ->
+    ok.
+
+
 init([]) ->
-    ok = couch_config:register(
-        fun("uuids", _) -> gen_server:cast(?MODULE, change) end
-    ),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
     {ok, state()}.
 
 terminate(_Reason, _State) ->
@@ -87,14 +94,14 @@ inc() ->
     crypto:rand_uniform(1, 16#ffe).
 
 state() ->
-    AlgoStr = couch_config:get("uuids", "algorithm", "random"),
+    AlgoStr = ?cfget("uuids", "algorithm", "random"),
     case couch_util:to_existing_atom(AlgoStr) of
         random ->
             random;
         utc_random ->
             utc_random;
         utc_id ->
-            UtcIdSuffix = couch_config:get("uuids", "utc_id_suffix", ""),
+            UtcIdSuffix = ?cfget("uuids", "utc_id_suffix", ""),
             {utc_id, UtcIdSuffix};
         sequential ->
             {sequential, new_prefix(), inc()};

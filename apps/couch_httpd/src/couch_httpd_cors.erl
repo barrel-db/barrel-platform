@@ -21,6 +21,7 @@
 -module(couch_httpd_cors).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -export([is_preflight_request/1, cors_headers/2]).
 
@@ -295,31 +296,20 @@ maybe_add_credentials(Headers, true) ->
 allow_credentials("*", _Host) ->
     false;
 allow_credentials(_Origin, Host) ->
-    Default = get_bool_config("cors", "credentials", false),
-    get_bool_config(cors_section(Host), "credentials", Default).
+    Default = ?cfget_bool("cors", "credentials", false),
+    ?cfget_bool(cors_section(Host), "credentials", Default).
 
 
 
 cors_config(Host, Key, Default) ->
-    couch_config:get(cors_section(Host), Key,
-                     couch_config:get("cors", Key, Default)).
+    ?cfget(cors_section(Host), Key, ?cfget("cors", Key, Default)).
 
 cors_section(Host0) ->
     {Host, _Port} = split_host_port(Host0),
     "cors:" ++ Host.
 
 enable_cors() ->
-    get_bool_config("httpd", "enable_cors", false).
-
-get_bool_config(Section, Key, Default) ->
-    case couch_config:get(Section, Key) of
-    undefined ->
-        Default;
-    "true" ->
-        true;
-    "false" ->
-        false
-    end.
+    ?cfget_bool("httpd", "enable_cors", false).
 
 get_accepted_origins(Host) ->
     split_list(cors_config(Host, "origins", [])).

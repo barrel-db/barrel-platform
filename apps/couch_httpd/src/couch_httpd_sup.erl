@@ -21,15 +21,14 @@
 
 %% internal API
 -export([init/1]).
--export([config_change/2]).
-
+-export([config_change/3]).
 
 -spec start_link() -> ignore | {error, term()} | {ok, pid()}.
 start_link() ->
     {ok, Pid} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
 
     %% register to config events
-    ok  = couch_config:register(fun ?MODULE:config_change/2, Pid),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
     %% display uris
     couch_httpd_util:display_uris(),
@@ -92,21 +91,23 @@ listener_spec(Id) ->
      {couch_httpd, start_link, [Id]},
      permanent, brutal_kill, worker, [couch_httpd]}.
 
-config_change("httpd", "bind_address") ->
+config_change("httpd", "bind_address", _) ->
     ?MODULE:reload_listeners();
-config_change("httpd", "port") ->
+config_change("httpd", "port", _) ->
     ?MODULE:reload_listener(couch_http);
-config_change("httpd", "default_handler") ->
+config_change("httpd", "default_handler", _) ->
     ?MODULE:reload_listeners();
-config_change("httpd", "server_options") ->
+config_change("httpd", "server_options", _) ->
     ?MODULE:reload_listeners();
-config_change("httpd", "socket_options") ->
+config_change("httpd", "socket_options", _) ->
     ?MODULE:reload_listeners();
-config_change("httpd", "authentication_handlers") ->
+config_change("httpd", "authentication_handlers", _) ->
     couch_httpd:set_auth_handlers();
-config_change("httpd_global_handlers", _) ->
+config_change("httpd_global_handlers", _, _) ->
     ?MODULE:reload_listeners();
-config_change("httpd_db_handlers", _) ->
+config_change("httpd_db_handlers", _, _) ->
     ?MODULE:reload_listeners();
-config_change("ssl", _) ->
-    ?MODULE:reload_listener(couch_https).
+config_change("ssl", _, _) ->
+    ?MODULE:reload_listener(couch_https);
+config_change(_, _, _) ->
+    ok.

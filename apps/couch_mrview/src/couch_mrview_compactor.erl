@@ -14,6 +14,8 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_mrview.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -export([compact/3, swap_compacted/2]).
 
@@ -75,10 +77,7 @@ compact(State) ->
         {progress, 0}
     ]),
 
-    BufferSize0 = couch_config:get(
-        "view_compaction", "keyvalue_buffer_size", "2097152"
-    ),
-    BufferSize = list_to_integer(BufferSize0),
+    BufferSize = ?cfget_int( "view_compaction", "keyvalue_buffer_size", 2097152),
 
     FoldFun = fun({DocId, _} = KV, Acc) ->
         #acc{btree = Bt, kvs = Kvs, kvs_size = KvsSize, last_id = LastId} = Acc,

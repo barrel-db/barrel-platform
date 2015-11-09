@@ -14,8 +14,11 @@
 
 -export([start_link/2]).
 
+
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
+
+-include_lib("barrel/include/config.hrl").
 
 -record(state, {index,
                 dbname,
@@ -27,19 +30,16 @@
                 locks}).
 
 
+
+
 start_link(Index, DbName) ->
     gen_server:start_link(?MODULE, {Index, DbName}, []).
 
 init({Index, DbName}) ->
     process_flag(trap_exit, true),
-    %% register to config events
-    Self = self(),
-    ok  = couch_config:register(fun
-                ("couch_index", "threshold") ->
-                    gen_server:cast(Self, config_threshold);
-                ("couch_index", "refresh_interval") ->
-                    gen_server:cast(Self, config_refresh)
-            end),
+    %% subscribe to config events
+
+    barrel_config:subscribe(),
 
     %% get defaults
     Threshold = get_db_threshold(),
@@ -105,6 +105,14 @@ handle_cast(updated, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info({config_updated, ConfName, Event}, State) ->
+    if
+        ConfName =:= ?CFGNAME ->
+            NewState = config_change(Event, State),
+            {noreply, NewState};
+        true ->
+            {noreply, State}
+    end;
 handle_info(start_indexing, #state{index=Index,
                                    dbname=DbName,
                                    refresh_interval=R}=State) ->
@@ -176,6 +184,25 @@ terminate(_Reason, #state{refresh_pid=RPid, tref=TRef}) ->
     end,
     ok.
 
+config_change({_Type, {"couch_index", "threshold"}}, State) ->
+    Threshold = get_db_threshold(),
+    State#state{threshold=Threshold};
+config_change({_Type, {"couch_index", "refresh_interval"}}, #state{tref=TRef}=State) ->
+    R = get_refresh_interval(),
+    %% stop the old timee
+    if TRef /= nil ->
+            timer:cancel(TRef);
+        true -> ok
+    end,
+    %% start the new timer
+    {ok, NTRef}  = timer:send_interval(R, self(), refresh_index),
+    State#state{refresh_interval=R, tref=NTRef};
+config_change(_, State) ->
+    State.
+
+
+
+
 %% refresh the index to trigger updates.
 refresh_index(Db, Index) ->
     UpdateSeq = couch_util:with_db(Db, fun(WDb) ->
@@ -200,16 +227,12 @@ should_close() ->
 %% minimum. If the minimum is not acchieved, the update will happen
 %% in the next interval.
 get_db_threshold() ->
-    list_to_integer(
-            couch_config:get("couch_index", "threshold", "200")
-    ).
+    ?cfget_int("couch_index", "threshold", 200).
 
 %% refresh interval in ms, the interval in which the index will be
 %% updated
 get_refresh_interval() ->
-    list_to_integer(
-            couch_config:get("couch_index", "refresh_interval", "1000")
-    ).
+    ?cfget_int("couch_index", "refresh_interval", 1000).
 
 
 do_update(#state{index=Index, dbname=DbName,

@@ -1,0 +1,15 @@
+{application, 'barrel',
+ [{description, "barrel main application"},
+  {vsn, "0.1.0"},
+  {registered, [barrel_sup]},
+  {mod, {'barrel_app', []}},
+  {applications,
+   [kernel,
+    stdlib,
+    lager,
+    hooks,
+    econfig
+   ]},
+  {env,[]},
+  {modules, []}
+ ]}.

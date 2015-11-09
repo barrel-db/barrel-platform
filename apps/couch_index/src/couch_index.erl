@@ -26,6 +26,7 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -record(st, {
     mod,
@@ -86,12 +87,16 @@ release_indexer(Pid) ->
     gen_server:call(IPid, {release, self()}).
 
 
-config_change("query_server_config", "commit_freq", NewValue) ->
-    ok = gen_server:cast(?MODULE, {config_update, NewValue}).
+config_change("query_server_config", "commit_freq", _) ->
+    NewValue = ?cfget_int("query_server_config", "commit_freq", 5),
+    gen_server:cast(?MODULE, {config_update, NewValue});
+config_change(_, _, _) ->
+    ok.
 
 
 init({Mod, IdxState}) ->
-    ok = couch_config:register(fun ?MODULE:config_change/3),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
+
     DbName = Mod:get(db_name, IdxState),
     Resp = couch_util:with_db(DbName, fun(Db) ->
         case Mod:open(Db, IdxState) of
@@ -107,8 +112,8 @@ init({Mod, IdxState}) ->
             {ok, UPid} = couch_index_updater:start_link(self(), Mod),
             {ok, CPid} = couch_index_compactor:start_link(self(), Mod),
 
-            Delay = couch_config:get("query_server_config", "commit_freq", "5"),
-            MsDelay = 1000 * list_to_integer(Delay),
+            Delay = ?cfget_int("query_server_config", "commit_freq", 5),
+            MsDelay = 1000 * Delay,
             State = #st{
                 mod=Mod,
                 idx_state=NewIdxState,
@@ -236,7 +241,7 @@ handle_call(get_indexer_pid, _From, #st{mod=Mod, idx_state=IdxState}=State) ->
 
 
 handle_cast({config_change, NewDelay}, State) ->
-    MsDelay = 1000 * list_to_integer(NewDelay),
+    MsDelay = 1000 * NewDelay,
     {noreply, State#st{commit_delay=MsDelay}};
 handle_cast({trigger_update, UpdateSeq}, State) ->
     #st{

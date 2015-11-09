@@ -22,6 +22,8 @@
 -include("couch_replicator_api_wrap.hrl").
 -include("couch_replicator.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -import(couch_util, [
     get_value/2,
@@ -97,7 +99,7 @@ replication_id(#rep{user_ctx = UserCtx} = Rep, 2) ->
         % TODO: we might be under an SSL socket server only, or both under
         % SSL and a non-SSL socket.
         % ... mochiweb_socket_server:get(https, port)
-        list_to_integer(couch_config:get("httpd", "port", "5984"))
+        ?cfget_int("httpd", "port", 5984)
     end,
     Src = get_rep_endpoint(UserCtx, Rep#rep.source),
     Tgt = get_rep_endpoint(UserCtx, Rep#rep.target),
@@ -246,25 +248,25 @@ maybe_add_trailing_slash(Url) ->
 
 make_options(Props) ->
     Options = lists:ukeysort(1, convert_options(Props)),
-    DefWorkers = couch_config:get("replicator", "worker_processes", "4"),
-    DefBatchSize = couch_config:get("replicator", "worker_batch_size", "500"),
-    DefConns = couch_config:get("replicator", "http_connections", "20"),
-    DefTimeout = couch_config:get("replicator", "connection_timeout", "30000"),
-    DefRetries = couch_config:get("replicator", "retries_per_request", "10"),
-    UseCheckpoints = couch_config:get("replicator", "use_checkpoints", "true"),
-    DefCheckpointInterval = couch_config:get("replicator", "checkpoint_interval", "5000"),
+    DefWorkers = ?cfget_int("replicator", "worker_processes", 4),
+    DefBatchSize = ?cfget_int("replicator", "worker_batch_size", 500),
+    DefConns = ?cfget_int("replicator", "http_connections", 20),
+    DefTimeout = ?cfget_int("replicator", "connection_timeout", 30000),
+    DefRetries =?cfget_int("replicator", "retries_per_request", 10),
+    UseCheckpoints =  ?cfget_bool("replicator", "use_checkpoints", true),
+    DefCheckpointInterval = ?cfget_int("replicator", "checkpoint_interval", 5000),
     {ok, DefSocketOptions} = couch_util:parse_term(
-        couch_config:get("replicator", "socket_options",
-            "[{keepalive, true}, {nodelay, false}]")),
+            ?cfget("replicator", "socket_options", "[{keepalive, true}, {nodelay, false}]")
+    ),
     lists:ukeymerge(1, Options, lists:keysort(1, [
-        {connection_timeout, list_to_integer(DefTimeout)},
-        {retries, list_to_integer(DefRetries)},
-        {http_connections, list_to_integer(DefConns)},
+        {connection_timeout, DefTimeout},
+        {retries, DefRetries},
+        {http_connections, DefConns},
         {socket_options, DefSocketOptions},
-        {worker_batch_size, list_to_integer(DefBatchSize)},
-        {worker_processes, list_to_integer(DefWorkers)},
-        {use_checkpoints, list_to_existing_atom(UseCheckpoints)},
-        {checkpoint_interval, list_to_integer(DefCheckpointInterval)}
+        {worker_batch_size, DefBatchSize},
+        {worker_processes, DefWorkers},
+        {use_checkpoints, UseCheckpoints},
+        {checkpoint_interval, DefCheckpointInterval}
     ])).
 
 
@@ -337,13 +339,11 @@ parse_proxy_params(ProxyUrl) ->
 ssl_params(Url) ->
     case ibrowse_lib:parse_url(Url) of
     #url{protocol = https} ->
-        Depth = list_to_integer(
-            couch_config:get("replicator", "ssl_certificate_max_depth", "3")
-        ),
-        VerifyCerts = couch_config:get("replicator", "verify_ssl_certificates"),
-        CertFile = couch_config:get("replicator", "cert_file", nil),
-        KeyFile = couch_config:get("replicator", "key_file", nil),
-        Password = couch_config:get("replicator", "password", nil),
+        Depth = ?cfget_int("replicator", "ssl_certificate_max_depth", 3),
+        VerifyCerts = ?cfget("replicator", "verify_ssl_certificates"),
+        CertFile = ?cfget("replicator", "cert_file", nil),
+        KeyFile = ?cfget("replicator", "key_file", nil),
+        Password = ?cfget("replicator", "password", nil),
         SslOpts = [{depth, Depth} | ssl_verify_options(VerifyCerts =:= "true")],
         SslOpts1 = case CertFile /= nil andalso KeyFile /= nil of
             true ->
@@ -365,12 +365,12 @@ ssl_verify_options(Value) ->
     ssl_verify_options(Value, erlang:system_info(otp_release)).
 
 ssl_verify_options(true, OTPVersion) when OTPVersion >= "R14" ->
-    CAFile = couch_config:get("replicator", "ssl_trusted_certificates_file"),
+    CAFile = ?cfget("replicator", "ssl_trusted_certificates_file"),
     [{verify, verify_peer}, {cacertfile, CAFile}];
 ssl_verify_options(false, OTPVersion) when OTPVersion >= "R14" ->
     [{verify, verify_none}];
 ssl_verify_options(true, _OTPVersion) ->
-    CAFile = couch_config:get("replicator", "ssl_trusted_certificates_file"),
+    CAFile = ?cfget("replicator", "ssl_trusted_certificates_file"),
     [{verify, 2}, {cacertfile, CAFile}];
 ssl_verify_options(false, _OTPVersion) ->
     [{verify, 0}].

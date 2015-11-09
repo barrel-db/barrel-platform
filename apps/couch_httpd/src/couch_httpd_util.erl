@@ -20,23 +20,25 @@
          get_port/1]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 
 display_uris() ->
     display_uris(get_listeners()).
 
 display_uris(Bindings) ->
-    Ip = couch_config:get("httpd", "bind_address"),
+    Ip = ?cfget("httpd", "bind_address", "127.0.0.1"),
     lists:foreach(fun(Binding) ->
                 Uri = get_uri(Binding, Ip),
                 ?LOG_INFO("HTTP API started on ~p~n", [Uri])
         end, Bindings).
 
 write_uri_file() ->
-    Ip = couch_config:get("httpd", "bind_address"),
+    Ip = ?cfget("httpd", "bind_address", "127.0.0.1"),
     Listeners = get_listeners(),
     Uris = [get_uri(Name, Ip) || Name <- Listeners],
-    case couch_config:get("couchdb", "uri_file", null) of
+    case ?cfget("couchdb", "uri_file", null) of
         null -> ok;
         UriFile ->
             Lines = [begin case Uri of
@@ -57,7 +59,7 @@ write_uri_file() ->
     end.
 
 get_listeners() ->
-    SchemeStr = couch_config:get("httpd", "scheme", "http"),
+    SchemeStr = ?cfget("httpd", "scheme", "http"),
     SchemeList = re:split(SchemeStr, "\\s*,\\s*",[{return, list}]),
 
     lists:foldl(fun(S, Acc) ->

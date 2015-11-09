@@ -26,6 +26,8 @@
 -include_lib("couch_changes/include/couch_changes.hrl").
 -include("couch_replicator.hrl").
 -include("couch_replicator_js_functions.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -define(DOC_TO_REP, couch_rep_doc_id_to_rep_id).
 -define(REP_TO_STATE, couch_rep_id_to_rep_state).
@@ -106,28 +108,22 @@ replication_error(#rep{id = {BaseId, _} = RepId}, Error) ->
     end.
 
 
+
 init(_) ->
     process_flag(trap_exit, true),
     ?DOC_TO_REP = ets:new(?DOC_TO_REP, [named_table, set, protected]),
     ?REP_TO_STATE = ets:new(?REP_TO_STATE, [named_table, set, protected]),
-    Server = self(),
-    ok = couch_config:register(
-        fun("replicator", "db", NewName) ->
-            ok = gen_server:cast(Server, {rep_db_changed, ?l2b(NewName)});
-        ("replicator", "max_replication_retry_count", V) ->
-            ok = gen_server:cast(Server, {set_max_retries, retries_value(V)})
-        end
-    ),
+    barrel_config:subscribe(),
+
     {Loop, RepDbName} = changes_feed_loop(),
     _ = couch_event:subscribe_cond(db_updated, [{{'_', '$1'},
                                                  [{'==', '$1', created}],
                                                  [true]}]),
-    {ok, #state{
-        changes_feed_loop = Loop,
-        rep_db_name = RepDbName,
-        max_retries = retries_value(
-            couch_config:get("replicator", "max_replication_retry_count", "10"))
-    }}.
+
+    Retries = retries_value(?cfget("replicator", "max_replication_retry_count", "10")),
+    {ok, #state{changes_feed_loop = Loop,
+                rep_db_name = RepDbName,
+                max_retries = Retries}}.
 
 
 handle_call({rep_db_update, {ChangeProps} = Change}, _From, State) ->
@@ -190,9 +186,8 @@ handle_cast(Msg, State) ->
     ?LOG_ERROR("Replication manager received unexpected cast ~p", [Msg]),
     {stop, {error, {unexpected_cast, Msg}}, State}.
 
-
 handle_info({couch_event, db_updated, {DbName, created}}, State) ->
-    case ?l2b(couch_config:get("replicator", "db", "_replicator")) of
+    case ?cfget_bin("replicator", "db", <<"_replicator">>) of
         DbName ->
             {noreply, restart(State)};
         _ ->
@@ -210,6 +205,19 @@ handle_info({'DOWN', _Ref, _, _, _}, State) ->
     % From a db monitor created by a replication process. Ignore.
     {noreply, State};
 
+handle_info({config_updated, barrel, {_, {"replicator", "db"}}}, State) ->
+    DbName = ?cfget_bin("replicator", "db", <<"_replicator">>),
+    if
+        State#state.rep_db_name /= DbName ->
+            {noreply, restart(State)};
+        true ->
+            {noreply, State}
+    end;
+handle_info({config_updated, barrel, {_, {"replicator", "max_replication_retry_count"}}}, State) ->
+    Retries = retries_value(?cfget("replicator", "max_replication_retry_count", "10")),
+    {noreply, State#state{max_retries = Retries}};
+handle_info({config_updated, _, _}, State) ->
+    {noreply, State};
 handle_info(Msg, State) ->
     ?LOG_ERROR("Replication manager received unexpected message ~p", [Msg]),
     {stop, {unexpected_msg, Msg}, State}.
@@ -567,7 +575,7 @@ zone(Hr, Min) ->
 
 
 ensure_rep_db_exists() ->
-    DbName = ?l2b(couch_config:get("replicator", "db", "_replicator")),
+    DbName = ?cfget_bin("replicator", "db", <<"_replicator">>),
     UserCtx = #user_ctx{roles = [<<"_admin">>, <<"_replicator">>]},
     case couch_db:open_int(DbName, [sys_db, {user_ctx, UserCtx}, nologifmissing]) of
     {ok, Db} ->

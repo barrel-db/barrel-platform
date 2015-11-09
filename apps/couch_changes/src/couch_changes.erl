@@ -15,6 +15,8 @@
 -include_lib("couch_mrview/include/couch_mrview.hrl").
 -include("couch_changes.hrl").
 
+-include_lib("barrel/include/config.hrl").
+
 -export([handle_changes/3]).
 
 % For the builtin filter _docs_ids, this is the maximum number
@@ -273,9 +275,7 @@ get_changes_timeout(Args, Callback) ->
         timeout = Timeout,
         feed = ResponseType
     } = Args,
-    DefaultTimeout = list_to_integer(
-        couch_config:get("httpd", "changes_timeout", "60000")
-    ),
+    DefaultTimeout = ?cfget_int("httpd", "changes_timeout", 60000),
     case Heartbeat of
     undefined ->
         case Timeout of

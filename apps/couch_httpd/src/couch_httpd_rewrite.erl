@@ -18,6 +18,8 @@
 -module(couch_httpd_rewrite).
 -export([handle_rewrite_req/3]).
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -define(SEPARATOR, $\/).
 -define(MATCH_ALL, {bind, <<"*">>}).
@@ -120,7 +122,7 @@ handle_rewrite_req(#httpd{
     QueryList = lists:map(fun decode_query_value/1, couch_httpd:qs(Req)),
 
     RewritesSoFar = erlang:get(?REWRITE_COUNT),
-    MaxRewrites = list_to_integer(couch_config:get("httpd", "rewrite_limit", "100")),
+    MaxRewrites = ?cfget_int("httpd", "rewrite_limit", 100),
     case RewritesSoFar >= MaxRewrites of
         true ->
             throw({bad_request, <<"Exceeded rewrite recursion limit">>});
@@ -446,7 +448,7 @@ path_to_list([<<>>|R], Acc, DotDotCount) ->
 path_to_list([<<"*">>|R], Acc, DotDotCount) ->
     path_to_list(R, [?MATCH_ALL|Acc], DotDotCount);
 path_to_list([<<"..">>|R], Acc, DotDotCount) when DotDotCount == 2 ->
-    case couch_config:get("httpd", "secure_rewrites", "true") of
+    case ?cfget("httpd", "secure_rewrites", "true") of
     "false" ->
         path_to_list(R, [<<"..">>|Acc], DotDotCount+1);
     _Else ->

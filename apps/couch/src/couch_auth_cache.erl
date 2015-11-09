@@ -15,17 +15,23 @@
 
 % public API
 -export([get_user_creds/1]).
+-export([start_link/0]).
+-export([handle_config_change/3]).
 
 % gen_server API
--export([start_link/0, init/1, handle_call/3, handle_info/2, handle_cast/2]).
--export([code_change/3, terminate/2]).
+-export([init/1, handle_call/3, handle_info/2, handle_cast/2, code_change/3, terminate/2]).
 
 -include("couch_db.hrl").
 -include("couch_js_functions.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -define(STATE, auth_state_ets).
 -define(BY_USER, auth_by_user_ets).
 -define(BY_ATIME, auth_by_atime_ets).
+
+
+-define(DEFAULT_USERDB, <<"_users">>).
+-define(DEFAULT_CACHE_SIZE, 50).
 
 -record(state, {
     max_cache_size = 0,
@@ -42,7 +48,7 @@ get_user_creds(UserName) when is_list(UserName) ->
     get_user_creds(?l2b(UserName));
 
 get_user_creds(UserName) ->
-    UserCreds = case couch_config:get("admins", ?b2l(UserName)) of
+    UserCreds = case ?cfget("admins", ?b2l(UserName)) of
     "-hashed-" ++ HashedPwdAndSalt ->
         % the name is an admin, now check to see if there is a user doc
         % which has a matching name, salt, and password_sha
@@ -111,6 +117,21 @@ validate_user_creds(UserCreds) ->
     UserCreds.
 
 
+init_hooks() ->
+    hooks:reg(config_key_update, ?MODULE, handle_config_change, 3).
+
+unregister_hooks() ->
+    hooks:unreg(config_key_update, ?MODULE, handle_config_change, 3).
+
+
+handle_config_change("couch_httpd_auth", "auth_cache_size", _Type) ->
+    Size = ?cfget_int("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
+handle_config_change("couch_httpd_auth", "authentication_db", _Type) ->
+    ok = gen_server:call(?MODULE, reinit_cache);
+handle_config_change(_Section, _Key, _Type) ->
+    ok.
+
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -120,30 +141,12 @@ init(_) ->
     ?BY_USER = ets:new(?BY_USER, [set, protected, named_table]),
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
-    ok = couch_config:register(
-        fun("couch_httpd_auth", "auth_cache_size", SizeList) ->
-            Size = list_to_integer(SizeList),
-            ok = gen_server:call(?MODULE, {new_max_cache_size, Size}, infinity);
-        ("couch_httpd_auth", "authentication_db", _DbName) ->
-            ok = gen_server:call(?MODULE, reinit_cache, infinity)
-        end
-    ),
-
-    AuthDbName = ?l2b(couch_config:get("couch_httpd_auth", "authentication_db")),
+    init_hooks(),
+    CacheSize = ?cfget_int("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    AuthDbName = ?cfget_bin("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
     _ = couch_event:subscribe_db_updates(AuthDbName),
+    {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
-    State = #state{
-        max_cache_size = list_to_integer(
-            couch_config:get("couch_httpd_auth", "auth_cache_size", "50")
-        )
-    },
-    {ok, reinit_cache(State)}.
-
-
-handle_call(reinit_cache, _From, State) ->
-    catch erlang:demonitor(State#state.db_mon_ref, [flush]),
-    exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
-    {reply, ok, reinit_cache(State)};
 
 handle_call(auth_db_compacted, _From, State) ->
     exec_if_auth_db(
@@ -153,13 +156,7 @@ handle_call(auth_db_compacted, _From, State) ->
     ),
     {reply, ok, State};
 
-handle_call({new_max_cache_size, NewSize},
-        _From, #state{cache_size = Size} = State) when NewSize >= Size ->
-    {reply, ok, State#state{max_cache_size = NewSize}};
 
-handle_call({new_max_cache_size, NewSize}, _From, State) ->
-    free_mru_cache_entries(State#state.cache_size - NewSize),
-    {reply, ok, State#state{max_cache_size = NewSize, cache_size = NewSize}};
 
 handle_call({fetch, UserName}, _From, State) ->
     {Credentials, NewState} = case ets:lookup(?BY_USER, UserName) of
@@ -177,8 +174,19 @@ handle_call({fetch, UserName}, _From, State) ->
 
 handle_call(refresh, _From, State) ->
     exec_if_auth_db(fun refresh_entries/1),
-    {reply, ok, State}.
+    {reply, ok, State};
 
+handle_call({new_max_cache_size, NewSize}, _From, #state{cache_size = Size} = State) when NewSize >= Size ->
+    {reply, ok, State#state{max_cache_size = NewSize}};
+
+handle_call({new_max_cache_size, NewSize}, _From, State) ->
+    free_mru_cache_entries(State#state.cache_size - NewSize),
+    {reply, ok, State#state{max_cache_size = NewSize, cache_size = NewSize}};
+
+handle_call(reinit_cache, _From, State) ->
+    catch erlang:demonitor(State#state.db_mon_ref, [flush]),
+    exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
+    {reply, ok, reinit_cache(State)}.
 
 handle_cast({cache_hit, UserName}, State) ->
     case ets:lookup(?BY_USER, UserName) of
@@ -211,6 +219,7 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
+    unregister_hooks(),
     [{auth_db_name, DbName}] = ets:lookup(?STATE, auth_db_name),
     catch couch_event:unsubscribe_db_updates(DbName),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
@@ -223,6 +232,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
+
 clear_cache(State) ->
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete_all_objects(?BY_USER),
@@ -232,8 +242,8 @@ clear_cache(State) ->
 
 reinit_cache(State) ->
     NewState = clear_cache(State),
-    AuthDbName = ?l2b(couch_config:get("couch_httpd_auth", "authentication_db")),
-    _ = couch_event:change_db(AuthDbName),
+    AuthDbName = ?cfget_bin("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
+    catch _ = couch_event:change_db(AuthDbName),
     true = ets:insert(?STATE, {auth_db_name, AuthDbName}),
     AuthDb = open_auth_db(),
     true = ets:insert(?STATE, {auth_db, AuthDb}),

@@ -19,22 +19,11 @@
 -export([start/2, stop/1]).
 -export([get_app_env/2]).
 
--define(CONF_FILES, ["couch.ini", "local.ini"]).
-
 start(_Type, _Args) ->
-    couch_util:start_app_deps(couch),
-    IniFiles = get_ini_files(),
-    couch_sup:start_link(IniFiles).
+    couch_sup:start_link().
 
 stop(_) ->
     ok.
-
-get_ini_files() ->
-    DefaultConfDir =  filename:join([code:root_dir(), "./etc"]),
-    Defaults = lists:map(fun(FName) ->
-                    filename:join(DefaultConfDir, FName)
-            end, ?CONF_FILES),
-    get_app_env(config_files, Defaults).
 
 get_app_env(Env, Default) ->
     case application:get_env(couch, Env) of

@@ -16,6 +16,7 @@
 -export([get_compression_method/0]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 % binaries compressed with snappy have their first byte set to this value
 -define(SNAPPY_PREFIX, 1).
@@ -26,16 +27,13 @@
 
 
 get_compression_method() ->
-    case couch_config:get("couchdb", "file_compression") of
-    undefined ->
-        ?DEFAULT_COMPRESSION;
-    Method1 ->
-        case string:tokens(Method1, "_") of
+    MethodStr = ?cfget("couchdb", "file_compression", ?DEFAULT_COMPRESSION),
+
+    case string:tokens(MethodStr, "_") of
         [Method] ->
             list_to_existing_atom(Method);
         [Method, Level] ->
             {list_to_existing_atom(Method), list_to_integer(Level)}
-        end
     end.
 
 

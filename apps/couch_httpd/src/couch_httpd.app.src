@@ -22,7 +22,7 @@
                         public_key,
                         ssl,
                         inets]},
-        {included_applications, [mochiweb, ibrowse, hackney]},
+        {included_applications, [mochiweb]},
         {mod, {couch_httpd_app, []}},
         {env, []}
 ]}.

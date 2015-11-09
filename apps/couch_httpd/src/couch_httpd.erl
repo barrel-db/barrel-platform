@@ -13,6 +13,8 @@
 -module(couch_httpd).
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_httpd.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -export([start_link/1,  handle_request/5]).
 
@@ -35,29 +37,27 @@
 -export([set_auth_handlers/0]).
 
 start_link(couch_http) ->
-    Port = couch_config:get("httpd", "port", "5984"),
+    Port = ?cfget_int("httpd", "port", 5984),
     start_link(couch_http, [{port, Port}]);
 start_link(couch_https) ->
-    Port = couch_config:get("ssl", "port", "6984"),
-    CertFile = couch_config:get("ssl", "cert_file", nil),
-    KeyFile = couch_config:get("ssl", "key_file", nil),
+    Port = ?cfget_int("ssl", "port", 6984),
+    CertFile = ?cfget("ssl", "cert_file", nil),
+    KeyFile = ?cfget("ssl", "key_file", nil),
     Options = case CertFile /= nil andalso KeyFile /= nil of
         true ->
             SslOpts = [{certfile, CertFile}, {keyfile, KeyFile}],
 
             %% set password if one is needed for the cert
-            SslOpts1 = case couch_config:get("ssl", "password", nil) of
+            SslOpts1 = case ?cfget("ssl", "password", nil) of
                 nil -> SslOpts;
                 Password ->
                     SslOpts ++ [{password, Password}]
             end,
             % do we verify certificates ?
-            FinalSslOpts = case couch_config:get("ssl",
-                    "verify_ssl_certificates", "false") of
+            FinalSslOpts = case ?cfget("ssl", "verify_ssl_certificates", "false") of
                 "false" -> SslOpts1;
                 "true" ->
-                    case couch_config:get("ssl",
-                            "cacert_file", nil) of
+                    case ?cfget("ssl", "cacert_file", nil) of
                         nil ->
                             io:format("Verify SSL certificate "
                                 ++"enabled but file containing "
@@ -65,16 +65,13 @@ start_link(couch_https) ->
                                 ++"missing", []),
                             throw({error, missing_cacerts});
                         CaCertFile ->
-                            Depth = list_to_integer(couch_config:get("ssl",
-                                    "ssl_certificate_max_depth",
-                                    "1")),
+                            Depth = ?cfget_int("ssl", "ssl_certificate_max_depth", 1),
                             FinalOpts = [
                                 {cacertfile, CaCertFile},
                                 {depth, Depth},
                                 {verify, verify_peer}],
                             % allows custom verify fun.
-                            case couch_config:get("ssl",
-                                    "verify_fun", nil) of
+                            case ?cfget("ssl", "verify_fun", nil) of
                                 nil -> FinalOpts;
                                 SpecStr ->
                                     FinalOpts
@@ -83,49 +80,46 @@ start_link(couch_https) ->
                     end
             end,
 
-            [{port, Port},
-                {ssl, true},
-                {ssl_opts, FinalSslOpts}];
+            [{port, Port}, {ssl, true}, {ssl_opts, FinalSslOpts}];
         false ->
             io:format("SSL enabled but PEM certificates are missing.", []),
             throw({error, missing_certs})
     end,
     start_link(couch_https, Options).
+
 start_link(Name, Options) ->
     % read config and register for configuration changes
 
     % just stop if one of the config settings change. couch_sup
     % will restart us and then we will pick up the new settings.
 
-    BindAddress = couch_config:get("httpd", "bind_address", any),
+    BindAddress = ?cfget("httpd", "bind_address", any),
     validate_bind_address(BindAddress),
     DefaultSpec = "{couch_httpd_db, handle_request}",
     DefaultFun = make_arity_1_fun(
-        couch_config:get("httpd", "default_handler", DefaultSpec)
+        ?cfget("httpd", "default_handler", DefaultSpec)
     ),
 
     UrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
             {?l2b(UrlKey), make_arity_1_fun(SpecStr)}
-        end, couch_config:get("httpd_global_handlers")),
+        end, ?cfget("httpd_global_handlers")),
 
     DbUrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
             {?l2b(UrlKey), make_arity_2_fun(SpecStr)}
-        end, couch_config:get("httpd_db_handlers")),
+        end, ?cfget("httpd_db_handlers")),
 
     DesignUrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
             {?l2b(UrlKey), make_arity_3_fun(SpecStr)}
-        end, couch_config:get("httpd_design_handlers")),
+        end, ?cfget("httpd_design_handlers")),
 
     UrlHandlers = dict:from_list(UrlHandlersList),
     DbUrlHandlers = dict:from_list(DbUrlHandlersList),
     DesignUrlHandlers = dict:from_list(DesignUrlHandlersList),
-    {ok, ServerOptions} = couch_util:parse_term(
-        couch_config:get("httpd", "server_options", "[]")),
-    {ok, SocketOptions} = couch_util:parse_term(
-        couch_config:get("httpd", "socket_options", "[]")),
+    {ok, ServerOptions} = couch_util:parse_term(?cfget("httpd", "server_options", "[]")),
+    {ok, SocketOptions} = couch_util:parse_term(?cfget("httpd", "socket_options", "[]")),
 
     set_auth_handlers(),
 
@@ -155,8 +149,7 @@ start_link(Name, Options) ->
     mochiweb_http:start_link(FinalOptions).
 
 set_auth_handlers() ->
-    AuthenticationSrcs = make_fun_spec_strs(
-        couch_config:get("httpd", "authentication_handlers", "")),
+    AuthenticationSrcs = make_fun_spec_strs(?cfget("httpd", "authentication_handlers", "")),
     AuthHandlers = lists:map(
         fun(A) -> {make_arity_1_fun(A), ?l2b(A)} end, AuthenticationSrcs),
     ok = application:set_env(couch_httpd, auth_handlers, AuthHandlers).
@@ -355,7 +348,7 @@ handle_request_int(MochiReq, DefaultFun,
 authenticate_request(#httpd{user_ctx=#user_ctx{}} = Req, _AuthHandlers) ->
     Req;
 authenticate_request(#httpd{} = Req, []) ->
-    case couch_config:get("couch_httpd_auth", "require_valid_user", "false") of
+    case ?cfget("couch_httpd_auth", "require_valid_user", "false") of
     "true" ->
         throw({unauthorized, <<"Authentication required.">>});
     "false" ->
@@ -461,7 +454,7 @@ path(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(path).
 
 host_for_request(#httpd{mochi_req=MochiReq}) ->
-    XHost = couch_config:get("httpd", "x_forwarded_host", "X-Forwarded-Host"),
+    XHost = ?cfget("httpd", "x_forwarded_host", "X-Forwarded-Host"),
     case MochiReq:get_header_value(XHost) of
         undefined ->
             case MochiReq:get_header_value("Host") of
@@ -479,11 +472,11 @@ host_for_request(#httpd{mochi_req=MochiReq}) ->
 
 absolute_uri(#httpd{mochi_req=MochiReq}=Req, Path) ->
     Host = host_for_request(Req),
-    XSsl = couch_config:get("httpd", "x_forwarded_ssl", "X-Forwarded-Ssl"),
+    XSsl = ?cfget("httpd", "x_forwarded_ssl", "X-Forwarded-Ssl"),
     Scheme = case MochiReq:get_header_value(XSsl) of
                  "on" -> "https";
                  _ ->
-                     XProto = couch_config:get("httpd", "x_forwarded_proto", "X-Forwarded-Proto"),
+                     XProto = ?cfget("httpd", "x_forwarded_proto", "X-Forwarded-Proto"),
                      case MochiReq:get_header_value(XProto) of
                          %% Restrict to "https" and "http" schemes only
                          "https" -> "https";
@@ -517,8 +510,7 @@ body_length(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(body_length).
 
 body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
-    MaxSize = list_to_integer(
-        couch_config:get("couchdb", "max_document_size", "4294967296")),
+    MaxSize = ?cfget_int("couchdb", "max_document_size", 4294967296),
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
@@ -723,7 +715,7 @@ initialize_jsonp(Req) ->
         CallBack ->
             try
                 % make sure jsonp is configured on (default off)
-                case couch_config:get("httpd", "allow_jsonp", "false") of
+                case ?cfget("httpd", "allow_jsonp", "false") of
                 "true" ->
                     validate_callback(CallBack);
                 _Else ->
@@ -818,16 +810,16 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
         % this is where the basic auth popup is triggered
         case MochiReq:get_header_value("X-CouchDB-WWW-Authenticate") of
         undefined ->
-            case couch_config:get("httpd", "WWW-Authenticate", nil) of
+            case ?cfget("httpd", "WWW-Authenticate", nil) of
             nil ->
                 % If the client is a browser and the basic auth popup isn't turned on
                 % redirect to the session page.
                 case ErrorStr of
                 <<"unauthorized">> ->
-                    case couch_config:get("couch_httpd_auth", "authentication_redirect", nil) of
+                    case ?cfget("couch_httpd_auth", "authentication_redirect", nil) of
                     nil -> {Code, []};
                     AuthRedirect ->
-                        case couch_config:get("couch_httpd_auth", "require_valid_user", "false") of
+                        case ?cfget("couch_httpd_auth", "require_valid_user", "false") of
                         "true" ->
                             % send the browser popup header no matter what if we are require_valid_user
                             {Code, [{"WWW-Authenticate", "Basic realm=\"server\""}]};

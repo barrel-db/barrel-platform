@@ -17,6 +17,8 @@
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 % External API
 
@@ -36,12 +38,9 @@ init([Name, Command]) ->
     ?LOG_INFO("EXTERNAL: Starting process for: ~s", [Name]),
     ?LOG_INFO("COMMAND: ~s", [Command]),
     process_flag(trap_exit, true),
-    Timeout = list_to_integer(couch_config:get("couchdb", "os_process_timeout",
-        "5000")),
+    Timeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
+    barrel_config:subscribe(),
     {ok, Pid} = couch_os_process:start_link(Command, [{timeout, Timeout}]),
-    couch_config:register(fun("couchdb", "os_process_timeout", NewTimeout) ->
-        couch_os_process:set_timeout(Pid, list_to_integer(NewTimeout))
-    end),
     {ok, {Name, Command, Pid}}.
 
 terminate(_Reason, {_Name, _Command, Pid}) ->
@@ -51,6 +50,11 @@ terminate(_Reason, {_Name, _Command, Pid}) ->
 handle_call({execute, JsonReq}, _From, {Name, Command, Pid}) ->
     {reply, couch_os_process:prompt(Pid, JsonReq), {Name, Command, Pid}}.
 
+
+handle_info({config_updated, barrel, {_, {"couchdb", "os_process_timeout"}}}, {_, _, Pid}=State) ->
+    Timeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
+    couch_os_process:set_timeout(Pid, Timeout),
+    {noreply, State};
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State};
 handle_info({'EXIT', Pid, Reason}, {Name, Command, Pid}) ->

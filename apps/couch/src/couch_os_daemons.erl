@@ -12,12 +12,14 @@
 -module(couch_os_daemons).
 -behaviour(gen_server).
 
--export([start_link/0, info/0, info/1, config_change/2]).
+-export([start_link/0, info/0, info/1, config_change/3]).
 
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -record(daemon, {
     port,
@@ -42,12 +44,12 @@ info() ->
 info(Options) ->
     gen_server:call(?MODULE, {daemon_info, Options}).
 
-config_change(Section, Key) ->
+config_change(Section, Key, _) ->
     gen_server:cast(?MODULE, {config_change, Section, Key}).
 
 init(_) ->
     process_flag(trap_exit, true),
-    ok = couch_config:register(fun ?MODULE:config_change/2),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
     Table = ets:new(?MODULE, [protected, set, {keypos, #daemon.port}]),
     reload_daemons(Table),
     {ok, Table}.
@@ -220,14 +222,14 @@ stop_port(#daemon{port=Port}=D) ->
 
 
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section]) ->
-    KVs = couch_config:get(Section),
+    KVs = ?cfget(Section),
     Data = lists:map(fun({K, V}) -> {?l2b(K), ?l2b(V)} end, KVs),
     Json = iolist_to_binary(?JSON_ENCODE({Data})),
     port_command(Port, <<Json/binary, "\n">>),
     {ok, Daemon};
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section, Key]) ->
-    Value = case couch_config:get(Section, Key, null) of
-        null -> null;
+    Value = case ?cfget(Section, Key) of
+        undefined -> null;
         String -> ?l2b(String)
     end,
     Json = iolist_to_binary(?JSON_ENCODE(Value)),
@@ -271,7 +273,7 @@ handle_log_message(Name, Msg, Level) ->
 
 reload_daemons(Table) ->
     % List of daemons we want to have running.
-    Configured = lists:sort(couch_config:get("os_daemons")),
+    Configured = lists:sort(?cfget("os_daemons")),
 
     % Remove records for daemons that were halted.
     MSpecHalted = #daemon{name='$1', cmd='$2', status=halted, _='_'},
@@ -361,15 +363,13 @@ find_to_stop(_, [], Acc) ->
     Acc.
 
 should_halt(Errors) ->
-    RetryTimeCfg = couch_config:get("os_daemon_settings", "retry_time", "5"),
-    RetryTime = list_to_integer(RetryTimeCfg),
+    RetryTime = ?cfget_int("os_daemon_settings", "retry_time", 5),
 
     Now = os:timestamp(),
     RecentErrors = lists:filter(fun(Time) ->
         timer:now_diff(Now, Time) =< RetryTime * 1000000
     end, Errors),
 
-    RetryCfg = couch_config:get("os_daemon_settings", "max_retries", "3"),
-    Retries = list_to_integer(RetryCfg),
+    Retries = ?cfget_int("os_daemon_settings", "max_retries", 3),
 
     {length(RecentErrors) >= Retries, RecentErrors}.

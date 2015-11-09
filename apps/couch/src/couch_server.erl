@@ -22,7 +22,10 @@
 %% hooks
 -export([db_updated/2, ddoc_updated/2]).
 
+-export([config_change/3]).
+
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
 
 -record(server,{
     root_dir = [],
@@ -45,10 +48,10 @@ get_version(short) ->
 
 
 get_uuid() ->
-    case couch_config:get("couchdb", "uuid", nil) of
+    case ?cfget("couchdb", "uuid", nil) of
         nil ->
             UUID = couch_uuids:random(),
-            couch_config:set("couchdb", "uuid", ?b2l(UUID)),
+            ?cfset("couchdb", "uuid", UUID),
             UUID;
         UUID -> ?l2b(UUID)
     end.
@@ -89,7 +92,7 @@ delete(DbName, Options) ->
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
     maybe_add_sys_db_callbacks(?b2l(DbName), Options);
 maybe_add_sys_db_callbacks(DbName, Options) ->
-    case couch_config:get("replicator", "db", "_replicator") of
+    case ?cfget("replicator", "db", "_replicator") of
     DbName ->
         [
             {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
@@ -97,7 +100,7 @@ maybe_add_sys_db_callbacks(DbName, Options) ->
             sys_db | Options
         ];
     _ ->
-        case couch_config:get("couch_httpd_auth", "authentication_db", "_users") of
+        case ?cfget("couch_httpd_auth", "authentication_db", "_users") of
         DbName ->
         [
             {before_doc_update, fun couch_users_db:before_doc_update/2},
@@ -123,7 +126,7 @@ check_dbname(#server{dbname_regexp=RegExp}, DbName) ->
     end.
 
 is_admin(User, ClearPwd) ->
-    case couch_config:get("admins", User) of
+    case ?cfget("admins", User) of
     "-hashed-" ++ HashedPwdAndSalt ->
         [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
         couch_util:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
@@ -132,7 +135,7 @@ is_admin(User, ClearPwd) ->
     end.
 
 has_admins() ->
-    couch_config:get("admins") /= [].
+    ?cfget("admins") /= [].
 
 get_full_filename(Server, DbName) ->
     filename:join([Server#server.root_dir, "./" ++ DbName ++ ".couch"]).
@@ -144,7 +147,7 @@ hash_admin_passwords(Persist) ->
     lists:foreach(
         fun({User, ClearPassword}) ->
             HashedPassword = couch_passwords:hash_admin_password(ClearPassword),
-            couch_config:set("admins", User, ?b2l(HashedPassword), Persist)
+            ?cfset("admins", User, HashedPassword, Persist)
         end, couch_passwords:get_unhashed_admins()).
 
 
@@ -156,25 +159,23 @@ ddoc_updated(DbName, Event) ->
     couch_event:publish(ddoc_updated, {DbName, Event}).
 
 
+config_change("couchdb", "database_dir", _) ->
+    gen_server:cast(couch_server, config_change);
+config_change(_, _, _) ->
+    ok.
+
+
+
 init([]) ->
     % read config and register for configuration changes
 
     % just stop if one of the config settings change. couch_sup
     % will restart us and then we will pick up the new settings.
 
-    RootDir = couch_config:get("couchdb", "database_dir", "."),
-    Self = self(),
-    ok = couch_config:register(
-        fun("couchdb", "database_dir") ->
-            exit(Self, config_change)
-        end),
+    RootDir = ?cfget("couchdb", "database_dir", "."),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
     ok = couch_file:init_delete_dir(RootDir),
     hash_admin_passwords(),
-    ok = couch_config:register(
-        fun("admins", _Key, _Value, Persist) ->
-            % spawn here so couch_config doesn't try to call itself
-            spawn(fun() -> hash_admin_passwords(Persist) end)
-        end, false),
     {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
     ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
     ets:new(couch_dbs_by_pid, [set, private, named_table]),
@@ -313,6 +314,9 @@ handle_call({delete, DbName, _Options}, _From, Server) ->
     Error ->
         {reply, Error, Server}
     end.
+
+handle_cast(config_change, Server) ->
+    {stop, config_change, Server};
 
 handle_cast(Msg, _Server) ->
     exit({unknown_cast_message, Msg}).

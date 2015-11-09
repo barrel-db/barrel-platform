@@ -22,6 +22,8 @@
 
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -import(couch_httpd,
     [send_json/2,send_json/3,send_json/4,send_method_not_allowed/2,
@@ -37,7 +39,7 @@ handle_welcome_req(#httpd{method='GET'}=Req, WelcomeMessage) ->
         {couchdb, WelcomeMessage},
         {uuid, couch_server:get_uuid()},
         {version, list_to_binary(couch_server:get_version())}
-        ] ++ case couch_config:get("vendor") of
+        ] ++ case ?cfget("vendor") of
         [] ->
             [];
         Properties ->
@@ -146,28 +148,20 @@ handle_uuids_req(Req) ->
 % GET /_config
 handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    Grouped = lists:foldl(fun({{Section, Key}, Value}, Acc) ->
-        case dict:is_key(Section, Acc) of
-        true ->
-            dict:append(Section, {list_to_binary(Key), list_to_binary(Value)}, Acc);
-        false ->
-            dict:store(Section, [{list_to_binary(Key), list_to_binary(Value)}], Acc)
-        end
-    end, dict:new(), couch_config:all()),
-    KVs = dict:fold(fun(Section, Values, Acc) ->
-        [{list_to_binary(Section), {Values}} | Acc]
-    end, [], Grouped),
+    KVs = lists:foldl(fun({Section, Values0}, Acc) ->
+                Values = [{?l2b(K), ?l2b(V)} || {K, V} <- Values0],
+                [{list_to_binary(Section), {Values}} | Acc]
+    end, [], ?cfall()),
     send_json(Req, 200, {KVs});
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    KVs = [{list_to_binary(Key), list_to_binary(Value)}
-            || {Key, Value} <- couch_config:get(Section)],
+    KVs = [{?l2b(K), ?l2b(V)} || {K, V} <- ?cfget(?b2l(Section))],
     send_json(Req, 200, {KVs});
 % GET /_config/Section/Key
 handle_config_req(#httpd{method='GET', path_parts=[_, Section, Key]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    case couch_config:get(Section, Key, null) of
+    case ?cfget(?b2l(Section), ?b2l(Key), null) of
     null ->
         throw({not_found, unknown_config_value});
     Value ->
@@ -178,7 +172,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
       when (Method == 'PUT') or (Method == 'DELETE') ->
     ok = couch_httpd:verify_is_server_admin(Req),
     Persist = couch_httpd:header_value(Req, "X-Couch-Persist") /= "false",
-    case couch_config:get(<<"httpd">>, <<"config_whitelist">>, null) of
+    case ?cfget("httpd", "config_whitelist", null) of
         null ->
             % No whitelist; allow all changes.
             handle_approved_config_req(Req, Persist);
@@ -188,7 +182,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
             % Erlang term. To intentionally lock down the whitelist, supply a
             % well-formed list which does not include the whitelist config
             % variable itself.
-            FallbackWhitelist = [{<<"httpd">>, <<"config_whitelist">>}],
+            FallbackWhitelist = [{"httpd", "config_whitelist"}],
 
             Whitelist = case couch_util:parse_term(WhitelistValue) of
                 {ok, Value} when is_list(Value) ->
@@ -246,9 +240,11 @@ handle_approved_config_req(Req, Persist) ->
     end,
     handle_approved_config_req(Req, Persist, UseRawValue).
 
-handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section, Key]}=Req,
+handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section0, Key0]}=Req,
                            Persist, UseRawValue)
         when UseRawValue =:= false orelse UseRawValue =:= true ->
+    Section = ?b2l(Section0),
+    Key = ?b2l(Key0),
     RawValue = couch_httpd:json_body(Req),
     Value = case UseRawValue of
     true ->
@@ -256,7 +252,7 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section, Key]}=Re
         RawValue;
     false ->
         % Pre-process the value as necessary.
-        case Section of
+        case Section0 of
         <<"admins">> ->
             couch_passwords:hash_admin_password(RawValue);
         _ ->
@@ -264,10 +260,10 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section, Key]}=Re
         end
     end,
 
-    OldValue = couch_config:get(Section, Key, ""),
-    case couch_config:set(Section, Key, ?b2l(Value), Persist) of
+    OldValue = ?cfget_bin(Section, Key, <<"">>),
+    case ?cfset(Section, Key, Value, Persist) of
     ok ->
-        send_json(Req, 200, list_to_binary(OldValue));
+        send_json(Req, 200, OldValue);
     Error ->
         throw(Error)
     end;
@@ -277,13 +273,15 @@ handle_approved_config_req(#httpd{method='PUT'}=Req, _Persist, UseRawValue) ->
     send_json(Req, 400, {[{error, ?l2b(Err)}]});
 
 % DELETE /_config/Section/Key
-handle_approved_config_req(#httpd{method='DELETE',path_parts=[_,Section,Key]}=Req,
+handle_approved_config_req(#httpd{method='DELETE',path_parts=[_,Section0,Key0]}=Req,
                            Persist, _UseRawValue) ->
-    case couch_config:get(Section, Key, null) of
+    Section = ?b2l(Section0),
+    Key = ?b2l(Key0),
+    case ?cfget(Section, Key, null) of
     null ->
         throw({not_found, unknown_config_value});
     OldValue ->
-        couch_config:delete(Section, Key, Persist),
+        ?cfdel(Section, Key, Persist),
         send_json(Req, 200, list_to_binary(OldValue))
     end.
 
@@ -334,7 +332,7 @@ handle_log_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
 
 handle_up_req(#httpd{method='GET'} = Req) ->
-    case couch_config:get("couchdb", "maintenance_mode") of
+    case ?cfget("couchdb", "maintenance_mode") of
         "true" ->
             couch_httpd:send_json(Req, 404, {[{status, maintenance_mode}]});
         _ ->

@@ -13,7 +13,7 @@
 -module(couch_query_servers).
 -behaviour(gen_server).
 
--export([start_link/0, config_change/1]).
+-export([start_link/0, config_change/3]).
 
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2,code_change/3]).
 -export([start_doc_map/3, map_docs/2, map_doc_raw/2, stop_doc_map/1, raw_to_ejson/1]).
@@ -29,6 +29,8 @@
 -export([run_script/4]).
 
 -include("couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 -record(proc, {
     pid,
@@ -297,20 +299,17 @@ with_ddoc_proc(#doc{id=DDocId,revs={Start, [DiskRev|_]}}=DDoc, Fun) ->
 
 init([]) ->
     % register async to avoid deadlock on restart_child
-    Self = self(),
-    spawn(couch_config, register, [fun ?MODULE:config_change/1, Self]),
+    self() ! init,
+
 
     Langs = ets:new(couch_query_server_langs, [set, private]),
     LangLimits = ets:new(couch_query_server_lang_limits, [set, private]),
     PidProcs = ets:new(couch_query_server_pid_langs, [set, private]),
     LangProcs = ets:new(couch_query_server_procs, [set, private]),
 
-    ProcTimeout = list_to_integer(couch_config:get(
-                        "couchdb", "os_process_timeout", "5000")),
-    ReduceLimit = list_to_atom(
-        couch_config:get("query_server_config","reduce_limit","true")),
-    OsProcLimit = list_to_integer(
-        couch_config:get("query_server_config","os_process_limit","10")),
+    ProcTimeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
+    ReduceLimit = ?cfget_bool("query_server_config", "reduce_limit", true),
+    OsProcLimit = ?cfget_int("query_server_config", "os_process_limit", 10),
 
 
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
@@ -319,7 +318,7 @@ init([]) ->
         true = ets:insert(LangLimits, {?l2b(Lang), OsProcLimit, 0}), % 0 means no limit
         true = ets:insert(Langs, {?l2b(Lang),
                           Mod, Fun, SpecArg})
-    end, couch_config:get("query_servers")),
+    end, ?cfget("query_servers")),
 
 
     process_flag(trap_exit, true),
@@ -332,6 +331,7 @@ init([]) ->
     }}.
 
 terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
+    hooks:unreg(config_section_update, ?MODULE, config_change, 3),
     [couch_util:shutdown_sync(P) || {P,_} <- ets:tab2list(PidProcs)],
     ok.
 
@@ -381,6 +381,10 @@ handle_call({ret_proc, Proc}, _From, #qserver{
 handle_cast(_Whatever, Server) ->
     {noreply, Server}.
 
+handle_info(init, Server) ->
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
+    {noreply, Server};
+
 handle_info({'EXIT', _, _}, Server) ->
     {noreply, Server};
 handle_info({'DOWN', _, process, Pid, Status}, #qserver{
@@ -410,12 +414,14 @@ handle_info({'DOWN', _, process, Pid, Status}, #qserver{
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-config_change("query_servers") ->
+config_change("query_servers", _, _) ->
     supervisor:terminate_child(couch_secondary_services, query_servers),
     supervisor:restart_child(couch_secondary_services, query_servers);
-config_change("query_server_config") ->
+config_change("query_server_config", _, _) ->
     supervisor:terminate_child(couch_secondary_services, query_servers),
-    supervisor:restart_child(couch_secondary_services, query_servers).
+    supervisor:restart_child(couch_secondary_services, query_servers);
+config_change(_, _, _) ->
+    ok.
 
 % Private API
 

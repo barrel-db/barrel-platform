@@ -18,6 +18,7 @@
 
 % public API
 -export([start_link/0, stop/0]).
+-export([config_change/3]).
 -export([debug/2, info/2, warn/2, error/2]).
 -export([debug_on/0, info_on/0, warn_on/0, get_level/0, get_level_integer/0, set_level/1]).
 -export([debug_on/1, info_on/1, warn_on/1, get_level/1, get_level_integer/1, set_level/2]).
@@ -26,6 +27,8 @@
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
+
+-include_lib("barrel/include/config.hrl").
 
 
 -define(LEVEL_ERROR, 4).
@@ -123,26 +126,27 @@ start_link() ->
 stop() ->
     couch_event_sup:stop(couch_log).
 
+config_change("log", "file", _) ->
+    gen_server:cast(?MODULE, config_update);
+config_change("log", "level", _) ->
+    gen_server:cast(?MODULE, config_update);
+config_change("log", "include_sasl", _) ->
+    gen_server:cast(?MODULE, {config_update, include_sasl});
+config_change("log_level_by_module", _, _) ->
+    gen_server:cast(?MODULE, {config_update, log_level_by_module});
+config_change(_, _, _) ->
+    ok.
+
+
 init([]) ->
     % read config and register for configuration changes
-    ok = couch_config:register(fun
-                ("log", "file") ->
-                    gen_server:cast(?MODULE, config_update);
-                ("log", "level") ->
-                    gen_server:cast(?MODULE, config_update);
-                ("log", "include_sasl") ->
-                    gen_server:cast(?MODULE, {config_update, include_sasl});
-                ("log_level_by_module", _) ->
-                    gen_server:cast(?MODULE,
-                                    {config_update, log_level_by_module})
-            end),
-
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
     Filename = log_file(),
-    ALevel = list_to_atom(couch_config:get("log", "level", "info")),
+    ALevel = list_to_atom(?cfget("log", "level", "info")),
     Level = level_integer(ALevel),
-    Sasl = couch_config:get("log", "include_sasl", "true") =:= "true",
-    LevelByModule = couch_config:get("log_level_by_module"),
+    Sasl = ?cfget_bool("log", "include_sasl", true),
+    LevelByModule = ?cfget("log_level_by_module"),
 
     %% maybe start the log file backend
     maybe_start_logfile_backend(Filename, ALevel),
@@ -177,7 +181,7 @@ handle_call({set_level_integer, Module, NewLevel}, _From, State) ->
 
 handle_cast(config_update, #state{log_file=OldFilename}=State) ->
     Filename = log_file(),
-    ALevel = list_to_atom(couch_config:get("log", "level", "info")),
+    ALevel = list_to_atom(?cfget("log", "level", "info")),
     Level = level_integer(ALevel),
 
     %% set default module
@@ -195,10 +199,10 @@ handle_cast(config_update, #state{log_file=OldFilename}=State) ->
     {noreply, State#state{log_file=Filename, level = Level}};
 
 handle_cast({config_update, include_sasl}, State) ->
-    Sasl = couch_config:get("log", "include_sasl", "true") =:= "true",
+    Sasl = ?cfget_bool("log", "include_sasl", "true"),
     {noreply, State#state{sasl=Sasl}};
 handle_cast({config_update, log_level_by_module}, State) ->
-    LevelByModule = couch_config:get("log_level_by_module"),
+    LevelByModule = ?cfget("log_level_by_module"),
     lists:foreach(fun({Module, ModuleLevel}) ->
         ModuleLevelInteger = level_integer(list_to_atom(ModuleLevel)),
         ets:insert(?MODULE, {Module, ModuleLevelInteger})
@@ -235,8 +239,7 @@ terminate(_Arg, _State) ->
 read(Bytes, Offset) ->
     LogFileName = log_file(),
     LogFileSize = filelib:file_size(LogFileName),
-    MaxChunkSize = list_to_integer(
-        couch_config:get("httpd", "log_max_chunk_size", "1000000")),
+    MaxChunkSize = ?cfget_int("httpd", "log_max_chunk_size", 1000000),
     case Bytes > MaxChunkSize of
     true ->
         throw({bad_request, "'bytes' cannot exceed " ++
@@ -318,7 +321,7 @@ log_file() ->
         undefined -> "couchdb.log";
         FName -> FName
     end,
-    couch_config:get("log", "file", DefaultLogFile).
+    ?cfget("log", "file", DefaultLogFile).
 
 hfile({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack

@@ -12,6 +12,9 @@
 
 -module(couch_secondary_sup).
 -behaviour(supervisor).
+
+-include_lib("barrel/include/config.hrl").
+
 -export([init/1, start_link/0]).
 
 start_link() ->
@@ -30,5 +33,5 @@ init([]) ->
                 [Module]}
         end
         || {Name, SpecStr}
-        <- couch_config:get("daemons"), SpecStr /= ""],
+        <- ?cfget("daemons"), SpecStr /= ""],
     {ok, {{one_for_one, 10, 3600}, Children}}.

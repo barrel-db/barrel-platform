@@ -18,6 +18,9 @@
 
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
+-export([config_change/3]).
+
+-include_lib("barrel/include/config.hrl").
 
 -record(aggregate, {
     description = <<"">>,
@@ -89,10 +92,16 @@ collect_sample() ->
     gen_server:call(?MODULE, collect_sample, infinity).
 
 
+config_change("stats", _, _) ->
+    gen_server:cast(?MODULE, config_change);
+config_change(_, _, _) ->
+    ok.
+
+
 init(StatDescsFileName) ->
     % Create an aggregate entry for each {description, rate} pair.
     ets:new(?MODULE, [named_table, set, protected]),
-    SampleStr = couch_config:get("stats", "samples", "[0]"),
+    SampleStr = ?cfget("stats", "samples", "[0]"),
     {ok, Samples} = couch_util:parse_term(SampleStr),
     {ok, Descs} = file:consult(StatDescsFileName),
     lists:foreach(fun({Sect, Key, Value}) ->
@@ -104,13 +113,10 @@ init(StatDescsFileName) ->
             ets:insert(?MODULE, {{{Sect, Key}, Secs}, Agg})
         end, Samples)
     end, Descs),
+
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
     
-    Self = self(),
-    ok = couch_config:register(
-        fun("stats", _) -> exit(Self, config_change) end
-    ),
-    
-    Rate = list_to_integer(couch_config:get("stats", "rate", "1000")),
+    Rate = ?cfget_int("stats", "rate", 1000),
     % TODO: Add timer_start to kernel start options.
     {ok, TRef} = timer:apply_after(Rate, ?MODULE, collect_sample, []),
     {ok, {TRef, Rate}}.
@@ -152,6 +158,9 @@ handle_call(collect_sample, _, {OldTRef, SampleInterval}) ->
         ets:insert(?MODULE, {{Key, Rate}, NewAgg})
     end, ets:tab2list(?MODULE)),
     {reply, ok, {TRef, SampleInterval}}.
+
+handle_cast(config_change, State) ->
+    {stop, config_change, State};
 
 handle_cast(stop, State) ->
     {stop, normal, State}.

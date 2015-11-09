@@ -15,7 +15,7 @@
 
 -export([start_link/0, get_index/4, get_index/3, get_index/2]).
 -export([acquire_indexer/3, release_indexer/3]).
--export([config_change/2]).
+-export([config_change/3]).
 
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
@@ -96,7 +96,7 @@ index_reset(DbName, DDocId, Mod) ->
 
 init([]) ->
     process_flag(trap_exit, true),
-    couch_config:register(fun ?MODULE:config_change/2),
+    hooks:reg(config_index_update, ?MODULE, config_change, 3),
     ets:new(?BY_SIG, [protected, set, named_table]),
     ets:new(?BY_PID, [private, set, named_table]),
     ets:new(?BY_DB, [protected, bag, named_table]),
@@ -226,7 +226,7 @@ rem_from_ets(DbName, Sig, DDocId, Pid) ->
     ets:delete_object(?BY_DB, {DbName, {DDocId, Sig}}).
 
 
-config_change("couchdb", "view_index_dir") ->
+config_change("couchdb", "view_index_dir", _) ->
     exit(whereis(?MODULE), config_change);
-config_change("couchdb", "index_dir") ->
+config_change("couchdb", "index_dir", _) ->
     exit(whereis(?MODULE), config_change).

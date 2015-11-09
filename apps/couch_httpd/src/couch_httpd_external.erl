@@ -19,6 +19,8 @@
 -import(couch_httpd,[send_error/4]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("barrel/include/config.hrl").
+
 
 % handle_external_req/2
 % for the old type of config usage:
@@ -62,8 +64,7 @@ json_req_obj(#httpd{mochi_req=Req,
             }, Db, DocId) ->
     Body = case ReqBody of
         undefined ->
-            MaxSize = list_to_integer(
-                couch_config:get("couchdb", "max_document_size", "4294967296")),
+            MaxSize = ?cfget_int("couchdb", "max_document_size", 4294967296),
             Req:recv_body(MaxSize);
         Else -> Else
     end,
