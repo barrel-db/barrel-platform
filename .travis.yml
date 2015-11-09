@@ -4,14 +4,13 @@ otp_release:
     - 18.0
     - 18.1
 
-before_script:
+install:
     - "./support/bootstrap_travis.sh"
 
-
-script: "make"
+script: "./rebar3 compile"
 
 notifications:
     irc:
         - "irc.freenode.org#barreldb"
-    recipients:
+    email:
         - "bchesneay@gmail.com"
