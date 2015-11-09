@@ -8,3 +8,5 @@ script: "./rebar3 compile"
 notifications:
   irc:
     - "irc.freenode.org#barreldb"
+  recipients:
+  	- "bchesneay@gmail.com"
