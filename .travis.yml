@@ -4,6 +4,13 @@ otp_release:
     - 18.0
     - 18.1
 
+sudo: true
+
+before_install:
+    - sudo apt-get -y update
+    - sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
+    - sudo apt-get -y install libtool automake autoconf autoconf-archive
+
 install:
     - "./support/bootstrap_travis.sh"
 
