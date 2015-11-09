@@ -7,7 +7,7 @@ otp_release:
 install:
     - "./support/bootstrap_travis.sh"
 
-script: "./rebar3 compile"
+script: "DEBUG=1 ./rebar3 compile"
 
 notifications:
     irc:
