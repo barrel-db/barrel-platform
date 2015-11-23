@@ -6,11 +6,11 @@
  {<<"hooks">>,{pkg,<<"hooks">>,<<"1.1.1">>},0},
  {<<"ibrowse">>,{pkg,<<"barrel_ibrowse">>,<<"4.2.0">>},0},
  {<<"idna">>,{pkg,<<"idna">>,<<"1.0.2">>},1},
- {<<"jiffy">>,{pkg,<<"barrel_jiffy">>,<<"0.14.4">>},0},
+ {<<"jiffy">>,{pkg,<<"barrel_jiffy">>,<<"0.14.5">>},0},
  {<<"lager">>,{pkg,<<"lager">>,<<"3.0.1">>},0},
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.0">>},1},
  {<<"mochiweb">>,{pkg,<<"mochiweb">>,<<"2.12.2">>},0},
  {<<"oauth">>,{pkg,<<"barrel_oauth">>,<<"1.6.0">>},0},
  {<<"snappy">>,{pkg,<<"snappy">>,<<"1.1.1">>},0},
  {<<"ssl_verify_hostname">>,{pkg,<<"ssl_verify_hostname">>,<<"1.0.5">>},1},
- {<<"ucol_nif">>,{pkg,<<"ucol_nif">>,<<"1.1.2">>},0}].
+ {<<"ucol_nif">>,{pkg,<<"ucol_nif">>,<<"1.1.3">>},0}].
