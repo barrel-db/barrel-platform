@@ -25,5 +25,5 @@
     ]},
     {registered, []},
     {applications, [kernel, stdlib, couch_index]},
-    {included_applications, [ucol_nif]}
+    {included_applications, []}
 ]}.
