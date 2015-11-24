@@ -40,7 +40,7 @@ The main BARREL website is http://barrel-db.org
 ## Requirements
 
 - OS supported: Linux, OSX, BSDs (windows support is coming)
-- Erlang R15
+- Erlang 18.1
 - Curl
 - ICU
 - Spidermonkey 1.8.5
