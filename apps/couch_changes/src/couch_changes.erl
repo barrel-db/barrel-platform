@@ -25,6 +25,7 @@
 
 -record(changes_acc, {
     db,
+    start_seq,
     seq,
     prepend,
     filter,
@@ -58,9 +59,6 @@ handle_changes(Args1, Req, Db0) ->
             Args2 = Args1#changes_args{filter_fun= no_filter_fun(Style),
                                        filter_args=ViewArgs,
                                        view_name={DDoc, VName}},
-
-
-
             Start1 = fun() ->
                              {ok, Infos} = couch_mrview:get_view_info(Db0#db.name, DDoc, VName),
                              StartSeq = case Dir of
@@ -74,7 +72,6 @@ handle_changes(Args1, Req, Db0) ->
                                                         Since
                                                 end
                                         end,
-                             couch_log:info("start sequence is ~p~n", [StartSeq]),
                              {ok, Db} = couch_db:reopen(Db0),
                              {Db, StartSeq}
                      end,
@@ -139,20 +136,14 @@ handle_changes(Args1, Req, Db0) ->
             {Db, StartSeq} = Start(),
             UserAcc2 = start_sending_changes(Callback, UserAcc, Feed),
             {Timeout, TimeoutFun} = get_changes_timeout(Args, Callback),
-            Acc0 = build_acc(Args, Callback, UserAcc2, Db, StartSeq,
-                             <<"">>, Timeout, TimeoutFun),
+            Acc0 = build_acc(Args, Callback, UserAcc2, Db, StartSeq,<<"">>, Timeout, TimeoutFun),
             try
-                keep_sending_changes(
-                    Args#changes_args{dir=fwd},
-                    Acc0,
-                    true)
+                keep_sending_changes(Args#changes_args{dir=fwd}, Acc0, true)
             after
                 couch_event:unsubscribe(Event),
                 case FilterName of
                     "_view" ->
-                        couch_index_server:release_indexer(couch_mrview_index,
-                                                           Db0#db.name,
-                                                           DDocId);
+                        couch_index_server:release_indexer(couch_mrview_index, Db0#db.name, DDocId);
                     _ ->
                         ok
                 end,
@@ -167,12 +158,11 @@ handle_changes(Args1, Req, Db0) ->
             {Db, StartSeq} = Start(),
             Acc0 = build_acc(Args#changes_args{feed="normal"}, Callback,
                              UserAcc2, Db, StartSeq, <<>>, Timeout, TimeoutFun),
-            {ok, #changes_acc{seq = LastSeq, user_acc = UserAcc3}} =
-                send_changes(
-                    Args#changes_args{feed="normal"},
-                    Acc0,
-                    true),
-            end_sending_changes(Callback, UserAcc3, LastSeq, Feed)
+            {ok, #changes_acc{start_seq=StartSeq,
+                              seq = LastSeq,
+                              user_acc = UserAcc3}} =send_changes(Args#changes_args{feed="normal"}, Acc0, true),
+
+            end_sending_changes(Callback, UserAcc3, StartSeq, LastSeq, Feed)
         end
     end.
 
@@ -327,6 +317,7 @@ build_acc(Args, Callback, UserAcc, Db, StartSeq, Prepend, Timeout, TimeoutFun) -
     } = Args,
     #changes_acc{
         db = Db,
+        start_seq = StartSeq,
         seq = StartSeq,
         prepend = Prepend,
         filter = FilterFun,
@@ -463,12 +454,12 @@ keep_sending_changes(Args, Acc0, FirstRound) ->
     {ok, ChangesAcc} = send_changes(Args#changes_args{dir=fwd}, Acc0, FirstRound),
     #changes_acc{
         db = Db, callback = Callback, timeout = Timeout, timeout_fun = TimeoutFun,
-        seq = EndSeq, prepend = Prepend2, user_acc = UserAcc2, limit = NewLimit
+        start_seq=StartSeq, seq = EndSeq, prepend = Prepend2, user_acc = UserAcc2, limit = NewLimit
     } = ChangesAcc,
 
     couch_db:close(Db),
     if Limit > NewLimit, ResponseType == "longpoll" ->
-        end_sending_changes(Callback, UserAcc2, EndSeq, ResponseType);
+        end_sending_changes(Callback, UserAcc2, StartSeq, EndSeq, ResponseType);
     true ->
         case wait_db_updated(Timeout, TimeoutFun, UserAcc2) of
         {updated, UserAcc4} ->
@@ -486,15 +477,15 @@ keep_sending_changes(Args, Acc0, FirstRound) ->
                     timeout_fun = TimeoutFun},
                   false);
             _Else ->
-                end_sending_changes(Callback, UserAcc2, EndSeq, ResponseType)
+                end_sending_changes(Callback, UserAcc2, StartSeq, EndSeq, ResponseType)
             end;
         {stop, UserAcc4} ->
-            end_sending_changes(Callback, UserAcc4, EndSeq, ResponseType)
+            end_sending_changes(Callback, UserAcc4, StartSeq, EndSeq, ResponseType)
         end
     end.
 
-end_sending_changes(Callback, UserAcc, EndSeq, ResponseType) ->
-    Callback({stop, EndSeq}, ResponseType, UserAcc).
+end_sending_changes(Callback, UserAcc, StartSeq, EndSeq, ResponseType) ->
+    Callback({stop, StartSeq, EndSeq}, ResponseType, UserAcc).
 
 view_changes_enumerator({{Seq, _Key, DocId}, Val}, Acc) ->
     #changes_acc{db = Db0, include_removed_docs=IncludeRemovedDocs} = Acc,

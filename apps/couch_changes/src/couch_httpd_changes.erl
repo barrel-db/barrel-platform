@@ -53,18 +53,19 @@ handle_changes_req1(Req, #db{name=DbName}=Db) ->
             ok;
         (start, _) ->
             couch_httpd:send_chunk(Resp, "{\"results\":[\n");
-        ({stop, _EndSeq}, "eventsource") ->
+        ({stop, _StartSeq, _EndSeq}, "eventsource") ->
             couch_httpd:end_json_response(Resp);
-        ({stop, EndSeq}, "continuous") ->
+        ({stop, StartSeq, EndSeq}, "continuous") ->
             couch_httpd:send_chunk(
                 Resp,
-                [?JSON_ENCODE({[{<<"last_seq">>, EndSeq}]}) | "\n"]
+                [?JSON_ENCODE({[{<<"start_seq">>, StartSeq},
+                                {<<"last_seq">>, EndSeq}]}) | "\n"]
             ),
             couch_httpd:end_json_response(Resp);
-        ({stop, EndSeq}, _) ->
+        ({stop, StartSeq, EndSeq}, _) ->
             couch_httpd:send_chunk(
                 Resp,
-                io_lib:format("\n],\n\"last_seq\":~w}\n", [EndSeq])
+                io_lib:format("\n],\n\"start_seq\":~w,\n\"last_seq\":~w}\n", [StartSeq, EndSeq])
             ),
             couch_httpd:end_json_response(Resp);
         (timeout, _) ->
