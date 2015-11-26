@@ -300,9 +300,6 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
 
     UpdateView = fun(#mrview{id_num=ViewId}=View, {ViewId, KVs}) ->
         RemKVs = couch_util:dict_find(ViewId, RemByView, []),
-        couch_log:debug("indexing view ~p~n - add: ~p~n - rem: ~p~n", [ViewId,
-                                                                      KVs,
-                                                                      RemKVs]),
         ToAdd = KVs ++ RemKVs,
         {ToFind, SKVs, KSKVs, Seqs} =
         lists:foldl(fun

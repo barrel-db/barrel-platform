@@ -59,10 +59,6 @@ start_link(couch_https) ->
                 "true" ->
                     case ?cfget("ssl", "cacert_file", nil) of
                         nil ->
-                            io:format("Verify SSL certificate "
-                                ++"enabled but file containing "
-                                ++"PEM encoded CA certificates is "
-                                ++"missing", []),
                             throw({error, missing_cacerts});
                         CaCertFile ->
                             Depth = ?cfget_int("ssl", "ssl_certificate_max_depth", 1),
@@ -82,7 +78,6 @@ start_link(couch_https) ->
 
             [{port, Port}, {ssl, true}, {ssl_opts, FinalSslOpts}];
         false ->
-            io:format("SSL enabled but PEM certificates are missing.", []),
             throw({error, missing_certs})
     end,
     start_link(couch_https, Options).

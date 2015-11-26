@@ -16,7 +16,6 @@ loop(Fun, Acc, Options) ->
     [{timeout, Timeout}, {heartbeat, Heartbeat}] = Options,
     receive
         {couch_event, db_updated, Event} ->
-            io:format("got db event ~p~n", [Event]),
             case Fun(Event, Acc) of
                 {ok, Acc1} ->
                     loop(Fun, Acc1, Options);
