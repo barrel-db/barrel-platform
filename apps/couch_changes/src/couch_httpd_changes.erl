@@ -117,7 +117,7 @@ handle_changes_req1(Req, #db{name=DbName}=Db) ->
     end.
 
 
-parse_changes_query(Req, Db) ->
+parse_changes_query(Req, _Db) ->
     ChangesArgs = lists:foldl(fun({Key, Value}, Args) ->
         case {string:to_lower(Key), Value} of
         {"feed", _} ->
@@ -125,10 +125,7 @@ parse_changes_query(Req, Db) ->
         {"descending", "true"} ->
             Args#changes_args{dir=rev};
         {"since", "now"} ->
-            UpdateSeq = couch_util:with_db(Db#db.name, fun(WDb) ->
-                                        couch_db:get_update_seq(WDb)
-                                end),
-            Args#changes_args{since=UpdateSeq};
+            Args#changes_args{since=now};
         {"since", _} ->
             Args#changes_args{since=list_to_integer(Value)};
         {"last-event-id", _} ->

@@ -97,8 +97,7 @@ view_changes_since(Db, DDoc, VName, StartSeq, Fun, Acc) ->
 view_changes_since(Db, DDoc, VName, StartSeq, UserFun, Options, Acc) ->
     IdxType = changes_idx(Options),
     Args0 = make_view_changes_args(Options, IdxType),
-    {ok, {_, View}, _, Args} = couch_mrview_util:get_view(Db, DDoc, VName,
-                                                          Args0),
+    {ok, {_, View}, _, Args} = couch_mrview_util:get_view(Db, DDoc, VName,Args0),
     OptList = make_view_changes_opts(StartSeq, Options, Args, IdxType),
     Btree = case IdxType of
                 by_seq -> View#mrview.seq_btree;
@@ -121,8 +120,7 @@ count_view_changes_since(Db, DDoc, VName, SinceSeq, Options) ->
     case IdxType of
         by_seq ->
             Args0 = make_view_changes_args(Options, IdxType),
-            {ok, {_, View}, _, Args} = couch_mrview_util:get_view(Db, DDoc,
-                                                                  VName, Args0),
+            {ok, {_, View}, _, Args} = couch_mrview_util:get_view(Db, DDoc, VName, Args0),
             OptList = make_view_changes_opts(SinceSeq, Options, Args, IdxType),
             lists:foldl(
               fun(Opts, Acc0) ->

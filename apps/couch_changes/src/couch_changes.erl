@@ -53,22 +53,28 @@ handle_changes(Args1, Req, Db0) ->
 
     {Start, Args} = case FilterName of
         "_view" ->
-            couch_log:info("filter is a view~n", []),
             ViewArgs = make_view_args(Req),
             {DDoc, VName} = parse_view_param(Req),
             Args2 = Args1#changes_args{filter_fun= no_filter_fun(Style),
                                        filter_args=ViewArgs,
                                        view_name={DDoc, VName}},
+
+
+
             Start1 = fun() ->
-                             {ok, Infos} = couch_mrview:get_view_info(Db0#db.name,
-                                                                      DDoc, VName),
+                             {ok, Infos} = couch_mrview:get_view_info(Db0#db.name, DDoc, VName),
                              StartSeq = case Dir of
                                             rev ->
-                                                proplists:get_value(group_seq,
-                                                                    Infos, 0);
+                                                proplists:get_value(group_seq, Infos, 0);
                                             fwd ->
-                                                Since
+                                                case Since of
+                                                    now ->
+                                                        proplists:get_value(group_seq, Infos, 0);
+                                                    _ ->
+                                                        Since
+                                                end
                                         end,
+                             couch_log:info("start sequence is ~p~n", [StartSeq]),
                              {ok, Db} = couch_db:reopen(Db0),
                              {Db, StartSeq}
                      end,
@@ -83,7 +89,14 @@ handle_changes(Args1, Req, Db0) ->
                                            rev ->
                                                couch_db:get_update_seq(Db);
                                            fwd ->
-                                               Since
+                                               case Since of
+                                                   now ->
+                                                       couch_util:with_db(Db#db.name, fun(WDb) ->
+                                                                                              couch_db:get_update_seq(WDb)
+                                                                                      end);
+                                                   _ ->
+                                                        Since
+                                               end
                                        end,
                             {Db, StartSeq}
                     end,
@@ -351,8 +364,8 @@ send_changes(Args, Acc0, FirstRound) ->
                 Db, StartSeq, Dir, fun changes_enumerator/2, Acc0);
         "_view" ->
             {DDoc, VName} = ViewName,
-            couch_mrview:view_changes_since(
-              Db#db.name, DDoc, VName, StartSeq, fun view_changes_enumerator/2, FilterArgs, Acc0);
+            couch_mrview:view_changes_since(Db#db.name, DDoc, VName, StartSeq, fun view_changes_enumerator/2,
+                                            [{dir, Dir} | FilterArgs], Acc0);
 
         _ ->
             couch_db:changes_since(
@@ -362,12 +375,10 @@ send_changes(Args, Acc0, FirstRound) ->
         case FilterName of
             "_view" ->
                 {DDoc, VName} = ViewName,
-                io:format("filter args ~p~n", [FilterArgs]),
                 couch_mrview:view_changes_since(
-                    Db#db.name, DDoc, VName, StartSeq, fun view_changes_enumerator/2, FilterArgs, Acc0);
+                    Db#db.name, DDoc, VName, StartSeq, fun view_changes_enumerator/2, [{dir, Dir} | FilterArgs], Acc0);
             _ ->
-                couch_db:changes_since(
-                    Db, StartSeq, fun changes_enumerator/2, [{dir, Dir}], Acc0)
+                couch_db:changes_since(  Db, StartSeq, fun changes_enumerator/2, [{dir, Dir}], Acc0)
         end
     end.
 
@@ -491,13 +502,13 @@ view_changes_enumerator({{Seq, _Key, DocId}, Val}, Acc) ->
 
     case couch_db:get_doc_info(Db, DocId) of
         {ok, DocInfo} when Val /= removed ->
-           changes_enumerator(DocInfo, Acc, Seq);
+            changes_enumerator(DocInfo, Acc, Seq);
         {ok, DocInfo} ->
             #doc_info{revs=[#rev_info{deleted= Del}=RevInfo | Rest]} = DocInfo,
             case {Del, IncludeRemovedDocs} of
                 {true, _} ->
                     changes_enumerator(DocInfo, Acc, Seq);
-		{false, true} ->
+                {false, true} ->
                     RevInfo2 = RevInfo#rev_info{deleted= removed},
                     DocInfo2 = DocInfo#doc_info{revs = [RevInfo2 | Rest]},
                     changes_enumerator(DocInfo2, Acc, Seq);
