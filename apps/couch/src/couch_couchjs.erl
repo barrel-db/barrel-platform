@@ -19,7 +19,6 @@
 
 start_link(JsFile) ->
     Command = filename:join([couch_util:priv_dir(), "couchjs"]),
-    couch_log:info("js file is ~p~n", [JsFile]),
     couch_os_process:start_link(Command ++ " " ++ JsFile).
 
 set_timeout(Pid, Timeout) ->
@@ -29,9 +28,7 @@ send(Pid, Data) ->
     couch_os_process:send(Pid, Data).
 
 prompt(Pid, Data) ->
-    Res = couch_os_process:prompt(Pid, Data),
-    couch_log:info("result is ~p~n", [Res]),
-    Res.
+    couch_os_process:prompt(Pid, Data).
 
 writeline(OsProc, Data) ->
     couch_os_process:writeline(OsProc, Data).
