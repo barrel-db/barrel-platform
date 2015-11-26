@@ -149,7 +149,7 @@ get_info(Db, DDoc) ->
 get_view_info(#db{name=DbName}, DDoc, VName) ->
     get_view_info(DbName, DDoc, VName);
 get_view_info(DbName, DDoc, VName) ->
-    {ok, {_, View}, _, Args} = couch_mrview_util:get_view(DbName, DDoc, VName, #mrargs{direction=rev}),
+    {ok, {_, View}, _, _Args} = couch_mrview_util:get_view(DbName, DDoc, VName, #mrargs{direction=rev}),
     %% get the total number of rows
     {ok, TotalRows} =  couch_mrview_util:get_row_count(View),
 
@@ -488,10 +488,14 @@ default_cb(Row, Acc) ->
 
 
 to_mrargs(KeyList) ->
-    lists:foldl(fun({Key, Value}, Acc) ->
-        Index = lookup_index(couch_util:to_existing_atom(Key)),
-        setelement(Index, Acc, Value)
-    end, #mrargs{}, KeyList).
+    lists:foldl(fun
+                    ({dir, Value}, Acc) ->
+                        Index = lookup_index(couch_util:to_existing_atom(direction)),
+                        setelement(Index, Acc, Value);
+                    ({Key, Value}, Acc) ->
+                        Index = lookup_index(couch_util:to_existing_atom(Key)),
+                        setelement(Index, Acc, Value)
+                end, #mrargs{}, KeyList).
 
 
 lookup_index(Key) ->
@@ -518,6 +522,8 @@ make_view_changes_args(_Option, _) ->
 
 make_view_changes_opts(StartSeq, _Options, Args, by_key) ->
     couch_mrview_util:changes_key_opts(StartSeq, Args);
+make_view_changes_opts(StartSeq, Options, #mrargs{direction=rev}, _) ->
+    [[{start_key, StartSeq}] ++ Options];
 make_view_changes_opts(StartSeq, Options, _Args, _) ->
     [[{start_key, StartSeq+1}] ++ Options].
 
