@@ -40,12 +40,13 @@
 -include("couch_db.hrl").
 -include_lib("barrel/include/config.hrl").
 
--record(server,{
-    root_dir = [],
-    dbname_regexp,
-    dbs_open=0,
-    start_time=""
-    }).
+-record(state, {root_dir = [],
+                dbname_regexp,
+                dbs_open=0,
+                start_time="",
+                pending = []}).
+
+-record(pending, {db, ref, from, reqtype, clients}).
 
 %%%----------------------------------------------------------------------
 %%% API
@@ -74,8 +75,8 @@ get_uuid() ->
     end.
 
 get_stats() ->
-    {ok, #server{start_time=Time,dbs_open=Open}} =
-            gen_server:call(couch_server, get_server),
+    {ok, #state{start_time=Time,dbs_open=Open}} =
+            gen_server:call(couch_server, get_state),
     [{start_time, ?l2b(Time)}, {dbs_open, Open}].
 
 sup_start_link() ->
@@ -131,15 +132,13 @@ hash_admin_passwords(Persist) ->
         end, couch_passwords:get_unhashed_admins()).
 
 
-
-
 all_databases() ->
     {ok, DbList} = all_databases(
         fun(DbName, Acc) -> {ok, [DbName | Acc]} end, []),
     {ok, lists:usort(DbList)}.
 
 all_databases(Fun, Acc0) ->
-    {ok, #server{root_dir=Root}} = gen_server:call(couch_server, get_server),
+    {ok, #state{root_dir=Root}} = gen_server:call(couch_server, get_state),
     NormRoot = couch_util:normpath(Root),
     FinalAcc = try
         filelib:fold_files(Root, "^[a-z0-9\\_\\$()\\+\\-]*[\\.]couch$", true,
@@ -185,81 +184,40 @@ init([]) ->
 
 
     process_flag(trap_exit, true),
-    {ok, #server{root_dir=RootDir,
-                dbname_regexp=RegExp,
-                start_time=couch_util:rfc1123_date()}}.
+    {ok, #state{root_dir = RootDir,
+                 dbname_regexp = RegExp,
+                 start_time = couch_util:rfc1123_date(),
+                 pending = []}}.
 
-handle_call(get_server, _From, Server) ->
-    {reply, {ok, Server}, Server};
-handle_call({open, DbName, Options}, {FromPid,_}=From, Server) ->
-    case ets:lookup(couch_dbs_by_name, DbName) of
-    [] ->
-        do_open_db(DbName, Server, Options, From);
-    [{_, MainPid}] ->
-        {reply, couch_db:open_ref_counted(MainPid, FromPid), Server}
-    end;
-handle_call({create, DbName, Options}, From, Server) ->
-    case ets:lookup(couch_dbs_by_name, DbName) of
-    [] ->
-        do_open_db(DbName, Server, [create | Options], From);
-    [_AlreadyRunningDb] ->
-        {reply, file_exists, Server}
-    end;
-handle_call({delete, DbName, _Options}, _From, Server) ->
-    DbNameList = binary_to_list(DbName),
-    case check_dbname(Server, DbNameList) of
-    ok ->
-        FullFilepath = get_full_filename(Server, DbNameList),
-        UpdateState =
-        case ets:lookup(couch_dbs_by_name, DbName) of
-        [] -> false;
-        [{_, Pid}] ->
-            couch_util:shutdown_sync(Pid),
-            true = ets:delete(couch_dbs_by_name, DbName),
-            true = ets:delete(couch_dbs_by_pid, Pid),
-            true
-        end,
-        Server2 = case UpdateState of
-        true ->
-            DbsOpen = case ets:member(couch_sys_dbs, DbName) of
-            true ->
-                true = ets:delete(couch_sys_dbs, DbName),
-                Server#server.dbs_open;
-            false ->
-                Server#server.dbs_open - 1
-            end,
-            Server#server{dbs_open = DbsOpen};
-        false ->
-            Server
-        end,
+handle_call(get_state, _From, State) ->
+    {reply, {ok, State}, State};
+handle_call({create, _DbName, _Options}=Req, From, State) ->
+    request([{Req, From}], State);
+handle_call({open, _DbName, _Options}=Req, From, State) ->
+    request([{Req, From}], State);
+handle_call({delete, _DbName, _Options}=Req, From, State) ->
+    request([{Req, From}], State);
+handle_call(_, _From, State) ->
+    {reply, bad_call, State}.
 
-        %% Delete any leftover .compact files.  If we don't do this a subsequent
-        %% request for this DB will try to open the .compact file and use it.
-        couch_file:delete(Server#server.root_dir, FullFilepath ++ ".compact"),
+handle_cast(config_change, State) ->
+    {stop, config_change, State};
 
-        case couch_file:delete(Server#server.root_dir, FullFilepath) of
-        ok ->
-            hooks:run(db_updated, [DbName, deleted]),
-            {reply, ok, Server2};
-        {error, enoent} ->
-            {reply, not_found, Server2};
-        Else ->
-            {reply, Else, Server2}
-        end;
-    Error ->
-        {reply, Error, Server}
-    end.
-
-handle_cast(config_change, Server) ->
-    {stop, config_change, Server};
-
-handle_cast(Msg, _Server) ->
+handle_cast(Msg, _State) ->
     exit({unknown_cast_message, Msg}).
 
 
-handle_info({'EXIT', Pid, Reason}, Server) ->
-    Server2 = case ets:lookup(couch_dbs_by_pid, Pid) of
-    [] -> Server;
+handle_info({pending_reply, {Ref, Result}}, State) ->
+    {value, #pending{db = Db, from=From, clients=Clients}} =
+        lists:keysearch(Ref, #pending.ref, State#state.pending),
+    gen_server:reply(From, Result),
+    NP = lists:keydelete(Db, #pending.db, State#state.pending),
+    State1 = State#state{pending = NP},
+    request(Clients, State1);
+
+handle_info({'EXIT', Pid, Reason}, State) ->
+    State2 = case ets:lookup(couch_dbs_by_pid, Pid) of
+    [] -> State;
     [{Pid, DbName}] ->
         couch_log:info("db ~s died with reason ~p", [DbName, Reason]),
 
@@ -269,14 +227,14 @@ handle_info({'EXIT', Pid, Reason}, Server) ->
         case ets:lookup(couch_sys_dbs, DbName) of
         [{DbName, _}] ->
             true = ets:delete(couch_sys_dbs, DbName),
-            Server;
+            State;
         [] ->
-            Server#server{dbs_open = Server#server.dbs_open - 1}
+            State#state{dbs_open = State#state.dbs_open - 1}
         end
     end,
-    {noreply, Server2};
-handle_info(Info, Server) ->
-    {stop, {unknown_message, Info}, Server}.
+    {noreply, State2};
+handle_info(Info, State) ->
+    {stop, {unknown_message, Info}, State}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -335,7 +293,7 @@ maybe_add_sys_db_callbacks(DbName, Options) ->
         end
     end.
 
-check_dbname(#server{dbname_regexp=RegExp}, DbName) ->
+check_dbname(#state{dbname_regexp=RegExp}, DbName) ->
     case re:run(DbName, RegExp, [{capture, none}]) of
     nomatch ->
         case DbName of
@@ -348,32 +306,154 @@ check_dbname(#server{dbname_regexp=RegExp}, DbName) ->
         ok
     end.
 
-get_full_filename(Server, DbName) ->
-    filename:join([Server#server.root_dir, "./" ++ DbName ++ ".couch"]).
+get_full_filename(State, DbName) ->
+    filename:join([State#state.root_dir, "./" ++ DbName ++ ".couch"]).
 
-do_open_db(DbName, Server, Options, {FromPid, _}) ->
-    DbNameList = binary_to_list(DbName),
-    case check_dbname(Server, DbNameList) of
-    ok ->
-        Filepath = get_full_filename(Server, DbNameList),
-        case couch_db:start_link(DbName, Filepath, Options) of
-        {ok, DbPid} ->
-            true = ets:insert(couch_dbs_by_name, {DbName, DbPid}),
-            true = ets:insert(couch_dbs_by_pid, {DbPid, DbName}),
-            DbsOpen = Server#server.dbs_open + 1,
-            NewServer = Server#server{dbs_open = DbsOpen},
-            Reply = (catch couch_db:open_ref_counted(DbPid, FromPid)),
-            case lists:member(create, Options) of
-            true ->
-                    hooks:run(db_updated, [DbName, created]);
-            false ->
-                 ok
+
+request([{Req, From} | Rest], State) ->
+    Res = case Req of
+        {create, Db, Options} ->
+            handle_create(State, Req, From, Db, Options);
+        {open, Db, Options} ->
+            handle_open(State, Req, From, Db, Options);
+        {delete, Db, _Options} ->
+            handle_delete(State, Req, From, Db)
+        end,
+
+    State2 = case Res of
+        {pending, State1} ->
+            State1;
+        {Reply, State1} ->
+            gen_server:reply(From, Reply),
+            State1
+        end,
+    request(Rest, State2);
+request([], State) ->
+    {noreply, State}.
+
+
+handle_open(State, Req, {FromPid, _} = From, Db, Options) ->
+    case check_pending(Db, From, State, Req) of
+        {pending, NewState} -> {pending, NewState};
+        false ->
+            case ets:lookup(couch_dbs_by_name, Db) of
+                [] ->
+                    do_open_db(State, From, Db, Options);
+                [{_, MainPid}] ->
+                    {couch_db:open_ref_counted(MainPid, FromPid), State}
+            end
+    end.
+
+handle_create(State, Req, From, Db, Options) ->
+    case check_pending(Db, From, State, Req) of
+        {pending, NewState} -> {pending, NewState};
+        false ->
+            case ets:lookup(couch_dbs_by_name, Db) of
+                [] ->
+                    do_open_db(State, From, Db, [create | Options]);
+                [_AlreadyRunningDb] ->
+                    {file_exists, State}
+            end
+    end.
+
+handle_delete(State, Req, From, Db) ->
+    case check_pending(Db, From, State, Req) of
+        {pending, NewState} -> {pending, NewState};
+        false -> 
+            UpdateState = case ets:lookup(couch_dbs_by_name, Db) of
+                [] -> false;
+                [{_, Pid}] ->
+                    couch_util:shutdown_sync(Pid),
+                    true = ets:delete(couch_dbs_by_name, Db),
+                    true = ets:delete(couch_dbs_by_pid, Pid)
             end,
-            {reply, Reply, NewServer};
-        Error ->
-            {reply, Error, Server}
-        end;
+            NState = case UpdateState of
+                true ->
+                    case ets:member(couch_sys_dbs, Db) of
+                        true ->
+                            true = ets:delete(couch_sys_dbs, Db),
+                            State;
+                        false ->
+                            State#state{dbs_open=State#state.dbs_open - 1}
+                    end;
+                false ->
+                    State
+            end,
+            pending_call(Db, nil, make_ref(), From, internal_delete, NState)
+    end.
+
+pending_call(Db, Pid, Ref, {FromPid, _Tag}=From, ReqT, State) ->
+    Server = self(),
+    F = fun() ->
+        Res = case ReqT of
+            internal_open ->
+                internal_open(Pid, FromPid);
+            internal_delete ->
+                internal_delete(Db, State)
+        end,
+        Server ! {pending_reply, {Ref, Res}}
+    end,
+
+    _ = spawn(F),
+    PD = #pending{ db= Db, ref = Ref, from = From, reqtype = ReqT, clients=[]},
+    P = [PD | State#state.pending],
+    {pending, State#state{pending=P}}.
+
+do_open_db(State, From, Db, Options) ->
+    DbList = binary_to_list(Db),
+    case check_dbname(State, DbList) of
+        ok ->
+            Filepath = get_full_filename(State, DbList),
+            case couch_db:start_link(Db, Filepath, Options) of
+                {ok, DbPid} ->
+                    true = ets:insert(couch_dbs_by_name, {Db, DbPid}),
+                    true = ets:insert(couch_dbs_by_pid, {DbPid, Db}),
+                    case lists:member(create, Options) of
+                        true ->
+                            hooks:run(db_updated, [Db, created]);
+                        false ->
+                            ok
+                    end,
+                    NState = State#state{dbs_open = State#state.dbs_open + 1},
+                    pending_call(Db, DbPid, make_ref(), From, internal_open, NState);
+                Error ->
+                    {Error, State}
+            end;
      Error ->
-        {reply, Error, Server}
+        {Error, State}
      end.
 
+
+internal_open(DbPid, FromPid) ->
+    Reply = (catch couch_db:open_ref_counted(DbPid, FromPid)),
+    Reply.
+
+internal_delete(Db, State) ->
+    DbList = binary_to_list(Db),
+    case check_dbname(State, DbList) of
+        ok ->
+            FullFilepath = get_full_filename(State, DbList),
+            %% Delete any leftover .compact files.  If we don't do this a subsequent
+            %% request for this DB will try to open the .compact file and use it.
+            _ = couch_file:delete(State#state.root_dir, FullFilepath ++ ".compact"),
+            case couch_file:delete(State#state.root_dir, FullFilepath) of
+                ok ->
+                    hooks:run(db_updated, [Db, deleted]),
+                    ok;
+                {error, enoent} -> not_found;
+                Error -> Error
+            end;
+        Error ->
+            Error
+    end.
+
+
+check_pending(Db, From, State, Req) ->
+    case lists:keysearch(Db, #pending.db, State#state.pending) of
+        {value, #pending{db = Db, clients=Clients}=P} ->
+            NP = lists:keyreplace(Db, #pending.db, State#state.pending,
+                                  P#pending{clients = Clients++[{Req,From}]}),
+            {pending, State#state{pending=NP}};
+        false ->
+            false
+    end.
