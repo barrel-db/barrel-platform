@@ -13,16 +13,29 @@
 -module(couch_server).
 -behaviour(gen_server).
 
--export([open/2,create/2,delete/2,get_version/0,get_version/1,get_uuid/0]).
+%% public api
+-export([open/2, 
+         create/2,
+         delete/2,
+         get_version/0, get_version/1,
+         get_uuid/0]).
+
 -export([all_databases/0, all_databases/2]).
--export([init/1, handle_call/3,sup_start_link/0]).
--export([handle_cast/2,code_change/3,handle_info/2,terminate/2]).
--export([dev_start/0,is_admin/2,has_admins/0,get_stats/0]).
+-export([is_admin/2,
+         has_admins/0,
+         get_stats/0]).
+
+-export([sup_start_link/0]).
+-export([dev_start/0]).
+
+%% gen_server callbacks
+-export([init/1, handle_call/3,
+        handle_cast/2,code_change/3,handle_info/2,terminate/2]).
 
 %% hooks
 -export([db_updated/2, ddoc_updated/2]).
-
 -export([config_change/3]).
+
 
 -include("couch_db.hrl").
 -include_lib("barrel/include/config.hrl").
@@ -33,6 +46,10 @@
     dbs_open=0,
     start_time=""
     }).
+
+%%%----------------------------------------------------------------------
+%%% API
+%%%----------------------------------------------------------------------
 
 dev_start() ->
     couch:stop(),
@@ -89,41 +106,6 @@ create(DbName, Options0) ->
 delete(DbName, Options) ->
     gen_server:call(couch_server, {delete, DbName, Options}, infinity).
 
-maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
-    maybe_add_sys_db_callbacks(?b2l(DbName), Options);
-maybe_add_sys_db_callbacks(DbName, Options) ->
-    case ?cfget("replicator", "db", "_replicator") of
-    DbName ->
-        [
-            {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
-            {after_doc_read, fun couch_replicator_manager:after_doc_read/2},
-            sys_db | Options
-        ];
-    _ ->
-        case ?cfget("couch_httpd_auth", "authentication_db", "_users") of
-        DbName ->
-        [
-            {before_doc_update, fun couch_users_db:before_doc_update/2},
-            {after_doc_read, fun couch_users_db:after_doc_read/2},
-            sys_db | Options
-        ];
-        _ ->
-            Options
-        end
-    end.
-
-check_dbname(#server{dbname_regexp=RegExp}, DbName) ->
-    case re:run(DbName, RegExp, [{capture, none}]) of
-    nomatch ->
-        case DbName of
-            "_users" -> ok;
-            "_replicator" -> ok;
-            _Else ->
-                {error, illegal_database_name, DbName}
-            end;
-    match ->
-        ok
-    end.
 
 is_admin(User, ClearPwd) ->
     case ?cfget("admins", User) of
@@ -137,8 +119,6 @@ is_admin(User, ClearPwd) ->
 has_admins() ->
     ?cfget("admins") /= [].
 
-get_full_filename(Server, DbName) ->
-    filename:join([Server#server.root_dir, "./" ++ DbName ++ ".couch"]).
 
 hash_admin_passwords() ->
     hash_admin_passwords(true).
@@ -151,56 +131,7 @@ hash_admin_passwords(Persist) ->
         end, couch_passwords:get_unhashed_admins()).
 
 
-%% HOOKS
-db_updated(DbName, Event) ->
-    couch_event:publish(db_updated, {DbName, Event}).
 
-ddoc_updated(DbName, Event) ->
-    couch_event:publish(ddoc_updated, {DbName, Event}).
-
-
-config_change("couchdb", "database_dir", _) ->
-    gen_server:cast(couch_server, config_change);
-config_change(_, _, _) ->
-    ok.
-
-
-
-init([]) ->
-    % read config and register for configuration changes
-
-    % just stop if one of the config settings change. couch_sup
-    % will restart us and then we will pick up the new settings.
-
-    RootDir = ?cfget("couchdb", "database_dir", "."),
-    hooks:reg(config_key_update, ?MODULE, config_change, 3),
-    ok = couch_file:init_delete_dir(RootDir),
-    hash_admin_passwords(),
-    {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
-    ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
-    ets:new(couch_dbs_by_pid, [set, private, named_table]),
-    ets:new(couch_sys_dbs, [set, private, named_table]),
-
-    %% register db hook
-    hooks:reg(db_updated, ?MODULE, db_updated, 2),
-    hooks:reg(ddoc_updated, ?MODULE, ddoc_updated, 2),
-
-
-    process_flag(trap_exit, true),
-    {ok, #server{root_dir=RootDir,
-                dbname_regexp=RegExp,
-                start_time=couch_util:rfc1123_date()}}.
-
-terminate(_Reason, _Srv) ->
-    %% unregister db hooks
-    hooks:unreg(db_updated, ?MODULE, db_updated, 2),
-    hooks:unreg(ddoc_updated, ?MODULE, ddoc_updated, 2),
-
-    lists:foreach(
-        fun({_, Pid}) ->
-                couch_util:shutdown_sync(Pid)
-        end,
-        ets:tab2list(couch_dbs_by_name)).
 
 all_databases() ->
     {ok, DbList} = all_databases(
@@ -228,31 +159,35 @@ all_databases(Fun, Acc0) ->
     end,
     {ok, FinalAcc}.
 
-do_open_db(DbName, Server, Options, {FromPid, _}) ->
-    DbNameList = binary_to_list(DbName),
-    case check_dbname(Server, DbNameList) of
-    ok ->
-        Filepath = get_full_filename(Server, DbNameList),
-        case couch_db:start_link(DbName, Filepath, Options) of
-        {ok, DbPid} ->
-            true = ets:insert(couch_dbs_by_name, {DbName, DbPid}),
-            true = ets:insert(couch_dbs_by_pid, {DbPid, DbName}),
-            DbsOpen = Server#server.dbs_open + 1,
-            NewServer = Server#server{dbs_open = DbsOpen},
-            Reply = (catch couch_db:open_ref_counted(DbPid, FromPid)),
-            case lists:member(create, Options) of
-            true ->
-                    hooks:run(db_updated, [DbName, created]);
-            false ->
-                 ok
-            end,
-            {reply, Reply, NewServer};
-        Error ->
-            {reply, Error, Server}
-        end;
-     Error ->
-        {reply, Error, Server}
-     end.
+
+%%%----------------------------------------------------------------------
+%%% Callback functions from gen_server
+%%%----------------------------------------------------------------------
+
+init([]) ->
+    % read config and register for configuration changes
+
+    % just stop if one of the config settings change. couch_sup
+    % will restart us and then we will pick up the new settings.
+
+    RootDir = ?cfget("couchdb", "database_dir", "."),
+    hooks:reg(config_key_update, ?MODULE, config_change, 3),
+    ok = couch_file:init_delete_dir(RootDir),
+    hash_admin_passwords(),
+    {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
+    ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
+    ets:new(couch_dbs_by_pid, [set, private, named_table]),
+    ets:new(couch_sys_dbs, [set, private, named_table]),
+
+    %% register db hook
+    hooks:reg(db_updated, ?MODULE, db_updated, 2),
+    hooks:reg(ddoc_updated, ?MODULE, ddoc_updated, 2),
+
+
+    process_flag(trap_exit, true),
+    {ok, #server{root_dir=RootDir,
+                dbname_regexp=RegExp,
+                start_time=couch_util:rfc1123_date()}}.
 
 handle_call(get_server, _From, Server) ->
     {reply, {ok, Server}, Server};
@@ -321,8 +256,6 @@ handle_cast(config_change, Server) ->
 handle_cast(Msg, _Server) ->
     exit({unknown_cast_message, Msg}).
 
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
 
 handle_info({'EXIT', Pid, Reason}, Server) ->
     Server2 = case ets:lookup(couch_dbs_by_pid, Pid) of
@@ -344,3 +277,103 @@ handle_info({'EXIT', Pid, Reason}, Server) ->
     {noreply, Server2};
 handle_info(Info, Server) ->
     {stop, {unknown_message, Info}, Server}.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+terminate(_Reason, _Srv) ->
+    %% unregister db hooks
+    hooks:unreg(db_updated, ?MODULE, db_updated, 2),
+    hooks:unreg(ddoc_updated, ?MODULE, ddoc_updated, 2),
+
+    lists:foreach(
+        fun({_, Pid}) ->
+                couch_util:shutdown_sync(Pid)
+        end,
+        ets:tab2list(couch_dbs_by_name)).
+
+
+
+%%%----------------------------------------------------------------------
+%%% Internal functions
+%%%----------------------------------------------------------------------
+
+%% DB HOOKS
+db_updated(DbName, Event) ->
+    couch_event:publish(db_updated, {DbName, Event}).
+
+ddoc_updated(DbName, Event) ->
+    couch_event:publish(ddoc_updated, {DbName, Event}).
+
+%% CONFIG hooks
+config_change("couchdb", "database_dir", _) ->
+    gen_server:cast(couch_server, config_change);
+config_change(_, _, _) ->
+    ok.
+
+
+maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
+    maybe_add_sys_db_callbacks(?b2l(DbName), Options);
+maybe_add_sys_db_callbacks(DbName, Options) ->
+    case ?cfget("replicator", "db", "_replicator") of
+    DbName ->
+        [
+            {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
+            {after_doc_read, fun couch_replicator_manager:after_doc_read/2},
+            sys_db | Options
+        ];
+    _ ->
+        case ?cfget("couch_httpd_auth", "authentication_db", "_users") of
+        DbName ->
+        [
+            {before_doc_update, fun couch_users_db:before_doc_update/2},
+            {after_doc_read, fun couch_users_db:after_doc_read/2},
+            sys_db | Options
+        ];
+        _ ->
+            Options
+        end
+    end.
+
+check_dbname(#server{dbname_regexp=RegExp}, DbName) ->
+    case re:run(DbName, RegExp, [{capture, none}]) of
+    nomatch ->
+        case DbName of
+            "_users" -> ok;
+            "_replicator" -> ok;
+            _Else ->
+                {error, illegal_database_name, DbName}
+            end;
+    match ->
+        ok
+    end.
+
+get_full_filename(Server, DbName) ->
+    filename:join([Server#server.root_dir, "./" ++ DbName ++ ".couch"]).
+
+do_open_db(DbName, Server, Options, {FromPid, _}) ->
+    DbNameList = binary_to_list(DbName),
+    case check_dbname(Server, DbNameList) of
+    ok ->
+        Filepath = get_full_filename(Server, DbNameList),
+        case couch_db:start_link(DbName, Filepath, Options) of
+        {ok, DbPid} ->
+            true = ets:insert(couch_dbs_by_name, {DbName, DbPid}),
+            true = ets:insert(couch_dbs_by_pid, {DbPid, DbName}),
+            DbsOpen = Server#server.dbs_open + 1,
+            NewServer = Server#server{dbs_open = DbsOpen},
+            Reply = (catch couch_db:open_ref_counted(DbPid, FromPid)),
+            case lists:member(create, Options) of
+            true ->
+                    hooks:run(db_updated, [DbName, created]);
+            false ->
+                 ok
+            end,
+            {reply, Reply, NewServer};
+        Error ->
+            {reply, Error, Server}
+        end;
+     Error ->
+        {reply, Error, Server}
+     end.
+
