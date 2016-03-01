@@ -15,7 +15,7 @@ Apache CouchDB 1.3.
 - optimised for mobile usage
 - easily extendable for your own needs
 - Fully opensource. All the sources are on barrel GIT repository
-  (http://github.com/barrel) under the Apache License, Version 2.0.
+  (http://github.com/barrel-db) under the Apache License, Version 2.0.
 
 
 ## BARREL Project Goals
