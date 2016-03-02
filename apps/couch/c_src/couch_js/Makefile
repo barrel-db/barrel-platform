@@ -3,7 +3,7 @@ BASEDIR=$(CURDIR)
 PRIVDIR=$(BASEDIR)/../../priv
 STATIC_LIBS=$(BASEDIR)/../../../../.libs
 
-COUCHJS_DIR=$(BASEDIR)
+COUCHJS_DIR=.
 
 COUCHJS_SOURCES=$(shell find $(COUCHJS_DIR) -type f \( -name "*.c" \))
 COUCHJS_OBJS=$(addsuffix .o, $(basename $(COUCHJS_SOURCES)))
@@ -47,7 +47,9 @@ distclean: clean
 
 $(COUCHJS_BIN): $(COUCHJS_OBJS)
 	@mkdir -p $(PRIVDIR)
-	$(CC) $(COUCHJS_OBJS) $(JSLIBS) -o $(COUCHJS_BIN)
+	@cd "$(BASEDIR)" && \
+		$(CC) $(COUCHJS_OBJS) $(JSLIBS) -o "$(COUCHJS_BIN)"
 
 %.o: %.c
-	$(CC) -c $(JSCFLAGS) $<
+	@cd "$(BASEDIR)" && \
+		$(CC) -c $(JSCFLAGS) $<
