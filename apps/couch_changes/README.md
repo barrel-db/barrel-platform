@@ -1,8 +1,8 @@
 couch_changes
 =====
 
-`_changes` handler for couchdb with view changes support. This code live
-standalone since it is mixes dependencies from couch_httpd and couch_mrview.
+This app serves as a `_changes` handler for couchdb with support for view changes.
+This code is a standalone since it has mixed dependencies from both couch_httpd and couch_mrview.
 
 Build
 -----
