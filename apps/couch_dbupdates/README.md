@@ -1,7 +1,6 @@
 # couch_dbupdates
 
-`couch_dbupdates` is a simple couchdb modules to receive databases
-events in couchdb node.
+`couch_dbupdates` is a simple couchdb module to receive databases events in couchdb node.
 
 It's actually **supported by all the [refuge](http://refuge.io) projects**:
 
