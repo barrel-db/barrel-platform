@@ -1,13 +1,9 @@
 # Barrel
-
+[![Build Status](https://travis-ci.org/barrel-db/barrel-platform.png)](https://travis-ci.org/barrel-db/barrel-platform)
 ## What can Barrel do
 
 Work on a CouchDB flavor with modern features. Barrel started as a fork of
 Apache CouchDB 1.3.
-
-
-[![Build Status](https://travis-ci.org/barrel-db/barrel.svg?branch=master)](https://travis-ci.org/barrel-db/barrel)
-
 ## Features
 
 - compatible with the CouchDB HTTP API
@@ -35,7 +31,9 @@ possible to make these radical changes as part of an incremental process.
 
 
 
-The main BARREL website is http://barrel-db.org
+The main BARREL website is http://barrel-db.org.
+
+Also checkout [Barrel Users Forum](https://users.barrel-db.org/).
 
 ## Requirements
 
@@ -97,12 +95,13 @@ Contract)](http://rfc.zeromq.org/spec:22) process for contributions.
 
 Under C4.1 process, you are more than welcome to help us by:
 
-* join the discussion over anything from design to code style try out
-* and [submit issue reports](https://github.com/barrel/barrel/issues/new)
-* or feature requests pick a task in
-* [issues](https://github.com/barrel/barrel/issues) and get it done fork
-* the repository and have your own fixes send us pull requests and even
-* star this project ^_^
+* Join the discussion over anything from design to code style 
+* Try out barrel and [report issues](https://github.com/barrel/barrel/issues/new)
+* Request a feature
+* Pick an [issue](https://github.com/barrel/barrel/issues) and get it done
+* Fork the repository, pick an [issue](https://github.com/barrel/barrel/issues) and get it done
+* Send us pull requests
+* Star this project ^_^
 
 To build a development release, run the following command
 
