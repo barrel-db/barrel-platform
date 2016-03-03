@@ -1,10 +1,9 @@
 # Barrel
-
+[![Build Status](https://travis-ci.org/barrel-db/barrel-platform.png)](https://travis-ci.org/barrel-db/barrel-platform)
 ## What can Barrel do
 
 Work on a CouchDB flavor with modern features. Barrel started as a fork of
 Apache CouchDB 1.3.
-
 ## Features
 
 - compatible with the CouchDB HTTP API
