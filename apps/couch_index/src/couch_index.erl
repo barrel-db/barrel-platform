@@ -124,7 +124,7 @@ init({Mod, IdxState}) ->
             Args = [
                 Mod:get(db_name, IdxState),
                 Mod:get(idx_name, IdxState),
-                couch_index_util:hexsig(Mod:get(signature, IdxState))
+                couch_util:hexsig(Mod:get(signature, IdxState))
             ],
 
             _ = couch_event:subscribe_cond(db_updated, [{{DbName, '$1'},
@@ -149,7 +149,7 @@ terminate(Reason, State) ->
     Args = [
         Mod:get(db_name, IdxState),
         Mod:get(idx_name, IdxState),
-        couch_index_util:hexsig(Mod:get(signature, IdxState)),
+        couch_util:hexsig(Mod:get(signature, IdxState)),
         Reason
     ],
     ?LOG_INFO("Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),

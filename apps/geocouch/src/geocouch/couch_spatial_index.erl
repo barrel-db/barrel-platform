@@ -52,7 +52,7 @@ get(Property, State) ->
             } = State,
             {ok, Size} = couch_file:bytes(Fd),
             {ok, [
-                {signature, list_to_binary(couch_index_util:hexsig(Sig))},
+                {signature, list_to_binary(couch_util:hexsig(Sig))},
                 {language, Lang},
                 {disk_size, Size},
                 {update_seq, UpdateSeq},

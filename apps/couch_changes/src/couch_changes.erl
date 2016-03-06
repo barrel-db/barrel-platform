@@ -594,7 +594,7 @@ changes_row(Results, DocInfo, Acc, Seq) ->
                     true -> [deleted, conflicts];
                     false -> [deleted]
                 end,
-                Doc = couch_index_util:load_doc(Db, DocInfo, Opts),
+                Doc = couch_doc:load(Db, DocInfo, Opts),
                 case Doc of
                     null ->
                         [{doc, null}];
@@ -697,7 +697,7 @@ parse_view_options(Options, true, _Acc) ->
 parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
     Acc1 = case couch_util:to_binary(K) of
         <<"reduce">> ->
-            [{reduce, couch_mrview_http:parse_boolean(V)}];
+            [{reduce, couch_httpd_util:parse_boolean(V)}];
         <<"key">> ->
             V1 = parse_json(V, JsonReq),
             [{start_key, V1}, {end_key, V1} | Acc];
@@ -720,7 +720,7 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
         <<"end_key_docid">> ->
             [{start_key_docid, couch_util:to_binary(V)} | Acc];
         <<"limit">> ->
-            [{limit, couch_mrview_http:parse_pos_int(V)} | Acc];
+            [{limit, couch_httpd_util:parse_pos_int(V)} | Acc];
         <<"count">> ->
             throw({query_parse_error, <<"QS param `count` is not `limit`">>});
         <<"stale">> when V =:= <<"ok">> orelse V =:= "ok" ->
@@ -730,29 +730,29 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
         <<"stale">> ->
             throw({query_parse_error, <<"Invalid value for `stale`.">>});
         <<"descending">> ->
-            case couch_mrview_http:parse_boolean(V) of
+            case couch_httpd_util:parse_boolean(V) of
                 true ->
                     [{direction, rev} | Acc];
                 _ ->
                     [{direction, fwd} | Acc]
             end;
         <<"skip">> ->
-            [{skip, couch_mrview_http:parse_pos_int(V)} | Acc];
+            [{skip, couch_httpd_util:parse_pos_int(V)} | Acc];
         <<"group">> ->
-            case couch_mrview_http:parse_booolean(V) of
+            case couch_httpd_util:parse_booolean(V) of
                 true ->
                     [{group_level, exact} | Acc];
                 _ ->
                     [{group_level, 0} | Acc]
             end;
         <<"group_level">> ->
-            [{group_level, couch_mrview_http:parse_pos_int(V)} | Acc];
+            [{group_level, couch_httpd_util:parse_pos_int(V)} | Acc];
         <<"inclusive_end">> ->
-            [{inclusive_end, couch_mrview_http:parse_boolean(V)}];
+            [{inclusive_end, couch_httpd_util:parse_boolean(V)}];
         <<"inclusive_docs">> ->
-            [{include_docs, couch_mrview_http:parse_boolean(V)}];
+            [{include_docs, couch_httpd_util:parse_boolean(V)}];
         <<"include_removed_docs">> ->
-            [{include_removed_docs, couch_mrview_http:parse_boolean(V)}];
+            [{include_removed_docs, couch_httpd_util:parse_boolean(V)}];
         _ ->
             Acc
     end,

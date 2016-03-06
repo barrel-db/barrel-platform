@@ -13,7 +13,6 @@
 -module(couch_mrview_http).
 
 -export([
-    handle_all_docs_req/2,
     handle_reindex_req/3,
     handle_view_req/3,
     handle_temp_view_req/2,
@@ -22,10 +21,6 @@
     handle_cleanup_req/2,
     parse_qs/2
 ]).
-
--export([parse_boolean/1,
-         parse_int/1,
-         parse_pos_int/1]).
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("barrel/include/config.hrl").
@@ -42,14 +37,6 @@
     should_close=false
 }).
 
-
-handle_all_docs_req(#httpd{method='GET'}=Req, Db) ->
-    all_docs_req(Req, Db, undefined);
-handle_all_docs_req(#httpd{method='POST'}=Req, Db) ->
-    Keys = get_view_keys(couch_httpd:json_body_obj(Req)),
-    all_docs_req(Req, Db, Keys);
-handle_all_docs_req(Req, _Db) ->
-    couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
 handle_reindex_req(#httpd{method='POST',
                           path_parts=[_, _, DName,<<"_reindex">>]}=Req,
@@ -88,7 +75,7 @@ handle_view_req(#httpd{method='GET'}=Req, Db, DDoc) ->
 handle_view_req(#httpd{method='POST'}=Req, Db, DDoc) ->
     [_, _, _, _, ViewName] = Req#httpd.path_parts,
     Props = couch_httpd:json_body_obj(Req),
-    Keys = get_view_keys(Props),
+    Keys = couch_httpd_all_docs:is_keys(Props),
     Queries = get_view_queries(Props),
     case {Queries, Keys} of
         {Queries, undefined} ->
@@ -115,7 +102,7 @@ handle_temp_view_req(#httpd{method='POST'}=Req, Db) ->
     ok = couch_db:check_is_admin(Db),
     {Body} = couch_httpd:json_body_obj(Req),
     DDoc = couch_mrview_util:temp_view_to_ddoc({Body}),
-    Keys = get_view_keys({Body}),
+    Keys = couch_httpd_all_docs:is_keys({Body}),
     couch_stats_collector:increment({httpd, temporary_view_reads}),
     design_doc_view(Req, Db, DDoc, <<"temp">>, Keys);
 handle_temp_view_req(Req, _Db) ->
@@ -149,79 +136,6 @@ handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
     couch_httpd:send_json(Req, 202, {[{ok, true}]});
 handle_cleanup_req(Req, _Db) ->
     couch_httpd:send_method_not_allowed(Req, "POST").
-
-
-all_docs_req(Req, Db, Keys) ->
-    case couch_db:is_system_db(Db) of
-    true ->
-        case (catch couch_db:check_is_admin(Db)) of
-        ok ->
-            do_all_docs_req(Req, Db, Keys);
-        _ ->
-            DbName = ?b2l(Db#db.name),
-            case ?cfget("couch_httpd_auth", "authentication_db", "_users") of
-            DbName ->
-                UsersDbPublic = ?cfget("couch_httpd_auth", "users_db_public", "false"),
-                PublicFields = ?cfget("couch_httpd_auth", "public_fields"),
-                case {UsersDbPublic, PublicFields} of
-                {"true", PublicFields} when PublicFields =/= undefined ->
-                    do_all_docs_req(Req, Db, Keys);
-                {_, _} ->
-                    throw({forbidden, <<"Only admins can access _all_docs",
-                                        " of system databases.">>})
-                end;
-            _ ->
-                throw({forbidden, <<"Only admins can access _all_docs",
-                                    " of system databases.">>})
-            end
-        end;
-    false ->
-        do_all_docs_req(Req, Db, Keys)
-    end.
-
-do_all_docs_req(Req, Db, Keys) ->
-    Args0 = parse_qs(Req, Keys),
-    ETagFun = fun(Sig, Acc0) ->
-        ETag = couch_httpd:make_etag(Sig),
-        case couch_httpd:etag_match(Req, ETag) of
-            true -> throw({etag_match, ETag});
-            false -> {ok, Acc0#vacc{etag=ETag}}
-        end
-    end,
-    Args = Args0#mrargs{preflight_fun=ETagFun},
-    {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        VAcc0 = #vacc{db=Db, req=Req},
-        DbName = ?b2l(Db#db.name),
-        UsersDbName = ?cfget("couch_httpd_auth", "authentication_db", "_users"),
-        IsAdmin = is_admin(Db),
-        Callback = get_view_callback(DbName, UsersDbName, IsAdmin),
-        couch_mrview:query_all_docs(Db, Args, Callback, VAcc0)
-    end),
-    case is_record(Resp, vacc) of
-        true -> {ok, Resp#vacc.resp};
-        _ -> {ok, Resp}
-    end.
-
-is_admin(Db) ->
-    case catch couch_db:check_is_admin(Db) of
-    {unauthorized, _} ->
-        false;
-    ok ->
-        true
-    end.
-
-
-% admin users always get all fields
-get_view_callback(_, _, true) ->
-    fun view_cb/2;
-% if we are operating on the users db and we aren't
-% admin, filter the view
-get_view_callback(_DbName, _DbName, false) ->
-    fun filtered_view_cb/2;
-% non _users databases get all fields
-get_view_callback(_, _, _) ->
-    fun view_cb/2.
-
 
 design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
     Args0 = parse_qs(Req, Keys),
@@ -272,21 +186,6 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
         true -> {ok, Resp2#vacc.resp};
         _ -> {ok, Resp2}
     end.
-
-
-filtered_view_cb({row, Row0}, Acc) ->
-  Row1 = lists:map(fun({doc, null}) ->
-        {doc, null};
-    ({doc, Body}) ->
-        Doc = couch_users_db:strip_non_public_fields(#doc{body=Body}),
-        {doc, Doc#doc.body};
-    (KV) ->
-        KV
-    end, Row0),
-    view_cb({row, Row1}, Acc);
-filtered_view_cb(Obj, Acc) ->
-    view_cb(Obj, Acc).
-
 
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     Headers = [{"ETag", Acc#vacc.etag}],
@@ -371,18 +270,6 @@ row_to_json(Id0, Row) ->
     Obj = {Id ++ [{key, Key}, {value, Val}] ++ Doc},
     ?JSON_ENCODE(Obj).
 
-
-get_view_keys({Props}) ->
-    case couch_util:get_value(<<"keys">>, Props) of
-        undefined ->
-            ?LOG_DEBUG("POST with no keys member.", []),
-            undefined;
-        Keys when is_list(Keys) ->
-            Keys;
-        _ ->
-            throw({bad_request, "`keys` member must be a array."})
-    end.
-
 get_view_queries({Props}) ->
     case couch_util:get_value(<<"queries">>, Props) of
         undefined ->
@@ -416,30 +303,30 @@ parse_param(Key, Val, Args, Json) ->
         "" ->
             Args;
         "reduce" ->
-            Args#mrargs{reduce=parse_boolean(Val)};
+            Args#mrargs{reduce=couch_httpd_util:parse_boolean(Val)};
         "key" ->
-            JsonKey = parse_json(Val, Json),
+            JsonKey = couch_httpd_util:parse_json(Val, Json),
             Args#mrargs{start_key=JsonKey, end_key=JsonKey};
         "keys" ->
-            Args#mrargs{keys=parse_json(Val, Json)};
+            Args#mrargs{keys=couch_httpd_util:parse_json(Val, Json)};
         "startkey" ->
-            Args#mrargs{start_key=parse_json(Val, Json)};
+            Args#mrargs{start_key=couch_httpd_util:parse_json(Val, Json)};
         "start_key" ->
-            Args#mrargs{start_key=parse_json(Val, Json)};
+            Args#mrargs{start_key=couch_httpd_util:parse_json(Val, Json)};
         "startkey_docid" ->
             Args#mrargs{start_key_docid=list_to_binary(Val)};
         "start_key_doc_id" ->
             Args#mrargs{start_key_docid=list_to_binary(Val)};
         "endkey" ->
-            Args#mrargs{end_key=parse_json(Val, Json)};
+            Args#mrargs{end_key=couch_httpd_util:parse_json(Val, Json)};
         "end_key" ->
-            Args#mrargs{end_key=parse_json(Val, Json)};
+            Args#mrargs{end_key=couch_httpd_util:parse_json(Val, Json)};
         "endkey_docid" ->
             Args#mrargs{end_key_docid=list_to_binary(Val)};
         "end_key_doc_id" ->
             Args#mrargs{end_key_docid=list_to_binary(Val)};
         "limit" ->
-            Args#mrargs{limit=parse_pos_int(Val)};
+            Args#mrargs{limit=couch_httpd_util:parse_pos_int(Val)};
         "count" ->
             throw({query_parse_error, <<"QS param `count` is not `limit`">>});
         "stale" when Val == "ok" ->
@@ -449,25 +336,25 @@ parse_param(Key, Val, Args, Json) ->
         "stale" ->
             throw({query_parse_error, <<"Invalid value for `stale`.">>});
         "descending" ->
-            case parse_boolean(Val) of
+            case couch_httpd_util:parse_boolean(Val) of
                 true -> Args#mrargs{direction=rev};
                 _ -> Args#mrargs{direction=fwd}
             end;
         "skip" ->
-            Args#mrargs{skip=parse_pos_int(Val)};
+            Args#mrargs{skip=couch_httpd_util:parse_pos_int(Val)};
         "group" ->
-            case parse_boolean(Val) of
+            case couch_httpd_util:parse_boolean(Val) of
                 true -> Args#mrargs{group_level=exact};
                 _ -> Args#mrargs{group_level=0}
             end;
         "group_level" ->
-            Args#mrargs{group_level=parse_pos_int(Val)};
+            Args#mrargs{group_level=couch_httpd_util:parse_pos_int(Val)};
         "inclusive_end" ->
-            Args#mrargs{inclusive_end=parse_boolean(Val)};
+            Args#mrargs{inclusive_end=couch_httpd_util:parse_boolean(Val)};
         "include_docs" ->
-            Args#mrargs{include_docs=parse_boolean(Val)};
+            Args#mrargs{include_docs=couch_httpd_util:parse_boolean(Val)};
         "attachments" ->
-            case parse_boolean(Val) of
+            case couch_httpd_util:parse_boolean(Val) of
             true ->
                 Opts = Args#mrargs.doc_options,
                 Args#mrargs{doc_options=[attachments|Opts]};
@@ -475,7 +362,7 @@ parse_param(Key, Val, Args, Json) ->
                 Args
             end;
         "att_encoding_info" ->
-            case parse_boolean(Val) of
+            case couch_httpd_util:parse_boolean(Val) of
             true ->
                 Opts = Args#mrargs.doc_options,
                 Args#mrargs{doc_options=[att_encoding_info|Opts]};
@@ -483,9 +370,9 @@ parse_param(Key, Val, Args, Json) ->
                 Args
             end;
         "update_seq" ->
-            Args#mrargs{update_seq=parse_boolean(Val)};
+            Args#mrargs{update_seq=couch_httpd_util:parse_boolean(Val)};
         "conflicts" ->
-            Args#mrargs{conflicts=parse_boolean(Val)};
+            Args#mrargs{conflicts=couch_httpd_util:parse_boolean(Val)};
         "list" ->
             Args#mrargs{list=list_to_binary(Val)};
         "callback" ->
@@ -495,45 +382,3 @@ parse_param(Key, Val, Args, Json) ->
             BVal = list_to_binary(Val),
             Args#mrargs{extra=[{BKey, BVal} | Args#mrargs.extra]}
     end.
-
-
-parse_boolean(true) ->
-    true;
-parse_boolean(false) ->
-    false;
-parse_boolean(Val) when is_binary(Val) ->
-    parse_boolean(binary_to_list(Val));
-parse_boolean(Val) ->
-    case string:to_lower(Val) of
-    "true" -> true;
-    "false" -> false;
-    _ ->
-        Msg = io_lib:format("Invalid boolean parameter: ~p", [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
-    end.
-
-parse_int(Val) when is_integer(Val) ->
-    Val;
-parse_int(Val) ->
-    case (catch list_to_integer(Val)) of
-    IntVal when is_integer(IntVal) ->
-        IntVal;
-    _ ->
-        Msg = io_lib:format("Invalid value for integer: ~p", [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
-    end.
-
-parse_pos_int(Val) ->
-    case parse_int(Val) of
-    IntVal when IntVal >= 0 ->
-        IntVal;
-    _ ->
-        Fmt = "Invalid value for positive integer: ~p",
-        Msg = io_lib:format(Fmt, [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
-    end.
-
-parse_json(V, false) when is_list(V) ->
-    ?JSON_DECODE(V);
-parse_json(V, _) ->
-    V.

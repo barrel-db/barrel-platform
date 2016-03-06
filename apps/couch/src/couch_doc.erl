@@ -24,6 +24,7 @@
 -export([to_path/1]).
 -export([mp_parse_doc/2]).
 -export([with_ejson_body/1]).
+-export([load/3]).
 
 -include("couch_db.hrl").
 
@@ -690,3 +691,34 @@ with_ejson_body(#doc{body = Body} = Doc) when is_binary(Body) ->
     Doc#doc{body = couch_compress:decompress(Body)};
 with_ejson_body(#doc{body = {_}} = Doc) ->
     Doc.
+
+
+load(Db, #doc_info{}=DI, Opts) ->
+    Deleted = lists:member(deleted, Opts),
+    case (catch couch_db:open_doc(Db, DI, Opts)) of
+        {ok, #doc{deleted=false}=Doc} -> Doc;
+        {ok, #doc{deleted=true}=Doc} when Deleted -> Doc;
+        _Else -> null
+    end;
+load(Db, {DocId, Rev}, Opts) ->
+    case (catch load(Db, DocId, Rev, Opts)) of
+        #doc{deleted=false} = Doc -> Doc;
+        _ -> null
+    end.
+
+
+load(Db, DocId, Rev, Options) ->
+    case Rev of
+        nil -> % open most recent rev
+            case (catch couch_db:open_doc(Db, DocId, Options)) of
+                {ok, Doc} -> Doc;
+                _Error -> null
+            end;
+        _ -> % open a specific rev (deletions come back as stubs)
+            case (catch couch_db:open_doc_revs(Db, DocId, [Rev], Options)) of
+                {ok, [{ok, Doc}]} -> Doc;
+                {ok, [{{not_found, missing}, Rev}]} -> null;
+                {ok, [_Else]} -> null
+            end
+    end.
+

@@ -64,7 +64,7 @@ get(Property, State) ->
                 ++ if LocalSeq -> [<<"local_seq">>]; true -> [] end,
 
             {ok, [
-                {signature, list_to_binary(couch_index_util:hexsig(Sig))},
+                {signature, list_to_binary(couch_util:hexsig(Sig))},
                 {language, Lang},
                 {disk_size, Size},
                 {data_size, DataSize},

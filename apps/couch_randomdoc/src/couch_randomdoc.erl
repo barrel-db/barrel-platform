@@ -43,7 +43,7 @@ random_doc(Db, FilterFun, Opts) ->
                 #doc_info{revs=[#rev_info{deleted=true}|_]} ->
                     {ok, Acc};
                 DocInfo ->
-                    Doc = couch_index_util:load_doc(Db, DocInfo, Opts),
+                    Doc = couch_doc:load(Db, DocInfo, Opts),
 
                     case FilterFun(Db, Doc) of
                         true ->

@@ -19,7 +19,7 @@
 -export([delete_files/2, delete_index_file/2, delete_compaction_file/2]).
 -export([get_row_count/1, all_docs_reduce_to_count/1, reduce_to_count/1]).
 -export([get_view_changes_count/1]).
--export([all_docs_key_opts/1, all_docs_key_opts/2, key_opts/1, key_opts/2]).
+-export([key_opts/1, key_opts/2]).
 -export([fold/4, fold_reduce/4]).
 -export([temp_view_to_ddoc/1]).
 -export([calculate_data_size/2]).
@@ -150,7 +150,7 @@ view_sig(Db, State, View, #mrargs{include_docs=true}=Args) ->
     UpdateSeq = couch_db:get_update_seq(Db),
     PurgeSeq = couch_db:get_purge_seq(Db),
     Term = view_sig_term(BaseSig, UpdateSeq, PurgeSeq),
-    couch_index_util:hexsig(couch_util:md5(term_to_binary(Term)));
+    couch_util:hexsig(couch_util:md5(term_to_binary(Term)));
 view_sig(Db, State, {_Nth, _Lang, View}, Args) ->
     view_sig(Db, State, View, Args);
 view_sig(_Db, State, View, Args0) ->
@@ -162,7 +162,7 @@ view_sig(_Db, State, View, Args0) ->
         extra=[]
     },
     Term = view_sig_term(Sig, UpdateSeq, PurgeSeq, Args),
-    couch_index_util:hexsig(couch_util:md5(term_to_binary(Term))).
+    couch_util:hexsig(couch_util:md5(term_to_binary(Term))).
 
 view_sig_term(BaseSig, UpdateSeq, PurgeSeq) ->
     {BaseSig, UpdateSeq, PurgeSeq}.
@@ -573,12 +573,12 @@ make_header(State) ->
 
 
 index_file(DbName, Sig) ->
-    FileName = couch_index_util:hexsig(Sig) ++ ".view",
+    FileName = couch_util:hexsig(Sig) ++ ".view",
     couch_index_util:index_file(mrview, DbName, FileName).
 
 
 compaction_file(DbName, Sig) ->
-    FileName = couch_index_util:hexsig(Sig) ++ ".compact.view",
+    FileName = couch_util:hexsig(Sig) ++ ".compact.view",
     couch_index_util:index_file(mrview, DbName, FileName).
 
 
@@ -630,37 +630,6 @@ reset_state(State) ->
                          kseq_btree=nil}
              || View <- State#mrst.views]
      }.
-
-
-all_docs_key_opts(Args) ->
-    all_docs_key_opts(Args, []).
-
-
-all_docs_key_opts(#mrargs{keys=undefined}=Args, Extra) ->
-    all_docs_key_opts(Args#mrargs{keys=[]}, Extra);
-all_docs_key_opts(#mrargs{keys=[], direction=Dir}=Args, Extra) ->
-    [[{dir, Dir}] ++ ad_skey_opts(Args) ++ ad_ekey_opts(Args) ++ Extra];
-all_docs_key_opts(#mrargs{keys=Keys, direction=Dir}=Args, Extra) ->
-    lists:map(fun(K) ->
-        [{dir, Dir}]
-        ++ ad_skey_opts(Args#mrargs{start_key=K})
-        ++ ad_ekey_opts(Args#mrargs{end_key=K})
-        ++ Extra
-    end, Keys).
-
-
-ad_skey_opts(#mrargs{start_key=SKey}) when is_binary(SKey) ->
-    [{start_key, SKey}];
-ad_skey_opts(#mrargs{start_key_docid=SKeyDocId}) ->
-    [{start_key, SKeyDocId}].
-
-
-ad_ekey_opts(#mrargs{end_key=EKey}=Args) when is_binary(EKey) ->
-    Type = if Args#mrargs.inclusive_end -> end_key; true -> end_key_gt end,
-    [{Type, EKey}];
-ad_ekey_opts(#mrargs{end_key_docid=EKeyDocId}=Args) ->
-    Type = if Args#mrargs.inclusive_end -> end_key; true -> end_key_gt end,
-    [{Type, EKeyDocId}].
 
 
 key_opts(Args) ->
@@ -780,17 +749,17 @@ changes_expand([{Seq, {Val, Key, DocId}} | Rest], Type, Acc) ->
 maybe_load_doc(_Db, _DI, #mrargs{include_docs=false}) ->
     [];
 maybe_load_doc(Db, #doc_info{}=DI, #mrargs{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_index_util:load_doc(Db, DI, [conflicts]), Opts);
+    doc_row(couch_doc:load(Db, DI, [conflicts]), Opts);
 maybe_load_doc(Db, #doc_info{}=DI, #mrargs{doc_options=Opts}) ->
-    doc_row(couch_index_util:load_doc(Db, DI, []), Opts).
+    doc_row(couch_doc:load(Db, DI, []), Opts).
 
 
 maybe_load_doc(_Db, _Id, _Val, #mrargs{include_docs=false}) ->
     [];
 maybe_load_doc(Db, Id, Val, #mrargs{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_index_util:load_doc(Db, docid_rev(Id, Val), [conflicts]), Opts);
+    doc_row(couch_doc:load(Db, docid_rev(Id, Val), [conflicts]), Opts);
 maybe_load_doc(Db, Id, Val, #mrargs{doc_options=Opts}) ->
-    doc_row(couch_index_util:load_doc(Db, docid_rev(Id, Val), []), Opts).
+    doc_row(couch_doc:load(Db, docid_rev(Id, Val), []), Opts).
 
 
 doc_row(null, _Opts) ->

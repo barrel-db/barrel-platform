@@ -33,6 +33,7 @@
 -export([rfc1123_date/0, rfc1123_date/1]).
 -export([find_in_binary/2]).
 -export([to_atom/1]).
+-export([hexsig/1]).
 
 -include("couch_db.hrl").
 
@@ -525,3 +526,6 @@ match_rest_of_prefix([{Pos, _Len} | Rest], Prefix, Data, PrefixLength, N) ->
         {_Pos, _Len1} ->
             {partial, N + Pos}
     end.
+
+hexsig(Sig) ->
+    couch_util:to_hex(binary_to_list(Sig)).

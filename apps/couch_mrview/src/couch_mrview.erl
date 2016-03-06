@@ -12,7 +12,6 @@
 
 -module(couch_mrview).
 
--export([query_all_docs/2, query_all_docs/4]).
 -export([query_view/3, query_view/4, query_view/6]).
 -export([view_changes_since/6, view_changes_since/7]).
 -export([count_view_changes_since/4, count_view_changes_since/5]).
@@ -42,27 +41,6 @@
     update_seq,
     args
 }).
-
-
-query_all_docs(Db, Args) ->
-    query_all_docs(Db, Args, fun default_cb/2, []).
-
-
-query_all_docs(Db, Args, Callback, Acc) when is_list(Args) ->
-    query_all_docs(Db, to_mrargs(Args), Callback, Acc);
-query_all_docs(Db, Args0, Callback, Acc) ->
-    Sig = couch_util:with_db(Db, fun(WDb) ->
-        {ok, Info} = couch_db:get_db_info(WDb),
-        couch_index_util:hexsig(couch_util:md5(term_to_binary(Info)))
-    end),
-    Args1 = Args0#mrargs{view_type=map},
-    Args2 = couch_mrview_util:validate_args(Args1),
-    {ok, Acc1} = case Args2#mrargs.preflight_fun of
-        PFFun when is_function(PFFun, 2) -> PFFun(Sig, Acc);
-        _ -> {ok, Acc}
-    end,
-    all_docs_fold(Db, Args2, Callback, Acc1).
-
 
 query_view(Db, DDoc, VName) ->
     query_view(Db, DDoc, VName, #mrargs{}).
@@ -226,64 +204,6 @@ cancel_compaction(Db, DDoc) ->
 
 cleanup(Db) ->
     couch_mrview_cleanup:run(Db).
-
-
-all_docs_fold(Db, #mrargs{keys=undefined}=Args, Callback, UAcc) ->
-    {ok, Info} = couch_db:get_db_info(Db),
-    Total = couch_util:get_value(doc_count, Info),
-    UpdateSeq = couch_db:get_update_seq(Db),
-    Acc = #mracc{
-        db=Db,
-        total_rows=Total,
-        limit=Args#mrargs.limit,
-        skip=Args#mrargs.skip,
-        callback=Callback,
-        user_acc=UAcc,
-        reduce_fun=fun couch_mrview_util:all_docs_reduce_to_count/1,
-        update_seq=UpdateSeq,
-        args=Args
-    },
-    [Opts] = couch_mrview_util:all_docs_key_opts(Args),
-    {ok, Offset, FinalAcc} = couch_db:enum_docs(Db, fun map_fold/3, Acc, Opts),
-    finish_fold(FinalAcc, [{total, Total}, {offset, Offset}]);
-all_docs_fold(Db, #mrargs{direction=Dir, keys=Keys0}=Args, Callback, UAcc) ->
-    {ok, Info} = couch_db:get_db_info(Db),
-    Total = couch_util:get_value(doc_count, Info),
-    UpdateSeq = couch_db:get_update_seq(Db),
-    Acc = #mracc{
-        db=Db,
-        total_rows=Total,
-        limit=Args#mrargs.limit,
-        skip=Args#mrargs.skip,
-        callback=Callback,
-        user_acc=UAcc,
-        reduce_fun=fun couch_mrview_util:all_docs_reduce_to_count/1,
-        update_seq=UpdateSeq,
-        args=Args
-    },
-    % Backwards compatibility hack. The old _all_docs iterates keys
-    % in reverse if descending=true was passed. Here we'll just
-    % reverse the list instead.
-    Keys = if Dir =:= fwd -> Keys0; true -> lists:reverse(Keys0) end,
-
-    FoldFun = fun(Key, Acc0) ->
-        DocInfo = (catch couch_db:get_doc_info(Db, Key)),
-        {Doc, Acc1} = case DocInfo of
-            {ok, #doc_info{id=Id, revs=[RevInfo | _RestRevs]}=DI} ->
-                Rev = couch_doc:rev_to_str(RevInfo#rev_info.rev),
-                Props = [{rev, Rev}] ++ case RevInfo#rev_info.deleted of
-                    true -> [{deleted, true}];
-                    false -> []
-                end,
-                {{{Id, Id}, {Props}}, Acc0#mracc{doc_info=DI}};
-            not_found ->
-                {{{Key, error}, not_found}, Acc0}
-        end,
-        {_, Acc2} = map_fold(Doc, {[], [{0, 0, 0}]}, Acc1),
-        Acc2
-    end,
-    FinalAcc = lists:foldl(FoldFun, Acc, Keys),
-    finish_fold(FinalAcc, [{total, Total}]).
 
 
 map_fold(Db, View, Args, Callback, UAcc) ->

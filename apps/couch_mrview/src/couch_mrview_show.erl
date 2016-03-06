@@ -19,6 +19,7 @@
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("couch_httpd/include/couch_httpd.hrl").
 -include("couch_mrview.hrl").
 
 -record(lacc, {
@@ -161,7 +162,7 @@ send_doc_update_response(Req, Db, DDoc, UpdateName, Doc, DocId) ->
 
 
 handle_view_list_req(#httpd{method=Method}=Req, Db, DDoc)
-    when Method =:= 'GET' orelse Method =:= 'OPTIONS' ->
+        when Method =:= 'GET' orelse Method =:= 'OPTIONS' ->
     case Req#httpd.path_parts of
         [_, _, _DName, _, LName, VName] ->
             % Same design doc for view and list
@@ -191,7 +192,27 @@ handle_view_list_req(#httpd{method='POST'}=Req, Db, DDoc) ->
 handle_view_list_req(Req, _Db, _DDoc) ->
     couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
-
+handle_view_list(Req, Db, DDoc, LName, VDDoc, <<"_all_docs">>, Keys) ->
+    Args0 = couch_httpd_all_docs:parse_qs(Req, Keys),
+    ETagFun = fun(BaseSig, Acc0) ->
+        UserCtx = Req#httpd.user_ctx,
+        Name = UserCtx#user_ctx.name,
+        Roles = UserCtx#user_ctx.roles,
+        Accept = couch_httpd:header_value(Req, "Accept"),
+        Parts = {couch_httpd:doc_etag(DDoc), Accept, {Name, Roles}},
+        ETag = couch_httpd:make_etag({BaseSig, Parts}),
+        case couch_httpd:etag_match(Req, ETag) of
+            true -> throw({etag_match, ETag});
+            false -> {ok, Acc0#lacc{etag=ETag}}
+        end
+    end,
+    Args = Args0#all_docs_args{preflight_fun=ETagFun},
+    couch_httpd:etag_maybe(Req, fun() ->
+        couch_query_servers:with_ddoc_proc(DDoc, fun(QServer) ->
+            Acc = #lacc{db=Db, req=Req, qserver=QServer, lname=LName},
+            couch_httpd_all_docs:query_all_docs(Db, Args, fun list_cb/2, Acc)
+        end)
+    end);
 handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
     Args0 = couch_mrview_http:parse_qs(Req, Keys),
     ETagFun = fun(BaseSig, Acc0) ->
@@ -210,12 +231,7 @@ handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
     couch_httpd:etag_maybe(Req, fun() ->
         couch_query_servers:with_ddoc_proc(DDoc, fun(QServer) ->
             Acc = #lacc{db=Db, req=Req, qserver=QServer, lname=LName},
-            case VName of
-              <<"_all_docs">> ->
-                couch_mrview:query_all_docs(Db, Args, fun list_cb/2, Acc);
-              _ ->
-                couch_mrview:query_view(Db, VDDoc, VName, Args, fun list_cb/2, Acc)
-            end
+            couch_mrview:query_view(Db, VDDoc, VName, Args, fun list_cb/2, Acc)
         end)
     end).
 

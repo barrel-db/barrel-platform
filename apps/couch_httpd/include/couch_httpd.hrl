@@ -18,3 +18,24 @@
     update_type = interactive_edit,
     atts_since = nil
 }).
+
+
+-record(all_docs_args, {preflight_fun,
+        				start_key,
+        				start_key_docid,
+        				end_key,
+        				end_key_docid,
+        				keys,
+        				direction = fwd,
+        				limit = 16#10000000,
+        				skip = 0,
+        				group_level = 0,
+        				stale = false,
+        				inclusive_end = true,
+        				include_docs = false,
+        				doc_options = [],
+        				update_seq=false,
+        				conflicts,
+        				callback,
+        				list,
+        				extra = []}).

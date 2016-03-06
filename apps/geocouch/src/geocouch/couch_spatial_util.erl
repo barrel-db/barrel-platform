@@ -111,7 +111,7 @@ view_sig(State, View, Args0) ->
         extra=[]
     },
     Bin = term_to_binary({Sig, UpdateSeq, PurgeSeq, Args}),
-    couch_index_util:hexsig(couch_util:md5(Bin)).
+    couch_util:hexsig(couch_util:md5(Bin)).
 
 
 init_state(Db, Fd, State, nil) ->
@@ -230,12 +230,12 @@ make_header(State) ->
 
 
 index_file(DbName, Sig) ->
-    FileName = couch_index_util:hexsig(Sig) ++ ".spatial",
+    FileName = couch_util:hexsig(Sig) ++ ".spatial",
     couch_index_util:index_file(spatial, DbName, FileName).
 
 
 compaction_file(DbName, Sig) ->
-    FileName = couch_index_util:hexsig(Sig) ++ ".compact.spatial",
+    FileName = couch_util:hexsig(Sig) ++ ".compact.spatial",
     couch_index_util:index_file(spatial, DbName, FileName).
 
 
