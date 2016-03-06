@@ -192,7 +192,7 @@ handle_view_list_req(#httpd{method='POST'}=Req, Db, DDoc) ->
 handle_view_list_req(Req, _Db, _DDoc) ->
     couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
-handle_view_list(Req, Db, DDoc, LName, VDDoc, <<"_all_docs">>, Keys) ->
+handle_view_list(Req, Db, DDoc, LName, _VDDoc, <<"_all_docs">>, Keys) ->
     Args0 = couch_httpd_all_docs:parse_qs(Req, Keys),
     ETagFun = fun(BaseSig, Acc0) ->
         UserCtx = Req#httpd.user_ctx,
