@@ -13,5 +13,4 @@
  {<<"oauth">>,{pkg,<<"barrel_oauth">>,<<"1.6.0">>},0},
  {<<"snappy">>,{pkg,<<"snappy">>,<<"1.1.1">>},0},
  {<<"ssl_verify_hostname">>,{pkg,<<"ssl_verify_hostname">>,<<"1.0.5">>},1},
- {<<"ucol">>,{pkg,<<"ucol">>,<<"2.0.0">>},0},
- {<<"ucol_nif">>,{pkg,<<"ucol_nif">>,<<"1.1.5">>},0}].
+ {<<"ucol">>,{pkg,<<"ucol">>,<<"2.0.0">>},0}].
