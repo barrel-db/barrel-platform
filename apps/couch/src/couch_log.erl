@@ -22,7 +22,7 @@
 -export([debug/2, info/2, warn/2, error/2]).
 -export([debug_on/0, info_on/0, warn_on/0, get_level/0, get_level_integer/0, set_level/1]).
 -export([debug_on/1, info_on/1, warn_on/1, get_level/1, get_level_integer/1, set_level/2]).
--export([read/2]).
+-export([read/2, read/3]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -257,6 +257,19 @@ read(Bytes, Offset) ->
     {ok, Chunk} = file:pread(Fd, Start, Bytes),
     ok = file:close(Fd),
     Chunk.
+
+% If formatted is set to true, then read/3 removes the first line, assuming it is not complete and returns the chunk
+
+read(Bytes, Offset, Formatted) ->
+    Chunk = read(Bytes, Offset),
+    case Formatted of
+        true -> truncate_first_line(Chunk);
+        _ -> Chunk
+    end.
+
+truncate_first_line(Chunk) ->
+    EndOfLine = string:chr(Chunk, $\n),
+    string:substr(Chunk, EndOfLine + 1).
 
 
 maybe_start_logfile_backend(Filename, Level) ->
