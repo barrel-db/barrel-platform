@@ -23,6 +23,7 @@
 -export([debug_on/0, info_on/0, warn_on/0, get_level/0, get_level_integer/0, set_level/1]).
 -export([debug_on/1, info_on/1, warn_on/1, get_level/1, get_level_integer/1, set_level/2]).
 -export([read/2]).
+-export([read_from_last/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -258,6 +259,21 @@ read(Bytes, Offset) ->
     ok = file:close(Fd),
     Chunk.
 
+read_from_last(LastRead) ->
+    read_from_last(LastRead, 1000, 0, "").
+
+read_from_last(LastRead, Bytes, Offset, Chunk) ->
+    LogFileName = log_file(),
+    LogFileSize = filelib:file_size(LogFileName),
+    {ok, Fd} = file:open(LogFileName, [read]),
+    NewChunk = string:concat(read(Bytes, Offset), Chunk),
+    LastReadCharacter = string:str(NewChunk, LastRead),
+    case {Offset + Bytes < LogFileSize, LastReadCharacter > 0} of
+    {true, false} -> 
+        read_from_last(LastRead, Bytes, Offset + Bytes, NewChunk);
+    {_, true} ->
+        string:substr(NewChunk, LastReadCharacter - 1)
+    end.
 
 maybe_start_logfile_backend(Filename, Level) ->
     Started = case application:get_env(lager, handlers) of

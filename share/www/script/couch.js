@@ -437,6 +437,22 @@ CouchDB.requestStats = function(module, key, test) {
   return JSON.parse(stat)[module][key];
 };
 
+// this requests new log entries from the last read log entry
+CouchDB.get_log = function(last_read) {
+  options = "?log=false"
+  console.log(last_read)
+  if(last_read != ""){
+    options += ("&last_read=" + last_read)
+  }
+  CouchDB.last_req = CouchDB.request("GET", "/_log" + options);
+  CouchDB.maybeThrowError(CouchDB.last_req);  
+  return CouchDB.log_cleanup(CouchDB.last_req.response)
+}
+
+CouchDB.log_cleanup = function(log) {
+  return log.substring(log.indexOf("\n"), log.lastIndexOf("\n"))
+}
+
 CouchDB.uuids_cache = [];
 
 CouchDB.newUuids = function(n, buf) {

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!--
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+-->
+<html lang="en">
+  <head>
+    <title>Logs</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <link rel="stylesheet" href="style/layout.css?0.11.0" type="text/css">
+    <script src="script/json2.js"></script>
+    <script src="script/sha1.js"></script>
+    <script src="script/jquery.js"></script>
+    <script src="script/jquery.couch.js"></script>
+    <script src="script/futon.js"></script>
+    <script src="script/couch.js"></script>
+    <script>
+    	$(document).ready(function(){
+    		var previous_log = "";
+    		var last_read_log = "";
+        var stopped = false;
+        var started = false;
+    		$("#start").click(function(){
+    			if(started == false){
+            started = true;
+            stopped = false;
+            start_requests();
+          }
+          else if(stopped == true){
+            stopped = false;
+          }
+    		})
+
+    		start_requests = function(){
+    			$("#log_box").html("<strong>Started</strong>\n" + $("#log_box").html());
+    			setInterval(function(){ if(stopped!=true){ append_log(last_read()) }}, 2000);
+    		}
+
+    		last_read = function(){
+    			return last_read_log;
+    		}
+    		append_log = function(last_read){
+    			log = CouchDB.get_log(last_read).split("\n").reverse().join("\n");
+    			last_read_log = log.split("\n")[0];
+    			if(previous_log != log){
+    				$("#log_box").html(log + $("#log_box").html());
+    				previous_log = log;
+    			}
+    			else{
+    				return "";
+    			}
+    		}
+
+    		$("#stop").click(function(){
+    			stopped = true
+    			$("#log_box").html("<strong>Stopped</strong>\n" + $("#log_box").html())
+    		})
+
+    		$("#clear").click(function(){
+    			$("#log_box").html("<strong>Cleared</strong>");
+    		})
+    	})
+    </script>
+  </head>
+  <body><div id="wrap">
+    <h1>
+      <a href="index.html">Overview</a>
+      <strong>Logs</strong>
+    </h1>
+    <div id="content">
+    	<div id="controls">
+    		<a href="#" id="start">Start</a> |
+    		<a href="#" id="stop">Stop</a> | 
+    		<a href="#" id="clear">Clear</a> | 
+    	</div>
+    	<hr />
+    	<div id="log_box"></div>
+    </div>
+  </div></body>
+</html>

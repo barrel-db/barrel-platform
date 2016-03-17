@@ -301,9 +301,15 @@ increment_update_seq_req(Req, _Db) ->
 
 handle_log_req(#httpd{method='GET'}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
+    ReadFromLast = couch_httpd:qs_value(Req, "last_read", "false"),
     Bytes = list_to_integer(couch_httpd:qs_value(Req, "bytes", "1000")),
     Offset = list_to_integer(couch_httpd:qs_value(Req, "offset", "0")),
-    Chunk = couch_log:read(Bytes, Offset),
+    case ReadFromLast of
+        "false" -> 
+            Chunk = couch_log:read(Bytes, Offset);
+        _ ->
+            Chunk = couch_log:read_from_last(ReadFromLast)  
+    end,
     {ok, Resp} = start_chunked_response(Req, 200, [
         % send a plaintext response
         {"Content-Type", "text/plain; charset=utf-8"},
