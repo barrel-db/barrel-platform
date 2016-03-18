@@ -35,7 +35,7 @@ less(A,B) when is_number(A), is_number(B) -> A - B;
 less(A,_) when is_number(A)               -> -1;
 less(_,B) when is_number(B)               -> 1;
 
-less(A,B) when is_binary(A), is_binary(B) -> ucol_nif:compare(A,B);
+less(A,B) when is_binary(A), is_binary(B) -> ucol:compare(A,B);
 less(A,_) when is_binary(A)               -> -1;
 less(_,B) when is_binary(B)               -> 1;
 
@@ -56,7 +56,7 @@ less_props([], [_|_]) ->
 less_props(_, []) ->
     1;
 less_props([{AKey, AValue}|RestA], [{BKey, BValue}|RestB]) ->
-    case ucol_nif:compare(AKey, BKey) of
+    case ucol:compare(AKey, BKey) of
     0 ->
         case less(AValue, BValue) of
         0 ->
