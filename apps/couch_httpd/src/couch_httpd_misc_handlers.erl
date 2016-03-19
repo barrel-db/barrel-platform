@@ -303,7 +303,16 @@ handle_log_req(#httpd{method='GET'}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
     Bytes = list_to_integer(couch_httpd:qs_value(Req, "bytes", "1000")),
     Offset = list_to_integer(couch_httpd:qs_value(Req, "offset", "0")),
-    Chunk = couch_log:read(Bytes, Offset),
+    Formatted = couch_httpd:qs_value(Req, "formatted", "false"),
+    RawChunk = couch_log:read(Bytes, Offset),
+    case Formatted of
+        "true" ->
+            EndOfLine = string:chr(RawChunk, $\n),
+            Chunk = string:substr(RawChunk, EndOfLine + 1);
+        _ ->
+            Chunk = RawChunk
+    end,
+
     {ok, Resp} = start_chunked_response(Req, 200, [
         % send a plaintext response
         {"Content-Type", "text/plain; charset=utf-8"},
