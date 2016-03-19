@@ -621,7 +621,10 @@ http_1_0_keep_alive(Req, Headers) ->
     end.
 
 start_chunked_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
-    log_request(Req, Code),
+    case couch_httpd:qs_value(Req, "log") of
+        "false" -> ok;
+        _ -> log_request(Req, Code)
+    end,
     couch_stats_collector:increment({httpd_status_codes, Code}),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     Headers2 = Headers1 ++ server_header() ++
