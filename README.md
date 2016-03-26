@@ -96,10 +96,10 @@ Contract)](http://rfc.zeromq.org/spec:22) process for contributions.
 Under C4.1 process, you are more than welcome to help us by:
 
 * Join the discussion over anything from design to code style 
-* Try out barrel and [report issues](https://github.com/barrel/barrel/issues/new)
+* Try out barrel and [report issues](https://github.com/barrel-db/barrel-platform/issues/new)
 * Request a feature
-* Pick an [issue](https://github.com/barrel/barrel/issues) and get it done
-* Fork the repository, pick an [issue](https://github.com/barrel/barrel/issues) and get it done
+* Pick an [issue](https://github.com/barrel-db/barrel-platform/issues) and get it done
+* Fork the repository, pick an [issue](https://github.com/barrel-db/barrel-platform/issues) and get it done
 * Send us pull requests
 * Star this project ^_^
 
