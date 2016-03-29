@@ -1,110 +1,77 @@
-# Barrel
-[![Build Status](https://travis-ci.org/barrel-db/barrel-platform.png)](https://travis-ci.org/barrel-db/barrel-platform)
-## What can Barrel do
 
-Work on a CouchDB flavor with modern features. Barrel started as a fork of
-Apache CouchDB 1.3.
+<img src="https://raw.githubusercontent.com/barrel-db/media/master/banner/barrel-banner-groupfb.png">
+
+<p align="center">
+   <a href="https://travis-ci.org/barrel-db/barrel-platform">
+        <img src="https://img.shields.io/travis/barrel-db/barrel-platform.svg?style=flat-square">
+   </a>
+   
+   <a href="https://github.com/barrel-db/barrel-platform/blob/master/LICENSE">
+        <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square">
+   </a>
+
+   <a href="https://twitter.com/barreldb">
+        <img src="https://img.shields.io/badge/twitter-%40barreldb-55acee.svg?style=flat-square">
+   </a>
+
+   <a href="https://docs.barrel-db.org/">
+        <img src="https://img.shields.io/badge/docs-readme.io-ff69b4.svg?style=flat-square">
+   </a>
+</p>
+
+<p align="center"><i>A document-oriented database targeting data locality & P2P</i> - <a href="https://barrel-db.org/" target="_blank">barrel-db.org</a></p>
+
+
 ## Features
 
-- compatible with the CouchDB HTTP API
-- **view changes**: Get changes and replicate from a view index of your database
-- optimised for mobile usage
-- easily extendable for your own needs
-- Fully opensource. All the sources are on barrel GIT repository
-  (http://github.com/barrel-db) under the Apache License, Version 2.0.
+- The familiarity of CouchDB
+- Bend to your own needs
+- Get changes and replicate from a view index
+- Optimised for mobile and tablet usage
+- Liberal Apache-2.0 license
 
 
-## BARREL Project Goals
+## Goals
 
-Barrel is an effort to maintain the CouchDB HTTP API along with modern features
-such as the view changes based replication, full Erlang OTP support, a revised
-storage, P2P distribution... Underpinning, all this work is efficiency for
-small and large data systems -- something rare among database systems.
+Barrel should be able to work in unreliable conditions when the
+quorum can't be achieved (such as offline, disconnected or in other
+adverse conditions). The goal is to support efficiency for small and 
+large data systems through:
 
-Barrel must also be able to work in unreliable conditions where sometimes the
-quorum can't be achieved (because it is working offline or in other
-condtions).
+- Maintaining the CouchDB HTTP API
+- Modern features such as the view changes based replication
+- Erlang OTP support
+- P2P distribution
 
-Because Barrel is built on an existing relatively stable code base, it is
-possible to make these radical changes as part of an incremental process.
-
-
-
-
-The main BARREL website is http://barrel-db.org.
-
-Also checkout [Barrel Users Forum](https://users.barrel-db.org/).
 
 ## Requirements
 
-- OS supported: Linux, OSX, BSDs (windows support is coming)
+- OS supported: Linux, OSX, BSDs
 - Erlang 18.1
-- Curl
+- cURL
 - ICU
 - Spidermonkey 1.8.5
 
 
 ## Installation
 
-Installation is pretty simple. Just run the command line:
-
-    $ make update
-    $ make rel
-
-and it will generate an barrel release in `_build/prod/rel/barrel`. 
-
-> to build with an embedded version of spidermonkey and not rely on system dependencies that are sometimes missing or are badly installed, run the following command line:
->
->    $ JS_COMPILE=static make rel
->
-> also you can override the makefile variables `JSCFLAGS` and `JSLIBS` to link to a custom installation of spidermonkey.
+ - [Install Erlang](https://docs.barrel-db.org/docs/install-erlang)
+ - [Installing Barrel (Source)](https://docs.barrel-db.org/docs/installing-barrel-from-sources)
 
 
-To build a compressed tar archive of a release build of project, run the
-following command line:
+## Get Involved!
 
-    $ make tar
-
-## Binding port 80
-
-On most UNIX systems binding port 80 is a privileged operation (requires
-root). Running Erlang as root is not recommended so some configuration
-will need to be done so that rcouch can bind port 80.
-
-If you run a recent Linux kernel with capabilities you can give Erlang
-the necessary privilege using the setcap command (you may need to install a
-package named lxc, libcap2-bin or similar to obtain this command).
-
-    $ setcap 'cap_net_bind_service=+ep' /path/to/rel/refuge/erts-5.8.5/bin/beam`
-    $ setcap 'cap_net_bind_service=+ep' /path/to/rel/refuge/erts-5.8.5/bin/beam.smp
-
-On FreeBSD all ports can be made accessible to all users by issuing:
-
-    $ sysctl net.inet.ip.portrange.reservedhigh=0
+* Star this project :star:
+* Try out barrel and [report issues](https://barrel-db.atlassian.net)
+* Join the [Barrel User Forum](https://users.barrel-db.org/)
+* Request a feature and share ideas
+* Pick an [issue on JIRA](https://barrel-db.atlassian.net/) and get hacking
+* Follow us on [twitter](https://twitter.com/barreldb)
 
 
 ## Ownership and License
 
-The contributors are listed in AUTHORS. This project uses the Apache License 2
-license, see LICENSE.
+We use the [C4.1 (Collective Code Construction
+Contract)](http://rfc.zeromq.org/spec:22) process for contributions. Please read and get involved.
 
-Barrel uses the [C4.1 (Collective Code Construction
-Contract)](http://rfc.zeromq.org/spec:22) process for contributions.
-
-## Development
-
-Under C4.1 process, you are more than welcome to help us by:
-
-* Join the discussion over anything from design to code style 
-* Try out barrel and [report issues](https://github.com/barrel-db/barrel-platform/issues/new)
-* Request a feature
-* Pick an [issue](https://github.com/barrel-db/barrel-platform/issues) and get it done
-* Fork the repository, pick an [issue](https://github.com/barrel-db/barrel-platform/issues) and get it done
-* Send us pull requests
-* Star this project ^_^
-
-To build a development release, run the following command
-
-```
-    $ make devrel
-```
+Barrel is distributed under the Apache-2.0 license, see [LICENSE](https://github.com/pjhampton/barrel-platform/blob/couch-1.x/LICENSE).
