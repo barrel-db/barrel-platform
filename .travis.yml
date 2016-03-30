@@ -1,23 +1,17 @@
 language: erlang
-
 otp_release:
-    - 18.0
-    - 18.1
-
+- 18.0
+- 18.1
 sudo: true
-
 before_install:
-    - sudo apt-get -y update
-    - sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
-    - sudo apt-get -y install libtool automake autoconf autoconf-archive
-
+- sudo apt-get -y update
+- sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
+- sudo apt-get -y install libtool automake autoconf autoconf-archive
 install:
-    - "./support/bootstrap_travis.sh"
-
-script: "DEBUG=1 ./rebar3 compile"
-
+- "./support/bootstrap_travis.sh"
+script: DEBUG=1 ./rebar3 compile
 notifications:
-    irc:
-        - "irc.freenode.org#barreldb"
-    email:
-        - "bchesneay@gmail.com"
+  email:
+  - bchesneau@gmail.com
+  slack:
+    secure: v07PkcR4WofdFjGzkAeG0wPNPV798C/Jj81hoIZ2BHiV2WDomksvIQORY4J0W6qqgHoEYeQ35AkjrrheuQzVtmKc+BgW7xyrS4v4xLuP6c1A5uC+KYzUOCHXjPmyi7lH4H25e/HmCTK0EHhtyH5FSOfglEIgBkOUCAwQ1EbppNVefJ6zNMegjwwKUf2JgNMYfeeX2xAHCKCEbULYa/Lxc1+87pFwMc9lbO8LQYMKuyZob+7h1a0epeti3aElMd20wEFx69E4y5/Af7BkB973FEYaMkSr/iSYOkKd+0HcR6nakAYjxd6zdXbKy5UgHS7rC3iB5y3N5UHyowPVt+i5q8JWHtOgPKL8dEvtcXrA0ICk1JZb/aW+3kWg9f+nn2osXGZC27XQO7nzPfkDyFgOt+gq1nQ7K8KrPuGrntEILib9ZQQ9pmuzxE+LbtGfrcoU+jJph2fEWxO4cENC9W3DAaVV9ZpmIm4Gs4WGJae8KYXUnrWXvDzBvubX+ofYSWkFhtPjulW94MizdELEOu4kLl1QUXlFpDDcNRO5sa3IEpRvCkeVyaJjyL4GYTfw1gV0NmsROz7IZmOqMf6CG66hc5JJgvj61Km5P/Se6sWN2bZE6uUG6UgizIsYjCp8kT0Gqlc2sJHHjZDJg5iTAf5NmUVdMqBYr167WTKlCjt2sf8=
