@@ -1,8 +1,8 @@
 {application, geocouch, [
     {description, "GeoCouch - A spatial index for CouchDB"},
-    {vsn, "0.2.1"},
+    {vsn, "0.3.0"},
     {modules, []},
     {registered, []},
-    {applications, [kernel, stdlib]},
+    {applications, [kernel, stdlib, couch]},
     {env, []}
 ]}.

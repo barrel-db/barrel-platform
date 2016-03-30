@@ -1423,7 +1423,8 @@ Script = {
 		Res = fun.apply(ddoc, args),
 		respond(Res);
 	}
-};/**
+};
+/**
  * CoffeeScript Compiler v1.2.0
  * http://coffeescript.org
  *

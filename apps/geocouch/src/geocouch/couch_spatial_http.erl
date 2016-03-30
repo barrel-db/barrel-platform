@@ -17,7 +17,6 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_spatial.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 -record(acc, {
@@ -42,7 +41,8 @@ handle_spatial_req(#httpd{
 
 % the dispatching of endpoints below _spatial needs to be done manually
 dispatch_sub_spatial_req(#httpd{ path_parts=[_, _, _DName, Spatial, SpatialDisp|_]}=Req, Db, DDoc) ->
-    Conf = ?cfget("httpd_design_handlers", ?b2l(<<Spatial/binary, "/", SpatialDisp/binary>>)),
+    Conf = econfig:get(barrel, "httpd_design_handlers",
+                       ?b2l(<<Spatial/binary, "/", SpatialDisp/binary>>)),
     Fun = couch_httpd:make_arity_3_fun(Conf),
     apply(Fun, [Req, Db, DDoc]).
 
