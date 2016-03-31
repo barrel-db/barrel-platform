@@ -39,4 +39,3 @@ init([]) ->
             [couch_log]}
     ],
     {ok, {{one_for_one, 10, 3600}, Children}}.
-

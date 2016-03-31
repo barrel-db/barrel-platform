@@ -82,7 +82,7 @@ json_req_obj(#httpd{mochi_req=Req,
 % add headers...
     {[{<<"info">>, {Info}},
         {<<"id">>, DocId},
-        {<<"uuid">>, couch_uuids:new()},
+        {<<"uuid">>, barrel_uuids:new()},
         {<<"method">>, Method},
         {<<"requested_path">>, RequestedPath},
         {<<"path">>, Path},

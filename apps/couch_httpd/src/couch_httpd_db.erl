@@ -144,7 +144,7 @@ db_req(#httpd{method='POST',path_parts=[_DbName]}=Req, Db) ->
     validate_attachment_names(Doc),
     Doc2 = case Doc#doc.id of
         <<"">> ->
-            Doc#doc{id=couch_uuids:new(), revs={0, []}};
+            Doc#doc{id=barrel_uuids:new(), revs={0, []}};
         _ ->
             Doc
     end,
@@ -204,7 +204,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
                     Doc = couch_doc:from_json_obj(JsonObj),
                     validate_attachment_names(Doc),
                     Id = case Doc#doc.id of
-                        <<>> -> couch_uuids:new();
+                        <<>> -> barrel_uuids:new();
                         Id0 -> Id0
                     end,
                     case couch_util:get_value(<<"_rev">>, ObjProps) of
@@ -517,7 +517,7 @@ send_doc_efficiently(#httpd{mochi_req = MochiReq} = Req,
         false ->
             send_json(Req, 200, Headers, couch_doc:to_json_obj(Doc, Options));
         true ->
-            Boundary = couch_uuids:random(),
+            Boundary = barrel_uuids:random(),
             JsonBytes = ?JSON_ENCODE(couch_doc:to_json_obj(Doc,
                     [attachments, follows, att_encoding_info | Options])),
             {ContentType, Len} = couch_doc:len_doc_to_multi_part_stream(
@@ -532,8 +532,8 @@ send_doc_efficiently(#httpd{mochi_req = MochiReq} = Req,
     end.
 
 send_docs_multipart(Req, Results, Options1) ->
-    OuterBoundary = couch_uuids:random(),
-    InnerBoundary = couch_uuids:random(),
+    OuterBoundary = barrel_uuids:random(),
+    InnerBoundary = barrel_uuids:random(),
     Options = [attachments, follows, att_encoding_info | Options1],
     CType = {"Content-Type",
         "multipart/mixed; boundary=\"" ++ ?b2l(OuterBoundary) ++ "\""},
@@ -562,7 +562,7 @@ send_docs_multipart(Req, Results, Options1) ->
     couch_httpd:last_chunk(Resp).
 
 send_ranges_multipart(Req, ContentType, Len, Att, Ranges) ->
-    Boundary = couch_uuids:random(),
+    Boundary = barrel_uuids:random(),
     CType = {"Content-Type",
         "multipart/byteranges; boundary=\"" ++ ?b2l(Boundary) ++ "\""},
     {ok, Resp} = start_chunked_response(Req, 206, [CType]),
@@ -1071,4 +1071,3 @@ validate_attachment_name(Name) ->
         true -> Name;
         false -> throw({bad_request, <<"Attachment name is not UTF-8 encoded">>})
     end.
-

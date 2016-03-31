@@ -64,7 +64,7 @@ save_doc(#doc{body={Body}} = Doc) ->
         Doc;
     ClearPassword ->
         Iterations = barrel_config:get_integer("couch_httpd_auth", "iterations", 1000),
-        Salt = couch_uuids:random(),
+        Salt = barrel_uuids:random(),
         DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
         Body0 = [{?PASSWORD_SCHEME, ?PBKDF2}, {?ITERATIONS, Iterations}|Body],
         Body1 = ?replace(Body0, ?DERIVED_KEY, DerivedKey),

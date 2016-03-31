@@ -120,7 +120,7 @@ handle_restart_req(Req) ->
 
 handle_uuids_req(#httpd{method='GET'}=Req) ->
     Count = list_to_integer(couch_httpd:qs_value(Req, "count", "1")),
-    UUIDs = [couch_uuids:new() || _ <- lists:seq(1, Count)],
+    UUIDs = [barrel_uuids:new() || _ <- lists:seq(1, Count)],
     Etag = couch_httpd:make_etag(UUIDs),
     couch_httpd:etag_respond(Req, Etag, fun() ->
         CacheBustingHeaders = [

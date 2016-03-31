@@ -307,7 +307,7 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
     _ ->
         []
     end ++ options_to_query_args(Options, []),
-    Boundary = couch_uuids:random(),
+    Boundary = barrel_uuids:random(),
     JsonBytes = ?JSON_ENCODE(
         couch_doc:to_json_obj(
           Doc, [revs, attachments, follows, att_encoding_info | Options])),
@@ -849,7 +849,7 @@ json_to_doc_info({Props}) ->
         id = get_value(<<"id">>, Props),
         high_seq = get_value(<<"seq">>, Props),
         revs = RevsInfo
-    }, 
+    },
     {DocInfo, Seq}.
 
 

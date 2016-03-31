@@ -234,7 +234,7 @@ cookie_auth_cookie(Req, User, Secret, TimeStamp) ->
 ensure_cookie_auth_secret() ->
     case barrel_config:get("couch_httpd_auth", "secret", nil) of
         nil ->
-            NewSecret = ?b2l(couch_uuids:random()),
+            NewSecret = ?b2l(barrel_uuids:random()),
             barrel_config:set("couch_httpd_auth", "secret", NewSecret),
             NewSecret;
         Secret -> Secret

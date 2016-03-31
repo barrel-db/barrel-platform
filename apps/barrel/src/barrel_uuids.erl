@@ -9,24 +9,18 @@
 % WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 % License for the specific language governing permissions and limitations under
 % the License.
--module(couch_uuids).
--include("couch_db.hrl").
-
+-module(barrel_uuids).
 -behaviour(gen_server).
 
--export([start/0, stop/0]).
+-export([start_link/0]).
 -export([new/0, random/0, utc_random/0]).
 
--export([init/1, terminate/2, code_change/3]).
--export([handle_call/3, handle_cast/2, handle_info/2]).
+-export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2, handle_info/2]).
 
 -export([config_change/3]).
 
-start() ->
+start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-stop() ->
-    gen_server:cast(?MODULE, stop).
 
 new() ->
     gen_server:call(?MODULE, create).
@@ -65,7 +59,7 @@ handle_call(create, _From, utc_random) ->
 handle_call(create, _From, {utc_id, UtcIdSuffix}) ->
     {reply, utc_suffix(UtcIdSuffix), {utc_id, UtcIdSuffix}};
 handle_call(create, _From, {sequential, Pref, Seq}) ->
-    Result = ?l2b(Pref ++ io_lib:format("~6.16.0b", [Seq])),
+    Result = list_to_binary(Pref ++ io_lib:format("~6.16.0b", [Seq])),
     case Seq >= 16#fff000 of
         true ->
             {reply, Result, {sequential, new_prefix(), inc()}};

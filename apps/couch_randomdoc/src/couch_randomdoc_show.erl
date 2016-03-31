@@ -37,7 +37,7 @@ handle_randomdoc_show_req(#httpd{
             {null, nil}
     end,
 
-    CurrentEtag = couch_uuids:new(),
+    CurrentEtag = barrel_uuids:new(),
     couch_httpd:etag_respond(Req, CurrentEtag, fun() ->
         JsonReq = couch_httpd_external:json_req_obj(Req, Db, DocId),
         [<<"resp">>, ExternalResp] =

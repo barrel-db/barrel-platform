@@ -28,7 +28,12 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    {ok, { {one_for_all, 0, 1}, []} }.
+
+    UUIDs = {barrel_uuids,
+             {barrel_uuids, start_link, []},
+             permanent, brutal_kill, worker, [barrel_uuids]},
+
+    {ok, { {one_for_all, 0, 1}, [UUIDs]} }.
 
 %%====================================================================
 %% Internal functions

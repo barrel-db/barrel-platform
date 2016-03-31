@@ -67,7 +67,7 @@ get_version(short) ->
 get_uuid() ->
     case barrel_config:get("couchdb", "uuid", nil) of
         nil ->
-            UUID = couch_uuids:random(),
+            UUID = barrel_uuids:random(),
             barrel_config:set("couchdb", "uuid", UUID),
             UUID;
         UUID -> ?l2b(UUID)

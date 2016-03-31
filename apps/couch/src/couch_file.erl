@@ -107,7 +107,7 @@ append_term_md5(Fd, Term, Options) ->
 
 append_binary(Fd, Bin) ->
     gen_server:call(Fd, {append_bin, assemble_file_chunk(Bin)}, infinity).
-    
+
 append_binary_md5(Fd, Bin) ->
     gen_server:call(Fd,
         {append_bin, assemble_file_chunk(Bin, couch_util:md5(Bin))}, infinity).
@@ -206,7 +206,7 @@ delete(RootDir, Filepath) ->
 
 
 delete(RootDir, Filepath, Async) ->
-    DelFile = filename:join([RootDir,".delete", ?b2l(couch_uuids:random())]),
+    DelFile = filename:join([RootDir,".delete", ?b2l(barrel_uuids:random())]),
     case file:rename(Filepath, DelFile) of
     ok ->
         if (Async) ->

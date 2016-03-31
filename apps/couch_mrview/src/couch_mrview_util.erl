@@ -278,7 +278,7 @@ temp_view_to_ddoc({Props}) ->
         _ -> []
     end,
     DDoc = {[
-        {<<"_id">>, couch_uuids:random()},
+        {<<"_id">>, barrel_uuids:random()},
         {<<"language">>, Language},
         {<<"options">>, Options},
         {<<"views">>, {[

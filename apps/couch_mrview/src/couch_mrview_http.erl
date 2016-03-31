@@ -164,7 +164,7 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
     end, Queries),
     {ok, Resp2} = couch_httpd:etag_maybe(Req, fun() ->
                     VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n"},
-                    Etag = couch_uuids:new(),
+                    Etag = barrel_uuids:new(),
                     Headers = [{"ETag", Etag}],
                     FirstChunk = "{\"results\":[",
                     {ok, Resp} = couch_httpd:start_json_response(Req, 200, Headers),

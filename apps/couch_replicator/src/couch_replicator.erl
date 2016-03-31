@@ -606,7 +606,7 @@ init_state(Rep) ->
         rep_starttime = couch_util:rfc1123_date(),
         src_starttime = get_value(<<"instance_start_time">>, SourceInfo),
         tgt_starttime = get_value(<<"instance_start_time">>, TargetInfo),
-        session_id = couch_uuids:random(),
+        session_id = barrel_uuids:random(),
         db_compaction_notifier = start_db_compaction_notifier(Source, Target),
         source_monitor = db_monitor(Source),
         target_monitor = db_monitor(Target),
@@ -1025,4 +1025,3 @@ rep_stats(State) ->
         {doc_write_failures, Stats#rep_stats.doc_write_failures},
         {checkpointed_source_seq, CommittedSeq}
     ].
-
