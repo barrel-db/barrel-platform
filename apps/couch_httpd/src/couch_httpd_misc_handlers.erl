@@ -36,7 +36,7 @@
 
 handle_welcome_req(#httpd{method='GET'}=Req, WelcomeMessage) ->
     send_json(Req, {[
-        {couchdb, WelcomeMessage},
+        {name, barrel},
         {uuid, couch_server:get_uuid()},
         {version, list_to_binary(couch_server:get_version())}
         ] ++ case ?cfget("vendor") of
