@@ -1,4 +1,4 @@
--module(couch_exta).
+-module(couch_extra).
 
 %% API exports
 -export([]).
