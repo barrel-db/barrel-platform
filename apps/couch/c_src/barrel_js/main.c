@@ -49,7 +49,7 @@ req_ctor(JSContext* cx, uintN argc, jsval* vp)
     JSBool ret;
     JSObject* obj = JS_NewObjectForConstructor(cx, vp);
     if(!obj) {
-        JS_ReportError(cx, "Failed to create CouchHTTP instance.\n");
+        JS_ReportError(cx, "Failed to create BarrelHTTP instance.\n");
         return JS_FALSE;
     }
     ret = http_ctor(cx, obj);
@@ -77,7 +77,7 @@ req_open(JSContext* cx, uintN argc, jsval* vp)
     } else if(argc == 3) {
         ret = http_open(cx, obj, argv[0], argv[1], argv[2]);
     } else {
-        JS_ReportError(cx, "Invalid call to CouchHTTP.open");
+        JS_ReportError(cx, "Invalid call to BarrelHTTP.open");
     }
 
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
@@ -95,7 +95,7 @@ req_set_hdr(JSContext* cx, uintN argc, jsval* vp)
     if(argc == 2) {
         ret = http_set_hdr(cx, obj, argv[0], argv[1]);
     } else {
-        JS_ReportError(cx, "Invalid call to CouchHTTP.set_header");
+        JS_ReportError(cx, "Invalid call to BarrelHTTP.set_header");
     }
 
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
@@ -113,7 +113,7 @@ req_send(JSContext* cx, uintN argc, jsval* vp)
     if(argc == 1) {
         ret = http_send(cx, obj, argv[0]);
     } else {
-        JS_ReportError(cx, "Invalid call to CouchHTTP.send");
+        JS_ReportError(cx, "Invalid call to BarrelHTTP.send");
     }
 
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
@@ -136,7 +136,7 @@ req_status(JSContext* cx, JSObject* obj, jsid pid, jsval* vp)
 static JSBool
 base_url(JSContext *cx, JSObject* obj, jsid pid, jsval* vp)
 {
-    couch_args *args = (couch_args*)JS_GetContextPrivate(cx);
+    barrel_args *args = (barrel_args*)JS_GetContextPrivate(cx);
     return http_uri(cx, obj, args, &JS_RVAL(cx, vp));
 }
 
@@ -219,7 +219,7 @@ static JSBool
 print(JSContext* cx, uintN argc, jsval* vp)
 {
     jsval* argv = JS_ARGV(cx, vp);
-    couch_print(cx, argc, argv);
+    barrel_print(cx, argc, argv);
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
     return JS_TRUE;
 }
@@ -243,7 +243,7 @@ readline(JSContext* cx, uintN argc, jsval* vp)
     /* GC Occasionally */
     JS_MaybeGC(cx);
 
-    line = couch_readline(cx, stdin);
+    line = barrel_readline(cx, stdin);
     if(line == NULL) return JS_FALSE;
 
     JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(line));
@@ -274,8 +274,8 @@ seal(JSContext* cx, uintN argc, jsval* vp)
 }
 
 
-JSClass CouchHTTPClass = {
-    "CouchHTTP",
+JSClass BarrelHTTPClass = {
+    "BarrelHTTP",
     JSCLASS_HAS_PRIVATE
         | JSCLASS_CONSTRUCT_PROTOTYPE
         | JSCLASS_HAS_RESERVED_SLOTS(2),
@@ -291,14 +291,14 @@ JSClass CouchHTTPClass = {
 };
 
 
-JSPropertySpec CouchHTTPProperties[] = {
+JSPropertySpec BarrelHTTPProperties[] = {
     {"status", 0, JSPROP_READONLY, req_status, NULL},
     {"base_url", 0, JSPROP_READONLY | JSPROP_SHARED, base_url, NULL},
     {0, 0, 0, 0, 0}
 };
 
 
-JSFunctionSpec CouchHTTPFunctions[] = {
+JSFunctionSpec BarrelHTTPFunctions[] = {
     JS_FS("_open", req_open, 3, 0),
     JS_FS("_setRequestHeader", req_set_hdr, 2, 0),
     JS_FS("_send", req_send, 1, 0),
@@ -333,7 +333,7 @@ main(int argc, const char* argv[])
     jsval result;
     int i;
 
-    couch_args* args = couch_parse_args(argc, argv);
+    barrel_args* args = barrel_parse_args(argc, argv);
 
     rt = JS_NewRuntime(args->stack_size);
     if(rt == NULL)
@@ -343,7 +343,7 @@ main(int argc, const char* argv[])
     if(cx == NULL)
         return 1;
 
-    JS_SetErrorReporter(cx, couch_error);
+    JS_SetErrorReporter(cx, barrel_error);
     JS_ToggleOptions(cx, JSOPTION_XML);
     JS_SetOptions(cx, JSOPTION_METHODJIT);
 #ifdef JSOPTION_TYPE_INFERENCE
@@ -364,7 +364,7 @@ main(int argc, const char* argv[])
     if(!JS_InitStandardClasses(cx, global))
         return 1;
 
-    if(couch_load_funcs(cx, global, global_functions) != JS_TRUE)
+    if(barrel_load_funcs(cx, global, global_functions) != JS_TRUE)
         return 1;
 
     if(args->use_http) {
@@ -373,22 +373,22 @@ main(int argc, const char* argv[])
         klass = JS_InitClass(
             cx, global,
             NULL,
-            &CouchHTTPClass, req_ctor,
+            &BarrelHTTPClass, req_ctor,
             0,
-            CouchHTTPProperties, CouchHTTPFunctions,
+            BarrelHTTPProperties, BarrelHTTPFunctions,
             NULL, NULL
         );
 
         if(!klass)
         {
-            fprintf(stderr, "Failed to initialize CouchHTTP class.\n");
+            fprintf(stderr, "Failed to initialize BarrelHTTP class.\n");
             exit(2);
         }
     }
 
     for(i = 0 ; args->scripts[i] ; i++) {
         // Convert script source to jschars.
-        scriptsrc = couch_readfile(cx, args->scripts[i]);
+        scriptsrc = barrel_readfile(cx, args->scripts[i]);
         if(!scriptsrc)
             return 1;
 

@@ -1,15 +1,15 @@
 %% static config
 STATIC_CONFIG = [{pre_hooks, [{compile, "./support/build_spidermonkey.sh"},
-							  {"(linux|darwin|solaris)", compile, "make -C apps/couch/c_src/couch_js"},
-							  {"(freebsd|netbsd|openbsd)", compile, "gmake -C apps/couch/c_src/couch_js"}]},
-				 {post_hooks, [{clean, "make -C apps/couch/c_src/couch_js clean"},
+							  {"(linux|darwin|solaris)", compile, "make -C apps/couch/c_src/barrel_js"},
+							  {"(freebsd|netbsd|openbsd)", compile, "gmake -C apps/couch/c_src/barrel_js"}]},
+				 {post_hooks, [{clean, "make -C apps/couch/c_src/barrel_js clean"},
 				 			   {clean, "./support/build_spidermonkey.sh clean"},
-							   {"(freebsd|netbsd|openbsd)", compile, "gmake -C apps/couch/c_src/couch_js clean"},
+							   {"(freebsd|netbsd|openbsd)", compile, "gmake -C apps/couch/c_src/barrel_js clean"},
 				 			   {compile, "escript support/build_js.escript"}]}],
 
 JS_COMPILE=os:getenv("JS_COMPILE"),
 
-if 
+if
 	JS_COMPILE =:= "static" ->
 		lists:keymerge(1, CONFIG, STATIC_CONFIG);
 	true ->

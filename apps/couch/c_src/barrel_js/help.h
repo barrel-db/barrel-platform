@@ -10,8 +10,8 @@
 // License for the specific language governing permissions and limitations under
 // the License.
 
-#ifndef COUCHJS_HELP_H
-#define COUCHJS_HELP_H
+#ifndef BARRELJS_HELP_H
+#define BARRELJS_HELP_H
 
 static const char VERSION_TEMPLATE[] =
     "\n"
@@ -35,7 +35,7 @@ static const char VERSION_TEMPLATE[] =
 static const char USAGE_TEMPLATE[] =
     "Usage: %s [FILE]\n"
     "\n"
-    "The %s command runs the RCOUCH JavaScript interpreter.\n"
+    "The %s command runs the BARREL JavaScript interpreter.\n"
     "\n"
     "The exit status is 0 for success or 1 for failure.\n"
     "\n"
@@ -50,23 +50,23 @@ static const char USAGE_TEMPLATE[] =
     "              (or addresses) of one or more servers\n"
     "\n";
 
-#define BASENAME "couchjs"
+#define BASENAME "barreljs"
 
-#define couch_version()  \
+#define barrel_version()  \
     fprintf(                     \
             stdout,              \
             VERSION_TEMPLATE)
 
-#define DISPLAY_VERSION couch_version()
+#define DISPLAY_VERSION barrel_version()
 
 
-#define couch_usage(basename) \
+#define barrel_usage(basename) \
     fprintf(                                    \
             stdout,                             \
             USAGE_TEMPLATE,                     \
             basename,                           \
             basename)
 
-#define DISPLAY_USAGE couch_usage(BASENAME)
+#define DISPLAY_USAGE barrel_usage(BASENAME)
 
 #endif // Included help.h

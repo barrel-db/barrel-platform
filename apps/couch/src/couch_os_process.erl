@@ -123,7 +123,7 @@ readjson(OsProc) when is_record(OsProc, os_proc) ->
 
 pick_command(Line) ->
     json_stream_parse:events(Line, fun pick_command0/1).
-
+        
 pick_command0(array_start) ->
     fun pick_command1/1;
 pick_command0(_) ->
@@ -213,4 +213,3 @@ handle_info({Port, {exit_status, Status}}, #os_proc{port=Port}=OsProc) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-

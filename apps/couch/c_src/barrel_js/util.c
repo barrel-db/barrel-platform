@@ -66,17 +66,17 @@ slurp_file(const char* file, char** outbuf_p)
     return buflen + 1;
 }
 
-couch_args*
-couch_parse_args(int argc, const char* argv[])
+barrel_args*
+barrel_parse_args(int argc, const char* argv[])
 {
-    couch_args* args;
+    barrel_args* args;
     int i = 1;
 
-    args = (couch_args*) malloc(sizeof(couch_args));
+    args = (barrel_args*) malloc(sizeof(barrel_args));
     if(args == NULL)
         return NULL;
 
-    memset(args, '\0', sizeof(couch_args));
+    memset(args, '\0', sizeof(barrel_args));
     args->stack_size = 64L * 1024L * 1024L;
 
     while(i < argc) {
@@ -116,7 +116,7 @@ couch_parse_args(int argc, const char* argv[])
 
 
 int
-couch_fgets(char* buf, int size, FILE* fp)
+barrel_fgets(char* buf, int size, FILE* fp)
 {
     int n, i, c;
 
@@ -137,7 +137,7 @@ couch_fgets(char* buf, int size, FILE* fp)
 
 
 JSString*
-couch_readline(JSContext* cx, FILE* fp)
+barrel_readline(JSContext* cx, FILE* fp)
 {
     JSString* str;
     char* bytes = NULL;
@@ -149,7 +149,7 @@ couch_readline(JSContext* cx, FILE* fp)
     bytes = JS_malloc(cx, byteslen);
     if(bytes == NULL) return NULL;
 
-    while((readlen = couch_fgets(bytes+used, byteslen-used, fp)) > 0) {
+    while((readlen = barrel_fgets(bytes+used, byteslen-used, fp)) > 0) {
         used += readlen;
 
         if(bytes[used-1] == '\n') {
@@ -190,7 +190,7 @@ couch_readline(JSContext* cx, FILE* fp)
 
 
 JSString*
-couch_readfile(JSContext* cx, const char* filename)
+barrel_readfile(JSContext* cx, const char* filename)
 {
     JSString *string;
     size_t byteslen;
@@ -207,7 +207,7 @@ couch_readfile(JSContext* cx, const char* filename)
 
 
 void
-couch_print(JSContext* cx, uintN argc, jsval* argv)
+barrel_print(JSContext* cx, uintN argc, jsval* argv)
 {
     char *bytes = NULL;
     FILE *stream = stdout;
@@ -228,7 +228,7 @@ couch_print(JSContext* cx, uintN argc, jsval* argv)
 
 
 void
-couch_error(JSContext* cx, const char* mesg, JSErrorReport* report)
+barrel_error(JSContext* cx, const char* mesg, JSErrorReport* report)
 {
     jsval v, replace;
     char* bytes;
@@ -275,7 +275,7 @@ couch_error(JSContext* cx, const char* mesg, JSErrorReport* report)
 
 
 JSBool
-couch_load_funcs(JSContext* cx, JSObject* obj, JSFunctionSpec* funcs)
+barrel_load_funcs(JSContext* cx, JSObject* obj, JSFunctionSpec* funcs)
 {
     JSFunctionSpec* f;
     for(f = funcs; f->name != NULL; f++) {

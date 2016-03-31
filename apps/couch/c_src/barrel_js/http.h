@@ -10,8 +10,8 @@
 // License for the specific language governing permissions and limitations under
 // the License.
 
-#ifndef COUCH_JS_HTTP_H
-#define COUCH_JS_HTTP_H
+#ifndef BARREL_JS_HTTP_H
+#define BARREL_JS_HTTP_H
 
 #include "util.h"
 
@@ -22,6 +22,6 @@ JSBool http_open(JSContext* cx, JSObject* req, jsval mth, jsval url, jsval snc);
 JSBool http_set_hdr(JSContext* cx, JSObject* req, jsval name, jsval val);
 JSBool http_send(JSContext* cx, JSObject* req, jsval body);
 int http_status(JSContext* cx, JSObject* req);
-JSBool http_uri(JSContext* cx, JSObject *req, couch_args* args, jsval* uri);
+JSBool http_uri(JSContext* cx, JSObject *req, barrel_args* args, jsval* uri);
 
 #endif

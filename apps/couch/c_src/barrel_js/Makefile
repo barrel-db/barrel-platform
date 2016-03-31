@@ -3,11 +3,11 @@ BASEDIR=$(CURDIR)
 PRIVDIR=$(BASEDIR)/../../priv
 STATIC_LIBS=$(BASEDIR)/../../../../.libs
 
-COUCHJS_DIR=.
+BARRELJS_DIR=.
 
-COUCHJS_SOURCES=$(shell find $(COUCHJS_DIR) -type f \( -name "*.c" \))
-COUCHJS_OBJS=$(addsuffix .o, $(basename $(COUCHJS_SOURCES)))
-COUCHJS_BIN=$(PRIVDIR)/couchjs
+BARRELJS_SOURCES=$(shell find $(BARRELJS_DIR) -type f \( -name "*.c" \))
+BARRELJS_OBJS=$(addsuffix .o, $(basename $(BARRELJS_SOURCES)))
+BARRELJS_BIN=$(PRIVDIR)/barreljs
 
 UNAME_SYS := $(shell uname -s)
 ifeq ($(UNAME_SYS), Darwin)
@@ -37,18 +37,18 @@ endif
 
 JSLIBS += -lcurl
 
-all: $(COUCHJS_BIN)
+all: $(BARRELJS_BIN)
 
 clean:
-	@rm -rf $(COUCHJS_SO) $(COUCHJS_OBJS)
+	@rm -rf $(BARRELJS_SO) $(BARRELJS_OBJS)
 
 distclean: clean
-	@rm -rf $(COUCHJS_ENV)
+	@rm -rf $(BARRELJS_ENV)
 
-$(COUCHJS_BIN): $(COUCHJS_OBJS)
+$(BARRELJS_BIN): $(BARRELJS_OBJS)
 	@mkdir -p $(PRIVDIR)
 	@cd "$(BASEDIR)" && \
-		$(CC) $(COUCHJS_OBJS) $(JSLIBS) -o "$(COUCHJS_BIN)"
+		$(CC) $(BARRELJS_OBJS) $(JSLIBS) -o "$(BARRELJS_BIN)"
 
 %.o: %.c
 	@cd "$(BASEDIR)" && \

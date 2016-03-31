@@ -18,12 +18,12 @@
 
 
 start_link(JsFile) ->
-    Command = filename:join([couch_util:priv_dir(), "couchjs"]),
+    Command = filename:join([couch_util:priv_dir(), "barreljs"]),
     couch_os_process:start_link(Command ++ " " ++ JsFile).
 
 set_timeout(Pid, Timeout) ->
     couch_os_process:set_timeout(Pid, Timeout).
-
+    
 send(Pid, Data) ->
     couch_os_process:send(Pid, Data).
 

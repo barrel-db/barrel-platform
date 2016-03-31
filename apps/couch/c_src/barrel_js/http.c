@@ -76,7 +76,7 @@ http_status(JSContext* cx, JSObject* req, jsval body)
 }
 
 JSBool
-http_uri(JSContext* cx, JSObject* req, couch_args* args, jsval* uri_val)
+http_uri(JSContext* cx, JSObject* req, barrel_args* args, jsval* uri_val)
 {
     return JS_FALSE;
 }
@@ -140,7 +140,7 @@ http_ctor(JSContext* cx, JSObject* req)
     http = (HTTPData*) malloc(sizeof(HTTPData));
     if(!http)
     {
-        JS_ReportError(cx, "Failed to create CouchHTTP instance.");
+        JS_ReportError(cx, "Failed to create BarrelHTTP instance.");
         goto error;
     }
 
@@ -151,7 +151,7 @@ http_ctor(JSContext* cx, JSObject* req)
 
     if(!JS_SetPrivate(cx, req, http))
     {
-        JS_ReportError(cx, "Failed to set private CouchHTTP data.");
+        JS_ReportError(cx, "Failed to set private BarrelHTTP data.");
         goto error;
     }
 
@@ -187,7 +187,7 @@ http_open(JSContext* cx, JSObject* req, jsval mth, jsval url, jsval snc)
     JSBool ret = JS_FALSE;
 
     if(!http) {
-        JS_ReportError(cx, "Invalid CouchHTTP instance.");
+        JS_ReportError(cx, "Invalid BarrelHTTP instance.");
         goto done;
     }
 
@@ -261,7 +261,7 @@ http_set_hdr(JSContext* cx, JSObject* req, jsval name, jsval val)
     JSBool ret = JS_FALSE;
 
     if(!http) {
-        JS_ReportError(cx, "Invalid CouchHTTP instance.");
+        JS_ReportError(cx, "Invalid BarrelHTTP instance.");
         goto done;
     }
 
@@ -319,7 +319,7 @@ http_send(JSContext* cx, JSObject* req, jsval body)
     JSBool ret = JS_FALSE;
 
     if(!http) {
-        JS_ReportError(cx, "Invalid CouchHTTP instance.");
+        JS_ReportError(cx, "Invalid BarrelHTTP instance.");
         goto done;
     }
 
@@ -344,7 +344,7 @@ http_status(JSContext* cx, JSObject* req)
     HTTPData* http = (HTTPData*) JS_GetPrivate(cx, req);
 
     if(!http) {
-        JS_ReportError(cx, "Invalid CouchHTTP instance.");
+        JS_ReportError(cx, "Invalid BarrelHTTP instance.");
         return JS_FALSE;
     }
 
@@ -352,7 +352,7 @@ http_status(JSContext* cx, JSObject* req)
 }
 
 JSBool
-http_uri(JSContext* cx, JSObject* req, couch_args* args, jsval* uri_val)
+http_uri(JSContext* cx, JSObject* req, barrel_args* args, jsval* uri_val)
 {
     FILE* uri_fp = NULL;
     JSString* uri_str;
@@ -369,10 +369,10 @@ http_uri(JSContext* cx, JSObject* req, couch_args* args, jsval* uri_val)
         return JS_TRUE;
     }
 
-    // Read the first line of the couch.uri file.
+    // Read the first line of the barrel.uri file.
     if(!((uri_fp = fopen(args->uri_file, "r")) &&
-         (uri_str = couch_readline(cx, uri_fp)))) {
-        JS_ReportError(cx, "Failed to read couch.uri file.");
+         (uri_str = barrel_readline(cx, uri_fp)))) {
+        JS_ReportError(cx, "Failed to read barrel.uri file.");
         goto error;
     }
 
@@ -447,7 +447,7 @@ go(JSContext* cx, JSObject* obj, HTTPData* http, char* body, size_t bodylen)
         curl_easy_setopt(HTTP_HANDLE, CURLOPT_ERRORBUFFER, ERRBUF);
         curl_easy_setopt(HTTP_HANDLE, CURLOPT_COOKIEFILE, "");
         curl_easy_setopt(HTTP_HANDLE, CURLOPT_USERAGENT,
-                                            "CouchHTTP Client - Relax");
+                                            "BarrelHTTP Client - Relax");
     }
 
     if(!HTTP_HANDLE) {
