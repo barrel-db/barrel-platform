@@ -17,9 +17,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
-
--include_lib("barrel/include/config.hrl").
-
+         
 -record(state, {index,
                 dbname,
                 threshold,
@@ -105,14 +103,9 @@ handle_cast(updated, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({config_updated, ConfName, Event}, State) ->
-    if
-        ConfName =:= ?CFGNAME ->
-            NewState = config_change(Event, State),
-            {noreply, NewState};
-        true ->
-            {noreply, State}
-    end;
+handle_info({config_updated, _Name, Event}, State) ->
+    NewState = config_change(Event, State),
+    {noreply, NewState};
 handle_info(start_indexing, #state{index=Index,
                                    dbname=DbName,
                                    refresh_interval=R}=State) ->
@@ -227,12 +220,12 @@ should_close() ->
 %% minimum. If the minimum is not acchieved, the update will happen
 %% in the next interval.
 get_db_threshold() ->
-    ?cfget_int("couch_index", "threshold", 200).
+    barrel_config:get_integer("couch_index", "threshold", 200).
 
 %% refresh interval in ms, the interval in which the index will be
 %% updated
 get_refresh_interval() ->
-    ?cfget_int("couch_index", "refresh_interval", 1000).
+    barrel_config:get_integer("couch_index", "refresh_interval", 1000).
 
 
 do_update(#state{index=Index, dbname=DbName,

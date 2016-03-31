@@ -16,7 +16,6 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_mrview.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 -define(REM_VAL, removed).
@@ -233,8 +232,8 @@ accumulate_writes(W, Acc0) ->
 
 accumulate_more(NumDocIds) ->
     % check if we have enough items now
-    MinItems = ?cfget_int("view_updater", "min_writer_items", 100),
-    MinSize = ?cfget_int("view_updater", "min_writer_size", 16777216),
+    MinItems = barrel_config:get_integer("view_updater", "min_writer_items", 100),
+    MinSize = barrel_config:get_integer("view_updater", "min_writer_size", 16777216),
     {memory, CurrMem} = process_info(self(), memory),
     NumDocIds < MinItems andalso CurrMem < MinSize.
 

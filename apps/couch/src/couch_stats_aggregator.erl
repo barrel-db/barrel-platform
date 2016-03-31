@@ -20,8 +20,6 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([config_change/3]).
 
--include_lib("barrel/include/config.hrl").
-
 -record(aggregate, {
     description = <<"">>,
     seconds = 0,
@@ -40,7 +38,7 @@
 start() ->
     PrivDir = couch_util:priv_dir(),
     start(filename:join(PrivDir, "stat_descriptions.cfg")).
-    
+
 start(FileName) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [FileName], []).
 
@@ -101,7 +99,7 @@ config_change(_, _, _) ->
 init(StatDescsFileName) ->
     % Create an aggregate entry for each {description, rate} pair.
     ets:new(?MODULE, [named_table, set, protected]),
-    SampleStr = ?cfget("stats", "samples", "[0]"),
+    SampleStr = barrel_config:get("stats", "samples", "[0]"),
     {ok, Samples} = couch_util:parse_term(SampleStr),
     {ok, Descs} = file:consult(StatDescsFileName),
     lists:foreach(fun({Sect, Key, Value}) ->
@@ -115,12 +113,12 @@ init(StatDescsFileName) ->
     end, Descs),
 
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
-    
-    Rate = ?cfget_int("stats", "rate", 1000),
+
+    Rate = barrel_config:get_integer("stats", "rate", 1000),
     % TODO: Add timer_start to kernel start options.
     {ok, TRef} = timer:apply_after(Rate, ?MODULE, collect_sample, []),
     {ok, {TRef, Rate}}.
-    
+
 terminate(_Reason, {TRef, _Rate}) ->
     timer:cancel(TRef),
     ok.
@@ -143,7 +141,7 @@ handle_call(collect_sample, _, {OldTRef, SampleInterval}) ->
         end, {0, 0}, Values2),
         {Key, {absolute, Mean}}
     end, couch_stats_collector:all(absolute)),
-    
+
     Values = Incs ++ Abs,
     Now = os:timestamp(),
     lists:foreach(fun({{Key, Rate}, Agg}) ->
@@ -204,7 +202,7 @@ add_value(Time, Value, Agg) ->
         variance=Variance,
         samples=Samples
     } = Agg,
-    
+
     NewCount = Count + 1,
     NewMean = Mean + (Value - Mean) / NewCount,
     NewVariance = Variance + (Value - Mean) * (Value - NewMean),

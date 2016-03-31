@@ -15,7 +15,6 @@
 -export([before_doc_update/2, after_doc_read/2, strip_non_public_fields/1]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -define(NAME, <<"name">>).
 -define(PASSWORD, <<"password">>).
@@ -64,7 +63,7 @@ save_doc(#doc{body={Body}} = Doc) ->
     undefined ->
         Doc;
     ClearPassword ->
-        Iterations = ?cfget_int("couch_httpd_auth", "iterations", 1000),
+        Iterations = barrel_config:get_integer("couch_httpd_auth", "iterations", 1000),
         Salt = couch_uuids:random(),
         DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
         Body0 = [{?PASSWORD_SCHEME, ?PBKDF2}, {?ITERATIONS, Iterations}|Body],
@@ -117,5 +116,5 @@ get_doc_name(_) ->
     undefined.
 
 strip_non_public_fields(#doc{body={Props}}=Doc) ->
-    Public = ?cfget_list("couch_httpd_auth", "public_fields", []),
+    Public = barrel_config:get_list("couch_httpd_auth", "public_fields", []),
     Doc#doc{body={[{K, V} || {K, V} <- Props, lists:member(?b2l(K), Public)]}}.

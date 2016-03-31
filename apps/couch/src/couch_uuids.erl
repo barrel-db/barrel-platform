@@ -11,7 +11,6 @@
 % the License.
 -module(couch_uuids).
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -behaviour(gen_server).
 
@@ -94,14 +93,14 @@ inc() ->
     crypto:rand_uniform(1, 16#ffe).
 
 state() ->
-    AlgoStr = ?cfget("uuids", "algorithm", "random"),
+    AlgoStr = barrel_config:get("uuids", "algorithm", "random"),
     case couch_util:to_existing_atom(AlgoStr) of
         random ->
             random;
         utc_random ->
             utc_random;
         utc_id ->
-            UtcIdSuffix = ?cfget("uuids", "utc_id_suffix", ""),
+            UtcIdSuffix = barrel_config:get("uuids", "utc_id_suffix", ""),
             {utc_id, UtcIdSuffix};
         sequential ->
             {sequential, new_prefix(), inc()};

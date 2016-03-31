@@ -23,7 +23,6 @@
 
 -include("couch_db.hrl").
 -include("couch_js_functions.hrl").
--include_lib("barrel/include/config.hrl").
 
 -define(STATE, auth_state_ets).
 -define(BY_USER, auth_by_user_ets).
@@ -48,7 +47,7 @@ get_user_creds(UserName) when is_list(UserName) ->
     get_user_creds(?l2b(UserName));
 
 get_user_creds(UserName) ->
-    UserCreds = case ?cfget("admins", ?b2l(UserName)) of
+    UserCreds = case barrel_config:get("admins", ?b2l(UserName)) of
     "-hashed-" ++ HashedPwdAndSalt ->
         % the name is an admin, now check to see if there is a user doc
         % which has a matching name, salt, and password_sha
@@ -125,7 +124,7 @@ unregister_hooks() ->
 
 
 handle_config_change("couch_httpd_auth", "auth_cache_size", _Type) ->
-    Size = ?cfget_int("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    Size = barrel_config:get_integer("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
     ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
 handle_config_change("couch_httpd_auth", "authentication_db", _Type) ->
     ok = gen_server:call(?MODULE, reinit_cache);
@@ -142,8 +141,8 @@ init(_) ->
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
     init_hooks(),
-    CacheSize = ?cfget_int("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
-    AuthDbName = ?cfget_bin("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
+    CacheSize = barrel_config:get_integer("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
     _ = couch_event:subscribe_db_updates(AuthDbName),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
@@ -211,7 +210,7 @@ handle_info({couch_event, db_updated, {_, Event}}, State) ->
             {noreply, State};
         deleted ->
             {noreply, reinit_cache(State)};
-        _Else   -> 
+        _Else   ->
             {noreply, State}
     end;
 
@@ -242,7 +241,7 @@ clear_cache(State) ->
 
 reinit_cache(State) ->
     NewState = clear_cache(State),
-    AuthDbName = ?cfget_bin("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
+    AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
     catch _ = couch_event:change_db(AuthDbName),
     true = ets:insert(?STATE, {auth_db_name, AuthDbName}),
     AuthDb = open_auth_db(),

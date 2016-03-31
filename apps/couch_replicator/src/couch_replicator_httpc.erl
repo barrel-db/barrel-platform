@@ -15,7 +15,6 @@
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_replicator_api_wrap.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 -export([setup/1]).
@@ -84,7 +83,7 @@ send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
         {Worker1, infinity};
     _ ->
         {ok, Worker1} = couch_replicator_httpc_pool:get_worker(HttpDb#httpdb.httpc_pool),
-        Timeout1 = case ?cfget("replicator", "request_timeout", "infinity") of
+        Timeout1 = case barrel_config:get("replicator", "request_timeout", "infinity") of
             "infinity" -> infinity;
             Milliseconds -> list_to_integer(Milliseconds)
         end,

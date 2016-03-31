@@ -15,8 +15,6 @@
 -include_lib("couch_mrview/include/couch_mrview.hrl").
 -include("couch_changes.hrl").
 
--include_lib("barrel/include/config.hrl").
-
 -export([handle_changes/3]).
 
 % For the builtin filter _docs_ids, this is the maximum number
@@ -278,7 +276,7 @@ get_changes_timeout(Args, Callback) ->
         timeout = Timeout,
         feed = ResponseType
     } = Args,
-    DefaultTimeout = ?cfget_int("httpd", "changes_timeout", 60000),
+    DefaultTimeout = barrel_config:get_integer("httpd", "changes_timeout", 60000),
     case Heartbeat of
     undefined ->
         case Timeout of
@@ -764,4 +762,3 @@ parse_json(V, false) when is_list(V) ->
     ?JSON_DECODE(V);
 parse_json(V, _) ->
     V.
-

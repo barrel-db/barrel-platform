@@ -23,7 +23,6 @@
 ]).
 
 -include_lib("couch/include/couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -include("couch_mrview.hrl").
 

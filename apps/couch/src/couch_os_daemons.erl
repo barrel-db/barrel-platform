@@ -18,8 +18,6 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
-
 
 -record(daemon, {
     port,
@@ -222,13 +220,13 @@ stop_port(#daemon{port=Port}=D) ->
 
 
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section]) ->
-    KVs = ?cfget(Section),
+    KVs = barrel_config:get(Section),
     Data = lists:map(fun({K, V}) -> {?l2b(K), ?l2b(V)} end, KVs),
     Json = iolist_to_binary(?JSON_ENCODE({Data})),
     port_command(Port, <<Json/binary, "\n">>),
     {ok, Daemon};
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section, Key]) ->
-    Value = case ?cfget(Section, Key) of
+    Value = case barrel_config:get(Section, Key) of
         undefined -> null;
         String -> ?l2b(String)
     end,
@@ -273,7 +271,7 @@ handle_log_message(Name, Msg, Level) ->
 
 reload_daemons(Table) ->
     % List of daemons we want to have running.
-    Configured = lists:sort(?cfget("os_daemons")),
+    Configured = lists:sort(barrel_config:get("os_daemons")),
 
     % Remove records for daemons that were halted.
     MSpecHalted = #daemon{name='$1', cmd='$2', status=halted, _='_'},
@@ -363,13 +361,13 @@ find_to_stop(_, [], Acc) ->
     Acc.
 
 should_halt(Errors) ->
-    RetryTime = ?cfget_int("os_daemon_settings", "retry_time", 5),
+    RetryTime = barrel_config:get_integer("os_daemon_settings", "retry_time", 5),
 
     Now = os:timestamp(),
     RecentErrors = lists:filter(fun(Time) ->
         timer:now_diff(Now, Time) =< RetryTime * 1000000
     end, Errors),
 
-    Retries = ?cfget_int("os_daemon_settings", "max_retries", 3),
+    Retries = barrel_config:get_integer("os_daemon_settings", "max_retries", 3),
 
     {length(RecentErrors) >= Retries, RecentErrors}.

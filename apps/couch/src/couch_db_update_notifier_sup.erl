@@ -19,7 +19,6 @@
 %
 
 -module(couch_db_update_notifier_sup).
--include_lib("barrel/include/config.hrl").
 
 
 -behaviour(supervisor).
@@ -35,7 +34,7 @@ start_link() ->
 init([]) ->
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
-    UpdateNotifierExes = ?cfget("update_notification"),
+    UpdateNotifierExes = barrel_config:get("update_notification"),
 
     {ok,
         {{one_for_one, 10, 3600},
@@ -54,7 +53,7 @@ config_change("update_notification", Id, delete) ->
     supervisor:terminate_child(couch_db_update_notifier_sup, Id),
     supervisor:delete_child(couch_db_update_notifier_sup, Id);
 config_change("update_notification", Id, _) ->
-    Exe = ?cfget("update_notification", Id),
+    Exe = barrel_config:get("update_notification", Id),
 
     ChildSpec = {
         Id,

@@ -27,9 +27,7 @@
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
-
--include_lib("barrel/include/config.hrl").
-
+         
 
 -define(LEVEL_ERROR, 4).
 -define(LEVEL_WARN, 3).
@@ -143,10 +141,10 @@ init([]) ->
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
     Filename = log_file(),
-    ALevel = list_to_atom(?cfget("log", "level", "info")),
+    ALevel = list_to_atom(barrel_config:get("log", "level", "info")),
     Level = level_integer(ALevel),
-    Sasl = ?cfget_bool("log", "include_sasl", true),
-    LevelByModule = ?cfget("log_level_by_module"),
+    Sasl = barrel_config:get_boolean("log", "include_sasl", true),
+    LevelByModule = barrel_config:get("log_level_by_module"),
 
     %% maybe start the log file backend
     maybe_start_logfile_backend(Filename, ALevel),
@@ -181,7 +179,7 @@ handle_call({set_level_integer, Module, NewLevel}, _From, State) ->
 
 handle_cast(config_update, #state{log_file=OldFilename}=State) ->
     Filename = log_file(),
-    ALevel = list_to_atom(?cfget("log", "level", "info")),
+    ALevel = list_to_atom(barrel_config:get("log", "level", "info")),
     Level = level_integer(ALevel),
 
     %% set default module
@@ -199,10 +197,10 @@ handle_cast(config_update, #state{log_file=OldFilename}=State) ->
     {noreply, State#state{log_file=Filename, level = Level}};
 
 handle_cast({config_update, include_sasl}, State) ->
-    Sasl = ?cfget_bool("log", "include_sasl", "true"),
+    Sasl = barrel_config:get_boolean("log", "include_sasl", "true"),
     {noreply, State#state{sasl=Sasl}};
 handle_cast({config_update, log_level_by_module}, State) ->
-    LevelByModule = ?cfget("log_level_by_module"),
+    LevelByModule = barrel_config:get("log_level_by_module"),
     lists:foreach(fun({Module, ModuleLevel}) ->
         ModuleLevelInteger = level_integer(list_to_atom(ModuleLevel)),
         ets:insert(?MODULE, {Module, ModuleLevelInteger})
@@ -239,7 +237,7 @@ terminate(_Arg, _State) ->
 read(Bytes, Offset) ->
     LogFileName = log_file(),
     LogFileSize = filelib:file_size(LogFileName),
-    MaxChunkSize = ?cfget_int("httpd", "log_max_chunk_size", 1000000),
+    MaxChunkSize = barrel_config:get_integer("httpd", "log_max_chunk_size", 1000000),
     case Bytes > MaxChunkSize of
     true ->
         throw({bad_request, "'bytes' cannot exceed " ++
@@ -321,7 +319,7 @@ log_file() ->
         undefined -> "couchdb.log";
         FName -> FName
     end,
-    ?cfget("log", "file", DefaultLogFile).
+    barrel_config:get("log", "file", DefaultLogFile).
 
 hfile({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack

@@ -20,7 +20,6 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include_lib("couch/include/couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -define(SEPARATOR, $\/).
 -define(MATCH_ALL, {bind, '*'}).
@@ -238,7 +237,7 @@ bind_path(_, _) ->
 %% create vhost list from ini
 
 host(MochiReq) ->
-    XHost = ?cfget("httpd", "x_forwarded_host", "X-Forwarded-Host"),
+    XHost = barrel_config:get("httpd", "x_forwarded_host", "X-Forwarded-Host"),
     case MochiReq:get_header_value(XHost) of
         undefined ->
             case MochiReq:get_header_value("Host") of
@@ -254,7 +253,7 @@ make_vhosts() ->
                     Acc;
                 ({Vhost, Path}, Acc) ->
                     [{parse_vhost(Vhost), split_path(Path)}|Acc]
-            end, [], ?cfget("vhosts")),
+            end, [], barrel_config:get("vhosts")),
 
     lists:reverse(lists:usort(Vhosts)).
 
@@ -371,13 +370,13 @@ config_change(_, _, _) ->
 
 load_conf() ->
     %% get vhost globals
-    VHostGlobals = ?cfget_list("httpd", "vhost_global_handlers", []),
+    VHostGlobals = barrel_config:get_list("httpd", "vhost_global_handlers", []),
 
     %% build vhosts matching rules
     VHosts = make_vhosts(),
 
     %% build vhosts handler fun
     DefaultVHostFun = "{couch_httpd_vhost, redirect_to_vhost}",
-    Fun = couch_httpd:make_arity_2_fun(?cfget("httpd", "redirect_vhost_handler", DefaultVHostFun)),
+    Fun = couch_httpd:make_arity_2_fun(barrel_config:get("httpd", "redirect_vhost_handler", DefaultVHostFun)),
 
     {VHostGlobals, VHosts, Fun}.

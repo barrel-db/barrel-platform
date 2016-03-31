@@ -16,7 +16,6 @@
 
 -include_lib("couch/include/couch_db.hrl").
 -include("couch_changes.hrl").
--include_lib("barrel/include/config.hrl").
 
 handle_changes_req(#httpd{method='POST'}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
@@ -27,7 +26,7 @@ handle_changes_req(#httpd{path_parts=[_,<<"_changes">>]}=Req, _Db) ->
     couch_httpd:send_method_not_allowed(Req, "GET,HEAD,POST").
 
 handle_changes_req1(Req, #db{name=DbName}=Db) ->
-    AuthDbName = ?cfget_bin("couch_httpd_auth", "authentication_db", <<"_users">>),
+    AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", <<"_users">>),
     case AuthDbName of
     DbName ->
         % in the authentication database, _changes is admin-only.

@@ -14,7 +14,7 @@
 -behaviour(gen_server).
 
 %% public api
--export([open/2, 
+-export([open/2,
          create/2,
          delete/2,
          get_version/0, get_version/1,
@@ -38,7 +38,6 @@
 
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -record(state, {root_dir = [],
                 dbname_regexp,
@@ -66,10 +65,10 @@ get_version(short) ->
 
 
 get_uuid() ->
-    case ?cfget("couchdb", "uuid", nil) of
+    case barrel_config:get("couchdb", "uuid", nil) of
         nil ->
             UUID = couch_uuids:random(),
-            ?cfset("couchdb", "uuid", UUID),
+            barrel_config:set("couchdb", "uuid", UUID),
             UUID;
         UUID -> ?l2b(UUID)
     end.
@@ -109,7 +108,7 @@ delete(DbName, Options) ->
 
 
 is_admin(User, ClearPwd) ->
-    case ?cfget("admins", User) of
+    case barrel_config:get("admins", User) of
     "-hashed-" ++ HashedPwdAndSalt ->
         [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
         couch_util:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
@@ -118,7 +117,7 @@ is_admin(User, ClearPwd) ->
     end.
 
 has_admins() ->
-    ?cfget("admins") /= [].
+    barrel_config:get("admins") /= [].
 
 
 hash_admin_passwords() ->
@@ -128,7 +127,7 @@ hash_admin_passwords(Persist) ->
     lists:foreach(
         fun({User, ClearPassword}) ->
             HashedPassword = couch_passwords:hash_admin_password(ClearPassword),
-            ?cfset("admins", User, HashedPassword, Persist)
+            barrel_config:set("admins", User, HashedPassword, Persist)
         end, couch_passwords:get_unhashed_admins()).
 
 
@@ -169,7 +168,7 @@ init([]) ->
     % just stop if one of the config settings change. couch_sup
     % will restart us and then we will pick up the new settings.
 
-    RootDir = ?cfget("couchdb", "database_dir", "."),
+    RootDir = barrel_config:get("couchdb", "database_dir", "."),
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
     ok = couch_file:init_delete_dir(RootDir),
     hash_admin_passwords(),
@@ -273,7 +272,7 @@ config_change(_, _, _) ->
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
     maybe_add_sys_db_callbacks(?b2l(DbName), Options);
 maybe_add_sys_db_callbacks(DbName, Options) ->
-    case ?cfget("replicator", "db", "_replicator") of
+    case barrel_config:get("replicator", "db", "_replicator") of
     DbName ->
         [
             {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
@@ -281,7 +280,7 @@ maybe_add_sys_db_callbacks(DbName, Options) ->
             sys_db | Options
         ];
     _ ->
-        case ?cfget("couch_httpd_auth", "authentication_db", "_users") of
+        case barrel_config:get("couch_httpd_auth", "authentication_db", "_users") of
         DbName ->
         [
             {before_doc_update, fun couch_users_db:before_doc_update/2},
@@ -359,7 +358,7 @@ handle_create(State, Req, From, Db, Options) ->
 handle_delete(State, Req, From, Db) ->
     case check_pending(Db, From, State, Req) of
         {pending, NewState} -> {pending, NewState};
-        false -> 
+        false ->
             UpdateState = case ets:lookup(couch_dbs_by_name, Db) of
                 [] -> false;
                 [{_, Pid}] ->

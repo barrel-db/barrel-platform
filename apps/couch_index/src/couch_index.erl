@@ -26,7 +26,6 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 -include_lib("couch/include/couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -record(st, {
     mod,
@@ -88,7 +87,7 @@ release_indexer(Pid) ->
 
 
 config_change("query_server_config", "commit_freq", _) ->
-    NewValue = ?cfget_int("query_server_config", "commit_freq", 5),
+    NewValue = barrel_config:get_integer("query_server_config", "commit_freq", 5),
     gen_server:cast(?MODULE, {config_update, NewValue});
 config_change(_, _, _) ->
     ok.
@@ -112,7 +111,7 @@ init({Mod, IdxState}) ->
             {ok, UPid} = couch_index_updater:start_link(self(), Mod),
             {ok, CPid} = couch_index_compactor:start_link(self(), Mod),
 
-            Delay = ?cfget_int("query_server_config", "commit_freq", 5),
+            Delay = barrel_config:get_integer("query_server_config", "commit_freq", 5),
             MsDelay = 1000 * Delay,
             State = #st{
                 mod=Mod,

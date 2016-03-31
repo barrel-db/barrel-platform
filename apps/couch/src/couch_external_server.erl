@@ -17,7 +17,6 @@
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 % External API
@@ -38,7 +37,7 @@ init([Name, Command]) ->
     ?LOG_INFO("EXTERNAL: Starting process for: ~s", [Name]),
     ?LOG_INFO("COMMAND: ~s", [Command]),
     process_flag(trap_exit, true),
-    Timeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
+    Timeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
     barrel_config:subscribe(),
     {ok, Pid} = couch_os_process:start_link(Command, [{timeout, Timeout}]),
     {ok, {Name, Command, Pid}}.
@@ -52,7 +51,7 @@ handle_call({execute, JsonReq}, _From, {Name, Command, Pid}) ->
 
 
 handle_info({config_updated, barrel, {_, {"couchdb", "os_process_timeout"}}}, {_, _, Pid}=State) ->
-    Timeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
+    Timeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
     couch_os_process:set_timeout(Pid, Timeout),
     {noreply, State};
 handle_info({'EXIT', _Pid, normal}, State) ->
@@ -70,5 +69,3 @@ handle_cast(_Whatever, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-

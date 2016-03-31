@@ -29,8 +29,6 @@
 -export([run_script/4]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
-
 
 -record(proc, {
     pid,
@@ -307,9 +305,9 @@ init([]) ->
     PidProcs = ets:new(couch_query_server_pid_langs, [set, private]),
     LangProcs = ets:new(couch_query_server_procs, [set, private]),
 
-    ProcTimeout = ?cfget_int("couchdb", "os_process_timeout", 5000),
-    ReduceLimit = ?cfget_bool("query_server_config", "reduce_limit", true),
-    OsProcLimit = ?cfget_int("query_server_config", "os_process_limit", 10),
+    ProcTimeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
+    ReduceLimit = barrel_config:get_boolean("query_server_config", "reduce_limit", true),
+    OsProcLimit = barrel_config:get_integer("query_server_config", "os_process_limit", 10),
 
 
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
@@ -318,7 +316,7 @@ init([]) ->
         true = ets:insert(LangLimits, {?l2b(Lang), OsProcLimit, 0}), % 0 means no limit
         true = ets:insert(Langs, {?l2b(Lang),
                           Mod, Fun, SpecArg})
-    end, ?cfget("query_servers")),
+    end, barrel_config:get("query_servers")),
 
 
     process_flag(trap_exit, true),

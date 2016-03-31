@@ -11,7 +11,7 @@
 -export([start/2
         ,stop/1]).
 
--define(CONF_FILES, ["couch.ini", "local.ini"]).
+-define(CONF_FILES, ["barrel.ini", "local.ini"]).
 
 %%====================================================================
 %% API

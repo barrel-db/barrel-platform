@@ -26,7 +26,6 @@
 -include_lib("couch_changes/include/couch_changes.hrl").
 -include("couch_replicator.hrl").
 -include("couch_replicator_js_functions.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 -define(DOC_TO_REP, couch_rep_doc_id_to_rep_id).
@@ -120,7 +119,7 @@ init(_) ->
                                                  [{'==', '$1', created}],
                                                  [true]}]),
 
-    Retries = retries_value(?cfget("replicator", "max_replication_retry_count", "10")),
+    Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
     {ok, #state{changes_feed_loop = Loop,
                 rep_db_name = RepDbName,
                 max_retries = Retries}}.
@@ -187,7 +186,7 @@ handle_cast(Msg, State) ->
     {stop, {error, {unexpected_cast, Msg}}, State}.
 
 handle_info({couch_event, db_updated, {DbName, created}}, State) ->
-    case ?cfget_bin("replicator", "db", <<"_replicator">>) of
+    case barrel_config:get_binary("replicator", "db", <<"_replicator">>) of
         DbName ->
             {noreply, restart(State)};
         _ ->
@@ -206,7 +205,7 @@ handle_info({'DOWN', _Ref, _, _, _}, State) ->
     {noreply, State};
 
 handle_info({config_updated, barrel, {_, {"replicator", "db"}}}, State) ->
-    DbName = ?cfget_bin("replicator", "db", <<"_replicator">>),
+    DbName = barrel_config:get_binary("replicator", "db", <<"_replicator">>),
     if
         State#state.rep_db_name /= DbName ->
             {noreply, restart(State)};
@@ -214,7 +213,7 @@ handle_info({config_updated, barrel, {_, {"replicator", "db"}}}, State) ->
             {noreply, State}
     end;
 handle_info({config_updated, barrel, {_, {"replicator", "max_replication_retry_count"}}}, State) ->
-    Retries = retries_value(?cfget("replicator", "max_replication_retry_count", "10")),
+    Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
     {noreply, State#state{max_retries = Retries}};
 handle_info({config_updated, _, _}, State) ->
     {noreply, State};
@@ -575,7 +574,7 @@ zone(Hr, Min) ->
 
 
 ensure_rep_db_exists() ->
-    DbName = ?cfget_bin("replicator", "db", <<"_replicator">>),
+    DbName = barrel_config:get_binary("replicator", "db", <<"_replicator">>),
     UserCtx = #user_ctx{roles = [<<"_admin">>, <<"_replicator">>]},
     case couch_db:open_int(DbName, [sys_db, {user_ctx, UserCtx}, nologifmissing]) of
     {ok, Db} ->

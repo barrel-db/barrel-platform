@@ -17,7 +17,6 @@
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2, handle_info/2]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 start_link() ->
@@ -54,7 +53,7 @@ terminate(_Reason, Handlers) ->
 handle_call({get, UrlName}, _From, Handlers) ->
     case ets:lookup(Handlers, UrlName) of
     [] ->
-        case ?cfget("external", UrlName, nil) of
+        case barrel_config:get("external", UrlName, nil) of
         nil ->
             Msg = lists:flatten(
                 io_lib:format("No server configured for ~p.", [UrlName])),
@@ -100,4 +99,3 @@ handle_info({'EXIT', Pid, Reason}, Handlers) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-

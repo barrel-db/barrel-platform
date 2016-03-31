@@ -15,8 +15,6 @@
 -export([handle_changes/6]).
 
 -include_lib("couch/include/couch_db.hrl").
--include_lib("barrel/include/config.hrl").
-
 
 -record(vst, {dbname,
               ddoc,
@@ -55,7 +53,7 @@ handle_changes(DbName, DDocId, View, Fun, Acc, Options) ->
     ViewOptions = proplists:get_value(view_options, Options, []),
     Queries = proplists:get_value(queries, Options),
 
-    RefreshDefault = case ?cfget("couch_index", "refresh_index", "true") of
+    RefreshDefault = case barrel_config:get("couch_index", "refresh_index", "true") of
                          "true" -> true;
                          _ -> false
                      end,
@@ -175,7 +173,7 @@ loop(#vst{since=Since, callback=Callback,
     end.
 
 changes_timeout(Options) ->
-    DefaultTimeout = ?cfget_int("httpd", "changes_timeout", 60000),
+    DefaultTimeout = barrel_config:get_integer("httpd", "changes_timeout", 60000),
     UserTimeout = case proplists:get_value(timeout, Options) of
                       undefined -> DefaultTimeout;
                       Timeout1 -> Timeout1

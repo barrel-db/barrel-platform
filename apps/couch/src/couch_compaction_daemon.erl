@@ -22,7 +22,6 @@
 -export([code_change/3, terminate/2]).
 
 -include("couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 -define(CONFIG_ETS, couch_compaction_daemon_config).
 
@@ -72,7 +71,7 @@ handle_cast({config_update, DbName, delete}, State) ->
     {noreply, State};
 
 handle_cast({config_update, DbName, _}, #state{loop_pid = Loop} = State) ->
-    Config = ?cfget("compactions", DbName),
+    Config = barrel_confi:get("compactions", DbName),
     case parse_config(DbName, Config) of
     {ok, NewConfig} ->
         WasEmpty = (ets:info(?CONFIG_ETS, size) =:= 0),
@@ -136,7 +135,7 @@ compact_loop(Parent) ->
     true ->
         receive {Parent, have_config} -> ok end;
     false ->
-        PausePeriod = ?cfget_int("compaction_daemon", "check_interval", ?DEFAULT_CHECK_INTERVAL),
+        PausePeriod = barrel_config:get_integer("compaction_daemon", "check_interval", ?DEFAULT_CHECK_INTERVAL),
         ok = timer:sleep(PausePeriod * 1000)
     end,
     compact_loop(Parent).
@@ -310,7 +309,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
         false ->
             false;
         true ->
-            Free = free_space(?cfget("couchdb", "database_dir")),
+            Free = free_space(barrel_config:get("couchdb", "database_dir")),
             case Free >= SpaceRequired of
             true ->
                 true;
@@ -378,7 +377,7 @@ check_frag(Threshold, Frag) ->
 
 frag(Props) ->
     FileSize = couch_util:get_value(disk_size, Props),
-    MinFileSize = ?cfget_int("compaction_daemon", "min_file_size", ?DEFAULT_MIN_FILESIZE),
+    MinFileSize = barrel_config:get_integer("compaction_daemon", "min_file_size", ?DEFAULT_MIN_FILESIZE),
     case FileSize < MinFileSize of
     true ->
         {0, FileSize};
@@ -410,7 +409,7 @@ load_config() ->
                 ok
             end
         end,
-        ?cfget("compactions")).
+        barrel_config:get("compactions")).
 
 parse_config(DbName, ConfigString) ->
     case (catch do_parse_config(ConfigString)) of

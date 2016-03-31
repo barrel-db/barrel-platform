@@ -12,7 +12,7 @@
 
 -module(couch_httpd_misc_handlers).
 
--export([handle_welcome_req/2,handle_favicon_req/2,handle_utils_dir_req/2,
+-export([handle_welcome_req/1,handle_favicon_req/2,handle_utils_dir_req/2,
          handle_all_dbs_req/1,handle_restart_req/1,
          handle_uuids_req/1,handle_config_req/1,handle_log_req/1,
          handle_task_status_req/1, handle_file_req/2,
@@ -20,9 +20,7 @@
 
 -export([increment_update_seq_req/2]).
 
-
 -include_lib("couch/include/couch_db.hrl").
--include_lib("barrel/include/config.hrl").
 
 
 -import(couch_httpd,
@@ -34,18 +32,17 @@
 
 % httpd global handlers
 
-handle_welcome_req(#httpd{method='GET'}=Req, WelcomeMessage) ->
+handle_welcome_req(#httpd{method='GET'}=Req) ->
     send_json(Req, {[
         {name, barrel},
-        {uuid, couch_server:get_uuid()},
-        ] ++ case ?cfget("vendor") of
-        [] ->
-            [];
-        Properties ->
-            [{vendor, {[{?l2b(K), ?l2b(V)} || {K, V} <- Properties]}}]
+        {uuid, couch_server:get_uuid()}
+        ] ++ case barrel_config:get("vendor") of
+            [] -> [];
+            Properties ->
+                [{vendor, {[{?l2b(K), ?l2b(V)} || {K, V} <- Properties]}}]
         end
     });
-handle_welcome_req(Req, _) ->
+handle_welcome_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
 handle_favicon_req(#httpd{method='GET'}=Req, DocumentRoot) ->
@@ -150,17 +147,17 @@ handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
     KVs = lists:foldl(fun({Section, Values0}, Acc) ->
                 Values = [{?l2b(K), ?l2b(V)} || {K, V} <- Values0],
                 [{list_to_binary(Section), {Values}} | Acc]
-    end, [], ?cfall()),
+    end, [], barrel_confgig:all()),
     send_json(Req, 200, {KVs});
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    KVs = [{?l2b(K), ?l2b(V)} || {K, V} <- ?cfget(?b2l(Section))],
+    KVs = [{?l2b(K), ?l2b(V)} || {K, V} <- barrel_config:get(?b2l(Section))],
     send_json(Req, 200, {KVs});
 % GET /_config/Section/Key
 handle_config_req(#httpd{method='GET', path_parts=[_, Section, Key]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    case ?cfget(?b2l(Section), ?b2l(Key), null) of
+    case barrel_config:get(?b2l(Section), ?b2l(Key), null) of
     null ->
         throw({not_found, unknown_config_value});
     Value ->
@@ -171,7 +168,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
       when (Method == 'PUT') or (Method == 'DELETE') ->
     ok = couch_httpd:verify_is_server_admin(Req),
     Persist = couch_httpd:header_value(Req, "X-Couch-Persist") /= "false",
-    case ?cfget("httpd", "config_whitelist", null) of
+    case barrel_config:get("httpd", "config_whitelist", null) of
         null ->
             % No whitelist; allow all changes.
             handle_approved_config_req(Req, Persist);
@@ -259,8 +256,8 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section0, Key0]}=
         end
     end,
 
-    OldValue = ?cfget_bin(Section, Key, <<"">>),
-    case ?cfset(Section, Key, Value, Persist) of
+    OldValue = barrel_config:get_binary(Section, Key, <<"">>),
+    case barrel_config:set(Section, Key, Value, Persist) of
     ok ->
         send_json(Req, 200, OldValue);
     Error ->
@@ -276,11 +273,11 @@ handle_approved_config_req(#httpd{method='DELETE',path_parts=[_,Section0,Key0]}=
                            Persist, _UseRawValue) ->
     Section = ?b2l(Section0),
     Key = ?b2l(Key0),
-    case ?cfget(Section, Key, null) of
+    case barrel_config:get(Section, Key, null) of
     null ->
         throw({not_found, unknown_config_value});
     OldValue ->
-        ?cfdel(Section, Key, Persist),
+        barrel_config:del(Section, Key, Persist),
         send_json(Req, 200, list_to_binary(OldValue))
     end.
 
@@ -340,7 +337,7 @@ handle_log_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
 
 handle_up_req(#httpd{method='GET'} = Req) ->
-    case ?cfget("couchdb", "maintenance_mode") of
+    case barrel_config:get("couchdb", "maintenance_mode") of
         "true" ->
             couch_httpd:send_json(Req, 404, {[{status, maintenance_mode}]});
         _ ->
