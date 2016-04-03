@@ -20,6 +20,7 @@ specific language governing permissions and limitations under the License.
     <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64" type="image/vnd.microsoft.icon">
     
     <link rel="stylesheet" href="style/layout.css" type="text/css">
+    <link rel="stylesheet" href="style/codemirror.css" type="text/css">
     <script src="script/json2.js"></script>
     <script src="script/sha1.js"></script>
     <script src="script/jquery.js"></script>
@@ -30,13 +31,18 @@ specific language governing permissions and limitations under the License.
     <script src="script/jquery.suggest.js"></script>
     <script src="script/futon.browse.js"></script>
     <script src="script/futon.format.js"></script>
+    <script src="script/codemirror/codemirror.js"></script>
+    <script src="script/codemirror/mode/javascript.js"></script>
+    <script src="script/codemirror/mode/coffeescript.js"></script>
+    <script src="script/codemirror/mode/erlang.js"></script>
     <script>
       var page = new $.futon.CouchDatabasePage();
       $.futon.navigation.ready(function() {
         this.addDatabase(page.db.name);
         this.updateSelection(location.pathname, "?" + page.db.name);
       });
-
+      
+      var editorStatus = false; 
       $(function() {
         if (page.redirecting) return;
         $("h1 strong").text(page.db.name);
@@ -52,6 +58,7 @@ specific language governing permissions and limitations under the License.
 
         $("#viewcode span").click(function() {
           $("#viewcode").toggleClass("collapsed");
+          loadEditors();
         });
         $("#viewcode button.run").click(function() {
           page.updateDocumentListing();
@@ -64,16 +71,6 @@ specific language governing permissions and limitations under the License.
         });
         $("#viewcode button.saveas").click(function() {
           page.saveViewAs();
-        });
-        $("#viewcode textarea").makeResizable({
-          always: true,
-          grippie: $("#viewcode .bottom"),
-          vertical: true
-        });
-        $("#viewcode td.map").makeResizable({
-          always: true,
-          grippie: $("#viewcode td.splitter"),
-          horizontal: true
         });
 
         // Restore preferences/state
@@ -93,7 +90,8 @@ specific language governing permissions and limitations under the License.
         page.populateViewsMenu();
         page.populateViewEditor();
         if (page.isTempView) {
-          $("#viewcode").show().removeClass("collapsed").find("textarea")[0].focus();
+          $("#viewcode").show().removeClass("collapsed");
+          loadEditors();
           $("#documents").hide();
         }
 
@@ -149,6 +147,40 @@ specific language governing permissions and limitations under the License.
             page.jumpToDocument($(this).val());
           }
         });
+
+        function loadEditors() {
+          if(!editorStatus) {
+            editorStatus = true;
+            $('#viewcode_map, #viewcode_reduce').each(function(index, elem){
+              var editor = CodeMirror.fromTextArea(elem, {   
+                mode: 'javascript',
+                styleActiveLine: true,
+                lineNumbers: true,
+                lineWrapping: true,
+              })
+              editor.on("change", function(){
+                $(elem).val(editor.getDoc().getValue())
+              });
+            });
+
+            $("#language").change(function(){
+              var selected_language = $( "#language option:selected" ).val()
+              changeLanguage(selected_language);
+            })
+
+            function changeLanguage(language) {
+              for(var i=0; i < $('.CodeMirror').length; i++) {
+                var editor = $('.CodeMirror')[i].CodeMirror;
+                editor.setOption("mode", language);
+              }
+            }
+          } else {
+              for(var i=0; i < $('.CodeMirror').length; i++) {
+                var editor = $('.CodeMirror')[i].CodeMirror;
+                editor.refresh();
+              }
+          }
+        }
       });
     </script>
   </head>
