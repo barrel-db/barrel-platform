@@ -13,7 +13,6 @@
 
 -export([handle_proxy_req/2]).
 
--include_lib("couch/include/couch_db.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
 
 -define(TIMEOUT, infinity).
@@ -40,25 +39,27 @@ handle_proxy_req(Req, ProxyDest) ->
     end.
 
 
-get_method(#httpd{mochi_req=MochiReq}) ->
+get_method(Req) ->
+    MochiReq = couch_httpd:mochi_req(Req),
     case MochiReq:get(method) of
         Method when is_atom(Method) ->
             list_to_atom(string:to_lower(atom_to_list(Method)));
         Method when is_list(Method) ->
             list_to_atom(string:to_lower(Method));
         Method when is_binary(Method) ->
-            list_to_atom(string:to_lower(?b2l(Method)))
+            list_to_atom(string:to_lower(binary_to_list(Method)))
     end.
 
 
 get_url(Req, ProxyDest) when is_binary(ProxyDest) ->
-    get_url(Req, ?b2l(ProxyDest));
-get_url(#httpd{mochi_req=MochiReq}=Req, ProxyDest) ->
+    get_url(Req, binary_to_list(ProxyDest));
+get_url(Req, ProxyDest) ->
+    MochiReq = couch_httpd:mochi_req(Req),
     BaseUrl = case mochiweb_util:partition(ProxyDest, "/") of
         {[], "/", _} -> couch_httpd:absolute_uri(Req, ProxyDest);
         _ -> ProxyDest
     end,
-    ProxyPrefix = "/" ++ ?b2l(hd(Req#httpd.path_parts)),
+    ProxyPrefix = "/" ++ binary_to_list(hd(couch_httpd:path_parts(Req))),
     RequestedPath = MochiReq:get(raw_path),
     case mochiweb_util:partition(RequestedPath, ProxyPrefix) of
         {[], ProxyPrefix, []} ->
@@ -71,11 +72,13 @@ get_url(#httpd{mochi_req=MochiReq}=Req, ProxyDest) ->
             throw({invalid_url_path, {ProxyPrefix, RequestedPath}})
     end.
 
-get_version(#httpd{mochi_req=MochiReq}) ->
+get_version(Req) ->
+    MochiReq = couch_httpd:mochi_req(Req),
     MochiReq:get(version).
 
 
-get_headers(#httpd{mochi_req=MochiReq}) ->
+get_headers(Req) ->
+    MochiReq = couch_httpd:mochi_req(Req),
     to_ibrowse_headers(mochiweb_headers:to_list(MochiReq:get(headers)), []).
 
 to_ibrowse_headers([], Acc) ->
@@ -93,26 +96,26 @@ to_ibrowse_headers([{K, V} | Rest], Acc) when is_list(K) ->
             to_ibrowse_headers(Rest, [{K, V} | Acc])
     end.
 
-get_body(#httpd{method='GET'}) ->
-    fun() -> eof end;
-get_body(#httpd{method='HEAD'}) ->
-    fun() -> eof end;
-get_body(#httpd{method='DELETE'}) ->
-    fun() -> eof end;
-get_body(#httpd{mochi_req=MochiReq}) ->
-    case MochiReq:get(body_length) of
-        undefined ->
-            <<>>;
-        {unknown_transfer_encoding, Unknown} ->
-            exit({unknown_transfer_encoding, Unknown});
-        chunked ->
-            {fun stream_chunked_body/1, {init, MochiReq, 0}};
-        0 ->
-            <<>>;
-        Length when is_integer(Length) andalso Length > 0 ->
-            {fun stream_length_body/1, {init, MochiReq, Length}};
-        Length ->
-            exit({invalid_body_length, Length})
+get_body(Req) ->
+    MochiReq = couch_httpd:mochi_req(Req),
+    case lists:member(couch_httpd:method(Req), ['GET', 'HEAD', 'DELETE']) of
+        true ->
+            fun() -> eof end;
+        false ->
+            case MochiReq:get(body_length) of
+                undefined ->
+                    <<>>;
+                {unknown_transfer_encoding, Unknown} ->
+                    exit({unknown_transfer_encoding, Unknown});
+                chunked ->
+                    {fun stream_chunked_body/1, {init, MochiReq, 0}};
+                0 ->
+                    <<>>;
+                Length when is_integer(Length) andalso Length > 0 ->
+                    {fun stream_length_body/1, {init, MochiReq, Length}};
+                Length ->
+                    exit({invalid_body_length, Length})
+            end
     end.
 
 
@@ -239,7 +242,7 @@ read_chunk_length(MochiReq) ->
             Splitter = fun(C) ->
                 C =/= $\r andalso C =/= $\n andalso C =/= $\s
             end,
-            {Hex, _Rest} = lists:splitwith(Splitter, ?b2l(Header)),
+            {Hex, _Rest} = lists:splitwith(Splitter, binary_to_list(Header)),
             {mochihex:to_int(Hex), Header};
         _ ->
             exit(normal)
@@ -314,8 +317,8 @@ stream_length_response(Req, ReqId, Resp) ->
 
 
 get_urls(Req, ProxyDest) ->
-    SourceUrl = couch_httpd:absolute_uri(Req, "/" ++ hd(Req#httpd.path_parts)),
-    Source = parse_url(?b2l(iolist_to_binary(SourceUrl))),
+    SourceUrl = couch_httpd:absolute_uri(Req, "/" ++ hd(couch_httpd:path_parts(Req))),
+    Source = parse_url(binary_to_list(iolist_to_binary(SourceUrl))),
     case (catch parse_url(ProxyDest)) of
         Dest when is_record(Dest, url) ->
             {Source, Dest};
@@ -361,9 +364,9 @@ rewrite_cookie(_Source, _Dest, Cookie) ->
 
 
 parse_url(Url) when is_binary(Url) ->
-    ibrowse_lib:parse_url(?b2l(Url));
+    ibrowse_lib:parse_url(binary_to_list(Url));
 parse_url(Url) when is_list(Url) ->
-    ibrowse_lib:parse_url(?b2l(iolist_to_binary(Url))).
+    ibrowse_lib:parse_url(binary_to_list(iolist_to_binary(Url))).
 
 
 join_url_path(Src, Dst) ->
