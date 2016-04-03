@@ -92,7 +92,7 @@ get_from_cache(UserName) ->
             [] ->
                 gen_server:call(?MODULE, {fetch, UserName}, infinity);
             [{UserName, {Credentials, _ATime}}] ->
-                couch_stats_collector:increment({couchdb, auth_cache_hits}),
+                exometer:update([barrel, auth_cache_hits], 1),
                 gen_server:cast(?MODULE, {cache_hit, UserName}),
                 Credentials
             end
@@ -160,11 +160,11 @@ handle_call(auth_db_compacted, _From, State) ->
 handle_call({fetch, UserName}, _From, State) ->
     {Credentials, NewState} = case ets:lookup(?BY_USER, UserName) of
     [{UserName, {Creds, ATime}}] ->
-        couch_stats_collector:increment({couchdb, auth_cache_hits}),
+        exometer:update([barrel, auth_cache_hits], 1),
         cache_hit(UserName, Creds, ATime),
         {Creds, State};
     [] ->
-        couch_stats_collector:increment({couchdb, auth_cache_misses}),
+        exometer:update([barrel, auth_cache_misses], 1),
         Creds = get_user_props_from_db(UserName),
         State1 = add_cache_entry(UserName, Creds, os:timestamp(), State),
         {Creds, State1}

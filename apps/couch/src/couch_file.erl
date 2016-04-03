@@ -334,7 +334,7 @@ maybe_track_open_os_files(FileOptions) ->
     true ->
         ok;
     false ->
-        couch_stats_collector:track_process_count({couchdb, open_os_files})
+        barrel_metrics_process:track([barrel, open_os_files])
     end.
 
 terminate(_Reason, #file{fd = Fd}) ->

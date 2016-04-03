@@ -7,7 +7,8 @@
    [kernel,
     stdlib,
     lager,
-    barrel_config
+    barrel_config,
+    barrel_metrics
    ]},
   {env,[]},
   {modules, []}

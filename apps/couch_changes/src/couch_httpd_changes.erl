@@ -105,15 +105,11 @@ handle_changes_req1(Req, #db{name=DbName}=Db) ->
             FeedChangesFun(MakeCallback(Resp))
         end
     end,
-    couch_stats_collector:increment(
-        {httpd, clients_requesting_changes}
-    ),
+    exometer:update([httpd, clients_requesting_changes], 1),
     try
         WrapperFun(ChangesFun)
     after
-    couch_stats_collector:decrement(
-        {httpd, clients_requesting_changes}
-    )
+        exometer:update([httpd, clients_requesting_changes], -1)
     end.
 
 

@@ -13,7 +13,7 @@
 // Do some basic tests.
 couchTests.basics = function(debug) {
   var result = JSON.parse(CouchDB.request("GET", "/").responseText);
-  T(result.couchdb == "Welcome");
+  T(result.name == "barrel");
 
   var db = new CouchDB("test_suite_db", {"X-Couch-Full-Commit":"false"});
   db.deleteDb();

@@ -331,8 +331,8 @@ handle_request_int(MochiReq, DefaultFun,
             send_error(HttpReq, Error)
     end,
     RequestTime = round(timer:now_diff(os:timestamp(), Begin)/1000),
-    couch_stats_collector:record({couchdb, request_time}, RequestTime),
-    couch_stats_collector:increment({httpd, requests}),
+    exometer:update([barrel, request_time], RequestTime),
+    exometer:update([httpd, requests], 1),
     {ok, Resp}.
 
 % Try authentication handlers in order until one sets a user_ctx
@@ -358,7 +358,7 @@ authenticate_request(Response, _AuthSrcs) ->
     Response.
 
 increment_method_stats(Method) ->
-    couch_stats_collector:increment({httpd_request_methods, Method}).
+    exometer:update([httpd_request_methods, Method], 1).
 
 validate_referer(Req) ->
     Host = host_for_request(Req),
@@ -573,7 +573,7 @@ log_request(#httpd{mochi_req=MochiReq,peer=Peer}, Code) ->
 
 start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
     log_request(Req, Code),
-    couch_stats_collector:increment({httpd_status_codes, Code}),
+    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = Headers ++ server_header() ++
                couch_httpd_auth:cookie_auth_header(Req, Headers),
     Headers2 = couch_httpd_cors:cors_headers(Req, Headers1),
@@ -586,7 +586,7 @@ start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
 
 start_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     log_request(Req, Code),
-    couch_stats_collector:increment({httpd_status_codes, Code}),
+    exometer:update([httpd_status_codes, Code], 1),
     CookieHeader = couch_httpd_auth:cookie_auth_header(Req, Headers),
     Headers1 = Headers ++ server_header() ++ CookieHeader,
     Headers2 = couch_httpd_cors:cors_headers(Req, Headers1),
@@ -620,7 +620,7 @@ http_1_0_keep_alive(Req, Headers) ->
 
 start_chunked_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     log_request(Req, Code),
-    couch_stats_collector:increment({httpd_status_codes, Code}),
+    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     Headers2 = Headers1 ++ server_header() ++
                couch_httpd_auth:cookie_auth_header(Req, Headers1),
@@ -645,7 +645,7 @@ last_chunk(Resp) ->
 
 send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     log_request(Req, Code),
-    couch_stats_collector:increment({httpd_status_codes, Code}),
+    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     if Code >= 500 ->
         ?LOG_ERROR("httpd ~p error response:~n ~s", [Code, Body]);

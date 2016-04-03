@@ -137,7 +137,7 @@ open_doc(Db, IdOrDocInfo) ->
     open_doc(Db, IdOrDocInfo, []).
 
 open_doc(Db, Id, Options) ->
-    increment_stat(Db, {couchdb, database_reads}),
+    increment_stat(Db, [barrel, database_reads]),
     case open_doc_int(Db, Id, Options) of
     {ok, #doc{deleted=true}=Doc} ->
         case lists:member(deleted, Options) of
@@ -182,7 +182,7 @@ find_ancestor_rev_pos({RevPos, [RevId|Rest]}, AttsSinceRevs) ->
     end.
 
 open_doc_revs(Db, Id, Revs, Options) ->
-    increment_stat(Db, {couchdb, database_reads}),
+    increment_stat(Db, [barrel, database_reads]),
     [{ok, Results}] = open_doc_revs_int(Db, [{Id, Revs}], Options),
     {ok, [apply_open_options(Result, Options) || Result <- Results]}.
 
@@ -684,7 +684,7 @@ check_dup_atts2(_) ->
 
 
 update_docs(Db, Docs, Options, replicated_changes) ->
-    increment_stat(Db, {couchdb, database_writes}),
+    increment_stat(Db, [barrel, database_writes]),
     % associate reference with each doc in order to track duplicates
     Docs2 = lists:map(fun(Doc) -> {Doc, make_ref()} end, Docs),
     DocBuckets = before_docs_update(Db, group_alike_docs(Docs2)),
@@ -711,7 +711,7 @@ update_docs(Db, Docs, Options, replicated_changes) ->
     {ok, DocErrors};
 
 update_docs(Db, Docs, Options, interactive_edit) ->
-    increment_stat(Db, {couchdb, database_writes}),
+    increment_stat(Db, [barrel, database_writes]),
     AllOrNothing = lists:member(all_or_nothing, Options),
     % go ahead and generate the new revision ids for the documents.
     % separate out the NonRep documents from the rest of the documents
@@ -1086,7 +1086,7 @@ init({DbName, Filepath, Fd, Options}) ->
     true ->
         ok;
     false ->
-        couch_stats_collector:track_process_count({couchdb, open_databases})
+        barrel_metrics_process:track([barrel, open_databases])
     end,
     process_flag(trap_exit, true),
     {ok, Db}.
@@ -1353,7 +1353,7 @@ increment_stat(#db{options = Options}, Stat) ->
     true ->
         ok;
     false ->
-        couch_stats_collector:increment(Stat)
+        exometer:update(Stat, 1)
     end.
 
 local_btree(#db{local_docs_btree = BTree, fd = ReaderFd}) ->
