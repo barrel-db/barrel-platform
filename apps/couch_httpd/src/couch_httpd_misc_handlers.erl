@@ -147,7 +147,7 @@ handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
     KVs = lists:foldl(fun({Section, Values0}, Acc) ->
                 Values = [{?l2b(K), ?l2b(V)} || {K, V} <- Values0],
                 [{list_to_binary(Section), {Values}} | Acc]
-    end, [], barrel_confgig:all()),
+    end, [], barrel_config:all()),
     send_json(Req, 200, {KVs});
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
