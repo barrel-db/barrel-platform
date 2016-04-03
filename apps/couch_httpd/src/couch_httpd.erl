@@ -36,13 +36,16 @@
 -export([set_auth_handlers/0]).
 
 %% interface to the httpd record
--export([method/1, mochi_req/1, peer/1, path_parts/1, user_ctx/1]).
+-export([method/1, mochi_req/1, peer/1, path_parts/1, requested_path_parts/1,
+         req_body/1, user_ctx/1]).
 
 method(#httpd{method=Method}) -> Method.
 mochi_req(#httpd{mochi_req=MochiReq}) -> MochiReq.
 peer(#httpd{peer=Peer}) -> Peer.
 path_parts(#httpd{path_parts=Parts}) -> Parts.
+requested_path_parts(#httpd{requested_path_parts=Parts}) -> Parts.
 user_ctx(#httpd{user_ctx=UserCtx}) -> UserCtx.
+req_body(#httpd{req_body=ReqBody}) -> ReqBody.
 
 
 start_link(couch_http) ->
