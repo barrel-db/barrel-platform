@@ -61,8 +61,3 @@ maybe_flush(Req, Metrics) ->
         _ ->
             ok
     end.
-
-to_binary(V) when is_atom(V) -> atom_to_binary(V, latin1);
-to_binary(V) when is_list(V) -> list_to_binary(V);
-to_binary(V) when is_integer(V) -> integer_to_binary(V);
-to_binary(V) when is_binary(V) -> V.
