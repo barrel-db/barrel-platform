@@ -35,6 +35,16 @@
 -export([http_1_0_keep_alive/2]).
 -export([set_auth_handlers/0]).
 
+%% interface to the httpd record
+-export([method/1, mochi_req/1, peer/1, path_parts/1, user_ctx/1]).
+
+method(#httpd{method=Method}) -> Method.
+mochi_req(#httpd{mochi_req=MochiReq}) -> MochiReq.
+peer(#httpd{peer=Peer}) -> Peer.
+path_parts(#httpd{path_parts=Parts}) -> Parts.
+user_ctx(#httpd{user_ctx=UserCtx}) -> UserCtx.
+
+
 start_link(couch_http) ->
     Port = barrel_config:get_integer("httpd", "port", 5984),
     start_link(couch_http, [{port, Port}]);
