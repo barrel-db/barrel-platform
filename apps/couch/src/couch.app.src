@@ -22,7 +22,6 @@
         couch_db_update,
         couch_db_update_notifier_sup,
         couch_external_manager,
-        couch_log,
         couch_primary_services,
         couch_query_servers,
         couch_secondary_services,

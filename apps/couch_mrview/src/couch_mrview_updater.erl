@@ -60,7 +60,7 @@ purge(_Db, PurgeSeq, PurgedIdRevs, State) ->
         id_btree=IdBtree,
         views=Views
     } = State,
-
+    
     Ids = [Id || {Id, _Revs} <- PurgedIdRevs],
     {ok, Lookups, IdBtree2} = couch_btree:query_modify(IdBtree, Ids, [], Ids),
 
@@ -334,7 +334,7 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
         {ok, VSeqBtree2, VKSeqBtree2} = case IsUpdated of
             true ->
                 {SToDel, KSToDel} = removed_seqs(RemovedKeys, [], []),
-                couch_log:debug("indexing seqs, view ~p~n - add: ~p~n - rem:~p~n", [ViewId, SKVs, SToDel]),
+                barrel_log:debug("indexing seqs, view ~p~n - add: ~p~n - rem:~p~n", [ViewId, SKVs, SToDel]),
                 {ok, SBt} = couch_btree:add_remove(View#mrview.seq_btree, SKVs,
                                                    SToDel),
 
@@ -342,7 +342,7 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
                                                     KSToDel),
                 {ok, SBt, KSBt};
             false ->
-                couch_log:debug("no seq index to update", []),
+                barrel_log:debug("no seq index to update", []),
                 {ok, View#mrview.seq_btree, View#mrview.kseq_btree}
         end,
 

@@ -614,7 +614,7 @@ use_seq(_, ViewSeq) -> ViewSeq.
 wait_db_updated(Timeout, TimeoutFun, UserAcc) ->
     receive
         {couch_event, db_updated, _}=Ev ->
-            couch_log:info("got db update ~p~n", [Ev]),
+            barrel_log:info("got db update ~p~n", [Ev]),
             get_rest_db_updated(UserAcc);
         {couch_event, index_update, _} ->
             get_rest_db_updated(UserAcc)

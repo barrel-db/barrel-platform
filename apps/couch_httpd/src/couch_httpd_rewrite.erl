@@ -399,14 +399,14 @@ process_rules([], _Req, _Db, _DDoc, Routes) ->
 process_rules([Source | Rest], Req, Db, DDoc, Routes) when is_binary(Source) ->
     NewRules= couch_query_servers:run_script(Req, Db, DDoc, Source),
     NewRoutes = process_rules(NewRules, Req, Db, DDoc, []),
-    couch_log:info("routes ~p~n", [NewRoutes]),
+    barrel_log:info("routes ~p~n", [NewRoutes]),
     process_rules(Rest, Req, Db, DDoc, NewRoutes ++ Routes);
 process_rules([Rule | Rest], Req, Db, DDoc, Routes) ->
     process_rules(Rest, Req, Db, DDoc, [make_rule(Rule) | Routes]).
 
 %% @doc transform json rule in erlang for pattern matching
 make_rule({Rule}) ->
-    couch_log:info("to ~p~n", [Rule]),
+    barrel_log:info("to ~p~n", [Rule]),
     Method = case couch_util:get_value(<<"method">>, Rule) of
         undefined -> ?MATCH_ALL;
         M -> to_binding(M)

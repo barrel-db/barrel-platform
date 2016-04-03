@@ -218,7 +218,7 @@ handle_info({'EXIT', Pid, Reason}, State) ->
     State2 = case ets:lookup(couch_dbs_by_pid, Pid) of
     [] -> State;
     [{Pid, DbName}] ->
-        couch_log:info("db ~s died with reason ~p", [DbName, Reason]),
+        barrel_log:info("db ~s died with reason ~p", [DbName, Reason]),
 
         true = ets:delete(couch_dbs_by_pid, Pid),
         true = ets:delete(couch_dbs_by_name, DbName),

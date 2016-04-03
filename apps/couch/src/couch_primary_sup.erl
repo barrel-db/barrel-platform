@@ -30,12 +30,6 @@ init([]) ->
             permanent,
             brutal_kill,
             worker,
-            [couch_server]},
-        {couch_log,
-            {couch_log, start_link, []},
-            permanent,
-            brutal_kill,
-            worker,
-            [couch_log]}
+            [couch_server]}
     ],
     {ok, {{one_for_one, 10, 3600}, Children}}.

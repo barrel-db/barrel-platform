@@ -300,7 +300,7 @@ handle_log_req(#httpd{method='GET'}=Req) ->
     Bytes = list_to_integer(couch_httpd:qs_value(Req, "bytes", "1000")),
     Offset = list_to_integer(couch_httpd:qs_value(Req, "offset", "0")),
     Formatted = couch_httpd:qs_value(Req, "formatted", "false"),
-    RawChunk = couch_log:read(Bytes, Offset),
+    RawChunk = barrel_log:read(Bytes, Offset),
     case Formatted of
         "true" ->
             EndOfLine = string:chr(RawChunk, $\n),

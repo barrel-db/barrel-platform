@@ -33,7 +33,11 @@ init([]) ->
              {barrel_uuids, start_link, []},
              permanent, brutal_kill, worker, [barrel_uuids]},
 
-    {ok, { {one_for_all, 0, 1}, [UUIDs]} }.
+    Log = {barrel_log,
+           {barrel_log, start_link, []},
+           permanent, brutal_kill, worker, [barrel_log]},
+
+    {ok, { {one_for_all, 0, 1}, [UUIDs, Log]} }.
 
 %%====================================================================
 %% Internal functions

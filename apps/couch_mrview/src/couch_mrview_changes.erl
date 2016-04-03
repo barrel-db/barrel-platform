@@ -156,7 +156,7 @@ loop(#vst{since=Since, callback=Callback,
         reset ->
             Callback(stop, {Since, Acc});
         Message ->
-            couch_log:info("got unexpected message ~p~n", [Message]),
+            barrel_log:info("got unexpected message ~p~n", [Message]),
             exit(normal)
     after Timeout ->
               if

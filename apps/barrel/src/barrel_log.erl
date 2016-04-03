@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_log).
+-module(barrel_log).
 
 -behaviour(gen_server).
 
@@ -27,7 +27,7 @@
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
-         
+
 
 -define(LEVEL_ERROR, 4).
 -define(LEVEL_WARN, 3).
@@ -111,18 +111,18 @@ get_level_integer(Module0) ->
     end.
 
 set_level_integer(Int) ->
-    gen_event:call(error_logger, couch_log, {set_level_integer, Int}).
+    gen_event:call(error_logger, barrel_log, {set_level_integer, Int}).
 
 set_level_integer(Module, Int) ->
-    gen_event:call(error_logger, couch_log, {set_level_integer, Module, Int}).
+    gen_event:call(error_logger, barrel_log, {set_level_integer, Module, Int}).
 
 
 
 start_link() ->
-    gen_server:start_link({local, couch_log}, couch_log, [], []).
+    gen_server:start_link({local, barrel_log}, barrel_log, [], []).
 
 stop() ->
-    couch_event_sup:stop(couch_log).
+    couch_event_sup:stop(barrel_log).
 
 config_change("log", "file", _) ->
     gen_server:cast(?MODULE, config_update);

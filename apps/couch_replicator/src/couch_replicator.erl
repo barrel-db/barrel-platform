@@ -514,7 +514,7 @@ terminate(Reason, State) ->
         target_name = Target,
         rep_details = #rep{id = {BaseId, Ext} = RepId} = Rep
     } = State,
-    couch_log:error("Replication `~s` (`~s` -> `~s`) failed: ~s",
+    barrel_log:error("Replication `~s` (`~s` -> `~s`) failed: ~s",
         [BaseId ++ Ext, Source, Target, to_binary(Reason)]),
     terminate_cleanup(State),
     couch_replicator_notifier:notify({error, RepId, Reason}),

@@ -35,6 +35,7 @@ restart_core_server() ->
 
 
 
+
 stop() ->
     catch exit(whereis(couch_sup), normal).
 
