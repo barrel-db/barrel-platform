@@ -18,12 +18,9 @@ handle_req(#httpd{method='GET', path_parts=[_ | Path]}=Req) ->
             Name2 = binary_to_atom(Name, latin1),
             [{{Section2, Name2, '_', '_'}, [], [true]}]
     end,
-    couch_log:info("spec is ~p~n", [Spec]),
     Compiled = ets:match_spec_compile(Spec),
     Obj = find(Metrics, Compiled, #{}),
-    couch_log:info("got object, ~p~n", [Obj]),
-    JsonObj = jsx:encode(Obj, [indent]),
-    couch_httpd:send_json(Req, JsonObj);
+    couch_httpd:send_json2(Req, Obj);
 handle_req(Req) ->
     couch_httpd:send_method_not_allowed(Req, "GET").
 
@@ -34,7 +31,10 @@ find([Spec | Rest], Compiled, Obj) ->
             {S, N, _, _} = Spec,
             case exometer:get_value([S, N]) of
                 {ok, Props} ->
-                    V = proplists:get_value(value, Props, <<>>),
+                    V = case proplists:get_value(value, Props) of
+                        undefined -> Props;
+                        Val -> Val
+                    end,
                     Obj2 = case maps:find(S, Obj) of
                                 {ok, Items} ->
                                     Items2 = Items#{ N => V },

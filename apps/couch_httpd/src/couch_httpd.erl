@@ -30,6 +30,7 @@
 -export([send_response/4,send_method_not_allowed/2,send_error/2,
         send_error/4,send_error/5, send_error/6, send_redirect/2,send_chunked_error/2]).
 -export([send_json/2,send_json/3,send_json/4,last_chunk/1,parse_multipart_request/3]).
+-export([send_json2/2,send_json2/3,send_json2/4]).
 -export([accepted_encodings/1,handle_request_int/5,validate_referer/1,validate_ctype/2]).
 -export([http_1_0_keep_alive/2]).
 -export([set_auth_handlers/0]).
@@ -676,6 +677,23 @@ send_json(Req, Code, Headers, Value) ->
     ],
     Body = [start_jsonp(), ?JSON_ENCODE(Value), end_jsonp(), $\n],
     send_response(Req, Code, DefaultHeaders ++ Headers, Body).
+
+
+send_json2(Req, Value) ->
+    send_json2(Req, 200, Value).
+
+send_json2(Req, Code, Value) ->
+    send_json2(Req, Code, [], Value).
+
+send_json2(Req, Code, Headers, Value) ->
+    initialize_jsonp(Req),
+    DefaultHeaders = [
+        {"Content-Type", negotiate_content_type(Req)},
+        {"Cache-Control", "must-revalidate"}
+    ],
+    Body = [start_jsonp(), jsx:encode(Value, []), end_jsonp(), $\n],
+    send_response(Req, Code, DefaultHeaders ++ Headers, Body).
+
 
 start_json_response(Req, Code) ->
     start_json_response(Req, Code, []).
