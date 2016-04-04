@@ -914,7 +914,7 @@ copy_compact(Db, NewDb0, Retry) ->
     NewDb = NewDb0#db{fsync_options=FsyncOptions, compression=Compression},
     TotalChanges = couch_db:count_changes_since(Db, NewDb#db.update_seq),
     BufferSize = barrel_config:get_integer("database_compaction", "doc_buffer_size", 524288),
-    CheckpointAfter = barrel_confifg:get_integer("database_compaction", "checkpoint_after", BufferSize * 10),
+    CheckpointAfter = barrel_config:get_integer("database_compaction", "checkpoint_after", BufferSize * 10),
 
     EnumBySeqFun =
     fun(#doc_info{high_seq=Seq}=DocInfo, _Offset,
