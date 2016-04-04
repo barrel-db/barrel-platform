@@ -458,7 +458,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
     end,
     % convert start time tuple to microsecs and store as a binary string
     {MegaSecs, Secs, MicroSecs} = os:timestamp(),
-    StartTime = ?l2b(io_lib:format("~p",
+    StartTime = list_to_binary(io_lib:format("~p",
             [(MegaSecs*1000000*1000000) + (Secs*1000000) + MicroSecs])),
     {ok, RefCntr} = couch_ref_counter:start([Fd, ReaderFd]),
     #db{
@@ -736,7 +736,7 @@ update_local_docs(#db{local_docs_btree=Btree}=Db, Docs) ->
         fun({Client, {#doc{id=Id,deleted=Delete,revs={0,PrevRevs},body=Body}, Ref}}, OldDocLookup) ->
             case PrevRevs of
             [RevStr|_] ->
-                PrevRev = list_to_integer(?b2l(RevStr));
+                PrevRev = list_to_integer(binary_to_list(RevStr));
             [] ->
                 PrevRev = 0
             end,
@@ -750,7 +750,7 @@ update_local_docs(#db{local_docs_btree=Btree}=Db, Docs) ->
                 case Delete of
                     false ->
                         send_result(Client, Ref, {ok,
-                                {0, ?l2b(integer_to_list(PrevRev + 1))}}),
+                                {0, list_to_binary(integer_to_list(PrevRev + 1))}}),
                         {update, {Id, {PrevRev + 1, Body}}};
                     true  ->
                         send_result(Client, Ref,

@@ -40,7 +40,7 @@ handle_req(Req, _Db) ->
 get_random_doc(Req, Db, FilterName) ->
     case FilterName of
         <<"_view">> ->
-            ViewSpec = ?l2b(couch_httpd:qs_value(Req, "view", "")),
+            ViewSpec = list_to_binary(couch_httpd:qs_value(Req, "view", "")),
             case binary:split(ViewSpec, <<"/">>) of
             [DName, VName] ->
                 DesignId = <<"_design/", DName/binary>>,
@@ -87,7 +87,7 @@ parse_query(Req) ->
             Options = [att_encoding_info | Args#random_query.options],
             Args#random_query{options=Options};
         {"filter", Filter} ->
-            Args#random_query{filter=?l2b(mochiweb_util:unquote(Filter))};
+            Args#random_query{filter=list_to_binary(mochiweb_util:unquote(Filter))};
         _Else -> % unknown key value pair, ignore.
             Args
         end
@@ -103,7 +103,7 @@ make_filter(FilterName, Req, Db) ->
 
 
 builtin_filter(<<"_prefix">>, Req) ->
-    Prefix = ?l2b(couch_httpd:qs_value(Req, "prefix", "")),
+    Prefix = list_to_binary(couch_httpd:qs_value(Req, "prefix", "")),
     filter_prefix(Prefix);
 builtin_filter(<<"_design_doc">>, _Req) ->
     filter_ddoc();

@@ -113,7 +113,7 @@ handle_call({add_task, TaskProps}, {From, _}, Server) ->
     end;
 handle_call(all, _, Server) ->
     All = [
-        [{pid, ?l2b(pid_to_list(Pid))} | TaskProps]
+        [{pid, list_to_binary(pid_to_list(Pid))} | TaskProps]
         ||
         {Pid, TaskProps} <- ets:tab2list(?MODULE)
     ],

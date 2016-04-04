@@ -44,10 +44,10 @@
     Credentials::list() | nil.
 
 get_user_creds(UserName) when is_list(UserName) ->
-    get_user_creds(?l2b(UserName));
+    get_user_creds(list_to_binary(UserName));
 
 get_user_creds(UserName) ->
-    UserCreds = case barrel_config:get("admins", ?b2l(UserName)) of
+    UserCreds = case barrel_config:get("admins", binary_to_list(UserName)) of
     "-hashed-" ++ HashedPwdAndSalt ->
         % the name is an admin, now check to see if there is a user doc
         % which has a matching name, salt, and password_sha
@@ -73,16 +73,16 @@ get_user_creds(UserName) ->
 
 make_admin_doc(HashedPwd, Salt, ExtraRoles) ->
     [{<<"roles">>, [<<"_admin">>|ExtraRoles]},
-     {<<"salt">>, ?l2b(Salt)},
+     {<<"salt">>, list_to_binary(Salt)},
      {<<"password_scheme">>, <<"simple">>},
-     {<<"password_sha">>, ?l2b(HashedPwd)}].
+     {<<"password_sha">>, list_to_binary(HashedPwd)}].
 
 make_admin_doc(DerivedKey, Salt, Iterations, ExtraRoles) ->
     [{<<"roles">>, [<<"_admin">>|ExtraRoles]},
-     {<<"salt">>, ?l2b(Salt)},
+     {<<"salt">>, list_to_binary(Salt)},
      {<<"iterations">>, list_to_integer(Iterations)},
      {<<"password_scheme">>, <<"pbkdf2">>},
-     {<<"derived_key">>, ?l2b(DerivedKey)}].
+     {<<"derived_key">>, list_to_binary(DerivedKey)}].
 
 get_from_cache(UserName) ->
     exec_if_auth_db(

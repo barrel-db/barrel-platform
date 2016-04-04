@@ -116,7 +116,7 @@ handle_rewrite_req(#httpd{
 
     % we are in a design handler
     DesignId = <<"_design/", DesignName/binary>>,
-    Prefix = <<"/", (?l2b(couch_util:url_encode(DbName)))/binary, "/", DesignId/binary>>,
+    Prefix = <<"/", (list_to_binary(couch_util:url_encode(DbName)))/binary, "/", DesignId/binary>>,
     QueryList = lists:map(fun decode_query_value/1, couch_httpd:qs(Req)),
 
     RewritesSoFar = erlang:get(?REWRITE_COUNT),
@@ -154,9 +154,9 @@ handle_rewrite_req(#httpd{
             % if path is relative detect it and rewrite path
             Path1 = case mochiweb_util:safe_relative_path(Path0) of
                 undefined ->
-                    ?b2l(Prefix) ++ "/" ++ Path0;
+                    binary_to_list(Prefix) ++ "/" ++ Path0;
                 P1 ->
-                    ?b2l(Prefix) ++ "/" ++ P1
+                    binary_to_list(Prefix) ++ "/" ++ P1
             end,
 
             Path2 = normalize_path(Path1),
@@ -168,7 +168,7 @@ handle_rewrite_req(#httpd{
                     [Path2, "?", mochiweb_util:urlencode(Bindings)]
             end,
 
-            RawPath1 = ?b2l(iolist_to_binary(Path3)),
+            RawPath1 = binary_to_list(iolist_to_binary(Path3)),
 
             % In order to do OAuth correctly, we have to save the
             % requested path. We use default so chained rewriting
@@ -304,7 +304,7 @@ maybe_format(VarName, Value, Formats) ->
 format(<<"int">>, Value) when is_integer(Value) ->
     Value;
 format(<<"int">>, Value) when is_binary(Value) ->
-    format(<<"int">>, ?b2l(Value));
+    format(<<"int">>, binary_to_list(Value));
 format(<<"int">>, Value) when is_list(Value) ->
     case (catch list_to_integer(Value)) of
         IntVal when is_integer(IntVal) ->
@@ -313,7 +313,7 @@ format(<<"int">>, Value) when is_list(Value) ->
             Value
     end;
 format(<<"bool">>, Value) when is_binary(Value) ->
-    format(<<"bool">>, ?b2l(Value));
+    format(<<"bool">>, binary_to_list(Value));
 format(<<"bool">>, Value) when is_list(Value) ->
     case string:to_lower(Value) of
         "true" -> true;
@@ -480,12 +480,12 @@ decode_query_value({K,V}) ->
         true ->
             {to_binding(K), ?JSON_DECODE(V)};
         false ->
-            {to_binding(K), ?l2b(V)}
+            {to_binding(K), list_to_binary(V)}
     end.
 
 to_binding({bind, V}) ->
     {bind, V};
 to_binding(V) when is_list(V) ->
-    to_binding(?l2b(V));
+    to_binding(list_to_binary(V));
 to_binding(V) ->
     {bind, V}.

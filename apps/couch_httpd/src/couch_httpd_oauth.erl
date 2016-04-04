@@ -253,9 +253,9 @@ get_callback_params(ConsumerKey, Params, Url) ->
         Err;
     {OauthCreds} ->
         User = couch_util:get_value(<<"username">>, OauthCreds, []),
-        ConsumerSecret = ?b2l(couch_util:get_value(
+        ConsumerSecret = binary_to_list(couch_util:get_value(
             <<"consumer_secret">>, OauthCreds, <<>>)),
-        TokenSecret = ?b2l(couch_util:get_value(
+        TokenSecret = binary_to_list(couch_util:get_value(
             <<"token_secret">>, OauthCreds, <<>>)),
         case (User =:= []) orelse (ConsumerSecret =:= []) orelse
             (TokenSecret =:= []) of
@@ -295,7 +295,7 @@ ok(#httpd{mochi_req=MochiReq}, Body) ->
 oauth_credentials_info(Token, ConsumerKey) ->
     case use_auth_db() of
     {ok, Db} ->
-        Result = case query_oauth_view(Db, [?l2b(ConsumerKey), ?l2b(Token)]) of
+        Result = case query_oauth_view(Db, [list_to_binary(ConsumerKey), ?l2b(Token)]) of
         [] ->
             nil;
         [Creds] ->
@@ -312,17 +312,17 @@ oauth_credentials_info(Token, ConsumerKey) ->
         {
             case barrel_config:get("oauth_consumer_secrets", ConsumerKey) of
             undefined -> [];
-            ConsumerSecret -> [{<<"consumer_secret">>, ?l2b(ConsumerSecret)}]
+            ConsumerSecret -> [{<<"consumer_secret">>, list_to_binary(ConsumerSecret)}]
             end
             ++
             case barrel_config:get("oauth_token_secrets", Token) of
             undefined -> [];
-            TokenSecret -> [{<<"token_secret">>, ?l2b(TokenSecret)}]
+            TokenSecret -> [{<<"token_secret">>, list_to_binary(TokenSecret)}]
             end
             ++
             case barrel_config:fget("oauth_token_users", Token) of
             undefined -> [];
-            User -> [{<<"username">>, ?l2b(User)}]
+            User -> [{<<"username">>, list_to_binary(User)}]
             end
         }
     end.

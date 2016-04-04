@@ -122,7 +122,7 @@ all_docs_req(Req, Db, Keys) ->
         ok ->
             do_all_docs_req(Req, Db, Keys);
         _ ->
-            DbName = ?b2l(Db#db.name),
+            DbName = binary_to_list(Db#db.name),
             case barrel_config:get("couch_httpd_auth", "authentication_db", "_users") of
             DbName ->
                 UsersDbPublic = barrel_config:get("couch_httpd_auth", "users_db_public", "false"),
@@ -155,7 +155,7 @@ do_all_docs_req(Req, Db, Keys) ->
     Args = Args0#all_docs_args{preflight_fun=ETagFun},
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
         VAcc0 = #vacc{db=Db, req=Req},
-        DbName = ?b2l(Db#db.name),
+        DbName = binary_to_list(Db#db.name),
         UsersDbName = barrel_config:get("couch_httpd_auth", "authentication_db", "_users"),
         IsAdmin = is_admin(Db),
         Callback = get_view_callback(DbName, UsersDbName, IsAdmin),

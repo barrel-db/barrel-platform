@@ -39,7 +39,7 @@ handle_welcome_req(#httpd{method='GET'}=Req) ->
         ] ++ case barrel_config:get("vendor") of
             [] -> [];
             Properties ->
-                [{vendor, {[{?l2b(K), ?l2b(V)} || {K, V} <- Properties]}}]
+                [{vendor, {[{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties]}}]
         end
     });
 handle_welcome_req(Req) ->
@@ -145,19 +145,19 @@ handle_uuids_req(Req) ->
 handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
     KVs = lists:foldl(fun({Section, Values0}, Acc) ->
-                Values = [{?l2b(K), ?l2b(V)} || {K, V} <- Values0],
+                Values = [{list_to_binary(K), ?l2b(V)} || {K, V} <- Values0],
                 [{list_to_binary(Section), {Values}} | Acc]
     end, [], barrel_config:all()),
     send_json(Req, 200, {KVs});
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    KVs = [{?l2b(K), ?l2b(V)} || {K, V} <- barrel_config:get(?b2l(Section))],
+    KVs = [{list_to_binary(K), ?l2b(V)} || {K, V} <- barrel_config:get(binary_to_list(Section))],
     send_json(Req, 200, {KVs});
 % GET /_config/Section/Key
 handle_config_req(#httpd{method='GET', path_parts=[_, Section, Key]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    case barrel_config:get(?b2l(Section), ?b2l(Key), null) of
+    case barrel_config:get(binary_to_list(Section), ?b2l(Key), null) of
     null ->
         throw({not_found, unknown_config_value});
     Value ->
@@ -217,7 +217,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
                 _NotWhitelisted ->
                     % Disallow modifying this non-whitelisted variable.
                     send_error(Req, 400, <<"modification_not_allowed">>,
-                               ?l2b("This config variable is read-only"))
+                               list_to_binary("This config variable is read-only"))
             end
     end;
 handle_config_req(Req) ->
@@ -239,8 +239,8 @@ handle_approved_config_req(Req, Persist) ->
 handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section0, Key0]}=Req,
                            Persist, UseRawValue)
         when UseRawValue =:= false orelse UseRawValue =:= true ->
-    Section = ?b2l(Section0),
-    Key = ?b2l(Key0),
+    Section = binary_to_list(Section0),
+    Key = binary_to_list(Key0),
     RawValue = couch_httpd:json_body(Req),
     Value = case UseRawValue of
     true ->
@@ -266,13 +266,13 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section0, Key0]}=
 
 handle_approved_config_req(#httpd{method='PUT'}=Req, _Persist, UseRawValue) ->
     Err = io_lib:format("Bad value for 'raw' option: ~s", [UseRawValue]),
-    send_json(Req, 400, {[{error, ?l2b(Err)}]});
+    send_json(Req, 400, {[{error, list_to_binary(Err)}]});
 
 % DELETE /_config/Section/Key
 handle_approved_config_req(#httpd{method='DELETE',path_parts=[_,Section0,Key0]}=Req,
                            Persist, _UseRawValue) ->
-    Section = ?b2l(Section0),
-    Key = ?b2l(Key0),
+    Section = binary_to_list(Section0),
+    Key = binary_to_list(Key0),
     case barrel_config:get(Section, Key, null) of
     null ->
         throw({not_found, unknown_config_value});
@@ -319,7 +319,7 @@ handle_log_req(#httpd{method='GET'}=Req) ->
 handle_log_req(#httpd{method='POST'}=Req) ->
     {PostBody} = couch_httpd:json_body_obj(Req),
     Level = couch_util:get_value(<<"level">>, PostBody),
-    Message = ?b2l(couch_util:get_value(<<"message">>, PostBody)),
+    Message = binary_to_list(couch_util:get_value(<<"message">>, PostBody)),
     case Level of
     <<"debug">> ->
         barrel_log:debug(Message, []),
@@ -331,7 +331,7 @@ handle_log_req(#httpd{method='POST'}=Req) ->
         barrel_log:error(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     _ ->
-        send_json(Req, 400, {[{error, ?l2b(io_lib:format("Unrecognized log level '~s'", [Level]))}]})
+        send_json(Req, 400, {[{error, list_to_binary(io_lib:format("Unrecognized log level '~s'", [Level]))}]})
     end;
 handle_log_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").

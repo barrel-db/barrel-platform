@@ -117,4 +117,4 @@ get_doc_name(_) ->
 
 strip_non_public_fields(#doc{body={Props}}=Doc) ->
     Public = barrel_config:get_list("couch_httpd_auth", "public_fields", []),
-    Doc#doc{body={[{K, V} || {K, V} <- Props, lists:member(?b2l(K), Public)]}}.
+    Doc#doc{body={[{K, V} || {K, V} <- Props, lists:member(binary_to_list(K), Public)]}}.

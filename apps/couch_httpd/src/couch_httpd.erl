@@ -96,17 +96,17 @@ start_link(Name, Options) ->
 
     UrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
-            {?l2b(UrlKey), make_arity_1_fun(SpecStr)}
+            {list_to_binary(UrlKey), make_arity_1_fun(SpecStr)}
         end, barrel_config:get("httpd_global_handlers")),
 
     DbUrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
-            {?l2b(UrlKey), make_arity_2_fun(SpecStr)}
+            {list_to_binary(UrlKey), make_arity_2_fun(SpecStr)}
         end, barrel_config:get("httpd_db_handlers")),
 
     DesignUrlHandlersList = lists:map(
         fun({UrlKey, SpecStr}) ->
-            {?l2b(UrlKey), make_arity_3_fun(SpecStr)}
+            {list_to_binary(UrlKey), make_arity_3_fun(SpecStr)}
         end, barrel_config:get("httpd_design_handlers")),
 
     UrlHandlers = dict:from_list(UrlHandlersList),
@@ -145,7 +145,7 @@ start_link(Name, Options) ->
 set_auth_handlers() ->
     AuthenticationSrcs = make_fun_spec_strs(barrel_config:get("httpd", "authentication_handlers", "")),
     AuthHandlers = lists:map(
-        fun(A) -> {make_arity_1_fun(A), ?l2b(A)} end, AuthenticationSrcs),
+        fun(A) -> {make_arity_1_fun(A), list_to_binary(A)} end, AuthenticationSrcs),
     ok = application:set_env(couch_httpd, auth_handlers, AuthHandlers).
 
 % SpecStr is a string like "{my_module, my_fun}"
@@ -262,8 +262,8 @@ handle_request_int(MochiReq, DefaultFun,
         peer = MochiReq:get(peer),
         method = Method,
         requested_path_parts =
-            [?l2b(unquote(Part)) || Part <- string:tokens(RequestedPath, "/")],
-        path_parts = [?l2b(unquote(Part)) || Part <- string:tokens(Path, "/")],
+            [list_to_binary(unquote(Part)) || Part <- string:tokens(RequestedPath, "/")],
+        path_parts = [list_to_binary(unquote(Part)) || Part <- string:tokens(Path, "/")],
         db_url_handlers = DbUrlHandlers,
         design_url_handlers = DesignUrlHandlers,
         default_fun = DefaultFun,
@@ -522,7 +522,7 @@ json_body_obj(Httpd) ->
 
 
 doc_etag(#doc{revs={Start, [DiskRev|_]}}) ->
-    "\"" ++ ?b2l(couch_doc:rev_to_str({Start, DiskRev})) ++ "\"".
+    "\"" ++ binary_to_list(couch_doc:rev_to_str({Start, DiskRev})) ++ "\"".
 
 make_etag(Term) ->
     <<SigInt:128/integer>> = couch_util:md5(term_to_binary(Term)),
@@ -661,7 +661,7 @@ send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     {ok, MochiReq:respond({Code, Headers3, Body})}.
 
 send_method_not_allowed(Req, Methods) ->
-    send_error(Req, 405, [{"Allow", Methods}], <<"method_not_allowed">>, ?l2b("Only " ++ Methods ++ " allowed")).
+    send_error(Req, 405, [{"Allow", Methods}], <<"method_not_allowed">>, list_to_binary("Only " ++ Methods ++ " allowed")).
 
 send_json(Req, Value) ->
     send_json(Req, 200, Value).
@@ -773,7 +773,7 @@ validate_callback([Char | Rest]) ->
 
 
 error_info({Error, Reason}) when is_list(Reason) ->
-    error_info({Error, ?l2b(Reason)});
+    error_info({Error, list_to_binary(Reason)});
 error_info(bad_request) ->
     {400, <<"bad_request">>, <<>>};
 error_info({bad_request, Reason}) ->
@@ -910,7 +910,7 @@ send_chunked_error(Resp, Error) ->
     JsonError = {[{<<"code">>, Code},
         {<<"error">>,  ErrorStr},
         {<<"reason">>, ReasonStr}]},
-    send_chunk(Resp, ?l2b([$\n,?JSON_ENCODE(JsonError),$\n])),
+    send_chunk(Resp, list_to_binary([$\n,?JSON_ENCODE(JsonError),$\n])),
     last_chunk(Resp).
 
 send_redirect(Req, Path) ->

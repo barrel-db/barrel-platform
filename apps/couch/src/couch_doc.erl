@@ -43,7 +43,7 @@ to_branch(Doc, [RevId | Rest]) ->
 to_json_rev(0, []) ->
     [];
 to_json_rev(Start, [FirstRevId|_]) ->
-    [{<<"_rev">>, ?l2b([integer_to_list(Start),"-",revid_to_str(FirstRevId)])}].
+    [{<<"_rev">>, list_to_binary([integer_to_list(Start),"-",revid_to_str(FirstRevId)])}].
 
 to_json_body(true, {Body}) ->
     Body ++ [{<<"_deleted">>, true}];
@@ -62,12 +62,12 @@ to_json_revisions(Options, Start, RevIds) ->
     end.
 
 revid_to_str(RevId) when size(RevId) =:= 16 ->
-    ?l2b(couch_util:to_hex(RevId));
+    list_to_binary(couch_util:to_hex(RevId));
 revid_to_str(RevId) ->
     RevId.
 
 rev_to_str({Pos, RevId}) ->
-    ?l2b([integer_to_list(Pos),"-",revid_to_str(RevId)]).
+    list_to_binary([integer_to_list(Pos),"-",revid_to_str(RevId)]).
 
 
 revs_to_strs([]) ->
@@ -81,7 +81,7 @@ to_json_meta(Meta) ->
             {JsonRevsInfo, _Pos}  = lists:mapfoldl(
                 fun({RevId, Status}, PosAcc) ->
                     JsonObj = {[{<<"rev">>, rev_to_str({PosAcc, RevId})},
-                        {<<"status">>, ?l2b(atom_to_list(Status))}]},
+                        {<<"status">>, list_to_binary(atom_to_list(Status))}]},
                     {JsonObj, PosAcc - 1}
                 end, Start, RevsInfo),
             {<<"_revs_info">>, JsonRevsInfo};
@@ -166,7 +166,7 @@ from_json_obj(_Other) ->
     throw({bad_request, "Document must be a JSON object"}).
 
 parse_revid(RevId) when size(RevId) =:= 32 ->
-    RevInt = erlang:list_to_integer(?b2l(RevId), 16),
+    RevInt = erlang:list_to_integer(binary_to_list(RevId), 16),
      <<RevInt:128>>;
 parse_revid(RevId) when length(RevId) =:= 32 ->
     RevInt = erlang:list_to_integer(RevId, 16),
@@ -174,11 +174,11 @@ parse_revid(RevId) when length(RevId) =:= 32 ->
 parse_revid(RevId) when is_binary(RevId) ->
     RevId;
 parse_revid(RevId) when is_list(RevId) ->
-    ?l2b(RevId).
+    list_to_binary(RevId).
 
 
 parse_rev(Rev) when is_binary(Rev) ->
-    parse_rev(?b2l(Rev));
+    parse_rev(binary_to_list(Rev));
 parse_rev(Rev) when is_list(Rev) ->
     SplitRev = lists:splitwith(fun($-) -> false; (_) -> true end, Rev),
     case SplitRev of
@@ -314,7 +314,7 @@ transfer_fields([{<<"_replication_stats">>, _} = Field | Rest],
 % unknown special field
 transfer_fields([{<<"_",Name/binary>>, _} | _], _) ->
     throw({doc_validation,
-            ?l2b(io_lib:format("Bad special document member: _~s", [Name]))});
+            list_to_binary(io_lib:format("Bad special document member: _~s", [Name]))});
 
 transfer_fields([Field | Rest], #doc{body=Fields}=Doc) ->
     transfer_fields(Rest, Doc#doc{body=[Field|Fields]}).
@@ -326,7 +326,7 @@ att_encoding_info(BinProps) ->
         {identity, DiskLen};
     Enc ->
         EncodedLen = couch_util:get_value(<<"encoded_length">>, BinProps, DiskLen),
-        {list_to_existing_atom(?b2l(Enc)), EncodedLen}
+        {list_to_existing_atom(binary_to_list(Enc)), EncodedLen}
     end.
 
 to_doc_info(FullDocInfo) ->

@@ -86,7 +86,7 @@ normparts([Part | RestParts], Acc) ->
 to_existing_atom(V) when is_list(V) ->
     try list_to_existing_atom(V) catch _:_ -> V end;
 to_existing_atom(V) when is_binary(V) ->
-    try list_to_existing_atom(?b2l(V)) catch _:_ -> V end;
+    try list_to_existing_atom(binary_to_list(V)) catch _:_ -> V end;
 to_existing_atom(V) when is_atom(V) ->
     V.
 
@@ -121,7 +121,7 @@ simple_call(Pid, Message) ->
     end.
 
 validate_utf8(Data) when is_list(Data) ->
-    validate_utf8(?l2b(Data));
+    validate_utf8(list_to_binary(Data));
 validate_utf8(Bin) when is_binary(Bin) ->
     validate_utf8_fast(Bin, 0).
 
@@ -389,7 +389,7 @@ verify([], [], Result) ->
     Result == 0.
 
 verify(<<X/binary>>, <<Y/binary>>) ->
-    verify(?b2l(X), ?b2l(Y));
+    verify(binary_to_list(X), ?b2l(Y));
 verify(X, Y) when is_list(X) and is_list(Y) ->
     case length(X) == length(Y) of
         true ->
@@ -432,7 +432,7 @@ url_strip_password(Url) ->
 encode_doc_id(#doc{id = Id}) ->
     encode_doc_id(Id);
 encode_doc_id(Id) when is_list(Id) ->
-    encode_doc_id(?l2b(Id));
+    encode_doc_id(list_to_binary(Id));
 encode_doc_id(<<"_design/", Rest/binary>>) ->
     "_design/" ++ url_encode(Rest);
 encode_doc_id(<<"_local/", Rest/binary>>) ->

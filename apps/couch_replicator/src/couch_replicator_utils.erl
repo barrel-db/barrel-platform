@@ -195,17 +195,17 @@ parse_rep_db({Props}, ProxyParams, Options) ->
     Url = maybe_add_trailing_slash(get_value(<<"url">>, Props)),
     {AuthProps} = get_value(<<"auth">>, Props, {[]}),
     {BinHeaders} = get_value(<<"headers">>, Props, {[]}),
-    Headers = lists:ukeysort(1, [{?b2l(K), ?b2l(V)} || {K, V} <- BinHeaders]),
+    Headers = lists:ukeysort(1, [{binary_to_list(K), ?b2l(V)} || {K, V} <- BinHeaders]),
     DefaultHeaders = (#httpdb{})#httpdb.headers,
     OAuth = case get_value(<<"oauth">>, AuthProps) of
     undefined ->
         nil;
     {OauthProps} ->
         #oauth{
-            consumer_key = ?b2l(get_value(<<"consumer_key">>, OauthProps)),
-            token = ?b2l(get_value(<<"token">>, OauthProps)),
-            token_secret = ?b2l(get_value(<<"token_secret">>, OauthProps)),
-            consumer_secret = ?b2l(get_value(<<"consumer_secret">>, OauthProps)),
+            consumer_key = binary_to_list(get_value(<<"consumer_key">>, OauthProps)),
+            token = binary_to_list(get_value(<<"token">>, OauthProps)),
+            token_secret = binary_to_list(get_value(<<"token_secret">>, OauthProps)),
+            consumer_secret = binary_to_list(get_value(<<"consumer_secret">>, OauthProps)),
             signature_method =
                 case get_value(<<"signature_method">>, OauthProps) of
                 undefined ->        hmac_sha1;
@@ -235,7 +235,7 @@ parse_rep_db(<<DbName/binary>>, _ProxyParams, _Options) ->
 
 
 maybe_add_trailing_slash(Url) when is_binary(Url) ->
-    maybe_add_trailing_slash(?b2l(Url));
+    maybe_add_trailing_slash(binary_to_list(Url));
 maybe_add_trailing_slash(Url) ->
     case lists:last(Url) of
     $/ ->
@@ -275,7 +275,7 @@ convert_options([{<<"cancel">>, V} | R]) ->
     [{cancel, V} | convert_options(R)];
 convert_options([{IdOpt, V} | R]) when IdOpt =:= <<"_local_id">>;
         IdOpt =:= <<"replication_id">>; IdOpt =:= <<"id">> ->
-    Id = lists:splitwith(fun(X) -> X =/= $+ end, ?b2l(V)),
+    Id = lists:splitwith(fun(X) -> X =/= $+ end, binary_to_list(V)),
     [{id, Id} | convert_options(R)];
 convert_options([{<<"create_target">>, V} | R]) ->
     [{create_target, V} | convert_options(R)];
@@ -290,7 +290,7 @@ convert_options([{<<"doc_ids">>, null} | R]) ->
 convert_options([{<<"doc_ids">>, V} | R]) ->
     % Ensure same behaviour as old replicator: accept a list of percent
     % encoded doc IDs.
-    DocIds = [?l2b(couch_httpd:unquote(Id)) || Id <- V],
+    DocIds = [list_to_binary(couch_httpd:unquote(Id)) || Id <- V],
     [{doc_ids, DocIds} | convert_options(R)];
 convert_options([{<<"worker_processes">>, V} | R]) ->
     [{worker_processes, couch_util:to_integer(V)} | convert_options(R)];
@@ -316,7 +316,7 @@ convert_options([_ | R]) -> % skip unknown option
 
 
 parse_proxy_params(ProxyUrl) when is_binary(ProxyUrl) ->
-    parse_proxy_params(?b2l(ProxyUrl));
+    parse_proxy_params(binary_to_list(ProxyUrl));
 parse_proxy_params([]) ->
     [];
 parse_proxy_params(ProxyUrl) ->

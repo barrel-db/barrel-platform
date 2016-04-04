@@ -56,7 +56,7 @@ handle_req(#httpd{method='POST',path_parts=[_,<<"_bulk_get">>],
                     end,
 
                     CType = {"Content-Type", MpType ++ "; boundary=\"" ++
-                             ?b2l(Boundary1) ++  "\""},
+                             binary_to_list(Boundary1) ++  "\""},
                     {ok, Resp1} = couch_httpd:start_chunked_response(Req, 200,
                                                                      [CType]),
                     {Resp1, Boundary1}
@@ -175,7 +175,7 @@ open_doc_revs({Props}, Db, Options) ->
     DocId = couch_util:get_value(<<"id">>, Props),
     Revs = case couch_util:get_value(<<"rev">>, Props) of
                undefined -> all;
-               Rev -> couch_doc:parse_revs([?b2l(Rev)])
+               Rev -> couch_doc:parse_revs([binary_to_list(Rev)])
            end,
     Options1 = case couch_util:get_value(<<"atts_since">>, Props, []) of
                    [] -> Options;

@@ -36,7 +36,7 @@ special_test_authentication_handler(Req) ->
         {_, _} ->
             throw({unauthorized, <<"Name or password is incorrect.">>})
         end,
-        Req#httpd{user_ctx=#user_ctx{name=?l2b(Name)}};
+        Req#httpd{user_ctx=#user_ctx{name=list_to_binary(Name)}};
     _ ->
         % No X-Couch-Test-Auth credentials sent, give admin access so the
         % previous authentication can be restored after the test
@@ -68,10 +68,10 @@ default_authentication_handler(Req) ->
             nil ->
                 throw({unauthorized, <<"Name or password is incorrect.">>});
             UserProps ->
-                case authenticate(?l2b(Pass), UserProps) of
+                case authenticate(list_to_binary(Pass), UserProps) of
                     true ->
                         Req#httpd{user_ctx=#user_ctx{
-                            name=?l2b(User),
+                            name=list_to_binary(User),
                             roles=couch_util:get_value(<<"roles">>, UserProps, [])
                         }};
                     _Else ->
@@ -131,24 +131,24 @@ proxy_auth_user(Req) ->
             Roles = case header_value(Req, XHeaderRoles) of
                 undefined -> [];
                 Else ->
-                    [?l2b(R) || R <- string:tokens(Else, ",")]
+                    [list_to_binary(R) || R <- string:tokens(Else, ",")]
             end,
             case barrel_config:get("couch_httpd_auth", "proxy_use_secret", "false") of
                 "true" ->
                     case barrel_config:get("couch_httpd_auth", "secret", nil) of
                         nil ->
-                            Req#httpd{user_ctx=#user_ctx{name=?l2b(UserName), roles=Roles}};
+                            Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName), roles=Roles}};
                         Secret ->
                             ExpectedToken = couch_util:to_hex(crypto:hmac(sha, Secret, UserName)),
                             case header_value(Req, XHeaderToken) of
                                 Token when Token == ExpectedToken ->
-                                    Req#httpd{user_ctx=#user_ctx{name=?l2b(UserName),
+                                    Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName),
                                                             roles=Roles}};
                                 _ -> nil
                             end
                     end;
                 _ ->
-                    Req#httpd{user_ctx=#user_ctx{name=?l2b(UserName), roles=Roles}}
+                    Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName), roles=Roles}}
             end
     end.
 
@@ -160,7 +160,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
     Cookie ->
         [User, TimeStr, HashStr] = try
             AuthSession = couch_util:decodeBase64Url(Cookie),
-            [_A, _B, _Cs] = re:split(?b2l(AuthSession), ":",
+            [_A, _B, _Cs] = re:split(binary_to_list(AuthSession), ":",
                                      [{return, list}, {parts, 3}])
         catch
             _:_Error ->
@@ -174,14 +174,14 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
             barrel_log:debug("cookie auth secret is not set",[]),
             Req;
         SecretStr ->
-            Secret = ?l2b(SecretStr),
+            Secret = list_to_binary(SecretStr),
             case couch_auth_cache:get_user_creds(User) of
             nil -> Req;
             UserProps ->
                 UserSalt = couch_util:get_value(<<"salt">>, UserProps, <<"">>),
                 FullSecret = <<Secret/binary, UserSalt/binary>>,
                 ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeStr),
-                Hash = ?l2b(HashStr),
+                Hash = list_to_binary(HashStr),
                 Timeout = barrel_config:get_integer("couch_httpd_auth", "timeout", 600),
                 barrel_log:debug("timeout ~p", [Timeout]),
                 case (catch erlang:list_to_integer(TimeStr, 16)) of
@@ -191,7 +191,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
                                 TimeLeft = TimeStamp + Timeout - CurrentTime,
                                 barrel_log:debug("Successful cookie auth as: ~p", [User]),
                                 Req#httpd{user_ctx=#user_ctx{
-                                    name=?l2b(User),
+                                    name=list_to_binary(User),
                                     roles=couch_util:get_value(<<"roles">>, UserProps, [])
                                 }, auth={FullSecret, TimeLeft < Timeout*0.9}};
                             _Else ->
@@ -218,7 +218,7 @@ cookie_auth_header(#httpd{user_ctx=#user_ctx{name=User}, auth={Secret, true}}=Re
     AuthSession = couch_util:get_value("AuthSession", Cookies),
     if AuthSession == undefined ->
         TimeStamp = make_cookie_time(),
-        [cookie_auth_cookie(Req, ?b2l(User), Secret, TimeStamp)];
+        [cookie_auth_cookie(Req, binary_to_list(User), Secret, TimeStamp)];
     true ->
         []
     end;
@@ -228,13 +228,13 @@ cookie_auth_cookie(Req, User, Secret, TimeStamp) ->
     SessionData = User ++ ":" ++ erlang:integer_to_list(TimeStamp, 16),
     Hash = crypto:hmac(sha, Secret, SessionData),
     mochiweb_cookies:cookie("AuthSession",
-        couch_util:encodeBase64Url(SessionData ++ ":" ++ ?b2l(Hash)),
+        couch_util:encodeBase64Url(SessionData ++ ":" ++ binary_to_list(Hash)),
         [{path, "/"}] ++ cookie_scheme(Req) ++ max_age()).
 
 ensure_cookie_auth_secret() ->
     case barrel_config:get("couch_httpd_auth", "secret", nil) of
         nil ->
-            NewSecret = ?b2l(barrel_uuids:random()),
+            NewSecret = binary_to_list(barrel_uuids:random()),
             barrel_config:set("couch_httpd_auth", "secret", NewSecret),
             NewSecret;
         Secret -> Secret
@@ -251,13 +251,13 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
         "application/json" ++ _ ->
             {Pairs} = ?JSON_DECODE(ReqBody),
             lists:map(fun({Key, Value}) ->
-              {?b2l(Key), ?b2l(Value)}
+              {binary_to_list(Key), ?b2l(Value)}
             end, Pairs);
         _ ->
             []
     end,
-    UserName = ?l2b(couch_util:get_value("name", Form, "")),
-    Password = ?l2b(couch_util:get_value("password", Form, "")),
+    UserName = list_to_binary(couch_util:get_value("name", Form, "")),
+    Password = list_to_binary(couch_util:get_value("password", Form, "")),
     barrel_log:debug("Attempt Login: ~s",[UserName]),
     User = case couch_auth_cache:get_user_creds(UserName) of
         nil -> [];
@@ -267,9 +267,9 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
     case authenticate(Password, User) of
         true ->
             % setup the session cookie
-            Secret = ?l2b(ensure_cookie_auth_secret()),
+            Secret = list_to_binary(ensure_cookie_auth_secret()),
             CurrentTime = make_cookie_time(),
-            Cookie = cookie_auth_cookie(Req, ?b2l(UserName), <<Secret/binary, UserSalt/binary>>, CurrentTime),
+            Cookie = cookie_auth_cookie(Req, binary_to_list(UserName), <<Secret/binary, UserSalt/binary>>, CurrentTime),
             % TODO document the "next" feature in Futon
             {Code, Headers} = case couch_httpd:qs_value(Req, "next", nil) of
                 nil ->
@@ -315,7 +315,7 @@ handle_session_req(#httpd{method='GET', user_ctx=UserCtx}=Req) ->
                     {authentication_handlers, [auth_name(H) || H <- couch_httpd:make_fun_spec_strs(
                             barrel_config:get("httpd", "authentication_handlers"))]}
                 ] ++ maybe_value(authenticated, UserCtx#user_ctx.handler, fun(Handler) ->
-                        auth_name(?b2l(Handler))
+                        auth_name(binary_to_list(Handler))
                     end)}}
             ]})
     end;
@@ -352,7 +352,7 @@ authenticate(Pass, UserProps) ->
 
 auth_name(String) when is_list(String) ->
     [_,_,_,_,_,Name|_] = re:split(String, "[\\W_]", [{return, list}]),
-    ?l2b(Name).
+    list_to_binary(Name).
 
 make_cookie_time() ->
     {NowMS, NowS, _} = os:timestamp(),

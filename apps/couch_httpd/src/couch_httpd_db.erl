@@ -372,7 +372,7 @@ db_doc_req(#httpd{method='DELETE'}=Req, Db, DocId) ->
     Rev ->
         update_doc(Req, Db, DocId,
                 couch_doc_from_req(Req, DocId,
-                    {[{<<"_rev">>, ?l2b(Rev)},{<<"_deleted">>,true}]}))
+                    {[{<<"_rev">>, list_to_binary(Rev)},{<<"_deleted">>,true}]}))
     end;
 
 db_doc_req(#httpd{method = 'GET', mochi_req = MochiReq} = Req, Db, DocId) ->
@@ -522,7 +522,7 @@ send_doc_efficiently(#httpd{mochi_req = MochiReq} = Req,
                     [attachments, follows, att_encoding_info | Options])),
             {ContentType, Len} = couch_doc:len_doc_to_multi_part_stream(
                     Boundary,JsonBytes, Atts, true),
-            CType = {"Content-Type", ?b2l(ContentType)},
+            CType = {"Content-Type", binary_to_list(ContentType)},
             {ok, Resp} = start_response_length(Req, 200, [CType|Headers], Len),
             couch_doc:doc_to_multi_part_stream(Boundary,JsonBytes,Atts,
                     fun(Data) -> couch_httpd:send(Resp, Data) end, true)
@@ -536,7 +536,7 @@ send_docs_multipart(Req, Results, Options1) ->
     InnerBoundary = barrel_uuids:random(),
     Options = [attachments, follows, att_encoding_info | Options1],
     CType = {"Content-Type",
-        "multipart/mixed; boundary=\"" ++ ?b2l(OuterBoundary) ++ "\""},
+        "multipart/mixed; boundary=\"" ++ binary_to_list(OuterBoundary) ++ "\""},
     {ok, Resp} = start_chunked_response(Req, 200, [CType]),
     couch_httpd:send_chunk(Resp, <<"--", OuterBoundary/binary>>),
     lists:foreach(
@@ -564,11 +564,11 @@ send_docs_multipart(Req, Results, Options1) ->
 send_ranges_multipart(Req, ContentType, Len, Att, Ranges) ->
     Boundary = barrel_uuids:random(),
     CType = {"Content-Type",
-        "multipart/byteranges; boundary=\"" ++ ?b2l(Boundary) ++ "\""},
+        "multipart/byteranges; boundary=\"" ++ binary_to_list(Boundary) ++ "\""},
     {ok, Resp} = start_chunked_response(Req, 206, [CType]),
     couch_httpd:send_chunk(Resp, <<"--", Boundary/binary>>),
     lists:foreach(fun({From, To}) ->
-        ContentRange = ?l2b(make_content_range(From, To, Len)),
+        ContentRange = list_to_binary(make_content_range(From, To, Len)),
         couch_httpd:send_chunk(Resp,
             <<"\r\nContent-Type: ", ContentType/binary, "\r\n",
             "Content-Range: ", ContentRange/binary, "\r\n",
@@ -609,7 +609,7 @@ update_doc_result_to_json(DocId, Error) ->
 
 
 update_doc(Req, Db, DocId, #doc{deleted=false}=Doc) ->
-    Loc = absolute_uri(Req, "/" ++ ?b2l(Db#db.name) ++ "/" ++ ?b2l(DocId)),
+    Loc = absolute_uri(Req, "/" ++ binary_to_list(Db#db.name) ++ "/" ++ ?b2l(DocId)),
     update_doc(Req, Db, DocId, Doc, [{"Location", Loc}]);
 update_doc(Req, Db, DocId, Doc) ->
     update_doc(Req, Db, DocId, Doc, []).
@@ -728,7 +728,7 @@ db_attachment_req(#httpd{method='GET',mochi_req=MochiReq}=Req, Db, DocId, FileNa
     [#att{type=Type, encoding=Enc, disk_len=DiskLen, att_len=AttLen}=Att] ->
         Etag = case Att#att.md5 of
             <<>> -> couch_httpd:doc_etag(Doc);
-            Md5 -> "\"" ++ ?b2l(base64:encode(Md5)) ++ "\""
+            Md5 -> "\"" ++ binary_to_list(base64:encode(Md5)) ++ "\""
         end,
         ReqAcceptsAttEnc = lists:member(
            atom_to_list(Enc),
@@ -917,9 +917,9 @@ db_attachment_req(#httpd{method=Method,mochi_req=MochiReq}=Req, Db, DocId, FileN
         [];
     _ ->
         [{"Location", absolute_uri(Req, "/" ++
-            ?b2l(Db#db.name) ++ "/" ++
-            ?b2l(DocId) ++ "/" ++
-            ?b2l(FileName)
+            binary_to_list(Db#db.name) ++ "/" ++
+            binary_to_list(DocId) ++ "/" ++
+            binary_to_list(FileName)
         )}]
     end,
     update_doc(Req, Db, DocId, DocEdited, Headers);

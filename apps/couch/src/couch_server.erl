@@ -70,13 +70,13 @@ get_uuid() ->
             UUID = barrel_uuids:random(),
             barrel_config:set("couchdb", "uuid", UUID),
             UUID;
-        UUID -> ?l2b(UUID)
+        UUID -> list_to_binary(UUID)
     end.
 
 get_stats() ->
     {ok, #state{start_time=Time,dbs_open=Open}} =
             gen_server:call(couch_server, get_state),
-    [{start_time, ?l2b(Time)}, {dbs_open, Open}].
+    [{start_time, list_to_binary(Time)}, {dbs_open, Open}].
 
 sup_start_link() ->
     gen_server:start_link({local, couch_server}, couch_server, [], []).
@@ -147,7 +147,7 @@ all_databases(Fun, Acc0) ->
                 [$/ | RelativeFilename] -> ok;
                 RelativeFilename -> ok
                 end,
-                case Fun(?l2b(filename:rootname(RelativeFilename, ".couch")), AccIn) of
+                case Fun(list_to_binary(filename:rootname(RelativeFilename, ".couch")), AccIn) of
                 {ok, NewAcc} -> NewAcc;
                 {stop, NewAcc} -> throw({stop, Fun, NewAcc})
                 end
@@ -270,7 +270,7 @@ config_change(_, _, _) ->
 
 
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
-    maybe_add_sys_db_callbacks(?b2l(DbName), Options);
+    maybe_add_sys_db_callbacks(binary_to_list(DbName), Options);
 maybe_add_sys_db_callbacks(DbName, Options) ->
     case barrel_config:get("replicator", "db", "_replicator") of
     DbName ->

@@ -75,7 +75,7 @@ code_change(_OldVsn, State, _Extra) ->
 encode_event(EventType, EventDesc) when is_atom(EventType) ->
     encode_event(atom_to_list(EventType), EventDesc);
 encode_event(EventType, EventDesc) when is_list(EventType) ->
-    encode_event(?l2b(EventType), EventDesc);
+    encode_event(list_to_binary(EventType), EventDesc);
 encode_event(EventType, {DbName, DocId}) ->
     {[{type, EventType}, {db, DbName}, {id, DocId}]};
 encode_event(EventType, DbName) ->

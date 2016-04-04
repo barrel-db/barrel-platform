@@ -71,7 +71,7 @@ replication_started(#rep{id = {BaseId, _} = RepId}) ->
         update_rep_doc(DocId, [
             {<<"_replication_state">>, <<"triggered">>},
             {<<"_replication_state_reason">>, undefined},
-            {<<"_replication_id">>, ?l2b(BaseId)},
+            {<<"_replication_id">>, list_to_binary(BaseId)},
             {<<"_replication_stats">>, undefined}]),
         ok = gen_server:call(?MODULE, {rep_started, RepId}, infinity),
         barrel_log:info("Document `~s` triggered replication `~s`",
@@ -102,7 +102,7 @@ replication_error(#rep{id = {BaseId, _} = RepId}, Error) ->
         update_rep_doc(DocId, [
             {<<"_replication_state">>, <<"error">>},
             {<<"_replication_state_reason">>, to_binary(error_reason(Error))},
-            {<<"_replication_id">>, ?l2b(BaseId)}]),
+            {<<"_replication_id">>, list_to_binary(BaseId)}]),
         ok = gen_server:call(?MODULE, {rep_error, RepId, Error}, infinity)
     end.
 
@@ -377,12 +377,12 @@ maybe_start_replication(State, DocId, RepDoc) ->
     #rep_state{starting = false, rep = #rep{doc_id = OtherDocId}} ->
         barrel_log:info("The replication specified by the document `~s` was already"
             " triggered by the document `~s`", [DocId, OtherDocId]),
-        maybe_tag_rep_doc(DocId, RepDoc, ?l2b(BaseId)),
+        maybe_tag_rep_doc(DocId, RepDoc, list_to_binary(BaseId)),
         State;
     #rep_state{starting = true, rep = #rep{doc_id = OtherDocId}} ->
         barrel_log:info("The replication specified by the document `~s` is already"
             " being triggered by the document `~s`", [DocId, OtherDocId]),
-        maybe_tag_rep_doc(DocId, RepDoc, ?l2b(BaseId)),
+        maybe_tag_rep_doc(DocId, RepDoc, list_to_binary(BaseId)),
         State
     end.
 

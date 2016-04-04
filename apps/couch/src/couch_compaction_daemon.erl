@@ -67,7 +67,7 @@ init(_) ->
 
 
 handle_cast({config_update, DbName, delete}, State) ->
-    true = ets:delete(?CONFIG_ETS, ?l2b(DbName)),
+    true = ets:delete(?CONFIG_ETS, list_to_binary(DbName)),
     {noreply, State};
 
 handle_cast({config_update, DbName, _}, #state{loop_pid = Loop} = State) ->
@@ -75,7 +75,7 @@ handle_cast({config_update, DbName, _}, #state{loop_pid = Loop} = State) ->
     case parse_config(DbName, Config) of
     {ok, NewConfig} ->
         WasEmpty = (ets:info(?CONFIG_ETS, size) =:= 0),
-        true = ets:insert(?CONFIG_ETS, {?l2b(DbName), NewConfig}),
+        true = ets:insert(?CONFIG_ETS, {list_to_binary(DbName), NewConfig}),
         case WasEmpty of
         true ->
             Loop ! {self(), have_config};
@@ -404,7 +404,7 @@ load_config() ->
         fun({DbName, ConfigString}) ->
             case parse_config(DbName, ConfigString) of
             {ok, Config} ->
-                true = ets:insert(?CONFIG_ETS, {?l2b(DbName), Config});
+                true = ets:insert(?CONFIG_ETS, {list_to_binary(DbName), Config});
             error ->
                 ok
             end

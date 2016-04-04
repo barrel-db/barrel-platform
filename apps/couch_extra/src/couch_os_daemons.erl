@@ -160,7 +160,7 @@ handle_info({Port, {data, {eol, Data}}}, Table) ->
     % that are considered part of the stdio API.
     case D#daemon.kill of
         undefined ->
-            true = ets:insert(Table, D#daemon{kill=?b2l(Line), buf=[]});
+            true = ets:insert(Table, D#daemon{kill=binary_to_list(Line), buf=[]});
         _Else ->
             D2 = case (catch ?JSON_DECODE(Line)) of
                 {invalid_json, Rejected} ->
@@ -221,24 +221,24 @@ stop_port(#daemon{port=Port}=D) ->
 
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section]) ->
     KVs = barrel_config:get(Section),
-    Data = lists:map(fun({K, V}) -> {?l2b(K), ?l2b(V)} end, KVs),
+    Data = lists:map(fun({K, V}) -> {list_to_binary(K), ?l2b(V)} end, KVs),
     Json = iolist_to_binary(?JSON_ENCODE({Data})),
     port_command(Port, <<Json/binary, "\n">>),
     {ok, Daemon};
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section, Key]) ->
     Value = case barrel_config:get(Section, Key) of
         undefined -> null;
-        String -> ?l2b(String)
+        String -> list_to_binary(String)
     end,
     Json = iolist_to_binary(?JSON_ENCODE(Value)),
     port_command(Port, <<Json/binary, "\n">>),
     {ok, Daemon};
 handle_port_message(Daemon, [<<"register">>, Sec]) when is_binary(Sec) ->
-    Patterns = lists:usort(Daemon#daemon.cfg_patterns ++ [{?b2l(Sec)}]),
+    Patterns = lists:usort(Daemon#daemon.cfg_patterns ++ [{binary_to_list(Sec)}]),
     {ok, Daemon#daemon{cfg_patterns=Patterns}};
 handle_port_message(Daemon, [<<"register">>, Sec, Key])
                         when is_binary(Sec) andalso is_binary(Key) ->
-    Pattern = {?b2l(Sec), ?b2l(Key)},
+    Pattern = {binary_to_list(Sec), ?b2l(Key)},
     Patterns = lists:usort(Daemon#daemon.cfg_patterns ++ [Pattern]),
     {ok, Daemon#daemon{cfg_patterns=Patterns}};
 handle_port_message(#daemon{name=Name}=Daemon, [<<"log">>, Msg]) ->
@@ -256,14 +256,14 @@ handle_port_message(#daemon{name=Name}=Daemon, Else) ->
 handle_log_message(Name, Msg, _Level) when not is_binary(Msg) ->
     barrel_log:error("Invalid log message from daemon ~p: ~p", [Name, Msg]);
 handle_log_message(Name, Msg, <<"debug">>) ->
-    barrel_log:debug("Daemon ~p :: ~s", [Name, ?b2l(Msg)]);
+    barrel_log:debug("Daemon ~p :: ~s", [Name, binary_to_list(Msg)]);
 handle_log_message(Name, Msg, <<"info">>) ->
-    barrel_log:info("Daemon ~p :: ~s", [Name, ?b2l(Msg)]);
+    barrel_log:info("Daemon ~p :: ~s", [Name, binary_to_list(Msg)]);
 handle_log_message(Name, Msg, <<"error">>) ->
-    barrel_log:error("Daemon: ~p :: ~s", [Name, ?b2l(Msg)]);
+    barrel_log:error("Daemon: ~p :: ~s", [Name, binary_to_list(Msg)]);
 handle_log_message(Name, Msg, Level) ->
     barrel_log:error("Invalid log level from daemon: ~p", [Level]),
-    barrel_log:info("Daemon: ~p :: ~s", [Name, ?b2l(Msg)]).
+    barrel_log:info("Daemon: ~p :: ~s", [Name, binary_to_list(Msg)]).
 
 %
 % Daemon management helpers

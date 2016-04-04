@@ -313,8 +313,8 @@ init([]) ->
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
     lists:foreach(fun({Lang, SpecStr}) ->
         {ok, {Mod, Fun, SpecArg}} = couch_util:parse_term(SpecStr),
-        true = ets:insert(LangLimits, {?l2b(Lang), OsProcLimit, 0}), % 0 means no limit
-        true = ets:insert(Langs, {?l2b(Lang),
+        true = ets:insert(LangLimits, {list_to_binary(Lang), OsProcLimit, 0}), % 0 means no limit
+        true = ets:insert(Langs, {list_to_binary(Lang),
                           Mod, Fun, SpecArg})
     end, barrel_config:get("query_servers")),
 

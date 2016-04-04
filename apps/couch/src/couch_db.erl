@@ -653,7 +653,7 @@ new_revid(#doc{body=Body,revs={OldStart,OldRevs},
     case [{N, T, M} || #att{name=N,type=T,md5=M} <- Atts, M =/= <<>>] of
     Atts2 when length(Atts) =/= length(Atts2) ->
         % We must have old style non-md5 attachments
-        ?l2b(integer_to_list(couch_util:rand32()));
+        list_to_binary(integer_to_list(couch_util:rand32()));
     Atts2 ->
         OldRev = case OldRevs of [] -> 0; [OldRev0|_] -> OldRev0 end,
         couch_util:md5(term_to_binary([Deleted, OldStart, OldRev, Body, Atts2]))
@@ -951,7 +951,7 @@ flush_att(Fd, #att{data=Fun,att_len=AttLen}=Att) when is_function(Fun) ->
 
 
 compressible_att_type(MimeType) when is_binary(MimeType) ->
-    compressible_att_type(?b2l(MimeType));
+    compressible_att_type(binary_to_list(MimeType));
 compressible_att_type(MimeType) ->
     TypeExpList = barrel_config:get_list("attachments", "compressible_types", []),
     lists:any(
@@ -1179,7 +1179,7 @@ open_doc_revs_int(Db, IdRevs, Options) ->
 open_doc_int(Db, <<?LOCAL_DOC_PREFIX, _/binary>> = Id, Options) ->
     case couch_btree:lookup(local_btree(Db), [Id]) of
     [{ok, {_, {Rev, BodyData}}}] ->
-        Doc = #doc{id=Id, revs={0, [?l2b(integer_to_list(Rev))]}, body=BodyData},
+        Doc = #doc{id=Id, revs={0, [list_to_binary(integer_to_list(Rev))]}, body=BodyData},
         apply_open_options({ok, Doc}, Options);
     [not_found] ->
         {not_found, missing}

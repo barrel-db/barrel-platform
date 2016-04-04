@@ -60,7 +60,7 @@ db_uri(#db{name = Name}) ->
     db_uri(Name);
 
 db_uri(DbName) ->
-    ?b2l(DbName).
+    binary_to_list(DbName).
 
 
 db_open(Db, Options) ->
@@ -75,7 +75,7 @@ db_open(#httpdb{} = Db1, _Options, Create) ->
     true ->
         send_req(Db, [{method, put}],
             fun(401, _, _) ->
-                throw({unauthorized, ?l2b(db_uri(Db))});
+                throw({unauthorized, list_to_binary(db_uri(Db))});
             (_, _, _) ->
                 ok
             end)
@@ -84,9 +84,9 @@ db_open(#httpdb{} = Db1, _Options, Create) ->
         fun(200, _, _) ->
             {ok, Db};
         (401, _, _) ->
-            throw({unauthorized, ?l2b(db_uri(Db))});
+            throw({unauthorized, list_to_binary(db_uri(Db))});
         (_, _, _) ->
-            throw({db_not_found, ?l2b(db_uri(Db))})
+            throw({db_not_found, list_to_binary(db_uri(Db))})
         end)
     catch
         throw:Error ->
@@ -318,7 +318,7 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
         [{"X-Couch-Full-Commit", "false"}];
     false ->
         []
-    end ++ [{"Content-Type", ?b2l(ContentType)}, {"Content-Length", Len}],
+    end ++ [{"Content-Type", binary_to_list(ContentType)}, {"Content-Length", Len}],
     Body = {fun stream_doc/1, {JsonBytes, Doc#doc.atts, Boundary, Len}},
     send_req(
         % A crash here bubbles all the way back up to run_user_fun inside
@@ -456,7 +456,7 @@ changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
 changes_since(Db, Style, StartSeq, UserFun, Options) ->
     Filter = case get_value(doc_ids, Options) of
     undefined ->
-        ?b2l(get_value(filter, Options, <<>>));
+        binary_to_list(get_value(filter, Options, <<>>));
     _DocIds ->
         "_doc_ids"
     end,
@@ -494,7 +494,7 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         ViewFields = ["key" | ViewFields0],
 
         {Params} = get_value(query_params, Options, {[]}),
-        [{"filter", ?b2l(FilterName)} | lists:foldl(
+        [{"filter", binary_to_list(FilterName)} | lists:foldl(
             fun({K, V}, QSAcc) ->
                 Ks = couch_util:to_list(K),
                 case lists:keymember(Ks, 1, QSAcc) of
@@ -577,7 +577,7 @@ options_to_query_args([{open_revs, all} | Rest], Acc) ->
 options_to_query_args([latest | Rest], Acc) ->
     options_to_query_args(Rest, [{"latest", "true"} | Acc]);
 options_to_query_args([{open_revs, Revs} | Rest], Acc) ->
-    JsonRevs = ?b2l(?JSON_ENCODE(couch_doc:revs_to_strs(Revs))),
+    JsonRevs = binary_to_list(?JSON_ENCODE(couch_doc:revs_to_strs(Revs))),
     options_to_query_args(Rest, [{"open_revs", JsonRevs} | Acc]).
 
 

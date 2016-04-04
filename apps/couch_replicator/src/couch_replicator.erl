@@ -97,7 +97,7 @@ do_replication_loop(#rep{id = {BaseId, Ext} = Id, options = Options} = Rep) ->
     {ok, _Pid} ->
         case get_value(continuous, Options, false) of
         true ->
-            {ok, {continuous, ?l2b(BaseId ++ Ext)}};
+            {ok, {continuous, list_to_binary(BaseId ++ Ext)}};
         false ->
             wait_for_result(Id)
         end;
@@ -191,9 +191,9 @@ cancel_replication({BaseId, Extension}) ->
         barrel_log:info("Replication `~s` canceled.", [FullRepId]),
         case supervisor:delete_child(couch_replicator_job_sup, FullRepId) of
             ok ->
-                {ok, {cancelled, ?l2b(FullRepId)}};
+                {ok, {cancelled, list_to_binary(FullRepId)}};
             {error, not_found} ->
-                {ok, {cancelled, ?l2b(FullRepId)}};
+                {ok, {cancelled, list_to_binary(FullRepId)}};
             Error ->
                 Error
         end;
@@ -281,10 +281,10 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
 
     couch_task_status:add_task([
         {type, replication},
-        {replication_id, ?l2b(BaseId ++ Ext)},
+        {replication_id, list_to_binary(BaseId ++ Ext)},
         {doc_id, Rep#rep.doc_id},
-        {source, ?l2b(SourceName)},
-        {target, ?l2b(TargetName)},
+        {source, list_to_binary(SourceName)},
+        {target, list_to_binary(TargetName)},
         {continuous, get_value(continuous, Options, false)},
         {revisions_checked, 0},
         {missing_revisions_found, 0},
@@ -621,7 +621,7 @@ init_state(Rep) ->
 
 
 find_replication_logs(DbList, #rep{id = {BaseId, _}} = Rep) ->
-    LogId = ?l2b(?LOCAL_DOC_PREFIX ++ BaseId),
+    LogId = list_to_binary(?LOCAL_DOC_PREFIX ++ BaseId),
     fold_replication_logs(DbList, ?REP_ID_VERSION, LogId, LogId, Rep, []).
 
 
@@ -633,7 +633,7 @@ fold_replication_logs([Db | Rest] = Dbs, Vsn, LogId, NewId, Rep, Acc) ->
     {error, <<"not_found">>} when Vsn > 1 ->
         OldRepId = couch_replicator_utils:replication_id(Rep, Vsn - 1),
         fold_replication_logs(Dbs, Vsn - 1,
-            ?l2b(?LOCAL_DOC_PREFIX ++ OldRepId), NewId, Rep, Acc);
+            list_to_binary(?LOCAL_DOC_PREFIX ++ OldRepId), NewId, Rep, Acc);
     {error, <<"not_found">>} ->
         fold_replication_logs(
             Rest, ?REP_ID_VERSION, NewId, NewId, Rep, [#doc{id = NewId} | Acc]);
@@ -764,8 +764,8 @@ do_checkpoint(State) ->
     {SrcInstanceStartTime, TgtInstanceStartTime} ->
         barrel_log:info("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
             [SourceName, TargetName, NewSeq]),
-        StartTime = ?l2b(ReplicationStartTime),
-        EndTime = ?l2b(couch_util:rfc1123_date()),
+        StartTime = list_to_binary(ReplicationStartTime),
+        EndTime = list_to_binary(couch_util:rfc1123_date()),
         NewHistoryEntry = {[
             {<<"session_id">>, SessionId},
             {<<"start_time">>, StartTime},

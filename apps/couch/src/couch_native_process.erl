@@ -253,7 +253,7 @@ load_ddoc(DDocs, DDocId) ->
     try dict:fetch(DDocId, DDocs) of
         {DDoc} -> {DDoc}
     catch
-        _:_Else -> throw({error, ?l2b(io_lib:format("Native Query Server missing DDoc with Id: ~s",[DDocId]))})
+        _:_Else -> throw({error, list_to_binary(io_lib:format("Native Query Server missing DDoc with Id: ~s",[DDocId]))})
     end.
 
 bindings(State, Sig) ->

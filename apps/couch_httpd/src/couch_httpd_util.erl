@@ -99,7 +99,7 @@ parse_boolean(Val) ->
     "false" -> false;
     _ ->
         Msg = io_lib:format("Invalid boolean parameter: ~p", [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
+        throw({query_parse_error, list_to_binary(Msg)})
     end.
 
 parse_int(Val) when is_integer(Val) ->
@@ -110,7 +110,7 @@ parse_int(Val) ->
         IntVal;
     _ ->
         Msg = io_lib:format("Invalid value for integer: ~p", [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
+        throw({query_parse_error, list_to_binary(Msg)})
     end.
 
 parse_pos_int(Val) ->
@@ -120,7 +120,7 @@ parse_pos_int(Val) ->
     _ ->
         Fmt = "Invalid value for positive integer: ~p",
         Msg = io_lib:format(Fmt, [Val]),
-        throw({query_parse_error, ?l2b(Msg)})
+        throw({query_parse_error, list_to_binary(Msg)})
     end.
 
 parse_json(V, false) when is_list(V) ->

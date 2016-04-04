@@ -206,7 +206,7 @@ delete(RootDir, Filepath) ->
 
 
 delete(RootDir, Filepath, Async) ->
-    DelFile = filename:join([RootDir,".delete", ?b2l(barrel_uuids:random())]),
+    DelFile = filename:join([RootDir,".delete", binary_to_list(barrel_uuids:random())]),
     case file:rename(Filepath, DelFile) of
     ok ->
         if (Async) ->
