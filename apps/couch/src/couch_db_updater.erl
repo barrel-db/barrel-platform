@@ -153,7 +153,7 @@ handle_call({purge_docs, IdRevs}, _From, Db) ->
 handle_call(start_compact, _From, Db) ->
     case Db#db.compactor_pid of
     nil ->
-        ?LOG_INFO("Starting compaction for db \"~s\"", [Db#db.name]),
+        barrel_log:info("Starting compaction for db \"~s\"", [Db#db.name]),
         Pid = spawn_link(fun() -> start_copy_compact(Db) end),
         Db2 = Db#db{compactor_pid=Pid},
         ok = notify_db_updated(Db2),
@@ -194,7 +194,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
             revs_limit = Db#db.revs_limit
         }),
 
-        ?LOG_DEBUG("CouchDB swapping files ~s and ~s.",
+        barrel_log:debug("CouchDB swapping files ~s and ~s.",
                 [Filepath, CompactFilepath]),
         RootDir = barrel_config:get("couchdb", "database_dir", "."),
         couch_file:delete(RootDir, Filepath),
@@ -203,10 +203,10 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
         NewDb3 = refresh_validate_doc_funs(NewDb2),
         ok = notify_db_updated(NewDb3),
         hooks:run(db_updated, [NewDb3#db.name, compacted]),
-        ?LOG_INFO("Compaction for db \"~s\" completed.", [Db#db.name]),
+        barrel_log:info("Compaction for db \"~s\" completed.", [Db#db.name]),
         {reply, ok, NewDb3#db{compactor_pid=nil}};
     false ->
-        ?LOG_INFO("Compaction file still behind main file "
+        barrel_log:info("Compaction file still behind main file "
             "(update seq=~p. compact update seq=~p). Retrying.",
             [Db#db.update_seq, NewSeq]),
         close_db(NewDb),
@@ -215,7 +215,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
 
 
 handle_cast(Msg, #db{name = Name} = Db) ->
-    ?LOG_ERROR("Database `~s` updater received unexpected cast: ~p", [Name, Msg]),
+    barrel_log:error("Database `~s` updater received unexpected cast: ~p", [Name, Msg]),
     {stop, Msg, Db}.
 
 
@@ -545,7 +545,7 @@ flush_trees(#db{updater_fd = Fd} = Db,
                     % Fd where the attachments were written to is not the same
                     % as our Fd. This can happen when a database is being
                     % switched out during a compaction.
-                    ?LOG_DEBUG("File where the attachments are written has"
+                    barrel_log:debug("File where the attachments are written has"
                             " changed. Possibly retrying.", []),
                     throw(retry)
                 end,
@@ -977,7 +977,7 @@ copy_compact(Db, NewDb0, Retry) ->
 
 start_copy_compact(#db{name=Name,filepath=Filepath,header=#db_header{purge_seq=PurgeSeq}}=Db) ->
     CompactFile = Filepath ++ ".compact",
-    ?LOG_DEBUG("Compaction process spawned for db \"~s\"", [Name]),
+    barrel_log:debug("Compaction process spawned for db \"~s\"", [Name]),
     case couch_file:open(CompactFile, [nologifmissing]) of
     {ok, Fd} ->
         Retry = true,

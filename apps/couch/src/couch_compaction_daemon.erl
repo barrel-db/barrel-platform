@@ -171,10 +171,10 @@ maybe_compact_db(DbName, Config) ->
                 end;
             {'DOWN', DbMonRef, process, _, Reason} ->
                 couch_db:close(Db),
-                ?LOG_ERROR("Compaction daemon - an error ocurred while"
+                barrel_log:error("Compaction daemon - an error ocurred while"
                     " compacting the database `~s`: ~p", [DbName, Reason])
             after TimeLeft ->
-                ?LOG_INFO("Compaction daemon - canceling compaction for database"
+                barrel_log:info("Compaction daemon - canceling compaction for database"
                     " `~s` because it's exceeding the allowed period.",
                     [DbName]),
                 erlang:demonitor(DbMonRef, [flush]),
@@ -246,12 +246,12 @@ maybe_compact_view(DbName, GroupId, Config) ->
             {'DOWN', MonRef, process, _, normal} ->
                 ok;
             {'DOWN', MonRef, process, _, Reason} ->
-                ?LOG_ERROR("Compaction daemon - an error ocurred while compacting"
+                barrel_log:error("Compaction daemon - an error ocurred while compacting"
                     " the view group `~s` from database `~s`: ~p",
                     [GroupId, DbName, Reason]),
                 ok
             after TimeLeft ->
-                ?LOG_INFO("Compaction daemon - canceling the compaction for the "
+                barrel_log:info("Compaction daemon - canceling the compaction for the "
                     "view group `~s` of the database `~s` because it's exceeding"
                     " the allowed period.", [GroupId, DbName]),
                 erlang:demonitor(MonRef, [flush]),
@@ -262,7 +262,7 @@ maybe_compact_view(DbName, GroupId, Config) ->
             ok
         end;
     Error ->
-        ?LOG_ERROR("Error opening view group `~s` from database `~s`: ~p",
+        barrel_log:error("Error opening view group `~s` from database `~s`: ~p",
             [GroupId, DbName, Error]),
         ok
     end.
@@ -303,7 +303,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
     true ->
         {ok, DbInfo} = couch_db:get_db_info(Db),
         {Frag, SpaceRequired} = frag(DbInfo),
-        ?LOG_DEBUG("Fragmentation for database `~s` is ~p%, estimated space for"
+        barrel_log:debug("Fragmentation for database `~s` is ~p%, estimated space for"
            " compaction is ~p bytes.", [Db#db.name, Frag, SpaceRequired]),
         case check_frag(Threshold, Frag) of
         false ->
@@ -333,7 +333,7 @@ can_view_compact(Config, DbName, GroupId, GroupInfo) ->
             false;
         false ->
             {Frag, SpaceRequired} = frag(GroupInfo),
-            ?LOG_DEBUG("Fragmentation for view group `~s` (database `~s`) is "
+            barrel_log:debug("Fragmentation for view group `~s` (database `~s`) is "
                 "~p%, estimated space for compaction is ~p bytes.",
                 [GroupId, DbName, Frag, SpaceRequired]),
             case check_frag(Config#config.view_frag, Frag) of
@@ -416,11 +416,11 @@ parse_config(DbName, ConfigString) ->
     {ok, Conf} ->
         {ok, Conf};
     incomplete_period ->
-        ?LOG_ERROR("Incomplete period ('to' or 'from' missing) in the compaction"
+        barrel_log:error("Incomplete period ('to' or 'from' missing) in the compaction"
             " configuration for database `~s`", [DbName]),
         error;
     _ ->
-        ?LOG_ERROR("Invalid compaction configuration for database "
+        barrel_log:error("Invalid compaction configuration for database "
             "`~s`: `~s`", [DbName, ConfigString]),
         error
     end.

@@ -209,7 +209,7 @@ validate_docid(Id) when is_binary(Id) ->
     _Else -> ok
     end;
 validate_docid(Id) ->
-    ?LOG_DEBUG("Document id is not a string: ~p", [Id]),
+    barrel_log:debug("Document id is not a string: ~p", [Id]),
     throw({bad_request, <<"Document id must be a string">>}).
 
 transfer_fields([], #doc{body=Fields}=Doc) ->

@@ -127,13 +127,13 @@ async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
     %
     case supervisor:start_child(couch_replicator_job_sup, ChildSpec) of
     {ok, Pid} ->
-        ?LOG_INFO("starting new replication `~s` at ~p (`~s` -> `~s`)",
+        barrel_log:info("starting new replication `~s` at ~p (`~s` -> `~s`)",
             [RepChildId, Pid, Source, Target]),
         {ok, Pid};
     {error, already_present} ->
         case supervisor:restart_child(couch_replicator_job_sup, RepChildId) of
         {ok, Pid} ->
-            ?LOG_INFO("restarting replication `~s` at ~p (`~s` -> `~s`)",
+            barrel_log:info("restarting replication `~s` at ~p (`~s` -> `~s`)",
                 [RepChildId, Pid, Source, Target]),
             {ok, Pid};
         {error, running} ->
@@ -142,7 +142,7 @@ async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
             %% the Pid by calling start_child again.
             {error, {already_started, Pid}} =
                 supervisor:start_child(couch_replicator_job_sup, ChildSpec),
-            ?LOG_INFO("replication `~s` already running at ~p (`~s` -> `~s`)",
+            barrel_log:info("replication `~s` already running at ~p (`~s` -> `~s`)",
                 [RepChildId, Pid, Source, Target]),
             {ok, Pid};
         {error, {'EXIT', {badarg,
@@ -156,7 +156,7 @@ async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
             Error
         end;
     {error, {already_started, Pid}} ->
-        ?LOG_INFO("replication `~s` already running at ~p (`~s` -> `~s`)",
+        barrel_log:info("replication `~s` already running at ~p (`~s` -> `~s`)",
             [RepChildId, Pid, Source, Target]),
         {ok, Pid};
     {error, {Error, _}} ->
@@ -185,10 +185,10 @@ wait_for_result(RepId) ->
 
 cancel_replication({BaseId, Extension}) ->
     FullRepId = BaseId ++ Extension,
-    ?LOG_INFO("Canceling replication `~s`...", [FullRepId]),
+    barrel_log:info("Canceling replication `~s`...", [FullRepId]),
     case supervisor:terminate_child(couch_replicator_job_sup, FullRepId) of
     ok ->
-        ?LOG_INFO("Replication `~s` canceled.", [FullRepId]),
+        barrel_log:info("Replication `~s` canceled.", [FullRepId]),
         case supervisor:delete_child(couch_replicator_job_sup, FullRepId) of
             ok ->
                 {ok, {cancelled, ?l2b(FullRepId)}};
@@ -198,7 +198,7 @@ cancel_replication({BaseId, Extension}) ->
                 Error
         end;
     Error ->
-        ?LOG_ERROR("Error canceling replication `~s`: ~p", [FullRepId, Error]),
+        barrel_log:error("Error canceling replication `~s`: ~p", [FullRepId, Error]),
         Error
     end.
 
@@ -308,7 +308,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
     % cancel_replication/1) and then start the replication again, but this is
     % unfortunately not immune to race conditions.
 
-    ?LOG_INFO("Replication `~p` is using:~n"
+    barrel_log:info("Replication `~p` is using:~n"
         "~c~p worker processes~n"
         "~ca worker batch size of ~p~n"
         "~c~p HTTP connections~n"
@@ -326,7 +326,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
                 io_lib:format("~n~csource start sequence ~p", [$\t, StartSeq])
             end]),
 
-    ?LOG_DEBUG("Worker pids are: ~p", [Workers]),
+    barrel_log:debug("Worker pids are: ~p", [Workers]),
 
     couch_replicator_manager:replication_started(Rep),
 
@@ -353,38 +353,38 @@ handle_info({couch_event, db_updated, {DbName, compacted}},
     {noreply, State#rep_state{target = NewTarget}};
 
 handle_info({'DOWN', Ref, _, _, Why}, #rep_state{source_monitor = Ref} = St) ->
-    ?LOG_ERROR("Source database is down. Reason: ~p", [Why]),
+    barrel_log:error("Source database is down. Reason: ~p", [Why]),
     {stop, source_db_down, St};
 
 handle_info({'DOWN', Ref, _, _, Why}, #rep_state{target_monitor = Ref} = St) ->
-    ?LOG_ERROR("Target database is down. Reason: ~p", [Why]),
+    barrel_log:error("Target database is down. Reason: ~p", [Why]),
     {stop, target_db_down, St};
 
 handle_info({'EXIT', Pid, normal}, #rep_state{changes_reader=Pid} = State) ->
     {noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, #rep_state{changes_reader=Pid} = State) ->
-    ?LOG_ERROR("ChangesReader process died with reason: ~p", [Reason]),
+    barrel_log:error("ChangesReader process died with reason: ~p", [Reason]),
     {stop, changes_reader_died, cancel_timer(State)};
 
 handle_info({'EXIT', Pid, normal}, #rep_state{changes_manager = Pid} = State) ->
     {noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, #rep_state{changes_manager = Pid} = State) ->
-    ?LOG_ERROR("ChangesManager process died with reason: ~p", [Reason]),
+    barrel_log:error("ChangesManager process died with reason: ~p", [Reason]),
     {stop, changes_manager_died, cancel_timer(State)};
 
 handle_info({'EXIT', Pid, normal}, #rep_state{changes_queue=Pid} = State) ->
     {noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, #rep_state{changes_queue=Pid} = State) ->
-    ?LOG_ERROR("ChangesQueue process died with reason: ~p", [Reason]),
+    barrel_log:error("ChangesQueue process died with reason: ~p", [Reason]),
     {stop, changes_queue_died, cancel_timer(State)};
 
 handle_info({'EXIT', Pid, normal}, #rep_state{workers = Workers} = State) ->
     case Workers -- [Pid] of
     Workers ->
-        ?LOG_ERROR("unknown pid bit the dust ~p ~n",[Pid]),
+        barrel_log:error("unknown pid bit the dust ~p ~n",[Pid]),
         {noreply, State#rep_state{workers = Workers}};
         %% not clear why a stop was here before
         %{stop, {unknown_process_died, Pid, normal}, State};
@@ -402,7 +402,7 @@ handle_info({'EXIT', Pid, Reason}, #rep_state{workers = Workers} = State) ->
     false ->
         {stop, {unknown_process_died, Pid, Reason}, State2};
     true ->
-        ?LOG_ERROR("Worker ~p died with reason: ~p", [Pid, Reason]),
+        barrel_log:error("Worker ~p died with reason: ~p", [Pid, Reason]),
         {stop, {worker_died, Pid, Reason}, State2}
     end.
 
@@ -433,7 +433,7 @@ handle_call({report_seq_done, Seq, StatsInc}, From,
     _ ->
         NewThroughSeq0
     end,
-    ?LOG_DEBUG("Worker reported seq ~p, through seq was ~p, "
+    barrel_log:debug("Worker reported seq ~p, through seq was ~p, "
         "new through seq is ~p, highest seq done was ~p, "
         "new highest seq done is ~p~n"
         "Seqs in progress were: ~p~nSeqs in progress are now: ~p",
@@ -496,7 +496,7 @@ terminate(shutdown, #rep_state{rep_details = #rep{id = RepId}} = State) ->
 
 terminate(shutdown, {error, Class, Error, Stack, InitArgs}) ->
     #rep{id=RepId} = InitArgs,
-    ?LOG_ERROR("~p:~p: Replication failed to start for args ~p: ~p",
+    barrel_log:error("~p:~p: Replication failed to start for args ~p: ~p",
                [Class, Error, InitArgs, Stack]),
     case Error of
     {unauthorized, DbUri} ->
@@ -548,7 +548,7 @@ start_timer(State) ->
     {ok, Ref} ->
         Ref;
     Error ->
-        ?LOG_ERROR("Replicator, error scheduling checkpoint:  ~p", [Error]),
+        barrel_log:error("Replicator, error scheduling checkpoint:  ~p", [Error]),
         nil
     end.
 
@@ -673,7 +673,7 @@ read_changes(StartSeq, Db, ChangesQueue, Options, Type) ->
                     % Previous CouchDB releases had a bug which allowed a doc
                     % with an empty ID to be inserted into databases. Such doc
                     % is impossible to GET.
-                    ?LOG_ERROR("Replicator: ignoring document with empty ID in "
+                    barrel_log:error("Replicator: ignoring document with empty ID in "
                         "source database `~s` (_changes sequence ~p)",
                         [couch_replicator_api_wrap:db_uri(Db), LastSeq]);
                 _ ->
@@ -689,13 +689,13 @@ read_changes(StartSeq, Db, ChangesQueue, Options, Type) ->
             LastSeq = get(last_seq),
             Db2 = case LastSeq of
             StartSeq ->
-                ?LOG_INFO("Retrying _changes request to source database ~s"
+                barrel_log:info("Retrying _changes request to source database ~s"
                     " with since=~p in ~p seconds",
                     [couch_replicator_api_wrap:db_uri(Db), LastSeq, Db#httpdb.wait / 1000]),
                 ok = timer:sleep(Db#httpdb.wait),
                 Db#httpdb{wait = 2 * Db#httpdb.wait};
             _ ->
-                ?LOG_INFO("Retrying _changes request to source database ~s"
+                barrel_log:info("Retrying _changes request to source database ~s"
                     " with since=~p", [couch_replicator_api_wrap:db_uri(Db), LastSeq]),
                 Db
             end,
@@ -762,7 +762,7 @@ do_checkpoint(State) ->
          {checkpoint_commit_failure,
              <<"Failure on target commit: ", (to_binary(Reason))/binary>>};
     {SrcInstanceStartTime, TgtInstanceStartTime} ->
-        ?LOG_INFO("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
+        barrel_log:info("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
             [SourceName, TargetName, NewSeq]),
         StartTime = ?l2b(ReplicationStartTime),
         EndTime = ?l2b(couch_util:rfc1123_date()),
@@ -915,22 +915,22 @@ compare_replication_logs(SrcDoc, TgtDoc) ->
     false ->
         SourceHistory = get_value(<<"history">>, RepRecProps, []),
         TargetHistory = get_value(<<"history">>, RepRecPropsTgt, []),
-        ?LOG_INFO("Replication records differ. "
+        barrel_log:info("Replication records differ. "
                 "Scanning histories to find a common ancestor.", []),
-        ?LOG_DEBUG("Record on source:~p~nRecord on target:~p~n",
+        barrel_log:debug("Record on source:~p~nRecord on target:~p~n",
                 [RepRecProps, RepRecPropsTgt]),
         compare_rep_history(SourceHistory, TargetHistory)
     end.
 
 compare_rep_history(S, T) when S =:= [] orelse T =:= [] ->
-    ?LOG_INFO("no common ancestry -- performing full replication", []),
+    barrel_log:info("no common ancestry -- performing full replication", []),
     {?LOWEST_SEQ, []};
 compare_rep_history([{S} | SourceRest], [{T} | TargetRest] = Target) ->
     SourceId = get_value(<<"session_id">>, S),
     case has_session_id(SourceId, Target) of
     true ->
         RecordSeqNum = get_value(<<"recorded_seq">>, S, ?LOWEST_SEQ),
-        ?LOG_INFO("found a common replication record with source_seq ~p",
+        barrel_log:info("found a common replication record with source_seq ~p",
             [RecordSeqNum]),
         {RecordSeqNum, SourceRest};
     false ->
@@ -938,7 +938,7 @@ compare_rep_history([{S} | SourceRest], [{T} | TargetRest] = Target) ->
         case has_session_id(TargetId, SourceRest) of
         true ->
             RecordSeqNum = get_value(<<"recorded_seq">>, T, ?LOWEST_SEQ),
-            ?LOG_INFO("found a common replication record with source_seq ~p",
+            barrel_log:info("found a common replication record with source_seq ~p",
                 [RecordSeqNum]),
             {RecordSeqNum, TargetRest};
         false ->

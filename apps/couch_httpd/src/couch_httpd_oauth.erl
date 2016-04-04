@@ -54,7 +54,7 @@ oauth_auth_callback(#httpd{mochi_req = MochiReq} = Req, CbParams) ->
     true ->
         set_user_ctx(Req, User);
     false ->
-        ?LOG_DEBUG("OAuth handler: signature verification failed for user `~p`~n"
+        barrel_log:debug("OAuth handler: signature verification failed for user `~p`~n"
             "Received signature is `~p`~n"
             "HTTP method is `~p`~n"
             "URL is `~p`~n"
@@ -73,7 +73,7 @@ set_user_ctx(_Req, undefined) ->
 set_user_ctx(Req, Name) ->
     case couch_auth_cache:get_user_creds(Name) of
         nil ->
-            ?LOG_DEBUG("OAuth handler: user `~p` credentials not found", [Name]),
+            barrel_log:debug("OAuth handler: user `~p` credentials not found", [Name]),
             Req;
         User ->
             Roles = couch_util:get_value(<<"roles">>, User, []),
@@ -209,7 +209,7 @@ serve_oauth(#httpd{mochi_req=MochiReq}=Req, Fun, FailSilently) ->
 
     Params = proplists:delete("realm", HeaderParams) ++ mochiweb_util:parse_qs(QueryString),
 
-    ?LOG_DEBUG("OAuth Params: ~p", [Params]),
+    barrel_log:debug("OAuth Params: ~p", [Params]),
     case couch_util:get_value("oauth_version", Params, "1.0") of
         "1.0" ->
             case couch_util:get_value("oauth_consumer_key", Params, undefined) of
@@ -267,7 +267,7 @@ get_callback_params(ConsumerKey, Params, Url) ->
                 token_secret = TokenSecret,
                 username = User
             },
-            ?LOG_DEBUG("Got OAuth credentials, for ConsumerKey `~p` and "
+            barrel_log:debug("Got OAuth credentials, for ConsumerKey `~p` and "
                 "Token `~p`, from the views, User: `~p`, "
                 "ConsumerSecret: `~p`, TokenSecret: `~p`",
                 [ConsumerKey, Token, User, ConsumerSecret, TokenSecret]),

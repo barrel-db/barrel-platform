@@ -34,8 +34,8 @@ execute(Pid, JsonReq) ->
 % Gen Server Handlers
 
 init([Name, Command]) ->
-    ?LOG_INFO("EXTERNAL: Starting process for: ~s", [Name]),
-    ?LOG_INFO("COMMAND: ~s", [Command]),
+    barrel_log:info("EXTERNAL: Starting process for: ~s", [Name]),
+    barrel_log:info("COMMAND: ~s", [Command]),
     process_flag(trap_exit, true),
     Timeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
     barrel_config:subscribe(),
@@ -57,11 +57,11 @@ handle_info({config_updated, barrel, {_, {"couchdb", "os_process_timeout"}}}, {_
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State};
 handle_info({'EXIT', Pid, Reason}, {Name, Command, Pid}) ->
-    ?LOG_INFO("EXTERNAL: Process for ~s exiting. (reason: ~w)", [Name, Reason]),
+    barrel_log:info("EXTERNAL: Process for ~s exiting. (reason: ~w)", [Name, Reason]),
     {stop, Reason, {Name, Command, Pid}}.
 
 handle_cast(stop, {Name, Command, Pid}) ->
-    ?LOG_INFO("EXTERNAL: Shutting down ~s", [Name]),
+    barrel_log:info("EXTERNAL: Shutting down ~s", [Name]),
     exit(Pid, normal),
     {stop, normal, {Name, Command, Pid}};
 handle_cast(_Whatever, State) ->

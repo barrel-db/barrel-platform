@@ -438,7 +438,7 @@ ad_ekey_opts(#all_docs_args{end_key_docid=EKeyDocId}=Args) ->
 is_keys({Props}) ->
     case couch_util:get_value(<<"keys">>, Props) of
         undefined ->
-            ?LOG_DEBUG("POST with no keys member.", []),
+            barrel_log:debug("POST with no keys member.", []),
             undefined;
         Keys when is_list(Keys) ->
             Keys;

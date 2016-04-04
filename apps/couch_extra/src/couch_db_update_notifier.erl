@@ -62,7 +62,7 @@ handle_call(_Request, State) ->
     {reply, ok, State}.
 
 handle_info({'EXIT', Pid, Reason}, Pid) ->
-    ?LOG_ERROR("Update notification process ~p died: ~p", [Pid, Reason]),
+    barrel_log:error("Update notification process ~p died: ~p", [Pid, Reason]),
     remove_handler;
 handle_info({'EXIT', _, _}, Pid) ->
     %% the db_update event manager traps exits and forwards this message to all

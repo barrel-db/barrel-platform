@@ -187,7 +187,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
                     FallbackWhitelist;
                 {error, _} ->
                     [{WhitelistSection, WhitelistKey}] = FallbackWhitelist,
-                    ?LOG_ERROR("Only whitelisting ~s/~s due to error parsing: ~p",
+                    barrel_log:error("Only whitelisting ~s/~s due to error parsing: ~p",
                                [WhitelistSection, WhitelistKey, WhitelistValue]),
                     FallbackWhitelist
             end,
@@ -322,13 +322,13 @@ handle_log_req(#httpd{method='POST'}=Req) ->
     Message = ?b2l(couch_util:get_value(<<"message">>, PostBody)),
     case Level of
     <<"debug">> ->
-        ?LOG_DEBUG(Message, []),
+        barrel_log:debug(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     <<"info">> ->
-        ?LOG_INFO(Message, []),
+        barrel_log:info(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     <<"error">> ->
-        ?LOG_ERROR(Message, []),
+        barrel_log:error(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     _ ->
         send_json(Req, 400, {[{error, ?l2b(io_lib:format("Unrecognized log level '~s'", [Level]))}]})

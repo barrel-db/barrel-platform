@@ -131,7 +131,7 @@ init({Mod, IdxState}) ->
                                                            'ddoc_updated'}],
                                                          [true]}]),
 
-            ?LOG_INFO("Opening index for db: ~s idx: ~s sig: ~p", Args),
+            barrel_log:info("Opening index for db: ~s idx: ~s sig: ~p", Args),
             proc_lib:init_ack({ok, self()}),
             gen_server:enter_loop(?MODULE, [], State);
         Other ->
@@ -151,7 +151,7 @@ terminate(Reason, State) ->
         couch_util:hexsig(Mod:get(signature, IdxState)),
         Reason
     ],
-    ?LOG_INFO("Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),
+    barrel_log:info("Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),
     ok.
 
 
@@ -304,7 +304,7 @@ handle_cast({new_state, NewIdxState}, State) ->
         DDocId,
         CurrSeq
     ],
-    ?LOG_DEBUG("Updated index for db: ~s idx: ~s seq: ~B", Args),
+    barrel_log:debug("Updated index for db: ~s idx: ~s seq: ~B", Args),
     Rest = send_replies(State#st.waiters, CurrSeq, NewIdxState),
     case State#st.committed of
         true -> erlang:send_after(Delay, self(), commit);
@@ -420,7 +420,7 @@ handle_info({'DOWN', _, _, Pid, _}, #st{mod=Mod, idx_state=IdxState,
                                         indexer=Pid}=State) ->
     Args = [Mod:get(db_name, IdxState),
             Mod:get(idx_name, IdxState)],
-    ?LOG_INFO("Background indexer shutdown by monitor notice for db: ~s idx: ~s", Args),
+    barrel_log:info("Background indexer shutdown by monitor notice for db: ~s idx: ~s", Args),
 
     {noreply, State#st{indexer=nil}};
 
@@ -433,7 +433,7 @@ handle_info({'DOWN', _, _, _Pid, _}, #st{mod=Mod, idx_state=IdxState}=State) ->
     hooks:run(index_reset, [DbName, DDocId, Mod]),
 
     Args = [DbName, DDocId],
-    ?LOG_INFO("Index shutdown by monitor notice for db: ~s idx: ~s", Args),
+    barrel_log:info("Index shutdown by monitor notice for db: ~s idx: ~s", Args),
     catch send_all(State#st.waiters, shutdown),
     {stop, normal, State#st{waiters=[]}}.
 
