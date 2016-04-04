@@ -71,7 +71,7 @@ handle_cast({config_update, DbName, delete}, State) ->
     {noreply, State};
 
 handle_cast({config_update, DbName, _}, #state{loop_pid = Loop} = State) ->
-    Config = barrel_confi:get("compactions", DbName),
+    Config = barrel_config:get("compactions", DbName),
     case parse_config(DbName, Config) of
     {ok, NewConfig} ->
         WasEmpty = (ets:info(?CONFIG_ETS, size) =:= 0),
