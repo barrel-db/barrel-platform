@@ -35,19 +35,6 @@
 -export([http_1_0_keep_alive/2]).
 -export([set_auth_handlers/0]).
 
-%% interface to the httpd record
--export([method/1, mochi_req/1, peer/1, path_parts/1, requested_path_parts/1,
-         req_body/1, user_ctx/1]).
-
-method(#httpd{method=Method}) -> Method.
-mochi_req(#httpd{mochi_req=MochiReq}) -> MochiReq.
-peer(#httpd{peer=Peer}) -> Peer.
-path_parts(#httpd{path_parts=Parts}) -> Parts.
-requested_path_parts(#httpd{requested_path_parts=Parts}) -> Parts.
-user_ctx(#httpd{user_ctx=UserCtx}) -> UserCtx.
-req_body(#httpd{req_body=ReqBody}) -> ReqBody.
-
-
 start_link(couch_http) ->
     Port = barrel_config:get_integer("httpd", "port", 5984),
     start_link(couch_http, [{port, Port}]);
@@ -226,7 +213,7 @@ handle_request_int(MochiReq, DefaultFun,
     {FirstPart, _, _} ->
         list_to_binary(FirstPart)
     end,
-    barrel_log:debug("~p ~s ~p from ~p~nHeaders: ~p", [
+    ?LOG_DEBUG("~p ~s ~p from ~p~nHeaders: ~p", [
         MochiReq:get(method),
         RawUri,
         MochiReq:get(version),
@@ -252,7 +239,7 @@ handle_request_int(MochiReq, DefaultFun,
                                                  "TRACE", "CONNECT",
                                                  "COPY"]) of
     true ->
-        barrel_log:info("MethodOverride: ~s (real method was ~s)", [MethodOverride, Method1]),
+        ?LOG_INFO("MethodOverride: ~s (real method was ~s)", [MethodOverride, Method1]),
         case Method1 of
         'POST' -> couch_util:to_existing_atom(MethodOverride);
         _ ->
@@ -305,43 +292,43 @@ handle_request_int(MochiReq, DefaultFun,
         throw:{http_head_abort, Resp0} ->
             {ok, Resp0};
         throw:{invalid_json, S} ->
-            barrel_log:error("attempted upload of invalid JSON (set log_level to debug to log it)", []),
-            barrel_log:debug("Invalid JSON: ~p",[S]),
+            ?LOG_ERROR("attempted upload of invalid JSON (set log_level to debug to log it)", []),
+            ?LOG_DEBUG("Invalid JSON: ~p",[S]),
             send_error(HttpReq, {bad_request, invalid_json});
         throw:unacceptable_encoding ->
-            barrel_log:error("unsupported encoding method for the response", []),
+            ?LOG_ERROR("unsupported encoding method for the response", []),
             send_error(HttpReq, {not_acceptable, "unsupported encoding"});
         throw:bad_accept_encoding_value ->
-            barrel_log:error("received invalid Accept-Encoding header", []),
+            ?LOG_ERROR("received invalid Accept-Encoding header", []),
             send_error(HttpReq, bad_request);
         exit:normal ->
             exit(normal);
         exit:snappy_nif_not_loaded ->
             ErrorReason = "To access the database or view index, Apache CouchDB"
                 " must be built with Erlang OTP R13B04 or higher.",
-            barrel_log:error("~s", [ErrorReason]),
+            ?LOG_ERROR("~s", [ErrorReason]),
             send_error(HttpReq, {bad_otp_release, ErrorReason});
         exit:{body_too_large, _} ->
             send_error(HttpReq, request_entity_too_large);
         throw:Error ->
             Stack = erlang:get_stacktrace(),
-            barrel_log:debug("Minor error in HTTP request: ~p",[Error]),
-            barrel_log:debug("Stacktrace: ~p",[Stack]),
+            ?LOG_DEBUG("Minor error in HTTP request: ~p",[Error]),
+            ?LOG_DEBUG("Stacktrace: ~p",[Stack]),
             send_error(HttpReq, Error);
         error:badarg ->
             Stack = erlang:get_stacktrace(),
-            barrel_log:error("Badarg error in HTTP request",[]),
-            barrel_log:info("Stacktrace: ~p",[Stack]),
+            ?LOG_ERROR("Badarg error in HTTP request",[]),
+            ?LOG_INFO("Stacktrace: ~p",[Stack]),
             send_error(HttpReq, badarg);
         error:function_clause ->
             Stack = erlang:get_stacktrace(),
-            barrel_log:error("function_clause error in HTTP request",[]),
-            barrel_log:info("Stacktrace: ~p",[Stack]),
+            ?LOG_ERROR("function_clause error in HTTP request",[]),
+            ?LOG_INFO("Stacktrace: ~p",[Stack]),
             send_error(HttpReq, function_clause);
         Tag:Error ->
             Stack = erlang:get_stacktrace(),
-            barrel_log:error("Uncaught error in HTTP request: ~p",[{Tag, Error}]),
-            barrel_log:info("Stacktrace: ~p",[Stack]),
+            ?LOG_ERROR("Uncaught error in HTTP request: ~p",[{Tag, Error}]),
+            ?LOG_INFO("Stacktrace: ~p",[Stack]),
             send_error(HttpReq, Error)
     end,
     RequestTime = round(timer:now_diff(os:timestamp(), Begin)/1000),
@@ -576,7 +563,7 @@ verify_is_server_admin(#user_ctx{roles=Roles}) ->
     end.
 
 log_request(#httpd{mochi_req=MochiReq,peer=Peer}, Code) ->
-    barrel_log:info("~s - - ~s ~s ~B", [
+    ?LOG_INFO("~s - - ~s ~s ~B", [
         Peer,
         MochiReq:get(method),
         MochiReq:get(raw_path),
@@ -662,9 +649,9 @@ send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     if Code >= 500 ->
-        barrel_log:error("httpd ~p error response:~n ~s", [Code, Body]);
+        ?LOG_ERROR("httpd ~p error response:~n ~s", [Code, Body]);
     Code >= 400 ->
-        barrel_log:debug("httpd ~p error response:~n ~s", [Code, Body]);
+        ?LOG_DEBUG("httpd ~p error response:~n ~s", [Code, Body]);
     true -> ok
     end,
     Headers2 = Headers1 ++ server_header() ++
