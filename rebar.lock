@@ -4,7 +4,7 @@
   0},
  {<<"barrel_futon">>,
   {git,"https://github.com/barrel-db/barrel_futon",
-       {ref,"e4d70076988c5dcc2b2bec7f6e25e061cdeda796"}},
+       {ref,"29d984734593e415077e820d5bd717c3fa40a2bd"}},
   0},
  {<<"barrel_metrics">>,
   {git,"https://github.com/barrel-db/barrel_metrics",
