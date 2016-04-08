@@ -121,13 +121,10 @@ start_link(Name, Options) ->
     % get the same value.
     couch_server:get_uuid(),
 
-    % create broadcaster
-    Broadcaster = spawn_link(barrel_websocket, broadcast_server, [dict:new()]),
-
     % add barrel log event handler
-    lager_handler_watcher:start(lager_event, barrel_log_event_handler, [Broadcaster, self()]),
+    lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
 
-    WSLoop = fun(_Payload, _Broadcaster, _ReplyChannel) ->
+    WSLoop = fun(_Payload, [], _ReplyChannel) ->
         ok
     end,
 
@@ -147,8 +144,8 @@ start_link(Name, Options) ->
                  ]);
         true -> {ReentryWs, ReplyChannel} = mochiweb_websocket:upgrade_connection(
                                   Req, WSLoop),
-                Broadcaster ! {register, self(), ReplyChannel},
-                ReentryWs(Broadcaster)
+                gproc:reg({p, l, {log_event_handler, log}}, ReplyChannel),
+                ReentryWs([])
         end
     end,
 
