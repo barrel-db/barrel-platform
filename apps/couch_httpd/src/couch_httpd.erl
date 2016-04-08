@@ -121,16 +121,35 @@ start_link(Name, Options) ->
     % get the same value.
     couch_server:get_uuid(),
 
+    % create broadcaster
+    Broadcaster = spawn_link(barrel_websocket, broadcast_server, [dict:new()]),
+
+    % add barrel log event handler
+    lager_handler_watcher:start(lager_event, barrel_log_event_handler, [Broadcaster, self()]),
+
+    WSLoop = fun(_Payload, _Broadcaster, _ReplyChannel) ->
+        ok
+    end,
+
     Loop = fun(Req)->
+        H = mochiweb_request:get_header_value("Upgrade", Req),
+        IsWebsocket = (H =/= undefined andalso string:to_lower(H) =:= "websocket"),
         case SocketOptions of
         [] ->
             ok;
         _ ->
             ok = mochiweb_socket:setopts(Req:get(socket), SocketOptions)
         end,
-        apply(?MODULE, handle_request, [
-            Req, DefaultFun, UrlHandlers, DbUrlHandlers, DesignUrlHandlers
-        ])
+
+        case IsWebsocket of
+        false -> apply(?MODULE, handle_request, [
+                    Req, DefaultFun, UrlHandlers, DbUrlHandlers, DesignUrlHandlers
+                 ]);
+        true -> {ReentryWs, ReplyChannel} = mochiweb_websocket:upgrade_connection(
+                                  Req, WSLoop),
+                Broadcaster ! {register, self(), ReplyChannel},
+                ReentryWs(Broadcaster)
+        end
     end,
 
     % set mochiweb options
@@ -141,6 +160,7 @@ start_link(Name, Options) ->
 
     % launch mochiweb
     mochiweb_http:start_link(FinalOptions).
+
 
 set_auth_handlers() ->
     AuthenticationSrcs = make_fun_spec_strs(barrel_config:get("httpd", "authentication_handlers", "")),
