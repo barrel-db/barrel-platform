@@ -124,23 +124,6 @@ start_link(Name, Options) ->
     % add barrel log event handler
     lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
 
-    WSLoop = fun([PayloadStr], Options, ReplyChannel) ->
-        case jsx:is_json(PayloadStr) of
-        true -> Payload = jsx:decode(PayloadStr),
-            Type = proplists:get_value(<<"type">>,Payload),
-            Resource = proplists:get_value(<<"resource">>, Payload),
-            case {Type, Resource} of
-                {<<"subscribe">>, <<"logs">>} -> 
-                    {log_event_handler, gproc:reg({p, l, {log_event_handler, log}}, ReplyChannel)};
-                _ -> 
-                    ReplyChannel("Type and/or resource not present")
-            end;
-        false -> 
-            ReplyChannel("Invalid request")
-        end,
-        Options
-    end,
-
     Loop = fun(Req)->
         H = mochiweb_request:get_header_value("Upgrade", Req),
         IsWebsocket = (H =/= undefined andalso string:to_lower(H) =:= "websocket"),
@@ -155,8 +138,8 @@ start_link(Name, Options) ->
         false -> apply(?MODULE, handle_request, [
                     Req, DefaultFun, UrlHandlers, DbUrlHandlers, DesignUrlHandlers
                  ]);
-        true -> {ReentryWs, ReplyChannel} = mochiweb_websocket:upgrade_connection(
-                                  Req, WSLoop),
+        true -> {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
+                                  Req, fun barrel_websocket:ws_loop/3),
                 ReentryWs([])
         end
     end,
