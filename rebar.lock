@@ -1,6 +1,6 @@
 [{<<"barrel_admin">>,
   {git,"https://github.com/barrel-db/barrel_admin",
-       {ref,"3faba285f6efb60f28e42159f09790bd56a03e23"}},
+       {ref,"7352cd5216d6998992d76b0fd7dafe7d1c24333f"}},
   0},
  {<<"barrel_config">>,
   {git,"https://github.com/barrel-db/barrel_config.git",

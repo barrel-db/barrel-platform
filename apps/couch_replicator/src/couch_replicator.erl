@@ -279,7 +279,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         end,
         lists:seq(1, NumWorkers)),
 
-    couch_task_status:add_task([
+    barrel_task_status:add_task([
         {type, replication},
         {replication_id, list_to_binary(BaseId ++ Ext)},
         {doc_id, Rep#rep.doc_id},
@@ -296,7 +296,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         {progress, 0},
         {checkpoint_interval, CheckpointInterval}
     ]),
-    couch_task_status:set_update_frequency(1000),
+    barrel_task_status:set_update_frequency(1000),
 
     % Until OTP R14B03:
     %
@@ -995,7 +995,7 @@ update_task(State) ->
         current_through_seq = {_, CurSeq},
         source_seq = SourceCurSeq
     } = State,
-    couch_task_status:update(
+    barrel_task_status:update(
         rep_stats(State) ++ [
         {source_seq, SourceCurSeq},
         case is_number(CurSeq) andalso is_number(SourceCurSeq) of

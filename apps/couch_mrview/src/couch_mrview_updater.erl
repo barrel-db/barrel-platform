@@ -36,7 +36,7 @@ start_update(Partial, State, NumChanges) ->
 
     Self = self(),
     MapFun = fun() ->
-        couch_task_status:add_task([
+        barrel_task_status:add_task([
             {type, indexer},
             {database, State#mrst.db_name},
             {design_document, State#mrst.idx_name},
@@ -44,7 +44,7 @@ start_update(Partial, State, NumChanges) ->
             {changes_done, 0},
             {total_changes, NumChanges}
         ]),
-        couch_task_status:set_update_frequency(500),
+        barrel_task_status:set_update_frequency(500),
         map_docs(Self, InitState)
     end,
     WriteFun = fun() -> write_results(Self, InitState) end,
@@ -437,7 +437,7 @@ send_partial(_, _) ->
 
 
 update_task(NumChanges) ->
-    [Changes, Total] = couch_task_status:get([changes_done, total_changes]),
+    [Changes, Total] = barrel_task_status:get([changes_done, total_changes]),
     Changes2 = Changes + NumChanges,
     Progress = case Total of
         0 ->
@@ -446,4 +446,4 @@ update_task(NumChanges) ->
         _ ->
             (Changes2 * 100) div Total
     end,
-    couch_task_status:update([{progress, Progress}, {changes_done, Changes2}]).
+    barrel_task_status:update([{progress, Progress}, {changes_done, Changes2}]).

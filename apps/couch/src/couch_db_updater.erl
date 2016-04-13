@@ -943,17 +943,17 @@ copy_compact(Db, NewDb0, Retry) ->
         {changes_done, 0},
         {total_changes, TotalChanges}
     ],
-    case Retry and couch_task_status:is_task_added() of
+    case Retry and barrel_task_status:is_task_added() of
     true ->
-        couch_task_status:update([
+        barrel_task_status:update([
             {retry, true},
             {progress, 0},
             {changes_done, 0},
             {total_changes, TotalChanges}
         ]);
     false ->
-        couch_task_status:add_task(TaskProps0),
-        couch_task_status:set_update_frequency(500)
+        barrel_task_status:add_task(TaskProps0),
+        barrel_task_status:set_update_frequency(500)
     end,
 
     {ok, _, {NewDb2, Uncopied, _, _}} =
@@ -1015,7 +1015,7 @@ start_copy_compact(#db{name=Name,filepath=Filepath,header=#db_header{purge_seq=P
     end.
 
 update_compact_task(NumChanges) ->
-    [Changes, Total] = couch_task_status:get([changes_done, total_changes]),
+    [Changes, Total] = barrel_task_status:get([changes_done, total_changes]),
     Changes2 = Changes + NumChanges,
     Progress = case Total of
     0 ->
@@ -1023,7 +1023,7 @@ update_compact_task(NumChanges) ->
     _ ->
         (Changes2 * 100) div Total
     end,
-    couch_task_status:update([{changes_done, Changes2}, {progress, Progress}]).
+    barrel_task_status:update([{changes_done, Changes2}, {progress, Progress}]).
 
 make_doc_summary(#db{compression = Comp}, {Body0, Atts0}) ->
     Body = case couch_compress:is_compressed(Body0, Comp) of

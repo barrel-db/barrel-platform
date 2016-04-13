@@ -27,7 +27,7 @@
         couch_secondary_services,
         couch_server,
         couch_sup,
-        couch_task_status
+        barrel_task_status
     ]},
     {mod, {couch_app, []}},
     {env, []},

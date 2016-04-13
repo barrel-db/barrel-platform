@@ -23,7 +23,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 new() ->
-    gen_server:call(?MODULE, create).
+  gen_server:call(?MODULE, create).
 
 random() ->
     list_to_binary(couch_util:to_hex(crypto:rand_bytes(16))).
@@ -43,7 +43,6 @@ config_change("uuids", _, _) ->
     gen_server:cast(?MODULE, change);
 config_change(_, _, _) ->
     ok.
-
 
 init([]) ->
     hooks:reg(config_key_update, ?MODULE, config_change, 3),

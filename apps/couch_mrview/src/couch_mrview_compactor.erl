@@ -68,7 +68,7 @@ compact(State) ->
                      end,
                      TotalChanges0, Views),
 
-    couch_task_status:add_task([
+    barrel_task_status:add_task([
         {type, view_compaction},
         {database, DbName},
         {design_document, IdxName},
@@ -172,7 +172,7 @@ compact_view_btree(Btree, EmptyBtree, BufferSize, Acc0) ->
 
 update_task(#acc{changes = Changes, total_changes = Total} = Acc, ChangesInc) ->
     Changes2 = Changes + ChangesInc,
-    couch_task_status:update([{progress, (Changes2 * 100) div Total}]),
+    barrel_task_status:update([{progress, (Changes2 * 100) div Total}]),
     Acc#acc{changes = Changes2}.
 
 
