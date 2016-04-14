@@ -19,3 +19,4 @@ logs
 _build
 .libs
 .dists
+.idea
