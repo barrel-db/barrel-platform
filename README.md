@@ -74,4 +74,4 @@ large data systems through:
 We use the [C4.1 (Collective Code Construction
 Contract)](http://rfc.zeromq.org/spec:22) process for contributions. Please read and get involved.
 
-Barrel is distributed under the Apache-2.0 license, see [LICENSE](https://github.com/pjhampton/barrel-platform/blob/couch-1.x/LICENSE).
+Barrel is distributed under the Apache-2.0 license, see [LICENSE](https://github.com/barrel-db/barrel-platform/blob/master/LICENSE).
