@@ -67,7 +67,7 @@ large data systems through:
 * Request a feature and share ideas
 * Pick an [issue on JIRA](https://barrel-db.atlassian.net/) and get hacking
 * Follow us on [twitter](https://twitter.com/barreldb)
-
+* Join us on [slack](https://barrel-db.slack.com) ([request invite](https://slack.barrel-db.org/))
 
 ## Ownership and License
 
