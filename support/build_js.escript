@@ -19,28 +19,28 @@
 
 
 main([]) ->
-    JsFiles = ["share/server/json2.js",
-               "share/server/filter.js",
-               "share/server/mimeparse.js",
-               "share/server/render.js",
-               "share/server/state.js",
-               "share/server/util.js",
-               "share/server/validate.js",
-               "share/server/views.js",
-               "share/server/script.js",
-               "share/server/loop.js"],
+    JsFiles = ["priv/server/json2.js",
+               "priv/server/filter.js",
+               "priv/server/mimeparse.js",
+               "priv/server/render.js",
+               "priv/server/state.js",
+               "priv/server/util.js",
+               "priv/server/validate.js",
+               "priv/server/views.js",
+               "priv/server/script.js",
+               "priv/server/loop.js"],
 
-    CoffeeFiles = ["share/server/json2.js",
-                   "share/server/filter.js",
-                   "share/server/mimeparse.js",
-                   "share/server/render.js",
-                   "share/server/state.js",
-                   "share/server/util.js",
-                   "share/server/validate.js",
-                   "share/server/views.js",
-                   "share/server/script.js",
-                   "share/server/coffee-script.js",
-                   "share/server/loop.js"],
+    CoffeeFiles = ["priv/server/json2.js",
+                   "priv/server/filter.js",
+                   "priv/server/mimeparse.js",
+                   "priv/server/render.js",
+                   "priv/server/state.js",
+                   "priv/server/util.js",
+                   "priv/server/validate.js",
+                   "priv/server/views.js",
+                   "priv/server/script.js",
+                   "priv/server/coffee-script.js",
+                   "priv/server/loop.js"],
 
 
     Concat = fun(Files, To) ->
@@ -52,6 +52,6 @@ main([]) ->
             file:write_file(To, FinalBin)
     end,
 
-    ok = Concat(JsFiles, "share/server/main.js"),
-    ok = Concat(CoffeeFiles, "share/server/main-coffee.js"),
+    ok = Concat(JsFiles, "priv/server/main.js"),
+    ok = Concat(CoffeeFiles, "priv/server/main-coffee.js"),
     ok.
