@@ -20,7 +20,6 @@
 
 -module(couch_db_update_notifier_sup).
 
-
 -behaviour(supervisor).
 
 -export([start_link/0]).
