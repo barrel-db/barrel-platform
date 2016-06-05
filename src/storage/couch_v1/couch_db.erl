@@ -656,7 +656,7 @@ new_revid(#doc{body=Body,revs={OldStart,OldRevs},
         list_to_binary(integer_to_list(couch_util:rand32()));
     Atts2 ->
         OldRev = case OldRevs of [] -> 0; [OldRev0|_] -> OldRev0 end,
-        couch_util:md5(term_to_binary([Deleted, OldStart, OldRev, Body, Atts2]))
+        crypto:hash(md5, term_to_binary([Deleted, OldStart, OldRev, Body, Atts2]))
     end.
 
 new_revs([], OutBuckets, IdRevsAcc) ->

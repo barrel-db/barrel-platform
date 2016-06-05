@@ -41,7 +41,7 @@ query_all_docs(Db, Args, Callback, Acc) when is_list(Args) ->
 query_all_docs(Db, Args0, Callback, Acc) ->
     Sig = couch_util:with_db(Db, fun(WDb) ->
         {ok, Info} = couch_db:get_db_info(WDb),
-        couch_util:hexsig(couch_util:md5(term_to_binary(Info)))
+        couch_util:hexsig(crypto:hash(md5, term_to_binary(Info)))
     end),
     Args2 = validate_args(Args0),
     {ok, Acc1} = case Args2#all_docs_args.preflight_fun of

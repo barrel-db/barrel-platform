@@ -25,7 +25,6 @@
 -export([to_binary/1, to_integer/1, to_list/1, url_encode/1]).
 -export([verify/2,simple_call/2,shutdown_sync/1]).
 -export([get_value/2, get_value/3]).
--export([md5/1, md5_init/0, md5_update/2, md5_final/1]).
 -export([reorder_results/2]).
 -export([url_strip_password/1]).
 -export([encode_doc_id/1]).
@@ -398,23 +397,6 @@ verify(X, Y) when is_list(X) and is_list(Y) ->
             false
     end;
 verify(_X, _Y) -> false.
-
--spec md5(Data::(iolist() | binary())) -> Digest::binary().
-md5(Data) ->
-    try crypto:hash(md5, Data) catch error:_ -> erlang:md5(Data) end.
-
--spec md5_init() -> Context::binary().
-md5_init() ->
-    try crypto:hash_init(md5) catch error:_ -> erlang:md5_init() end.
-
--spec md5_update(Context::binary(), Data::(iolist() | binary())) ->
-    NewContext::binary().
-md5_update(Ctx, D) ->
-    try crypto:hash_update(Ctx,D) catch error:_ -> erlang:md5_update(Ctx,D) end.
-
--spec md5_final(Context::binary()) -> Digest::binary().
-md5_final(Ctx) ->
-    try crypto:hash_final(Ctx) catch error:_ -> erlang:md5_final(Ctx) end.
 
 % linear search is faster for small lists, length() is 0.5 ms for 100k list
 reorder_results(Keys, SortedResults) when length(Keys) < 100 ->
