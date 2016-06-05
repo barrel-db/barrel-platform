@@ -12,7 +12,6 @@
 
 -module(couch_util).
 
--export([start_app_deps/1, ensure_started/1]).
 -export([priv_dir/0, normpath/1]).
 -export([should_flush/0, should_flush/1, to_existing_atom/1]).
 -export([rand32/0, implode/2]).
@@ -38,24 +37,6 @@
 
 % arbitrarily chosen amount of memory to use before flushing to disk
 -define(FLUSH_MAX_MEM, 10000000).
-
-%% @spec start_app_deps(App :: atom()) -> ok
-%% @doc Start depedent applications of App.
-start_app_deps(App) ->
-    application:load(App),
-    {ok, DepApps} = application:get_key(App, applications),
-    [ensure_started(A) || A <- DepApps],
-    ok.
-
-%% @spec ensure_started(Application :: atom()) -> ok
-%% @doc Start the named application if not already started.
-ensure_started(App) ->
-    case application:start(App) of
-	ok ->
-	    ok;
-	{error, {already_started, App}} ->
-	    ok
-    end.
 
 priv_dir() ->
     case code:priv_dir(couch) of
