@@ -37,7 +37,7 @@
 -export([config_change/3]).
 
 
--include("couch_db.hrl").
+-include_lib("couch_db.hrl").
 
 -record(state, {root_dir = [],
                 dbname_regexp,
@@ -57,7 +57,7 @@ dev_start() ->
     couch:start().
 
 get_version() ->
-    couch:version().
+    barrel_server:version().
 get_version(short) ->
   %% strip git hash from version string
   [Version|_Rest] = string:tokens(get_version(), "+"),
@@ -65,13 +65,7 @@ get_version(short) ->
 
 
 get_uuid() ->
-    case barrel_config:get("couchdb", "uuid", nil) of
-        nil ->
-            UUID = barrel_uuids:random(),
-            barrel_config:set("couchdb", "uuid", UUID),
-            UUID;
-        UUID -> list_to_binary(UUID)
-    end.
+    barrel_server:node_id().
 
 get_stats() ->
     {ok, #state{start_time=Time,dbs_open=Open}} =

@@ -22,6 +22,9 @@
 -module(barrel_config).
 
 %% public API
+-export([get_env/1, get_env/2]).
+
+
 -export([init/1]).
 -export([all/0]).
 -export([get/1, get/2, get/3]).
@@ -39,6 +42,9 @@
 -export([handle_config_change/1]).
 
 -define(CFGNAME, barrel).
+
+get_env(Key) -> get_env(Key, undefined).
+get_env(Key, Default) -> application:get_env(barrel, Key, Default).
 
 
 %% @doc int with config files

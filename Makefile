@@ -15,7 +15,7 @@ update:
 	@$(REBAR) update
 
 devrel:
-	@$(REBAR) release
+	./rebar3 release
 
 rel: clean
 	@$(REBAR) as prod release

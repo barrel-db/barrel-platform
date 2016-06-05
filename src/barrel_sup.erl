@@ -20,14 +20,14 @@
 %%====================================================================
 
 start_link() ->
-  case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
-    {ok, Pid} ->
-      io:format("version: ~s.", [get_version()]),
-      couch_httpd_util:display_uris(), %% display uris
-      {ok, Pid};
-    Else ->
-      Else
-  end.
+	case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
+		{ok, Pid} ->
+			io:format("version: ~s.", [barrel_server:version()]),
+			couch_httpd_util:display_uris(),
+			{ok, Pid};
+		Else ->
+			Else
+	end.
 
 
 
@@ -48,10 +48,7 @@ init([]) ->
 
   Server = {couch_server,
             {couch_server, sup_start_link, []},
-            permanent,
-            brutal_kill,
-            worker,
-            [couch_server]},
+            permanent,brutal_kill,	worker,[couch_server]},
 
   Daemons = {barrel_daemons_sup,
              {barrel_daemons_sup, start_link, []},
@@ -73,16 +70,13 @@ init([]) ->
              {barrel_metrics_sup, start_link, []},
              permanent, infinity, supervisor, [barrel_metrics_sup]},
 
-  {ok, { {one_for_all, 0, 10}, [UUIDs, Log, Metrics, Server, Daemons, Http, Index, Replicator]} }.
+  Api = {barrel_api_sup,
+         {barrel_api_sup, start_link, []},
+         permanent, infinity, supervisor, [barrel_api_sup]},
+
+  {ok, { {one_for_all, 0, 10}, [UUIDs, Log, Metrics, Server, Daemons,
+                                Http, Api, Index, Replicator]} }.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-get_version() ->
-  case application:get_key(barrel, vsn) of
-    {ok, FullVersion} ->
-      hd(string:tokens(FullVersion, "-"));
-    _ ->
-      "0.0.0"
-  end.

@@ -22,6 +22,8 @@
         oauth,
         hackney,
         mochiweb,
+        ranch,
+        cowboy,
         hooks,
         econfig,
         exometer_core

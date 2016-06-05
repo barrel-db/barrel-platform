@@ -17,15 +17,19 @@
 %% API
 %%====================================================================
 
+-spec start(application:start_type(), any()) -> {ok, pid()}.
 start(_StartType, _StartArgs) ->
-	Args = init:get_arguments(),
-	ok = init_config(Args),
-	ok = maybe_set_pidfile(Args),
-    'barrel_sup':start_link().
+  Args = init:get_arguments(),
+  ok = init_config(Args),
+  ok = maybe_set_pidfile(Args),
+  'barrel_sup':start_link().
 
-%%--------------------------------------------------------------------
+
+-spec stop(atom()) -> ok.
 stop(_State) ->
     ok.
+
+
 
 %%====================================================================
 %% Internal functions

@@ -1,5 +1,5 @@
 ## Name of the node
--name {{node}}
+-name {{nodename}}
 
 ## Cookie for distributed erlang
 -setcookie {{cookie}}
