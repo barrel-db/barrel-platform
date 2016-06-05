@@ -20,7 +20,6 @@
          node_name/0,
          cluster_name/0]).
 
--define(PROTOCOLS, [<<"HTTP11">>, <<"WEBSOCKET">>]).
 -define(CLUSTER_NAME, <<"barrel">>).
 
 
@@ -28,8 +27,7 @@ node_info() ->
   #{ <<"name">> => node_name(),
      <<"cluster_name">> => cluster_name(),
      <<"uuid">> => node_id(),
-     <<"protocols">> => ?PROTOCOLS,
-     <<"version">> => #{ <<"number">> => version() }
+     <<"version">> => #{ <<"number">> => list_to_binary(version()) }
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.

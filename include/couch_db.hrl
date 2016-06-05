@@ -68,87 +68,76 @@
 -type path() :: {Start::pos_integer(), branch()}.
 -type tree() :: [branch()]. % sorted by key
 
--record(rev_info,
-    {
-    rev,
-    seq = 0,
-    deleted = false,
-    body_sp = nil % stream pointer
-    }).
+-record(rev_info, {rev,
+                   seq = 0,
+                   deleted = false,
+                   body_sp = nil % stream pointer
+                  }).
 
--record(doc_info,
-    {
-    id = <<"">>,
-    high_seq = 0,
-    revs = [] % rev_info
-    }).
+-record(doc_info, {id = <<"">>,
+                   high_seq = 0,
+                   revs = [] % rev_info
+                  }).
 
--record(full_doc_info,
-    {id = <<"">>,
-    update_seq = 0,
-    deleted = false,
-    rev_tree = [],
-    leafs_size = 0
-    }).
+-record(full_doc_info, {id = <<"">>,
+                        update_seq = 0,
+                        deleted = false,
+                        rev_tree = [],
+                        leafs_size = 0
+                       }).
 
--record(httpd,
-    {mochi_req,
-    peer,
-    method,
-    requested_path_parts,
-    path_parts,
-    db_url_handlers,
-    user_ctx,
-    req_body = undefined,
-    design_url_handlers,
-    auth,
-    default_fun,
-    url_handlers
-    }).
+-record(httpd, {mochi_req,
+                peer,
+                method,
+                requested_path_parts,
+                path_parts,
+                db_url_handlers,
+                user_ctx,
+                req_body = undefined,
+                design_url_handlers,
+                auth,
+                default_fun,
+                url_handlers
+               }).
 
 
--record(doc,
-    {
-    id = <<"">>,
-    revs = {0, []},
+-record(doc, {id = <<"">>,
+              revs = {0, []},
 
-    % the json body object.
-    body = {[]},
+              % the json body object.
+              body = {[]},
 
-    atts = [], % attachments
+              atts = [], % attachments
 
-    deleted = false,
+              deleted = false,
 
-    % key/value tuple of meta information, provided when using special options:
-    % couch_db:open_doc(Db, Id, Options).
-    meta = []
-    }).
+              % key/value tuple of meta information, provided when using special options:
+              % couch_db:open_doc(Db, Id, Options).
+              meta = []
+             }).
 
 
--record(att,
-    {
-    name,
-    type,
-    att_len,
-    disk_len, % length of the attachment in its identity form
+-record(att, {name,
+              type,
+              att_len,
+              disk_len, % length of the attachment in its identity form
               % (that is, without a content encoding applied to it)
               % differs from att_len when encoding /= identity
-    md5= <<>>,
-    revpos=0,
-    data,
-    encoding=identity % currently supported values are:
-                      %     identity, gzip
-                      % additional values to support in the future:
-                      %     deflate, compress
-    }).
+              md5= <<>>,
+              revpos=0,
+              data,
+              encoding=identity % currently supported values are:
+              %     identity, gzip
+              % additional values to support in the future:
+              %     deflate, compress
+             }).
 
 
--record(user_ctx,
-    {
-    name=null,
-    roles=[],
-    handler
-    }).
+-record(user_ctx, {
+          name=null,
+          roles=[],
+          handler
+         }).
 
 % This should be updated anytime a header change happens that requires more
 % than filling in new defaults.
@@ -162,130 +151,121 @@
 
 -define(LATEST_DISK_VERSION, 6).
 
--record(db_header,
-    {disk_version = ?LATEST_DISK_VERSION,
-     update_seq = 0,
-     unused = 0,
-     fulldocinfo_by_id_btree_state = nil,
-     docinfo_by_seq_btree_state = nil,
-     local_docs_btree_state = nil,
-     purge_seq = 0,
-     purged_docs = nil,
-     security_ptr = nil,
-     revs_limit = 1000
-    }).
+-record(db_header, {disk_version = ?LATEST_DISK_VERSION,
+                    update_seq = 0,
+                    unused = 0,
+                    fulldocinfo_by_id_btree_state = nil,
+                    docinfo_by_seq_btree_state = nil,
+                    local_docs_btree_state = nil,
+                    purge_seq = 0,
+                    purged_docs = nil,
+                    security_ptr = nil,
+                    revs_limit = 1000
+                   }).
 
--record(db,
-    {main_pid = nil,
-    update_pid = nil,
-    compactor_pid = nil,
-    instance_start_time, % number of microsecs since jan 1 1970 as a binary string
-    fd,
-    updater_fd,
-    fd_ref_counter,
-    header = #db_header{},
-    committed_update_seq,
-    fulldocinfo_by_id_btree,
-    docinfo_by_seq_btree,
-    local_docs_btree,
-    update_seq,
-    name,
-    filepath,
-    validate_doc_funs = [],
-    validate_doc_read_funs = [],
-    security = [],
-    security_ptr = nil,
-    user_ctx = #user_ctx{},
-    waiting_delayed_commit = nil,
-    revs_limit = 1000,
-    fsync_options = [],
-    options = [],
-    compression,
-    before_doc_update = nil, % nil | fun(Doc, Db) -> NewDoc
-    after_doc_read = nil     % nil | fun(Doc, Db) -> NewDoc
-    }).
+-record(db, {main_pid = nil,
+             update_pid = nil,
+             compactor_pid = nil,
+             instance_start_time, % number of microsecs since jan 1 1970 as a binary string
+             fd,
+             updater_fd,
+             fd_ref_counter,
+             header = #db_header{},
+             committed_update_seq,
+             fulldocinfo_by_id_btree,
+             docinfo_by_seq_btree,
+             local_docs_btree,
+             update_seq,
+             name,
+             filepath,
+             validate_doc_funs = [],
+             validate_doc_read_funs = [],
+             security = [],
+             security_ptr = nil,
+             user_ctx = #user_ctx{},
+             waiting_delayed_commit = nil,
+             revs_limit = 1000,
+             fsync_options = [],
+             options = [],
+             compression,
+             before_doc_update = nil, % nil | fun(Doc, Db) -> NewDoc
+             after_doc_read = nil     % nil | fun(Doc, Db) -> NewDoc
+            }).
 
 
--record(view_query_args, {
-    start_key,
-    end_key,
-    start_docid = ?MIN_STR,
-    end_docid = ?MAX_STR,
+-record(view_query_args, {start_key,
+                          end_key,
+                          start_docid = ?MIN_STR,
+                          end_docid = ?MAX_STR,
 
-    direction = fwd,
-    inclusive_end=true, % aka a closed-interval
+                          direction = fwd,
+                          inclusive_end=true, % aka a closed-interval
 
-    limit = 10000000000, % Huge number to simplify logic
-    skip = 0,
+                          limit = 10000000000, % Huge number to simplify logic
+                          skip = 0,
 
-    group_level = 0,
+                          group_level = 0,
 
-    view_type = nil,
-    include_docs = false,
-    doc_options = [],
-    conflicts = false,
-    stale = false,
-    multi_get = false,
-    callback = nil,
-    list = nil
-}).
+                          view_type = nil,
+                          include_docs = false,
+                          doc_options = [],
+                          conflicts = false,
+                          stale = false,
+                          multi_get = false,
+                          callback = nil,
+                          list = nil
+                         }).
 
--record(view_fold_helper_funs, {
-    reduce_count,
-    passed_end,
-    start_response,
-    send_row
-}).
+-record(view_fold_helper_funs, {reduce_count,
+                                passed_end,
+                                start_response,
+                                send_row
+                               }).
 
--record(reduce_fold_helper_funs, {
-    start_response,
-    send_row
-}).
+-record(reduce_fold_helper_funs, {start_response,
+                                  send_row
+                                 }).
 
--record(extern_resp_args, {
-    code = 200,
-    stop = false,
-    data = <<>>,
-    ctype = "application/json",
-    headers = [],
-    json = nil
-}).
+-record(extern_resp_args, {code = 200,
+                           stop = false,
+                           data = <<>>,
+                           ctype = "application/json",
+                           headers = [],
+                           json = nil
+                          }).
 
--record(index_header,
-    {seq=0,
-    purge_seq=0,
-    id_btree_state=nil,
-    view_states=nil
-    }).
+-record(index_header, {seq=0,
+                       purge_seq=0,
+                       id_btree_state=nil,
+                       view_states=nil
+                      }).
 
 % small value used in revision trees to indicate the revision isn't stored
 -define(REV_MISSING, []).
 
--record(btree, {
-    fd,
-    root,
-    extract_kv = fun({_Key, _Value} = KV) -> KV end,
-    assemble_kv = fun(Key, Value) -> {Key, Value} end,
-    less = fun(A, B) -> A < B end,
-    reduce = nil,
-    compression = ?DEFAULT_COMPRESSION
-}).
+-record(btree, {fd,
+                root,
+                extract_kv = fun({_Key, _Value} = KV) -> KV end,
+                assemble_kv = fun(Key, Value) -> {Key, Value} end,
+                less = fun(A, B) -> A < B end,
+                reduce = nil,
+                compression = ?DEFAULT_COMPRESSION
+               }).
 
--record(changes_args, {
-    feed = "normal",
-    dir = fwd,
-    since = 0,
-    limit = 1000000000000000,
-    style = main_only,
-    heartbeat,
-    timeout,
-    filter = "",
-    filter_fun,
-    filter_args = [],
-    include_removed_docs = true,
-    include_docs = false,
-    doc_options = [],
-    conflicts = false,
-    db_open_options = [],
-    view_name
-}).
+-record(changes_args, {feed = "normal",
+                       dir = fwd,
+                       since = 0,
+                       limit = 1000000000000000,
+                       style = main_only,
+                       heartbeat,
+                       timeout,
+                       filter = "",
+                       filter_fun,
+                       filter_args = [],
+                       include_removed_docs = true,
+                       include_docs = false,
+                       doc_options = [],
+                       conflicts = false,
+                       db_open_options = [],
+                       view_name
+                      }).
