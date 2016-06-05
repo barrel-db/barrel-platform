@@ -187,7 +187,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
                     FallbackWhitelist;
                 {error, _} ->
                     [{WhitelistSection, WhitelistKey}] = FallbackWhitelist,
-                    barrel_log:error("Only whitelisting ~s/~s due to error parsing: ~p",
+                    lager:error("Only whitelisting ~s/~s due to error parsing: ~p",
                                [WhitelistSection, WhitelistKey, WhitelistValue]),
                     FallbackWhitelist
             end,
@@ -300,7 +300,7 @@ handle_log_req(#httpd{method='GET'}=Req) ->
     Bytes = list_to_integer(couch_httpd:qs_value(Req, "bytes", "1000")),
     Offset = list_to_integer(couch_httpd:qs_value(Req, "offset", "0")),
     Formatted = couch_httpd:qs_value(Req, "formatted", "false"),
-    RawChunk = barrel_log:read(Bytes, Offset),
+    RawChunk = lager:read(Bytes, Offset),
     case Formatted of
         "true" ->
             EndOfLine = string:chr(RawChunk, $\n),
@@ -322,13 +322,13 @@ handle_log_req(#httpd{method='POST'}=Req) ->
     Message = binary_to_list(couch_util:get_value(<<"message">>, PostBody)),
     case Level of
     <<"debug">> ->
-        barrel_log:debug(Message, []),
+        lager:debug(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     <<"info">> ->
-        barrel_log:info(Message, []),
+        lager:info(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     <<"error">> ->
-        barrel_log:error(Message, []),
+        lager:error(Message, []),
         send_json(Req, 200, {[{ok, true}]});
     _ ->
         send_json(Req, 400, {[{error, list_to_binary(io_lib:format("Unrecognized log level '~s'", [Level]))}]})

@@ -393,7 +393,7 @@ handle_info({'DOWN', _, process, Pid, Status}, #qserver{
     [{Pid, Proc}] ->
         case Status of
         normal -> ok;
-        _ -> barrel_log:debug("Linked process died abnormally: ~p (reason: ~p)", [Pid, Status])
+        _ -> lager:debug("Linked process died abnormally: ~p (reason: ~p)", [Pid, Status])
         end,
         rem_value(PidProcs, Pid),
         catch rem_from_list(LangProcs, Proc#proc.lang, Proc),
@@ -518,11 +518,11 @@ proc_with_ddoc(DDoc, DDocKey, LangProcs) ->
         end, LangProcs),
     case DDocProcs of
         [DDocProc|_] ->
-            barrel_log:debug("DDocProc found for DDocKey: ~p",[DDocKey]),
+            lager:debug("DDocProc found for DDocKey: ~p",[DDocKey]),
             {ok, DDocProc};
         [] ->
             [TeachProc|_] = LangProcs,
-            barrel_log:debug("Teach ddoc to new proc ~p with DDocKey: ~p",[TeachProc, DDocKey]),
+            lager:debug("Teach ddoc to new proc ~p with DDocKey: ~p",[TeachProc, DDocKey]),
             {ok, SmartProc} = teach_ddoc(DDoc, DDocKey, TeachProc),
             {ok, SmartProc}
     end.

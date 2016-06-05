@@ -171,7 +171,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
         CurrentTime = make_cookie_time(),
         case barrel_config:get("couch_httpd_auth", "secret", nil) of
         nil ->
-            barrel_log:debug("cookie auth secret is not set",[]),
+            lager:debug("cookie auth secret is not set",[]),
             Req;
         SecretStr ->
             Secret = list_to_binary(SecretStr),
@@ -183,13 +183,13 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
                 ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeStr),
                 Hash = list_to_binary(HashStr),
                 Timeout = barrel_config:get_integer("couch_httpd_auth", "timeout", 600),
-                barrel_log:debug("timeout ~p", [Timeout]),
+                lager:debug("timeout ~p", [Timeout]),
                 case (catch erlang:list_to_integer(TimeStr, 16)) of
                     TimeStamp when CurrentTime < TimeStamp + Timeout ->
                         case couch_passwords:verify(ExpectedHash, Hash) of
                             true ->
                                 TimeLeft = TimeStamp + Timeout - CurrentTime,
-                                barrel_log:debug("Successful cookie auth as: ~p", [User]),
+                                lager:debug("Successful cookie auth as: ~p", [User]),
                                 Req#httpd{user_ctx=#user_ctx{
                                     name=list_to_binary(User),
                                     roles=couch_util:get_value(<<"roles">>, UserProps, [])
@@ -258,7 +258,7 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
     end,
     UserName = list_to_binary(couch_util:get_value("name", Form, "")),
     Password = list_to_binary(couch_util:get_value("password", Form, "")),
-    barrel_log:debug("Attempt Login: ~s",[UserName]),
+    lager:debug("Attempt Login: ~s",[UserName]),
     User = case couch_auth_cache:get_user_creds(UserName) of
         nil -> [];
         Result -> Result

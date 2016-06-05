@@ -42,10 +42,6 @@ init([]) ->
            {barrel_uuids, start_link, []},
            permanent, brutal_kill, worker, [barrel_uuids]},
 
-  Log = {barrel_log,
-         {barrel_log, start_link, []},
-         permanent, brutal_kill, worker, [barrel_log]},
-
   Server = {couch_server,
             {couch_server, sup_start_link, []},
             permanent,brutal_kill,	worker,[couch_server]},
@@ -74,7 +70,7 @@ init([]) ->
          {barrel_api_sup, start_link, []},
          permanent, infinity, supervisor, [barrel_api_sup]},
 
-  {ok, { {one_for_all, 0, 10}, [UUIDs, Log, Metrics, Server, Daemons,
+  {ok, { {one_for_all, 0, 10}, [UUIDs, Metrics, Server, Daemons,
                                 Http, Api, Index, Replicator]} }.
 
 %%====================================================================

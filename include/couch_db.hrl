@@ -40,29 +40,6 @@
 
 -define(DEFAULT_ATTACHMENT_CONTENT_TYPE, <<"application/octet-stream">>).
 
--define(LOG_DEBUG(Format, Args),
-    case barrel_log:debug_on(?MODULE) of
-        true ->
-            barrel_log:debug(Format, Args);
-        false -> ok
-    end).
-
--define(LOG_INFO(Format, Args),
-    case barrel_log:info_on(?MODULE) of
-        true ->
-            barrel_log:info(Format, Args);
-        false -> ok
-    end).
-
--define(LOG_WARN(Format, Args),
-    case barrel_log:warn_on(?MODULE) of
-        true ->
-            barrel_log:warn(Format, Args);
-        false -> ok
-    end).
-
--define(LOG_ERROR(Format, Args), barrel_log:error(Format, Args)).
-
 % Tree::term() is really a tree(), but we don't want to require R13B04 yet
 -type branch() :: {Key::term(), Value::term(), Tree::term()}.
 -type path() :: {Start::pos_integer(), branch()}.

@@ -84,14 +84,14 @@ handle_cast(_Whatever, State) ->
     {noreply, State}.
 
 handle_info({'EXIT', Pid, normal}, Handlers) ->
-    barrel_log:info("EXTERNAL: Server ~p terminated normally", [Pid]),
+    lager:info("EXTERNAL: Server ~p terminated normally", [Pid]),
     % The process terminated normally without us asking - Remove Pid from the
     % handlers table so we don't attempt to reuse it
     ets:match_delete(Handlers, {'_', Pid}),
     {noreply, Handlers};
 
 handle_info({'EXIT', Pid, Reason}, Handlers) ->
-    barrel_log:info("EXTERNAL: Server ~p died. (reason: ~p)", [Pid, Reason]),
+    lager:info("EXTERNAL: Server ~p died. (reason: ~p)", [Pid, Reason]),
     % Remove Pid from the handlers table so we don't try closing
     % it a second time in terminate/2.
     ets:match_delete(Handlers, {'_', Pid}),

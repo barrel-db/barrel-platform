@@ -172,14 +172,14 @@ handle_info({'EXIT', Pid, Reason}, Server) ->
                 ets:match_object(?BY_DB, {DbName, {'$1', Sig}}),
             rem_from_ets(DbName, Sig, DDocId, Pid);
         [] when Reason /= normal ->
-            barrel_log:warn("unhandled error ~p~n", [Reason]),
+            lager:warn("unhandled error ~p~n", [Reason]),
             ok;
         _Else ->
             ok
     end,
     {noreply, Server};
 handle_info(Msg, State) ->
-    barrel_log:warn("~p did not expect ~p", [?MODULE, Msg]),
+    lager:warn("~p did not expect ~p", [?MODULE, Msg]),
     {noreply, State}.
 
 

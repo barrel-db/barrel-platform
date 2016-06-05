@@ -334,7 +334,7 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
         {ok, VSeqBtree2, VKSeqBtree2} = case IsUpdated of
             true ->
                 {SToDel, KSToDel} = removed_seqs(RemovedKeys, [], []),
-                barrel_log:debug("indexing seqs, view ~p~n - add: ~p~n - rem:~p~n", [ViewId, SKVs, SToDel]),
+                lager:debug("indexing seqs, view ~p~n - add: ~p~n - rem:~p~n", [ViewId, SKVs, SToDel]),
                 {ok, SBt} = couch_btree:add_remove(View#mrview.seq_btree, SKVs,
                                                    SToDel),
 
@@ -342,7 +342,7 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
                                                     KSToDel),
                 {ok, SBt, KSBt};
             false ->
-                barrel_log:debug("no seq index to update", []),
+                lager:debug("no seq index to update", []),
                 {ok, View#mrview.seq_btree, View#mrview.kseq_btree}
         end,
 

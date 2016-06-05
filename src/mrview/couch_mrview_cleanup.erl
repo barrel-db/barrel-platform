@@ -38,7 +38,7 @@ run(Db) ->
     ToDelete = DiskFiles -- SigFiles,
 
     lists:foreach(fun(FN) ->
-        barrel_log:debug("Deleting stale view file: ~s", [FN]),
+        lager:debug("Deleting stale view file: ~s", [FN]),
         couch_file:delete(RootDir, FN, false)
     end, ToDelete),
 

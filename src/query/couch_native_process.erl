@@ -70,7 +70,7 @@ handle_call({set_timeout, TimeOut}, _From, State) ->
     {reply, ok, State#evstate{timeout=TimeOut}};
 
 handle_call({prompt, Data}, _From, State) ->
-    barrel_log:debug("Prompt native qs: ~s",[?JSON_ENCODE(Data)]),
+    lager:debug("Prompt native qs: ~s",[?JSON_ENCODE(Data)]),
     {NewState, Resp} = try run(State, to_binary(Data)) of
         {S, R} -> {S, R}
         catch
@@ -166,7 +166,7 @@ run(#evstate{ddocs=DDocs}=State, [<<"ddoc">>, DDocId | Rest]) ->
     DDoc = load_ddoc(DDocs, DDocId),
     ddoc(State, DDoc, Rest);
 run(_, Unknown) ->
-    barrel_log:error("Native Process: Unknown command: ~p~n", [Unknown]),
+    lager:error("Native Process: Unknown command: ~p~n", [Unknown]),
     throw({error, unknown_command}).
     
 ddoc(State, {_DDoc}, [[<<"run">>, Source], Args]) ->
@@ -193,7 +193,7 @@ ddoc(State, {_, Fun}, [<<"filters">>|_], [Docs, Req]) ->
         case catch Fun(Doc, Req) of
         true -> true;
         false -> false;
-        {'EXIT', Error} -> barrel_log:error("~p", [Error])
+        {'EXIT', Error} -> lager:error("~p", [Error])
         end
     end,
     Resp = lists:map(FilterFunWrapper, Docs),
@@ -262,7 +262,7 @@ bindings(State, Sig, DDoc) ->
     Self = self(),
 
     Log = fun(Msg) ->
-        barrel_log:info(Msg, [])
+        lager:info(Msg, [])
     end,
 
     Emit = fun(Id, Value) ->

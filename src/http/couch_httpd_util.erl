@@ -36,7 +36,7 @@ display_uris(Bindings) ->
     Ip = barrel_config:get("httpd", "bind_address", "127.0.0.1"),
     lists:foreach(fun(Binding) ->
                 Uri = get_uri(Binding, Ip),
-                barrel_log:info("HTTP API started on ~p~n", [Uri])
+                lager:info("HTTP API started on ~p~n", [Uri])
         end, Bindings).
 
 write_uri_file() ->
@@ -53,11 +53,11 @@ write_uri_file() ->
             case file:write_file(UriFile, Lines) of
                 ok -> ok;
                 {error, eacces} ->
-                    barrel_log:info("Permission error when writing to URI file ~s",
+                    lager:info("Permission error when writing to URI file ~s",
                               [UriFile]),
                     throw({file_permission_error, UriFile});
                 Error2 ->
-                    barrel_log:info("Failed to write to URI file ~s: ~p~n",
+                    lager:info("Failed to write to URI file ~s: ~p~n",
                               [UriFile, Error2]),
                     throw(Error2)
             end

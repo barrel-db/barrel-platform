@@ -61,7 +61,7 @@ open(Filepath, Options) ->
             case {lists:member(nologifmissing, Options), Reason} of
             {true, enoent} -> ok;
             _ ->
-            barrel_log:error("Could not open file ~s: ~s",
+            lager:error("Could not open file ~s: ~s",
                 [Filepath, file:format_error(Reason)])
             end,
             Error

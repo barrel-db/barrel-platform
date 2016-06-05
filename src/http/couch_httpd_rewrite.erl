@@ -177,7 +177,7 @@ handle_rewrite_req(#httpd{
                                              MochiReq:get(raw_path),
                                              MochiReq:get(headers)),
 
-            barrel_log:debug("rewrite to ~p ~n", [RawPath1]),
+            lager:debug("rewrite to ~p ~n", [RawPath1]),
 
             % build a new mochiweb request
             MochiReq1 = mochiweb_request:new(MochiReq:get(socket),
@@ -399,14 +399,14 @@ process_rules([], _Req, _Db, _DDoc, Routes) ->
 process_rules([Source | Rest], Req, Db, DDoc, Routes) when is_binary(Source) ->
     NewRules= couch_query_servers:run_script(Req, Db, DDoc, Source),
     NewRoutes = process_rules(NewRules, Req, Db, DDoc, []),
-    barrel_log:info("routes ~p~n", [NewRoutes]),
+    lager:info("routes ~p~n", [NewRoutes]),
     process_rules(Rest, Req, Db, DDoc, NewRoutes ++ Routes);
 process_rules([Rule | Rest], Req, Db, DDoc, Routes) ->
     process_rules(Rest, Req, Db, DDoc, [make_rule(Rule) | Routes]).
 
 %% @doc transform json rule in erlang for pattern matching
 make_rule({Rule}) ->
-    barrel_log:info("to ~p~n", [Rule]),
+    lager:info("to ~p~n", [Rule]),
     Method = case couch_util:get_value(<<"method">>, Rule) of
         undefined -> ?MATCH_ALL;
         M -> to_binding(M)
@@ -450,7 +450,7 @@ path_to_list([<<"..">>|R], Acc, DotDotCount) when DotDotCount == 2 ->
     "false" ->
         path_to_list(R, [<<"..">>|Acc], DotDotCount+1);
     _Else ->
-        barrel_log:info("insecure_rewrite_rule ~p blocked", [lists:reverse(Acc) ++ [<<"..">>] ++ R]),
+        lager:info("insecure_rewrite_rule ~p blocked", [lists:reverse(Acc) ++ [<<"..">>] ++ R]),
         throw({insecure_rewrite_rule, "too many ../.. segments"})
     end;
 path_to_list([<<"..">>|R], Acc, DotDotCount) ->

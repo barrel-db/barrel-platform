@@ -103,7 +103,7 @@ open(Db, State) ->
                     {ok, NewSt#mrst{refc=RefCounter}}
             end;
         {error, Reason} = Error ->
-            barrel_log:error("Failed to open view file '~s': ~s",
+            lager:error("Failed to open view file '~s': ~s",
                        [IndexFName, file:format_error(Reason)]),
             Error
     end.
