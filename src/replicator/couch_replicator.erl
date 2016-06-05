@@ -202,7 +202,8 @@ cancel_replication({BaseId, Extension}) ->
         Error
     end.
 
-cancel_replication(RepId, #user_ctx{name = Name, roles = Roles}) ->
+cancel_replication(RepId, UserCtx) ->
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
     case lists:member(<<"_admin">>, Roles) of
     true ->
         cancel_replication(RepId);
@@ -212,11 +213,13 @@ cancel_replication(RepId, #user_ctx{name = Name, roles = Roles}) ->
             BaseId ++ Ext, 1, supervisor:which_children(couch_replicator_job_sup)) of
         {value, {_, Pid, _, _}} when is_pid(Pid) ->
             case (catch gen_server:call(Pid, get_details, infinity)) of
-            {ok, #rep{user_ctx = #user_ctx{name = Name}}} ->
-                cancel_replication(RepId);
-            {ok, _} ->
-                throw({unauthorized,
-                    <<"Can't cancel a replication triggered by another user">>});
+            {ok, #rep{user_ctx = UserCtx}} ->
+                case barrel_lib:userctx_get(name, UserCtx) of
+                    Name -> cancel_replication(RepId);
+                    _ ->
+                        throw({unauthorized,
+                                <<"Can't cancel a replication triggered by another user">>})
+                end;
             {'EXIT', {noproc, {gen_server, call, _}}} ->
                 {error, not_found};
             Error ->

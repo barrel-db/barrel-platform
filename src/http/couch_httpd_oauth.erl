@@ -77,7 +77,8 @@ set_user_ctx(Req, Name) ->
             Req;
         User ->
             Roles = couch_util:get_value(<<"roles">>, User, []),
-            Req#httpd{user_ctx=#user_ctx{name=Name, roles=Roles}}
+            UserCtx = barrel_lib:userctx([{name=Name, xroles=Roles}]),
+            Req#httpd{user_ctx=UserCtx}
     end.
 
 % OAuth request_token
@@ -339,8 +340,8 @@ use_auth_db() ->
 
 
 open_auth_db() ->
-    DbName = barrel_config:get_binaryn("couch_httpd_auth", "authentication_db", <<"_users">>),
-    DbOptions = [{user_ctx, #user_ctx{roles = [<<"_admin">>]}}],
+    DbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", <<"_users">>),
+    DbOptions = [{user_ctx, barrel_lib:adminctx()}],
     {ok, AuthDb} = couch_db:open_int(DbName, DbOptions),
     AuthDb.
 

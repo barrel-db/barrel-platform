@@ -15,9 +15,14 @@
 -module(barrel_lib).
 
 -export([to_binary/1]).
+-export([userctx/0, userctx/1, userctx_get/2, 
+         userctx_put/2, userctx_put/3, is_userctx/1]).
+-export([adminctx/0]).
 -export([load_config/2]).
 
 -include_lib("syntax_tools/include/merl.hrl").
+
+-type userctx() :: map().
 
 -spec to_binary(binary()|list()|integer()|atom()) -> binary().
 to_binary(V) when is_binary(V) -> V;
@@ -26,6 +31,36 @@ to_binary(V) when is_integer(V) -> integer_to_binary(V);
 to_binary(V) when is_atom(V) -> atom_to_binary(V, latin1);
 to_binary(_) -> erlang:error(badarg).
 
+-spec userctx() -> userctx().
+userctx() -> #{}.
+
+-spec userctx(list()) -> userctx().
+userctx(L) -> maps:from_list(L).
+
+-spec adminctx() -> userctx().
+adminctx() -> userctx([{roles, [<<"_admin">>]}]).
+
+-spec userctx_get(atom()|list(), userctx()) -> any().
+userctx_get(L, C) when is_list(L) -> [g(P, C) || P <- L];
+userctx_get(P, C) when is_atom(P) -> g(P, C).
+
+g(name, #{ name := Ret}) -> Ret;
+g(name, _C) -> null;
+g(roles, #{roles := Ret}) -> Ret;
+g(roles, _C) -> [];
+g(handler, #{handler := Ret}) -> Ret;
+g(handler, _C) -> undefined;
+g(Else, C) -> maps:get(Else, C).
+
+-spec userctx_put(any(), any(), userctx()) -> userctx().
+userctx_put(K, V, Ctx) when is_map(Ctx) -> Ctx#{K => V};
+userctx_put(_, _, _)  -> erlang:error(badarg).
+
+-spec userctx_put(list(), userctx()) -> userctx().
+userctx_put(L, C) when is_list(L) -> [userctx_put(K, V, C) || {K, V} <- L].
+
+is_userctx(C) when is_map(C) -> true;
+is_userctx(_) -> false.
 
 %% @doc Utility that converts a given property list into a module that provides
 %% constant time access to the various key/value pairs.

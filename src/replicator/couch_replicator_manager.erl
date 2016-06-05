@@ -345,13 +345,11 @@ rep_db_update_error(Error, DocId) ->
 
 rep_user_ctx({RepDoc}) ->
     case get_value(<<"user_ctx">>, RepDoc) of
-    undefined ->
-        #user_ctx{};
-    {UserCtx} ->
-        #user_ctx{
-            name = get_value(<<"name">>, UserCtx, null),
-            roles = get_value(<<"roles">>, UserCtx, [])
-        }
+    undefined -> barrel_lib:userctx();
+    {UserCtx} -> 
+        Name = proplists:get_value(<<"name">>, UserCtx, null),
+        Roles = proplists:get_value(<<"roles">>, UserCtx, []),
+        barrel_lib:userctx([{name, Name}, {roles, Roles}])
     end.
 
 
@@ -574,7 +572,8 @@ zone(Hr, Min) ->
 
 ensure_rep_db_exists() ->
     DbName = barrel_config:get_binary("replicator", "db", <<"_replicator">>),
-    UserCtx = #user_ctx{roles = [<<"_admin">>, <<"_replicator">>]},
+    Roles = [<<"_admin">>, <<"_replicator">>],
+    UserCtx = barrel_lib:userctx([{roles, Roles}]),
     case couch_db:open_int(DbName, [sys_db, {user_ctx, UserCtx}, nologifmissing]) of
     {ok, Db} ->
         Db;
@@ -643,7 +642,7 @@ state_after_error(#rep_state{retries_left = Left, wait = Wait} = State) ->
 before_doc_update(#doc{id = <<?DESIGN_DOC_PREFIX, _/binary>>} = Doc, _Db) ->
     Doc;
 before_doc_update(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
-    #user_ctx{roles = Roles, name = Name} = UserCtx,
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
     case lists:member(<<"_replicator">>, Roles) of
     true ->
         Doc;
@@ -670,7 +669,7 @@ before_doc_update(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
 after_doc_read(#doc{id = <<?DESIGN_DOC_PREFIX, _/binary>>} = Doc, _Db) ->
     Doc;
 after_doc_read(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
-    #user_ctx{name = Name} = UserCtx,
+    Name = barrel_lib:userctx_get(name, UserCtx),
     case (catch couch_db:check_is_admin(Db)) of
     ok ->
         Doc;

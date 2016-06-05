@@ -350,20 +350,20 @@ handle_request_int(MochiReq, DefaultFun,
 % Try authentication handlers in order until one sets a user_ctx
 % the auth funs also have the option of returning a response
 % move this to couch_httpd_auth?
-authenticate_request(#httpd{user_ctx=#user_ctx{}} = Req, _AuthHandlers) ->
+authenticate_request(#httpd{user_ctx=UserCtx} = Req, _AuthHandlers) when UserCtx /= undefined->
     Req;
 authenticate_request(#httpd{} = Req, []) ->
     case barrel_config:get("couch_httpd_auth", "require_valid_user", "false") of
     "true" ->
         throw({unauthorized, <<"Authentication required.">>});
     "false" ->
-        Req#httpd{user_ctx=#user_ctx{}}
+        Req#httpd{user_ctx=barrel_lib:userctx()}
     end;
 authenticate_request(#httpd{} = Req, [{AuthFun, AuthSrc} | RestAuthHandlers]) ->
     R = case AuthFun(Req) of
-        #httpd{user_ctx=#user_ctx{}=UserCtx}=Req2 ->
-            Req2#httpd{user_ctx=UserCtx#user_ctx{handler=AuthSrc}};
-        Else -> Else
+        #httpd{user_ctx=undefined}=Req2 -> Req2;
+        #httpd{user_ctx=UserCtx}=Req2 ->
+            Req2#httpd{user_ctx=barrel_lib:userctx_put(handler, AuthSrc, UserCtx)}
     end,
     authenticate_request(R, RestAuthHandlers);
 authenticate_request(Response, _AuthSrcs) ->
@@ -567,7 +567,8 @@ etag_maybe(Req, RespFun) ->
 
 verify_is_server_admin(#httpd{user_ctx=UserCtx}) ->
     verify_is_server_admin(UserCtx);
-verify_is_server_admin(#user_ctx{roles=Roles}) ->
+verify_is_server_admin(UserCtx) ->
+    Roles = barrel_lib:userctx_get(roles, UserCtx),
     case lists:member(<<"_admin">>, Roles) of
     true -> ok;
     false -> throw({unauthorized, <<"You are not a server admin.">>})

@@ -183,9 +183,10 @@ json_apply_field({Key, NewValue}, [], Acc) ->
     {[{Key, NewValue}|Acc]}.
 
 json_user_ctx(#db{name=DbName, user_ctx=Ctx}) ->
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], Ctx),
     {[{<<"db">>, DbName},
-            {<<"name">>,Ctx#user_ctx.name},
-            {<<"roles">>,Ctx#user_ctx.roles}]}.
+            {<<"name">>,Name},
+            {<<"roles">>,Roles}]}.
 
 json_decode(D) ->
     try
@@ -407,7 +408,8 @@ encode_doc_id(Id) ->
 with_db(Db, Fun) when is_record(Db, db) ->
     Fun(Db);
 with_db(DbName, Fun) ->
-    case couch_db:open_int(DbName, [{user_ctx, #user_ctx{roles=[<<"_admin">>]}}]) of
+
+    case couch_db:open_int(DbName, [{user_ctx, barrel_lib:adminctx()}]) of
         {ok, Db} ->
             try
                 Fun(Db)

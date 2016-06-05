@@ -101,8 +101,8 @@ show_etag(#httpd{user_ctx=UserCtx}=Req, Doc, DDoc, More) ->
         nil -> nil;
         Doc -> couch_httpd:doc_etag(Doc)
     end,
-    couch_httpd:make_etag({couch_httpd:doc_etag(DDoc), DocPart, Accept,
-        {UserCtx#user_ctx.name, UserCtx#user_ctx.roles}, More}).
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
+    couch_httpd:make_etag({couch_httpd:doc_etag(DDoc), DocPart, Accept, {Name, Roles}, More}).
 
 % updates a doc based on a request
 % handle_doc_update_req(#httpd{method = 'GET'}=Req, _Db, _DDoc) ->
@@ -196,8 +196,7 @@ handle_view_list(Req, Db, DDoc, LName, _VDDoc, <<"_all_docs">>, Keys) ->
     Args0 = couch_httpd_all_docs:parse_qs(Req, Keys),
     ETagFun = fun(BaseSig, Acc0) ->
         UserCtx = Req#httpd.user_ctx,
-        Name = UserCtx#user_ctx.name,
-        Roles = UserCtx#user_ctx.roles,
+        [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
         Accept = couch_httpd:header_value(Req, "Accept"),
         Parts = {couch_httpd:doc_etag(DDoc), Accept, {Name, Roles}},
         ETag = couch_httpd:make_etag({BaseSig, Parts}),
@@ -217,8 +216,7 @@ handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
     Args0 = couch_mrview_http:parse_qs(Req, Keys),
     ETagFun = fun(BaseSig, Acc0) ->
         UserCtx = Req#httpd.user_ctx,
-        Name = UserCtx#user_ctx.name,
-        Roles = UserCtx#user_ctx.roles,
+        [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
         Accept = couch_httpd:header_value(Req, "Accept"),
         Parts = {couch_httpd:doc_etag(DDoc), Accept, {Name, Roles}},
         ETag = couch_httpd:make_etag({BaseSig, Parts}),

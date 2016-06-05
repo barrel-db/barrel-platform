@@ -317,7 +317,8 @@ get_design_docs(Db) ->
     {ok, _, Docs} = couch_btree:fold(by_id_btree(Db), FoldFun, [], KeyOpts),
     Docs.
 
-check_is_admin(#db{user_ctx=#user_ctx{name=Name,roles=Roles}}=Db) ->
+check_is_admin(#db{user_ctx=UserCtx}=Db) ->
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
     {Admins} = get_admins(Db),
     AdminRoles = [<<"_admin">> | couch_util:get_value(<<"roles">>, Admins, [])],
     AdminNames = couch_util:get_value(<<"names">>, Admins,[]),
@@ -333,7 +334,8 @@ check_is_admin(#db{user_ctx=#user_ctx{name=Name,roles=Roles}}=Db) ->
         ok
     end.
 
-check_is_member(#db{user_ctx=#user_ctx{name=Name,roles=Roles}=UserCtx}=Db) ->
+check_is_member(#db{user_ctx=UserCtx}=Db) ->
+    [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
     case (catch check_is_admin(Db)) of
     ok -> ok;
     _ ->

@@ -500,7 +500,7 @@ close_db(#db{fd_ref_counter = RefCntr}) ->
 
 
 refresh_validate_doc_funs(Db0) ->
-    Db = Db0#db{user_ctx = #user_ctx{roles=[<<"_admin">>]}},
+    Db = Db0#db{user_ctx = barrel_lib:adminctx()},
     DesignDocs = couch_db:get_design_docs(Db),
     {UpdateFuns, ReadFuns} = lists:foldl(
             fun(DesignDocInfo, {UAcc, RAcc}) ->

@@ -36,11 +36,11 @@ special_test_authentication_handler(Req) ->
         {_, _} ->
             throw({unauthorized, <<"Name or password is incorrect.">>})
         end,
-        Req#httpd{user_ctx=#user_ctx{name=list_to_binary(Name)}};
+        Req#httpd{user_ctx=barrel_lib:userctx([{name, list_to_binary(Name)}])};
     _ ->
         % No X-Couch-Test-Auth credentials sent, give admin access so the
         % previous authentication can be restored after the test
-        Req#httpd{user_ctx=#user_ctx{roles=[<<"_admin">>]}}
+        Req#httpd{user_ctx=barrel_lib:adminctx()}
     end.
 
 basic_name_pw(Req) ->
@@ -70,10 +70,9 @@ default_authentication_handler(Req) ->
             UserProps ->
                 case authenticate(list_to_binary(Pass), UserProps) of
                     true ->
-                        Req#httpd{user_ctx=#user_ctx{
-                            name=list_to_binary(User),
-                            roles=couch_util:get_value(<<"roles">>, UserProps, [])
-                        }};
+                        UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
+                                                       {roles, couch_util:get_value(<<"roles">>, UserProps, [])}]),
+                        Req#httpd{user_ctx=UserCtx};
                     _Else ->
                         throw({unauthorized, <<"Name or password is incorrect.">>})
                 end
@@ -87,13 +86,13 @@ default_authentication_handler(Req) ->
                 "true" -> Req;
                 % If no admins, and no user required, then everyone is admin!
                 % Yay, admin party!
-                _ -> Req#httpd{user_ctx=#user_ctx{roles=[<<"_admin">>]}}
+                _ -> Req#httpd{user_ctx=barrel_lib:adminctx()}
             end
         end
     end.
 
 null_authentication_handler(Req) ->
-    Req#httpd{user_ctx=#user_ctx{roles=[<<"_admin">>]}}.
+    Req#httpd{user_ctx=barrel_lib:adminctx()}.
 
 %% @doc proxy auth handler.
 %
@@ -137,18 +136,23 @@ proxy_auth_user(Req) ->
                 "true" ->
                     case barrel_config:get("couch_httpd_auth", "secret", nil) of
                         nil ->
-                            Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName), roles=Roles}};
+                            UserCtx = barrel_lib:userctx([{name, list_to_binary(UserName)},
+                                                          {roles, Roles}]),
+                            Req#httpd{user_ctx=UserCtx};
                         Secret ->
                             ExpectedToken = couch_util:to_hex(crypto:hmac(sha, Secret, UserName)),
                             case header_value(Req, XHeaderToken) of
                                 Token when Token == ExpectedToken ->
-                                    Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName),
-                                                            roles=Roles}};
+                                    UserCtx = barrel_lib:userctx([{name, list_to_binary(UserName)},
+                                                                  {roles, Roles}]),
+                                    Req#httpd{user_ctx=UserCtx};
                                 _ -> nil
                             end
                     end;
                 _ ->
-                    Req#httpd{user_ctx=#user_ctx{name=list_to_binary(UserName), roles=Roles}}
+                    UserCtx = barrel_lib:userctx([{name, list_to_binary(UserName)},
+                                                  {roles, Roles}]),
+                    Req#httpd{user_ctx=UserCtx}
             end
     end.
 
@@ -190,10 +194,10 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
                             true ->
                                 TimeLeft = TimeStamp + Timeout - CurrentTime,
                                 lager:debug("Successful cookie auth as: ~p", [User]),
-                                Req#httpd{user_ctx=#user_ctx{
-                                    name=list_to_binary(User),
-                                    roles=couch_util:get_value(<<"roles">>, UserProps, [])
-                                }, auth={FullSecret, TimeLeft < Timeout*0.9}};
+
+                                UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
+                                                              {roles, couch_util:get_value(<<"roles">>, UserProps, [])}]),
+                                Req#httpd{user_ctx=UserCtx, auth={FullSecret, TimeLeft < Timeout*0.9}};
                             _Else ->
                                 Req
                         end;
@@ -204,23 +208,27 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
         end
     end.
 
-cookie_auth_header(#httpd{user_ctx=#user_ctx{name=null}}, _Headers) -> [];
-cookie_auth_header(#httpd{user_ctx=#user_ctx{name=User}, auth={Secret, true}}=Req, Headers) ->
-    % Note: we only set the AuthSession cookie if:
-    %  * a valid AuthSession cookie has been received
-    %  * we are outside a 10% timeout window
-    %  * and if an AuthSession cookie hasn't already been set e.g. by a login
-    %    or logout handler.
-    % The login and logout handlers need to set the AuthSession cookie
-    % themselves.
-    CookieHeader = couch_util:get_value("Set-Cookie", Headers, ""),
-    Cookies = mochiweb_cookies:parse_cookie(CookieHeader),
-    AuthSession = couch_util:get_value("AuthSession", Cookies),
-    if AuthSession == undefined ->
-        TimeStamp = make_cookie_time(),
-        [cookie_auth_cookie(Req, binary_to_list(User), Secret, TimeStamp)];
-    true ->
-        []
+cookie_auth_header(#httpd{user_ctx=UserCtx, auth=Auth}=Req, Headers) when UserCtx /= undefined ->
+    case {barrel_lib:userctx_get(name, UserCtx), Auth} of
+        {null, _} -> [];
+        {User, {Secret, true}} ->
+            % Note: we only set the AuthSession cookie if:
+            %  * a valid AuthSession cookie has been received
+            %  * we are outside a 10% timeout window
+            %  * and if an AuthSession cookie hasn't already been set e.g. by a login
+            %    or logout handler.
+            % The login and logout handlers need to set the AuthSession cookie
+            % themselves.
+            CookieHeader = couch_util:get_value("Set-Cookie", Headers, ""),
+            Cookies = mochiweb_cookies:parse_cookie(CookieHeader),
+            AuthSession = couch_util:get_value("AuthSession", Cookies),
+            if AuthSession == undefined ->
+                TimeStamp = make_cookie_time(),
+                [cookie_auth_cookie(Req, binary_to_list(User), Secret, TimeStamp)];
+            true ->
+                []
+            end;
+        {_, _} -> []
     end;
 cookie_auth_header(_Req, _Headers) -> [].
 
@@ -297,7 +305,7 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
 % get user info
 % GET /_session
 handle_session_req(#httpd{method='GET', user_ctx=UserCtx}=Req) ->
-    Name = UserCtx#user_ctx.name,
+    [Name, Roles, Handler] = barrel_lib:userctx_get([name, roles, handler], UserCtx),
     ForceLogin = couch_httpd:qs_value(Req, "basic", "false"),
     case {Name, ForceLogin} of
         {null, "true"} ->
@@ -308,14 +316,14 @@ handle_session_req(#httpd{method='GET', user_ctx=UserCtx}=Req) ->
                 {ok, true},
                 {<<"userCtx">>, {[
                     {name, Name},
-                    {roles, UserCtx#user_ctx.roles}
+                    {roles, Roles}
                 ]}},
                 {info, {[
                     {authentication_db, barrel_config:get_binary("couch_httpd_auth", "authentication_db", <<"_users">>)},
                     {authentication_handlers, [auth_name(H) || H <- couch_httpd:make_fun_spec_strs(
                             barrel_config:get("httpd", "authentication_handlers"))]}
-                ] ++ maybe_value(authenticated, UserCtx#user_ctx.handler, fun(Handler) ->
-                        auth_name(binary_to_list(Handler))
+                ] ++ maybe_value(authenticated, Handler, fun(Handler1) ->
+                        auth_name(binary_to_list(Handler1))
                     end)}}
             ]})
     end;
