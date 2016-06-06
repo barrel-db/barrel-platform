@@ -17,7 +17,6 @@
         gproc,
         ibrowse,
         snappy,
-        jiffy,
         ucol,
         oauth,
         hackney,
