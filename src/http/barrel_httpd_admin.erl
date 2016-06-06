@@ -1,3 +1,5 @@
+%% Copyright 2015-2016, Benoit Chesneau
+%%
 -module(barrel_httpd_admin).
 
 -export([handle_req/1]).

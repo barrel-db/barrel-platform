@@ -1,3 +1,5 @@
+%% Copyright 2016, Benoit Chesneau
+%%
 % Licensed under the Apache License, Version 2.0 (the "License"); you may not
 % use this file except in compliance with the License. You may obtain a copy of
 % the License at
@@ -10,7 +12,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
-%% The purpose of this module is to allow event handlers to particpate in Erlang
+%% @ doc The purpose of this module is to allow event handlers to particpate in Erlang
 %% supervisor trees. It provide a monitorable process that crashes if the event
 %% handler fails. The process, when shutdown, deregisters the event handler.
 
