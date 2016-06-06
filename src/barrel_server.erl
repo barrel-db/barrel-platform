@@ -18,22 +18,17 @@
 -export([node_info/0,
          node_id/0,
          version/0,
-         node_name/0,
-         cluster_name/0]).
-
--define(CLUSTER_NAME, <<"barrel">>).
-
+         node_name/0]).
 
 node_info() ->
-  #{ <<"name">> => node_name(),
-     <<"cluster_name">> => cluster_name(),
+  #{ <<"name">> => <<"barrel">>,
+     <<"cluster_name">> => node_name(),
      <<"uuid">> => node_id(),
      <<"version">> => #{ <<"number">> => list_to_binary(version()) }
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.
 
-cluster_name() -> application:get_env(barrel, cluster_name, ?CLUSTER_NAME).
 
 node_id() ->
   case barrel_config:get("barrel", "uuid", nil) of
