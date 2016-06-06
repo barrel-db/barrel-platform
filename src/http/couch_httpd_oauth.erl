@@ -372,7 +372,7 @@ get_oauth_ddoc() ->
             ]}
         }
     ]},
-    {ok, couch_doc:from_json_obj(Json)}.
+    {ok, barrel_doc:from_json_obj(Json)}.
 
 
 query_oauth_view(Db, Key) ->

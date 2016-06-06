@@ -285,7 +285,7 @@ temp_view_to_ddoc(Props) ->
              <<"language">> => Language,
              <<"options">> => Options,
              <<"views">> => #{<<"temp">> => View1}},
-    couch_doc:from_json_obj(DDoc).
+    barrel_doc:from_json_obj(DDoc).
 
 
 get_row_count(#mrview{btree=Bt}) ->
@@ -749,30 +749,30 @@ changes_expand([{Seq, {Val, Key, DocId}} | Rest], Type, Acc) ->
 maybe_load_doc(_Db, _DI, #mrargs{include_docs=false}) ->
     [];
 maybe_load_doc(Db, #doc_info{}=DI, #mrargs{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, DI, [conflicts]), Opts);
+    doc_row(barrel_doc:load(Db, DI, [conflicts]), Opts);
 maybe_load_doc(Db, #doc_info{}=DI, #mrargs{doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, DI, []), Opts).
+    doc_row(barrel_doc:load(Db, DI, []), Opts).
 
 
 maybe_load_doc(_Db, _Id, _Val, #mrargs{include_docs=false}) ->
     [];
 maybe_load_doc(Db, Id, Val, #mrargs{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, docid_rev(Id, Val), [conflicts]), Opts);
+    doc_row(barrel_doc:load(Db, docid_rev(Id, Val), [conflicts]), Opts);
 maybe_load_doc(Db, Id, Val, #mrargs{doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, docid_rev(Id, Val), []), Opts).
+    doc_row(barrel_doc:load(Db, docid_rev(Id, Val), []), Opts).
 
 
 doc_row(null, _Opts) ->
     [{doc, null}];
 doc_row(Doc, Opts) ->
-    [{doc, couch_doc:to_json_obj(Doc, Opts)}].
+    [{doc, barrel_doc:to_json_obj(Doc, Opts)}].
 
 
 docid_rev(Id, {Props}) ->
     DocId = couch_util:get_value(<<"_id">>, Props, Id),
     Rev = case couch_util:get_value(<<"_rev">>, Props, nil) of
         nil -> nil;
-        Rev0 -> couch_doc:parse_rev(Rev0)
+        Rev0 -> barrel_doc:parse_rev(Rev0)
     end,
     {DocId, Rev};
 docid_rev(Id, _) ->

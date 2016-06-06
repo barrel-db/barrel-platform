@@ -143,7 +143,7 @@ db_req(#httpd{method='GET',path_parts=[_DbName]}=Req, Db) ->
 
 db_req(#httpd{method='POST',path_parts=[_DbName]}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
-    Doc = couch_doc:from_json_obj(couch_httpd:json_body(Req)),
+    Doc = barrel_doc:from_json_obj(couch_httpd:json_body(Req)),
     validate_attachment_names(Doc),
     Doc2 = case Doc#doc.id of
         <<"">> ->
@@ -202,7 +202,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
         true ->
             Docs = lists:map(
                 fun({ObjProps} = JsonObj) ->
-                    Doc = couch_doc:from_json_obj(JsonObj),
+                    Doc = barrel_doc:from_json_obj(JsonObj),
                     validate_attachment_names(Doc),
                     Id = case Doc#doc.id of
                         <<>> -> barrel_uuids:new();
@@ -212,7 +212,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
                     undefined ->
                        Revs = {0, []};
                     Rev  ->
-                        {Pos, RevId} = couch_doc:parse_rev(Rev),
+                        {Pos, RevId} = barrel_doc:parse_rev(Rev),
                         Revs = {Pos, [RevId]}
                     end,
                     Doc#doc{id=Id,revs=Revs}
@@ -236,7 +236,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
             end;
         false ->
             Docs = lists:map(fun(JsonObj) ->
-                    Doc = couch_doc:from_json_obj(JsonObj),
+                    Doc = barrel_doc:from_json_obj(JsonObj),
                     validate_attachment_names(Doc),
                     Doc
                 end, DocsArray),
@@ -253,11 +253,11 @@ db_req(#httpd{path_parts=[_,<<"_bulk_docs">>]}=Req, _Db) ->
 db_req(#httpd{method='POST',path_parts=[_,<<"_purge">>]}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
     {IdsRevs} = couch_httpd:json_body_obj(Req),
-    IdsRevs2 = [{Id, couch_doc:parse_revs(Revs)} || {Id, Revs} <- IdsRevs],
+    IdsRevs2 = [{Id, barrel_doc:parse_revs(Revs)} || {Id, Revs} <- IdsRevs],
 
     case couch_db:purge_docs(Db, IdsRevs2) of
     {ok, PurgeSeq, PurgedIdsRevs} ->
-        PurgedIdsRevs2 = [{Id, couch_doc:revs_to_strs(Revs)} || {Id, Revs} <- PurgedIdsRevs],
+        PurgedIdsRevs2 = [{Id, barrel_doc:revs_to_strs(Revs)} || {Id, Revs} <- PurgedIdsRevs],
         send_json(Req, 200, #{<<"purge_seq">> => PurgeSeq, <<"purged">> => maps:from_list(PurgedIdsRevs2)});
     Error ->
         throw(Error)
@@ -269,9 +269,9 @@ db_req(#httpd{path_parts=[_,<<"_purge">>]}=Req, _Db) ->
 %% TODO: replace maps:from_list
 db_req(#httpd{method='POST',path_parts=[_,<<"_missing_revs">>]}=Req, Db) ->
     {JsonDocIdRevs} = couch_httpd:json_body_obj(Req),
-    JsonDocIdRevs2 = [{Id, [couch_doc:parse_rev(RevStr) || RevStr <- RevStrs]} || {Id, RevStrs} <- JsonDocIdRevs],
+    JsonDocIdRevs2 = [{Id, [barrel_doc:parse_rev(RevStr) || RevStr <- RevStrs]} || {Id, RevStrs} <- JsonDocIdRevs],
     {ok, Results} = couch_db:get_missing_revs(Db, JsonDocIdRevs2),
-    Results2 = [{Id, couch_doc:revs_to_strs(Revs)} || {Id, Revs, _} <- Results],
+    Results2 = [{Id, barrel_doc:revs_to_strs(Revs)} || {Id, Revs, _} <- Results],
     send_json(Req, #{missing_revs => maps:from_list(Results2)});
 
 db_req(#httpd{path_parts=[_,<<"_missing_revs">>]}=Req, _Db) ->
@@ -281,14 +281,14 @@ db_req(#httpd{path_parts=[_,<<"_missing_revs">>]}=Req, _Db) ->
 db_req(#httpd{method='POST',path_parts=[_,<<"_revs_diff">>]}=Req, Db) ->
     {JsonDocIdRevs} = couch_httpd:json_body_obj(Req),
     JsonDocIdRevs2 =
-        [{Id, couch_doc:parse_revs(RevStrs)} || {Id, RevStrs} <- JsonDocIdRevs],
+        [{Id, barrel_doc:parse_revs(RevStrs)} || {Id, RevStrs} <- JsonDocIdRevs],
     {ok, Results} = couch_db:get_missing_revs(Db, JsonDocIdRevs2),
     Results2 = lists:map(fun
         ({Id, MissingRevs, []}) ->
-            {Id, #{missing => couch_doc:revs_to_strs(MissingRevs)}};
+            {Id, #{missing => barrel_doc:revs_to_strs(MissingRevs)}};
         ({Id, MissingRevs, PossibleAncestors}) ->
-            {Id, #{missing => couch_doc:revs_to_strs(MissingRevs),
-                   possible_ancestors =>  couch_doc:revs_to_strs(PossibleAncestors)}}
+            {Id, #{missing => barrel_doc:revs_to_strs(MissingRevs),
+                   possible_ancestors =>  barrel_doc:revs_to_strs(PossibleAncestors)}}
     end, Results),
     send_json(Req, maps:from_list(Results2));
 
@@ -401,11 +401,11 @@ db_doc_req(#httpd{method = 'GET', mochi_req = MochiReq} = Req, Db, DocId) ->
                 fun(Result, AccSeparator) ->
                     case Result of
                     {ok, Doc} ->
-                        JsonDoc = couch_doc:to_json_obj(Doc, Options),
+                        JsonDoc = barrel_doc:to_json_obj(Doc, Options),
                         Json = ?JSON_ENCODE(#{ok => JsonDoc}),
                         send_chunk(Resp, AccSeparator ++ Json);
                     {{not_found, missing}, RevId} ->
-                        RevStr = couch_doc:rev_to_str(RevId),
+                        RevStr = barrel_doc:rev_to_str(RevId),
                         Json = ?JSON_ENCODE(#{"missing" => RevStr}),
                         send_chunk(Resp, AccSeparator ++ Json)
                     end,
@@ -422,12 +422,12 @@ db_doc_req(#httpd{method = 'GET', mochi_req = MochiReq} = Req, Db, DocId) ->
 
 db_doc_req(#httpd{method='POST'}=Req, Db, DocId) ->
     couch_httpd:validate_referer(Req),
-    couch_doc:validate_docid(DocId),
+    barrel_doc:validate_docid(DocId),
     couch_httpd:validate_ctype(Req, "multipart/form-data"),
     Form = couch_httpd:parse_form(Req),
     case couch_util:get_value("_doc", Form) of
     undefined ->
-        Rev = couch_doc:parse_rev(couch_util:get_value("_rev", Form)),
+        Rev = barrel_doc:parse_rev(couch_util:get_value("_rev", Form)),
         {ok, [{ok, Doc}]} = couch_db:open_doc_revs(Db, DocId, [Rev], []);
     Json ->
         Doc = couch_doc_from_req(Req, DocId, ?JSON_DECODE(Json))
@@ -453,11 +453,11 @@ db_doc_req(#httpd{method='POST'}=Req, Db, DocId) ->
     update_doc(Req, Db, DocId, NewDoc);
 
 db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
-    couch_doc:validate_docid(DocId),
+    barrel_doc:validate_docid(DocId),
 
     case couch_util:to_list(couch_httpd:header_value(Req, "Content-Type")) of
     ("multipart/related;" ++ _) = ContentType ->
-        {ok, Doc0, WaitFun, Parser} = couch_doc:doc_from_multi_part_stream(
+        {ok, Doc0, WaitFun, Parser} = barrel_doc:doc_from_multi_part_stream(
             ContentType, fun() -> receive_request_data(Req) end),
         Doc = couch_doc_from_req(Req, DocId, Doc0),
         try
@@ -466,7 +466,7 @@ db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
             Result
         catch throw:Err ->
             % Document rejected by a validate_doc_update function.
-            couch_doc:abort_multi_part_stream(Parser),
+            barrel_doc:abort_multi_part_stream(Parser),
             throw(Err)
         end;
     _Else ->
@@ -505,27 +505,27 @@ send_doc(Req, Doc, Options) ->
 
 
 send_doc_efficiently(Req, #doc{atts=[]}=Doc, Headers, Options) ->
-        send_json(Req, 200, Headers, couch_doc:to_json_obj(Doc, Options));
+        send_json(Req, 200, Headers, barrel_doc:to_json_obj(Doc, Options));
 send_doc_efficiently(#httpd{mochi_req = MochiReq} = Req,
     #doc{atts = Atts} = Doc, Headers, Options) ->
     case lists:member(attachments, Options) of
     true ->
         case MochiReq:accepts_content_type("multipart/related") of
         false ->
-            send_json(Req, 200, Headers, couch_doc:to_json_obj(Doc, Options));
+            send_json(Req, 200, Headers, barrel_doc:to_json_obj(Doc, Options));
         true ->
             Boundary = barrel_uuids:random(),
-            JsonBytes = ?JSON_ENCODE(couch_doc:to_json_obj(Doc,
+            JsonBytes = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc,
                     [attachments, follows, att_encoding_info | Options])),
-            {ContentType, Len} = couch_doc:len_doc_to_multi_part_stream(
+            {ContentType, Len} = barrel_doc:len_doc_to_multi_part_stream(
                     Boundary,JsonBytes, Atts, true),
             CType = {"Content-Type", binary_to_list(ContentType)},
             {ok, Resp} = start_response_length(Req, 200, [CType|Headers], Len),
-            couch_doc:doc_to_multi_part_stream(Boundary,JsonBytes,Atts,
+            barrel_doc:doc_to_multi_part_stream(Boundary,JsonBytes,Atts,
                     fun(Data) -> couch_httpd:send(Resp, Data) end, true)
         end;
     false ->
-        send_json(Req, 200, Headers, couch_doc:to_json_obj(Doc, Options))
+        send_json(Req, 200, Headers, barrel_doc:to_json_obj(Doc, Options))
     end.
 
 send_docs_multipart(Req, Results, Options1) ->
@@ -538,17 +538,17 @@ send_docs_multipart(Req, Results, Options1) ->
     couch_httpd:send_chunk(Resp, <<"--", OuterBoundary/binary>>),
     lists:foreach(
         fun({ok, #doc{atts=Atts}=Doc}) ->
-            JsonBytes = ?JSON_ENCODE(couch_doc:to_json_obj(Doc, Options)),
-            {ContentType, _Len} = couch_doc:len_doc_to_multi_part_stream(
+            JsonBytes = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc, Options)),
+            {ContentType, _Len} = barrel_doc:len_doc_to_multi_part_stream(
                     InnerBoundary, JsonBytes, Atts, true),
             couch_httpd:send_chunk(Resp, <<"\r\nContent-Type: ",
                     ContentType/binary, "\r\n\r\n">>),
-            couch_doc:doc_to_multi_part_stream(InnerBoundary, JsonBytes, Atts,
+            barrel_doc:doc_to_multi_part_stream(InnerBoundary, JsonBytes, Atts,
                     fun(Data) -> couch_httpd:send_chunk(Resp, Data)
                     end, true),
              couch_httpd:send_chunk(Resp, <<"\r\n--", OuterBoundary/binary>>);
         ({{not_found, missing}, RevId}) ->
-             RevStr = couch_doc:rev_to_str(RevId),
+             RevStr = barrel_doc:rev_to_str(RevId),
              Json = ?JSON_ENCODE(#{<<"missing">> => RevStr}),
              couch_httpd:send_chunk(Resp,
                 [<<"\r\nContent-Type: application/json; error=\"true\"\r\n\r\n">>,
@@ -570,7 +570,7 @@ send_ranges_multipart(Req, ContentType, Len, Att, Ranges) ->
             <<"\r\nContent-Type: ", ContentType/binary, "\r\n",
             "Content-Range: ", ContentRange/binary, "\r\n",
            "\r\n">>),
-        couch_doc:range_att_foldl(Att, From, To + 1,
+        barrel_doc:range_att_foldl(Att, From, To + 1,
             fun(Seg, _) -> send_chunk(Resp, Seg) end, {ok, Resp}),
         couch_httpd:send_chunk(Resp, <<"\r\n--", Boundary/binary>>)
     end, Ranges),
@@ -593,12 +593,12 @@ make_content_range(From, To, Len) ->
 
 update_doc_result_to_json({{Id, Rev}, Error}) ->
     {_Code, Err, Msg} = couch_httpd:error_info(Error),
-    #{id => Id, rev => couch_doc:rev_to_str(Rev), error => Err, reason => Msg}.
+    #{id => Id, rev => barrel_doc:rev_to_str(Rev), error => Err, reason => Msg}.
 
 update_doc_result_to_json(#doc{id=DocId}, Result) ->
     update_doc_result_to_json(DocId, Result);
 update_doc_result_to_json(DocId, {ok, NewRev}) ->
-    #{ok => true, id => DocId, rev => couch_doc:rev_to_str(NewRev)};
+    #{ok => true, id => DocId, rev => barrel_doc:rev_to_str(NewRev)};
 update_doc_result_to_json(DocId, Error) ->
     {_Code, ErrorStr, Reason} = couch_httpd:error_info(Error),
     #{id => DocId, error => ErrorStr, reason => Reason}.
@@ -639,7 +639,7 @@ update_doc(Req, Db, DocId, #doc{deleted=Deleted}=Doc, Headers, UpdateType) ->
     _Normal ->
         % normal
         {ok, NewRev} = couch_db:update_doc(Db, Doc, Options, UpdateType),
-        NewRevStr = couch_doc:rev_to_str(NewRev),
+        NewRevStr = barrel_doc:rev_to_str(NewRev),
         ResponseHeaders = [{"ETag", <<"\"", NewRevStr/binary, "\"">>}] ++ Headers,
         send_json(Req,
             if
@@ -655,7 +655,7 @@ couch_doc_from_req(Req, DocId, #doc{revs=Revs}=Doc) ->
     undefined ->
         undefined;
     QSRev ->
-        couch_doc:parse_rev(QSRev)
+        barrel_doc:parse_rev(QSRev)
     end,
     Revs2 =
     case Revs of
@@ -677,7 +677,7 @@ couch_doc_from_req(Req, DocId, #doc{revs=Revs}=Doc) ->
     end,
     Doc#doc{id=DocId, revs=Revs2};
 couch_doc_from_req(Req, DocId, Json) ->
-    couch_doc_from_req(Req, DocId, couch_doc:from_json_obj(Json)).
+    couch_doc_from_req(Req, DocId, barrel_doc:from_json_obj(Json)).
 
 % Useful for debugging
 % couch_doc_open(Db, DocId) ->
@@ -764,9 +764,9 @@ db_attachment_req(#httpd{method='GET',mochi_req=MochiReq}=Req, Db, DocId, FileNa
         end,
         AttFun = case ReqAcceptsAttEnc of
         false ->
-            fun couch_doc:att_foldl_decode/3;
+            fun barrel_doc:att_foldl_decode/3;
         true ->
-            fun couch_doc:att_foldl/3
+            fun barrel_doc:att_foldl/3
         end,
         couch_httpd:etag_respond(
             Req,
@@ -784,7 +784,7 @@ db_attachment_req(#httpd{method='GET',mochi_req=MochiReq}=Req, Db, DocId, FileNa
                             Headers1 = [{"Content-Range", make_content_range(From, To, Len)}]
                                 ++ Headers,
                             {ok, Resp} = start_response_length(Req, 206, Headers1, To - From + 1),
-                            couch_doc:range_att_foldl(Att, From, To + 1,
+                            barrel_doc:range_att_foldl(Att, From, To + 1,
                                 fun(Seg, _) -> send(Resp, Seg) end, {ok, Resp});
                         {identity, Ranges} when is_list(Ranges) andalso length(Ranges) < 10 ->
                             send_ranges_multipart(Req, Type, Len, Att, Ranges);
@@ -889,7 +889,7 @@ db_attachment_req(#httpd{method=Method,mochi_req=MochiReq}=Req, Db, DocId, FileN
 
     Doc = case extract_header_rev(Req, couch_httpd:qs_value(Req, "rev")) of
         missing_rev -> % make the new doc
-            couch_doc:validate_docid(DocId),
+            barrel_doc:validate_docid(DocId),
             #doc{id=DocId};
         Rev ->
             case couch_db:open_doc_revs(Db, DocId, [Rev], []) of
@@ -986,18 +986,18 @@ parse_doc_query(Req) ->
             Options = [deleted_conflicts | Args#doc_query_args.options],
             Args#doc_query_args{options=Options};
         {"rev", Rev} ->
-            Args#doc_query_args{rev=couch_doc:parse_rev(Rev)};
+            Args#doc_query_args{rev=barrel_doc:parse_rev(Rev)};
         {"open_revs", "all"} ->
             Args#doc_query_args{open_revs=all};
         {"open_revs", RevsJsonStr} ->
             JsonArray = ?JSON_DECODE(RevsJsonStr),
-            Args#doc_query_args{open_revs=couch_doc:parse_revs(JsonArray)};
+            Args#doc_query_args{open_revs=barrel_doc:parse_revs(JsonArray)};
         {"latest", "true"} ->
             Options = [latest | Args#doc_query_args.options],
             Args#doc_query_args{options=Options};
         {"atts_since", RevsJsonStr} ->
             JsonArray = ?JSON_DECODE(RevsJsonStr),
-            Args#doc_query_args{atts_since = couch_doc:parse_revs(JsonArray)};
+            Args#doc_query_args{atts_since = barrel_doc:parse_revs(JsonArray)};
         {"new_edits", "false"} ->
             Args#doc_query_args{update_type=replicated_changes};
         {"new_edits", "true"} ->
@@ -1011,11 +1011,11 @@ parse_doc_query(Req) ->
     end, #doc_query_args{}, couch_httpd:qs(Req)).
 
 extract_header_rev(Req, ExplicitRev) when is_binary(ExplicitRev) or is_list(ExplicitRev)->
-    extract_header_rev(Req, couch_doc:parse_rev(ExplicitRev));
+    extract_header_rev(Req, barrel_doc:parse_rev(ExplicitRev));
 extract_header_rev(Req, ExplicitRev) ->
     Etag = case couch_httpd:header_value(Req, "If-Match") of
         undefined -> undefined;
-        Value -> couch_doc:parse_rev(string:strip(Value, both, $"))
+        Value -> barrel_doc:parse_rev(string:strip(Value, both, $"))
     end,
     case {ExplicitRev, Etag} of
     {undefined, undefined} -> missing_rev;
@@ -1043,7 +1043,7 @@ parse_copy_destination_header(Req) ->
             match ->
                 [DocId, RevQs] = re:split(Destination, "\\?", [{return, list}]),
                 [_RevQueryKey, Rev] = re:split(RevQs, "=", [{return, list}]),
-                {Pos, RevId} = couch_doc:parse_rev(Rev),
+                {Pos, RevId} = barrel_doc:parse_rev(Rev),
                 {list_to_binary(DocId), {Pos, [RevId]}}
             end
         end

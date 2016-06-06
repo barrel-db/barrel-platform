@@ -109,11 +109,11 @@ send_docs(Resp, DocId, Results, Options, Sep) ->
         fun(Result, AccSeparator) ->
                 case Result of
                     {ok, Doc} ->
-                        JsonDoc = couch_doc:to_json_obj(Doc, Options),
+                        JsonDoc = barrel_doc:to_json_obj(Doc, Options),
                         Json = ?JSON_ENCODE(#{ok => JsonDoc}),
                         couch_httpd:send_chunk(Resp, AccSeparator ++ Json);
                     {{not_found, missing}, RevId} ->
-                        RevStr = couch_doc:rev_to_str(RevId),
+                        RevStr = barrel_doc:rev_to_str(RevId),
                         Json = ?JSON_ENCODE(#{"missing" => RevStr}),
                         couch_httpd:send_chunk(Resp, AccSeparator ++ Json)
                 end,
@@ -127,7 +127,7 @@ send_docs_multipart(Resp, Pre, DocId, Results, OuterBoundary, Options0) ->
 
         lists:foldl(fun
             ({ok, #doc{atts=[]}=Doc}, Pre1) ->
-                JsonBytes = ?JSON_ENCODE(couch_doc:to_json_obj(Doc, Options)),
+                JsonBytes = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc, Options)),
                 Headers = [{<<"Content-Type">>, <<"application/json">>}],
                 Part = part(JsonBytes, Headers,
                                               OuterBoundary),
@@ -138,7 +138,7 @@ send_docs_multipart(Resp, Pre, DocId, Results, OuterBoundary, Options0) ->
                 InnerBoundary = hackney_multipart:boundary(),
 
                 %% start the related part, we first send the json
-                JsonBytes = ?JSON_ENCODE(couch_doc:to_json_obj(Doc, Options)),
+                JsonBytes = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc, Options)),
                 Headers = mp_header(Revs, Id, InnerBoundary),
                 BinHeaders = hackney_headers:to_binary(Headers),
                 Bin = <<Pre1/binary, "--", OuterBoundary/binary, "\r\n", BinHeaders/binary >>,
@@ -157,7 +157,7 @@ send_docs_multipart(Resp, Pre, DocId, Results, OuterBoundary, Options0) ->
                                 end),
                 <<"\r\n">>;
             ({{not_found, missing}, RevId}, Pre1) ->
-                RevStr = couch_doc:rev_to_str(RevId),
+                RevStr = barrel_doc:rev_to_str(RevId),
                 Body = #{<<"id">> => DocId,
                          <<"error">> => <<"not_found">>,
                          <<"reason">> => <<"missing">>,
@@ -177,12 +177,12 @@ open_doc_revs(Props, Db, Options) ->
     DocId = maps:get(<<"id">>, Props),
     Revs = case maps:get(<<"rev">>, Props, undefined) of
                undefined -> all;
-               Rev -> couch_doc:parse_revs([binary_to_list(Rev)])
+               Rev -> barrel_doc:parse_revs([binary_to_list(Rev)])
            end,
     Options1 = case maps:get(<<"atts_since">>, Props, []) of
                    [] -> Options;
                    RevList when is_list(RevList) ->
-                       RevList1 = couch_doc:parse_revs(RevList),
+                       RevList1 = barrel_doc:parse_revs(RevList),
                        [{atts_since, RevList1}, attachments |Options]
                end,
 
@@ -200,7 +200,7 @@ mp_header({0, []}, Id, Boundary) ->
      {<<"Content-Type">>, <<"multipart/related; boundary=",
                             Boundary/binary >>}];
 mp_header({Start, [FirstRevId|_]}, Id, Boundary) ->
-    RevStr = couch_doc:rev_to_str({Start, FirstRevId}),
+    RevStr = barrel_doc:rev_to_str({Start, FirstRevId}),
     [{<<"X-Doc-Id">>, Id},
      {<<"X-Rev-Id">>, RevStr},
      {<<"Content-Type">>, <<"multipart/related; boundary=",

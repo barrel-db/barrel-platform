@@ -145,10 +145,10 @@ send_doc_update_response(Req, Db, DDoc, UpdateName, Doc, DocId) ->
                 _ ->
                     Options = [{user_ctx, Req#httpd.user_ctx}]
             end,
-            NewDoc = couch_doc:from_json_obj(NewJsonDoc),
-            couch_doc:validate_docid(NewDoc#doc.id),
+            NewDoc = barrel_doc:from_json_obj(NewJsonDoc),
+            barrel_doc:validate_docid(NewDoc#doc.id),
             {ok, NewRev} = couch_db:update_doc(Db, NewDoc, Options),
-            NewRevStr = couch_doc:rev_to_str(NewRev),
+            NewRevStr = barrel_doc:rev_to_str(NewRev),
             JsonResp0#{<<"code">> => 201,
                        <<"headers">> => #{<<"X-Couch-Update-NewRev">> => NewRevStr,
                                           <<"X-Couch-Id">> => NewDoc#doc.id}};

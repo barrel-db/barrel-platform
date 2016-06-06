@@ -173,7 +173,7 @@ ensure_full_commit(Db) ->
 
 get_missing_revs(#httpdb{} = Db, IdRevs) ->
     JsonBody = lists:foldl(fun({Id, Revs}, Acc) ->
-            Acc#{Id => couch_doc:revs_to_strs(Revs)}
+            Acc#{Id => barrel_doc:revs_to_strs(Revs)}
         end, #{}, IdRevs),
     send_req(
         Db,
@@ -181,10 +181,10 @@ get_missing_revs(#httpdb{} = Db, IdRevs) ->
             {headers, [{"Content-Type", "application/json"}]}],
         fun(200, _, Props) ->
             ConvertToNativeFun = fun({Id, {Result}}) ->
-                MissingRevs = couch_doc:parse_revs(
+                MissingRevs = barrel_doc:parse_revs(
                     get_value(<<"missing">>, Result)
                 ),
-                PossibleAncestors = couch_doc:parse_revs(
+                PossibleAncestors = barrel_doc:parse_revs(
                     get_value(<<"possible_ancestors">>, Result, [])
                 ),
                 {Id, MissingRevs, PossibleAncestors}
@@ -291,7 +291,7 @@ open_doc(#httpdb{} = Db, Id, Options) ->
         Db,
         [{path, encode_doc_id(Id)}, {qs, options_to_query_args(Options, [])}],
         fun(200, _, Body) ->
-            {ok, couch_doc:from_json_obj(Body)};
+            {ok, barrel_doc:from_json_obj(Body)};
         (_, _, Props) ->
             {error, maps:get(<<"error">>, Props, undefined)}
         end);
@@ -316,9 +316,9 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
     end ++ options_to_query_args(Options, []),
     Boundary = barrel_uuids:random(),
     JsonBytes = ?JSON_ENCODE(
-        couch_doc:to_json_obj(
+        barrel_doc:to_json_obj(
           Doc, [revs, attachments, follows, att_encoding_info | Options])),
-    {ContentType, Len} = couch_doc:len_doc_to_multi_part_stream(Boundary,
+    {ContentType, Len} = barrel_doc:len_doc_to_multi_part_stream(Boundary,
         JsonBytes, Doc#doc.atts, true),
     Headers = case lists:member(delay_commit, Options) of
     true ->
@@ -336,7 +336,7 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
         [{method, put}, {path, encode_doc_id(DocId)},
             {qs, QArgs}, {headers, Headers}, {body, Body}],
         fun(Code, _, Props) when Code =:= 200 orelse Code =:= 201 orelse Code =:= 202 ->
-                {ok, couch_doc:parse_rev(maps:get(<<"rev">>, Props))};
+                {ok, barrel_doc:parse_rev(maps:get(<<"rev">>, Props))};
             (409, _, _) ->
                 throw(conflict);
             (Code, _, Props) ->
@@ -374,7 +374,7 @@ update_docs(#httpdb{} = HttpDb, DocList, Options, UpdateType) ->
     % and JSON encode each doc only before sending it through the socket.
     {Docs, Len} = lists:mapfoldl(
         fun(#doc{} = Doc, Acc) ->
-            Json = ?JSON_ENCODE(couch_doc:to_json_obj(Doc, [revs, attachments])),
+            Json = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc, [revs, attachments])),
             {Json, Acc + iolist_size(Json)};
         (Doc, Acc) ->
             {Doc, Acc + iolist_size(Doc)}
@@ -583,7 +583,7 @@ options_to_query_args([{open_revs, all} | Rest], Acc) ->
 options_to_query_args([latest | Rest], Acc) ->
     options_to_query_args(Rest, [{"latest", "true"} | Acc]);
 options_to_query_args([{open_revs, Revs} | Rest], Acc) ->
-    JsonRevs = binary_to_list(?JSON_ENCODE(couch_doc:revs_to_strs(Revs))),
+    JsonRevs = binary_to_list(?JSON_ENCODE(barrel_doc:revs_to_strs(Revs))),
     options_to_query_args(Rest, [{"open_revs", JsonRevs} | Acc]).
 
 
@@ -592,7 +592,7 @@ options_to_query_args([{open_revs, Revs} | Rest], Acc) ->
 atts_since_arg(_UrlLen, [], Acc) ->
     lists:reverse(Acc);
 atts_since_arg(UrlLen, [PA | Rest], Acc) ->
-    RevStr = couch_doc:rev_to_str(PA),
+    RevStr = barrel_doc:rev_to_str(PA),
     NewUrlLen = case Rest of
     [] ->
         % plus 2 double quotes (% encoded)
@@ -640,19 +640,19 @@ receive_docs(Streamer, UserFun, Ref, UserAcc) ->
                 {ok, UserAcc2} ->
                     ok;
                 {skip, UserAcc2} ->
-                    couch_doc:abort_multi_part_stream(Parser)
+                    barrel_doc:abort_multi_part_stream(Parser)
                 end,
                 receive_docs(Streamer, UserFun, Ref, UserAcc2)
             end;
         {"application/json", []} ->
-            Doc = couch_doc:from_json_obj(
+            Doc = barrel_doc:from_json_obj(
                     ?JSON_DECODE(receive_all(Streamer, Ref, []))),
             {_, UserAcc2} = run_user_fun(UserFun, {ok, Doc}, UserAcc, Ref),
             receive_docs(Streamer, UserFun, Ref, UserAcc2);
         {"application/json", [{"error","true"}]} ->
             {ErrorProps} = ?JSON_DECODE(receive_all(Streamer, Ref, [])),
             Rev = get_value(<<"missing">>, ErrorProps),
-            Result = {{not_found, missing}, couch_doc:parse_rev(Rev)},
+            Result = {{not_found, missing}, barrel_doc:parse_rev(Rev)},
             {_, UserAcc2} = run_user_fun(UserFun, Result, UserAcc, Ref),
             receive_docs(Streamer, UserFun, Ref, UserAcc2)
         end;
@@ -766,7 +766,7 @@ doc_from_multi_part_stream(ContentType, DataFun, Ref) ->
     Parser = spawn_link(fun() ->
         {<<"--">>, _, _} = couch_httpd:parse_multipart_request(
             ContentType, DataFun,
-            fun(Next) -> couch_doc:mp_parse_doc(Next, []) end),
+            fun(Next) -> barrel_doc:mp_parse_doc(Next, []) end),
         unlink(Self)
         end),
     Parser ! {get_doc_bytes, Ref, self()},
@@ -776,7 +776,7 @@ doc_from_multi_part_stream(ContentType, DataFun, Ref) ->
         exit(Parser, kill),
         restart_remote_open_doc_revs(Ref, NewRef);
     {doc_bytes, Ref, DocBytes} ->
-        Doc = couch_doc:from_json_obj(?JSON_DECODE(DocBytes)),
+        Doc = barrel_doc:from_json_obj(?JSON_DECODE(DocBytes)),
         ReadAttachmentDataFun = fun() ->
             link(Parser),
             Parser ! {get_bytes, Ref, self()},
@@ -839,7 +839,7 @@ parse_changes_line(object_start, UserFun) ->
 
 json_to_doc_info(Props) ->
     RevsInfo0 = lists:map(fun(Change) ->
-                    Rev = couch_doc:parse_rev(maps:get(<<"rev">>, Change)),
+                    Rev = barrel_doc:parse_rev(maps:get(<<"rev">>, Change)),
                     Del = (true =:= maps:get(<<"deleted">>, Change, false)),
                     #rev_info{rev=Rev, deleted=Del}
             end, maps:get(<<"changes">>, Props)),
@@ -898,7 +898,7 @@ bulk_results_to_errors(_Docs, Results, remote) ->
 
 
 rev_to_str({_Pos, _Id} = Rev) ->
-    couch_doc:rev_to_str(Rev);
+    barrel_doc:rev_to_str(Rev);
 rev_to_str(Rev) ->
     Rev.
 

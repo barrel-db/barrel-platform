@@ -219,7 +219,7 @@ os_filter_fun(FilterName, Style, Req, Db) ->
             {ok, Passes} = couch_query_servers:filter_docs(
                 Req, Db2, DDoc, FName, Docs
             ),
-            [#{<<"rev">> => couch_doc:rev_to_str({RevPos, RevId})}
+            [#{<<"rev">> => barrel_doc:rev_to_str({RevPos, RevId})}
                 || {Pass, #doc{revs={RevPos,[RevId|_]}}}
                 <- lists:zip(Passes, Docs), Pass == true]
         end;
@@ -266,9 +266,9 @@ filter_designdoc(Style) ->
 builtin_results(Style, [#rev_info{rev=Rev}|_]=Revs) ->
     case Style of
         main_only ->
-            [#{<<"rev">> => couch_doc:rev_to_str(Rev)}];
+            [#{<<"rev">> => barrel_doc:rev_to_str(Rev)}];
         all_docs ->
-            [#{<<"rev">> => couch_doc:rev_to_str(R)} || #rev_info{rev=R} <- Revs]
+            [#{<<"rev">> => barrel_doc:rev_to_str(R)} || #rev_info{rev=R} <- Revs]
     end.
 
 get_changes_timeout(Args, Callback) ->
@@ -410,7 +410,7 @@ send_lookup_changes(FullDocInfos, StartSeq, Dir, Db, Fun, Acc0) ->
     end,
     DocInfos = lists:foldl(
         fun(FDI, Acc) ->
-            DI = couch_doc:to_doc_info(FDI),
+            DI = barrel_doc:to_doc_info(FDI),
             case GreaterFun(DI#doc_info.high_seq, StartSeq) of
             true ->
                 [DI | Acc];
@@ -597,12 +597,12 @@ include_doc(true, Db, DocInfo, DocOpts, Conflicts, Row) ->
         false -> [deleted]
     end,
 
-    Doc = couch_doc:load(Db, DocInfo, Opts),
+    Doc = barrel_doc:load(Db, DocInfo, Opts),
     case Doc of
         null ->
             Row#{doc => null};
         _ ->
-            Row#{doc => couch_doc:to_json_obj(Doc, DocOpts)}
+            Row#{doc => barrel_doc:to_json_obj(Doc, DocOpts)}
     end.
 
 add_deleted(true, Row) -> Row#{ <<"deleted">> => true};

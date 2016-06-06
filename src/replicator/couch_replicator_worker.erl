@@ -308,12 +308,12 @@ fetch_doc(Source, {Id, Revs, PAs}, DocHandler, Acc) ->
     throw:missing_doc ->
         lager:error("Retrying fetch and update of document `~s` as it is "
             "unexpectedly missing. Missing revisions are: ~s",
-            [Id, couch_doc:revs_to_strs(Revs)]),
+            [Id, barrel_doc:revs_to_strs(Revs)]),
         couch_replicator_api_wrap:open_doc_revs(Source, Id, Revs, [latest], DocHandler, Acc);
     throw:{missing_stub, _} ->
         lager:error("Retrying fetch and update of document `~s` due to out of "
             "sync attachment stubs. Missing revisions are: ~s",
-            [Id, couch_doc:revs_to_strs(Revs)]),
+            [Id, barrel_doc:revs_to_strs(Revs)]),
         couch_replicator_api_wrap:open_doc_revs(Source, Id, Revs, [latest], DocHandler, Acc)
     end.
 
@@ -420,7 +420,7 @@ maybe_flush_docs(#httpdb{} = Target, Batch, Doc) ->
             {Batch, #rep_stats{doc_write_failures = 1}}
         end;
     true ->
-        JsonDoc = ?JSON_ENCODE(couch_doc:to_json_obj(Doc, [revs, attachments])),
+        JsonDoc = ?JSON_ENCODE(barrel_doc:to_json_obj(Doc, [revs, attachments])),
         case SizeAcc + iolist_size(JsonDoc) of
         SizeAcc2 when SizeAcc2 > ?DOC_BUFFER_BYTE_SIZE ->
             lager:debug("Worker flushing doc batch of size ~p bytes", [SizeAcc2]),
@@ -485,13 +485,13 @@ flush_doc(Target, #doc{id = Id, revs = {Pos, [RevId | _]}} = Doc) ->
     throw:{Error, Reason} ->
         lager:error("Replicator: couldn't write document `~s`, revision `~s`,"
             " to target database `~s`. Error: `~s`, reason: `~s`.",
-            [Id, couch_doc:rev_to_str({Pos, RevId}),
+            [Id, barrel_doc:rev_to_str({Pos, RevId}),
                 couch_replicator_api_wrap:db_uri(Target), to_binary(Error), to_binary(Reason)]),
         {error, Error};
     throw:Err ->
         lager:error("Replicator: couldn't write document `~s`, revision `~s`,"
             " to target database `~s`. Error: `~s`.",
-            [Id, couch_doc:rev_to_str({Pos, RevId}),
+            [Id, barrel_doc:rev_to_str({Pos, RevId}),
                 couch_replicator_api_wrap:db_uri(Target), to_binary(Err)]),
         {error, Err}
     end.

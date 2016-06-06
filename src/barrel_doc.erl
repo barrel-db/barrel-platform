@@ -13,7 +13,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_doc).
+-module(barrel_doc).
 
 -export([to_doc_info/1,to_doc_info_path/1,parse_rev/1,parse_revs/1,rev_to_str/1,revs_to_strs/1]).
 -export([att_foldl/3,range_att_foldl/5,att_foldl_decode/3,

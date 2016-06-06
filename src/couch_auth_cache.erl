@@ -325,7 +325,7 @@ refresh_entry(Db, #doc_info{high_seq = DocSeq} = DocInfo) ->
 user_creds(#doc{deleted = true}) ->
     nil;
 user_creds(#doc{} = Doc) ->
-    {Creds} = couch_doc:to_json_obj(Doc, []),
+    {Creds} = barrel_doc:to_json_obj(Doc, []),
     Creds.
 
 
@@ -392,7 +392,7 @@ get_user_props_from_db(UserName) ->
             DocId = <<"org.couchdb.user:", UserName/binary>>,
             try
                 {ok, Doc} = couch_db:open_doc(Db, DocId, [conflicts]),
-                {DocProps} = couch_doc:to_json_obj(Doc, []),
+                {DocProps} = barrel_doc:to_json_obj(Doc, []),
                 DocProps
             catch
             _:_Error ->
@@ -420,12 +420,12 @@ ensure_auth_ddoc_exists(Db, DDocId) ->
         {ok, AuthDesign} = auth_design_doc(DDocId),
         {ok, _Rev} = couch_db:update_doc(Db, AuthDesign, []);
     {ok, Doc} ->
-        Obj = couch_doc:to_json_obj(Doc, []),
+        Obj = barrel_doc:to_json_obj(Doc, []),
         case maps:get(<<"validate_doc_update">>, Obj, []) of
             ?AUTH_DB_DOC_VALIDATE_FUNCTION -> ok;
             _ ->
                 Obj1 = Obj#{ <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION},
-                couch_db:update_doc(Db, couch_doc:from_json_obj(Obj1), [])
+                couch_db:update_doc(Db, barrel_doc:from_json_obj(Obj1), [])
         end
     end,
     ok.
@@ -435,4 +435,4 @@ auth_design_doc(DocId) ->
             <<"language">> => <<"javascript">>,
             <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION
             },
-    {ok, couch_doc:from_json_obj(Obj)}.
+    {ok, barrel_doc:from_json_obj(Obj)}.

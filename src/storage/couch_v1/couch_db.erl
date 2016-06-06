@@ -167,7 +167,7 @@ apply_open_options2(#doc{atts=Atts,revs=Revs}=Doc,
         if AttPos>RevPos -> Data; true -> stub end}
         || #att{revpos=AttPos,data=Data}=A <- Atts]}, Rest);
 apply_open_options2(Doc, [ejson_body | Rest]) ->
-    apply_open_options2(couch_doc:with_ejson_body(Doc), Rest);
+    apply_open_options2(barrel_doc:with_ejson_body(Doc), Rest);
 apply_open_options2(Doc,[_|Rest]) ->
     apply_open_options2(Doc,Rest).
 
@@ -203,7 +203,7 @@ find_missing([{Id, Revs}|RestIdRevs], [{ok, FullInfo} | RestLookupInfo]) ->
     [] ->
         find_missing(RestIdRevs, RestLookupInfo);
     MissingRevs ->
-        #doc_info{revs=RevsInfo} = couch_doc:to_doc_info(FullInfo),
+        #doc_info{revs=RevsInfo} = barrel_doc:to_doc_info(FullInfo),
         LeafRevs = [Rev || #rev_info{rev=Rev} <- RevsInfo],
         % Find the revs that are possible parents of this rev
         PossibleAncestors =
@@ -227,7 +227,7 @@ find_missing([{Id, Revs}|RestIdRevs], [not_found | RestLookupInfo]) ->
 get_doc_info(Db, Id) ->
     case get_full_doc_info(Db, Id) of
     {ok, DocInfo} ->
-        {ok, couch_doc:to_doc_info(DocInfo)};
+        {ok, barrel_doc:to_doc_info(DocInfo)};
     Else ->
         Else
     end.
@@ -488,17 +488,17 @@ prep_and_validate_update(Db, #doc{id=Id,revs={RevStart, Revs}}=Doc,
     [PrevRev|_] ->
         case dict:find({RevStart, PrevRev}, LeafRevsDict) of
         {ok, {Deleted, DiskSp, DiskRevs}} ->
-            case couch_doc:has_stubs(Doc) of
+            case barrel_doc:has_stubs(Doc) of
             true ->
                 DiskDoc = make_doc(Db, Id, Deleted, DiskSp, DiskRevs),
-                Doc2 = couch_doc:merge_stubs(Doc, DiskDoc),
+                Doc2 = barrel_doc:merge_stubs(Doc, DiskDoc),
                 {validate_doc_update(Db, Doc2, fun() -> DiskDoc end), Doc2};
             false ->
                 LoadDiskDoc = fun() -> make_doc(Db,Id,Deleted,DiskSp,DiskRevs) end,
                 {validate_doc_update(Db, Doc, LoadDiskDoc), Doc}
             end;
         error when AllowConflict ->
-            couch_doc:merge_stubs(Doc, #doc{}), % will generate error if
+            barrel_doc:merge_stubs(Doc, #doc{}), % will generate error if
                                                         % there are stubs
             {validate_doc_update(Db, Doc, fun() -> nil end), Doc};
         error ->
@@ -523,9 +523,9 @@ prep_and_validate_updates(Db, [DocBucket|RestBuckets], [not_found|RestLookups],
         AllowConflict, AccPrepped, AccErrors) ->
     {PreppedBucket, AccErrors3} = lists:foldl(
         fun({#doc{revs=Revs}=Doc,Ref}, {AccBucket, AccErrors2}) ->
-            case couch_doc:has_stubs(Doc) of
+            case barrel_doc:has_stubs(Doc) of
             true ->
-                couch_doc:merge_stubs(Doc, #doc{}); % will throw exception
+                barrel_doc:merge_stubs(Doc, #doc{}); % will throw exception
             false -> ok
             end,
             case Revs of
@@ -586,9 +586,9 @@ prep_and_validate_replicated_updates(Db, [Bucket|RestBuckets], [OldInfo|RestOldI
     not_found ->
         {ValidatedBucket, AccErrors3} = lists:foldl(
             fun({Doc, Ref}, {AccPrepped2, AccErrors2}) ->
-                case couch_doc:has_stubs(Doc) of
+                case barrel_doc:has_stubs(Doc) of
                 true ->
-                    couch_doc:merge_stubs(Doc, #doc{}); % will throw exception
+                    barrel_doc:merge_stubs(Doc, #doc{}); % will throw exception
                 false -> ok
                 end,
                 case validate_doc_update(Db, Doc, fun() -> nil end) of
@@ -604,7 +604,7 @@ prep_and_validate_replicated_updates(Db, [Bucket|RestBuckets], [OldInfo|RestOldI
         NewRevTree = lists:foldl(
             fun({NewDoc, _Ref}, AccTree) ->
                 {NewTree, _} = couch_key_tree:merge(AccTree,
-                    couch_doc:to_path(NewDoc), Db#db.revs_limit),
+                    barrel_doc:to_path(NewDoc), Db#db.revs_limit),
                 NewTree
             end,
             OldTree, Bucket),
@@ -622,10 +622,10 @@ prep_and_validate_replicated_updates(Db, [Bucket|RestBuckets], [OldInfo|RestOldI
                                 make_first_doc_on_disk(Db,Id,Start-1, tl(Path))
                             end,
 
-                    case couch_doc:has_stubs(Doc) of
+                    case barrel_doc:has_stubs(Doc) of
                     true ->
                         DiskDoc = LoadPrevRevFun(),
-                        Doc2 = couch_doc:merge_stubs(Doc, DiskDoc),
+                        Doc2 = barrel_doc:merge_stubs(Doc, DiskDoc),
                         GetDiskDocFun = fun() -> DiskDoc end;
                     false ->
                         Doc2 = Doc,
@@ -890,7 +890,7 @@ before_docs_update(#db{before_doc_update = nil}, BucketList) ->
 before_docs_update(#db{before_doc_update = Fun} = Db, BucketList) ->
     [lists:map(
         fun({Doc, Ref}) ->
-            NewDoc = Fun(couch_doc:with_ejson_body(Doc), Db),
+            NewDoc = Fun(barrel_doc:with_ejson_body(Doc), Db),
             {NewDoc, Ref}
         end,
         Bucket) || Bucket <- BucketList].
@@ -1194,7 +1194,7 @@ open_doc_int(Db, #doc_info{id=Id,revs=[RevInfo|_]}=DocInfo, Options) ->
        {ok, Doc#doc{meta=doc_meta_info(DocInfo, [], Options)}}, Options);
 open_doc_int(Db, #full_doc_info{id=Id,rev_tree=RevTree}=FullDocInfo, Options) ->
     #doc_info{revs=[#rev_info{deleted=IsDeleted,rev=Rev,body_sp=Bp}|_]} =
-        DocInfo = couch_doc:to_doc_info(FullDocInfo),
+        DocInfo = barrel_doc:to_doc_info(FullDocInfo),
     {[{_, RevPath}], []} = couch_key_tree:get(RevTree, [Rev]),
     Doc = make_doc(Db, Id, IsDeleted, Bp, RevPath),
     apply_open_options(
@@ -1320,7 +1320,7 @@ make_doc(#db{updater_fd = Fd} = Db, Id, Deleted, Bp, RevisionPath) ->
 after_doc_read(#db{after_doc_read = nil}, Doc) ->
     Doc;
 after_doc_read(#db{after_doc_read = Fun} = Db, Doc) ->
-    Fun(couch_doc:with_ejson_body(Doc), Db).
+    Fun(barrel_doc:with_ejson_body(Doc), Db).
 
 
 validate_doc_read(#db{validate_doc_read_funs=[]}, _Doc) ->

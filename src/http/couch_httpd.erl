@@ -536,7 +536,7 @@ json_body_obj(Req) ->
 
 
 doc_etag(#doc{revs={Start, [DiskRev|_]}}) ->
-    "\"" ++ binary_to_list(couch_doc:rev_to_str({Start, DiskRev})) ++ "\"".
+    "\"" ++ binary_to_list(barrel_doc:rev_to_str({Start, DiskRev})) ++ "\"".
 
 make_etag(Term) ->
     <<SigInt:128/integer>> = crypto:hash(md5, term_to_binary(Term)),

@@ -128,7 +128,7 @@ handle_call({purge_docs, IdRevs}, _From, Db) ->
                     BodyPointer = element(2, LeafVal),
                     {IsDeleted, BodyPointer, SeqAcc + 1}
                 end, Tree),
-            {couch_doc:to_doc_info(FullInfo#full_doc_info{rev_tree=Tree2}),
+            {barrel_doc:to_doc_info(FullInfo#full_doc_info{rev_tree=Tree2}),
                 SeqAcc + 1}
         end, LastSeq, FullDocInfoToUpdate),
 
@@ -508,11 +508,11 @@ refresh_validate_doc_funs(Db0) ->
             fun(DesignDocInfo, {UAcc, RAcc}) ->
                     {ok, DesignDoc} = couch_db:open_doc_int(Db, DesignDocInfo,
                                                             [ejson_body]),
-                    UAcc1 = case couch_doc:get_validate_doc_fun(DesignDoc) of
+                    UAcc1 = case barrel_doc:get_validate_doc_fun(DesignDoc) of
                         nil -> UAcc;
                         Fun -> [Fun|UAcc]
                     end,
-                    RAcc1 = case couch_doc:get_validate_read_doc_fun(
+                    RAcc1 = case barrel_doc:get_validate_read_doc_fun(
                             DesignDoc) of
                         nil -> RAcc;
                         Fun1 -> [Fun1|RAcc]
@@ -589,7 +589,7 @@ merge_rev_trees(Limit, MergeConflicts, [NewDocs|RestDocsList],
     {NewRevTree, _} = lists:foldl(
         fun({Client, {#doc{revs={Pos,[_Rev|PrevRevs]}}=NewDoc, Ref}}, {AccTree, OldDeleted}) ->
             if not MergeConflicts ->
-                case couch_key_tree:merge(AccTree, couch_doc:to_path(NewDoc),
+                case couch_key_tree:merge(AccTree, barrel_doc:to_path(NewDoc),
                     Limit) of
                 {_NewTree, conflicts} when (not OldDeleted) ->
                     send_result(Client, Ref, conflict),
@@ -616,12 +616,12 @@ merge_rev_trees(Limit, MergeConflicts, [NewDocs|RestDocsList],
                         % into a state that already existed before.
                         % put the rev into a subsequent edit of the deletion
                         #doc_info{revs=[#rev_info{rev={OldPos,OldRev}}|_]} =
-                                couch_doc:to_doc_info(OldDocInfo),
+                                barrel_doc:to_doc_info(OldDocInfo),
                         NewRevId = couch_db:new_revid(
                                 NewDoc#doc{revs={OldPos, [OldRev]}}),
                         NewDoc2 = NewDoc#doc{revs={OldPos + 1, [NewRevId, OldRev]}},
                         {NewTree2, _} = couch_key_tree:merge(AccTree,
-                                couch_doc:to_path(NewDoc2), Limit),
+                                barrel_doc:to_path(NewDoc2), Limit),
                         % we changed the rev id, this tells the caller we did
                         send_result(Client, Ref, {ok, {OldPos + 1, NewRevId}}),
                         {NewTree2, OldDeleted};
@@ -634,7 +634,7 @@ merge_rev_trees(Limit, MergeConflicts, [NewDocs|RestDocsList],
                 end;
             true ->
                 {NewTree, _} = couch_key_tree:merge(AccTree,
-                            couch_doc:to_path(NewDoc), Limit),
+                            barrel_doc:to_path(NewDoc), Limit),
                 {NewTree, OldDeleted}
             end
         end,
@@ -660,7 +660,7 @@ new_index_entries([], AccById, AccBySeq, AccDDocIds) ->
     {AccById, AccBySeq, AccDDocIds};
 new_index_entries([FullDocInfo|RestInfos], AccById, AccBySeq, AccDDocIds) ->
     #doc_info{revs=[#rev_info{deleted=Deleted}|_], id=Id} = DocInfo =
-            couch_doc:to_doc_info(FullDocInfo),
+            barrel_doc:to_doc_info(FullDocInfo),
     AccDDocIds2 = case Id of
     <<?DESIGN_DOC_PREFIX, _/binary>> ->
         [Id | AccDDocIds];
@@ -888,7 +888,7 @@ copy_docs(Db, #db{updater_fd = DestFd} = NewDb, InfoBySeq0, Retry) ->
         end, LookupResults),
 
     NewFullDocInfos = stem_full_doc_infos(Db, NewFullDocInfos1),
-    NewDocInfos = [couch_doc:to_doc_info(Info) || Info <- NewFullDocInfos],
+    NewDocInfos = [barrel_doc:to_doc_info(Info) || Info <- NewFullDocInfos],
     RemoveSeqs =
     case Retry of
     false ->

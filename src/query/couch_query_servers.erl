@@ -69,7 +69,7 @@ map_docs(Proc, Docs) ->
     % send the documents
     Results = lists:map(
         fun(Doc) ->
-            Json = couch_doc:to_json_obj(Doc, []),
+            Json = barrel_doc:to_json_obj(Doc, []),
 
             FunsResults = proc_prompt(Proc, [<<"map_doc">>, Json]),
             % the results are a json array of function map yields like this:
@@ -88,7 +88,7 @@ map_docs(Proc, Docs) ->
     {ok, Results}.
 
 map_doc_raw(Proc, Doc) ->
-    Json = couch_doc:to_json_obj(Doc, []),
+    Json = barrel_doc:to_json_obj(Doc, []),
     {ok, proc_prompt_raw(Proc, [<<"map_doc">>, Json])}.
 
 
@@ -226,7 +226,7 @@ builtin_stats(rereduce, [[_,First]|Rest]) ->
 
 % use the function stored in ddoc.validate_doc_update to test an update.
 validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj) ->
-    JsonEditDoc = couch_doc:to_json_obj(EditDoc, [revs]),
+    JsonEditDoc = barrel_doc:to_json_obj(EditDoc, [revs]),
     JsonDiskDoc = json_doc(DiskDoc),
     case ddoc_prompt(DDoc, [<<"validate_doc_update">>], [JsonEditDoc, JsonDiskDoc, Ctx, SecObj]) of
         1 ->
@@ -238,7 +238,7 @@ validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj) ->
     end.
 
 validate_doc_read(DDoc, Doc, Ctx, SecObj) ->
-    JsonDoc = couch_doc:to_json_obj(Doc, [revs]),
+    JsonDoc = barrel_doc:to_json_obj(Doc, [revs]),
     case ddoc_prompt(DDoc, [<<"validate_doc_read">>],
                      [JsonDoc, Ctx, SecObj]) of
         1 ->
@@ -251,10 +251,10 @@ validate_doc_read(DDoc, Doc, Ctx, SecObj) ->
 
 json_doc(nil) -> null;
 json_doc(Doc) ->
-    couch_doc:to_json_obj(Doc, [revs]).
+    barrel_doc:to_json_obj(Doc, [revs]).
 
 filter_view(DDoc, VName, Docs) ->
-    JsonDocs = [couch_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
+    JsonDocs = [barrel_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
     [true, Passes] = ddoc_prompt(DDoc, [<<"views">>, VName, <<"map">>], [JsonDocs]),
     {ok, Passes}.
 
@@ -265,7 +265,7 @@ filter_docs(Req, Db, DDoc, FName, Docs) ->
     #httpd{} = HttpReq ->
         couch_httpd_external:json_req_obj(HttpReq, Db)
     end,
-    JsonDocs = [couch_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
+    JsonDocs = [barrel_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
     [true, Passes] = ddoc_prompt(DDoc, [<<"filters">>, FName],
         [JsonDocs, JsonReq]),
     {ok, Passes}.
@@ -289,7 +289,7 @@ ddoc_prompt(DDoc, FunPath, Args) ->
     end).
 
 with_ddoc_proc(#doc{id=DDocId,revs={Start, [DiskRev|_]}}=DDoc, Fun) ->
-    Rev = couch_doc:rev_to_str({Start, DiskRev}),
+    Rev = barrel_doc:rev_to_str({Start, DiskRev}),
     DDocKey = {DDocId, Rev},
     Proc = get_ddoc_process(DDoc, DDocKey),
     try Fun({Proc, DDocId})
@@ -336,7 +336,7 @@ terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
     ok.
 
 handle_call({get_proc, DDoc1, DDocKey}, From, Server) ->
-    #doc{body = Props} = DDoc = couch_doc:with_ejson_body(DDoc1),
+    #doc{body = Props} = DDoc = barrel_doc:with_ejson_body(DDoc1),
     Lang = couch_util:get_value(<<"language">>, Props, <<"javascript">>),
     case lang_proc(Lang, Server, fun(Procs) ->
             % find a proc in the set that has the DDoc
@@ -557,7 +557,7 @@ teach_ddoc(DDoc, {DDocId, _Rev}=DDocKey, #proc{ddoc_keys=Keys}=Proc) ->
     % send ddoc over the wire
     % we only share the rev with the client we know to update code
     % but it only keeps the latest copy, per each ddoc, around.
-    true = proc_prompt(Proc, [<<"ddoc">>, <<"new">>, DDocId, couch_doc:to_json_obj(DDoc, [])]),
+    true = proc_prompt(Proc, [<<"ddoc">>, <<"new">>, DDocId, barrel_doc:to_json_obj(DDoc, [])]),
     % we should remove any other ddocs keys for this docid
     % because the query server overwrites without the rev
     Keys2 = [{D,R} || {D,R} <- Keys, D /= DDocId],

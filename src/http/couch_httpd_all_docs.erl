@@ -114,7 +114,7 @@ all_docs_fold(Db, #all_docs_args{direction=Dir, keys=Keys0}=Args, Callback, UAcc
         DocInfo = (catch couch_db:get_doc_info(Db, Key)),
         {Doc, Acc1} = case DocInfo of
             {ok, #doc_info{id=Id, revs=[RevInfo | _RestRevs]}=DI} ->
-                Rev = couch_doc:rev_to_str(RevInfo#rev_info.rev),
+                Rev = barrel_doc:rev_to_str(RevInfo#rev_info.rev),
                 Props = [{rev, Rev}] ++ case RevInfo#rev_info.deleted of
                     true -> [{deleted, true}];
                     false -> []
@@ -185,9 +185,9 @@ do_all_docs_req(Req, Db, Keys) ->
 
 all_docs_fold1(#full_doc_info{} = FullDocInfo, OffsetReds, Acc) ->
     % matches for _all_docs and translates #full_doc_info{} -> KV pair
-    case couch_doc:to_doc_info(FullDocInfo) of
+    case barrel_doc:to_doc_info(FullDocInfo) of
         #doc_info{id=Id, revs=[#rev_info{deleted=false, rev=Rev}|_]} = DI ->
-            Value = [{rev, couch_doc:rev_to_str(Rev)}],
+            Value = [{rev, barrel_doc:rev_to_str(Rev)}],
             all_docs_fold1({{Id, Id}, Value}, OffsetReds, Acc#fold_acc{doc_info=DI});
         #doc_info{revs=[#rev_info{deleted=true}|_]} ->
             {ok, Acc}
@@ -376,26 +376,26 @@ row_to_json(Id0, Row) ->
 maybe_load_doc(_Db, _DI, #all_docs_args{include_docs=false}) ->
     [];
 maybe_load_doc(Db, #doc_info{}=DI, #all_docs_args{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, DI, [conflicts]), Opts);
+    doc_row(barrel_doc:load(Db, DI, [conflicts]), Opts);
 maybe_load_doc(Db, #doc_info{}=DI, #all_docs_args{doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, DI, []), Opts).
+    doc_row(barrel_doc:load(Db, DI, []), Opts).
 
 
 maybe_load_doc(_Db, _Id, _Val, #all_docs_args{include_docs=false}) ->
     [];
 maybe_load_doc(Db, Id, Val, #all_docs_args{conflicts=true, doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, docid_rev(Id, Val), [conflicts]), Opts);
+    doc_row(barrel_doc:load(Db, docid_rev(Id, Val), [conflicts]), Opts);
 maybe_load_doc(Db, Id, Val, #all_docs_args{doc_options=Opts}) ->
-    doc_row(couch_doc:load(Db, docid_rev(Id, Val), []), Opts).
+    doc_row(barrel_doc:load(Db, docid_rev(Id, Val), []), Opts).
 
 doc_row(null, _Opts) ->
     [{doc, null}];
 doc_row(Doc, Opts) ->
-    [{doc, couch_doc:to_json_obj(Doc, Opts)}].
+    [{doc, barrel_doc:to_json_obj(Doc, Opts)}].
 
-docid_rev(_Id, #{ <<"_id">> := DocId, <<"_rev">> := Rev }) -> {DocId, couch_doc:parse_rev(Rev)};
+docid_rev(_Id, #{ <<"_id">> := DocId, <<"_rev">> := Rev }) -> {DocId, barrel_doc:parse_rev(Rev)};
 docid_rev(_Id, #{ <<"_id">> := DocId }) -> {DocId, nil};
-docid_rev(Id, #{ <<"_rev">> := Rev }) -> {Id, couch_doc:parse_rev(Rev)};
+docid_rev(Id, #{ <<"_rev">> := Rev }) -> {Id, barrel_doc:parse_rev(Rev)};
 docid_rev(Id, _) -> {Id, nil}.
 
 make_meta(Args, UpdateSeq, Base) ->

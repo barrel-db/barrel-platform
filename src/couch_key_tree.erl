@@ -40,7 +40,7 @@
 %% when branches are merged. The comparison has to begin at the same place in
 %% the branches. A revision id is of the form N-XXXXXXX where N is the current
 %% revision. So each path will have a start number, calculated in
-%% couch_doc:to_path using the formula N - length(RevIds) + 1 So, .eg. if a doc
+%% barrel_doc:to_path using the formula N - length(RevIds) + 1 So, .eg. if a doc
 %% was edit 1003 times this start number would be 4, indicating that 3
 %% revisions were truncated.
 %%

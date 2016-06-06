@@ -583,7 +583,7 @@ ensure_rep_ddoc_exists(RepDb, DDocID) ->
     {ok, _Doc} ->
         ok;
     _ ->
-        DDoc = couch_doc:from_json_obj(#{<<"_id">> => DDocID,
+        DDoc = barrel_doc:from_json_obj(#{<<"_id">> => DDocID,
                                          <<"language">> => <<"javascript">>,
                                          <<"validate_doc_update">> => ?REP_DB_DOC_VALIDATE_FUN
                                         }),
