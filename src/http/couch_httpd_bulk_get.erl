@@ -108,11 +108,11 @@ send_docs(Resp, DocId, Results, Options, Sep) ->
                 case Result of
                     {ok, Doc} ->
                         JsonDoc = couch_doc:to_json_obj(Doc, Options),
-                        Json = ?JSON_ENCODE({[{ok, JsonDoc}]}),
+                        Json = ?JSON_ENCODE(#{ok => JsonDoc}),
                         couch_httpd:send_chunk(Resp, AccSeparator ++ Json);
                     {{not_found, missing}, RevId} ->
                         RevStr = couch_doc:rev_to_str(RevId),
-                        Json = ?JSON_ENCODE({[{"missing", RevStr}]}),
+                        Json = ?JSON_ENCODE(#{"missing" => RevStr}),
                         couch_httpd:send_chunk(Resp, AccSeparator ++ Json)
                 end,
                 "," % AccSeparator now has a comma
@@ -156,11 +156,11 @@ send_docs_multipart(Resp, Pre, DocId, Results, OuterBoundary, Options0) ->
                 <<"\r\n">>;
             ({{not_found, missing}, RevId}, Pre1) ->
                 RevStr = couch_doc:rev_to_str(RevId),
-                Body = {[{<<"id">>, DocId},
-                         {<<"error">>, <<"not_found">>},
-                         {<<"reason">>, <<"missing">>},
-                         {<<"status">>, 400},
-                         {<<"missing">>, RevStr}]},
+                Body = #{<<"id">> => DocId,
+                         <<"error">> => <<"not_found">>,
+                         <<"reason">> => <<"missing">>,
+                         <<"status">> => 400,
+                         <<"missing">> => RevStr},
                 Json = ?JSON_ENCODE(Body),
 
                 Headers = [{<<"Content-Type">>, <<"application/json">>}],
@@ -171,13 +171,13 @@ send_docs_multipart(Resp, Pre, DocId, Results, OuterBoundary, Options0) ->
 
 
 
-open_doc_revs({Props}, Db, Options) ->
-    DocId = couch_util:get_value(<<"id">>, Props),
-    Revs = case couch_util:get_value(<<"rev">>, Props) of
+open_doc_revs(Props, Db, Options) ->
+    DocId = maps:get(<<"id">>, Props),
+    Revs = case maps:get(<<"rev">>, Props, undefined) of
                undefined -> all;
                Rev -> couch_doc:parse_revs([binary_to_list(Rev)])
            end,
-    Options1 = case couch_util:get_value(<<"atts_since">>, Props, []) of
+    Options1 = case maps:get(<<"atts_since">>, Props, []) of
                    [] -> Options;
                    RevList when is_list(RevList) ->
                        RevList1 = couch_doc:parse_revs(RevList),

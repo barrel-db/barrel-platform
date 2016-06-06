@@ -33,15 +33,15 @@
 % httpd global handlers
 
 handle_welcome_req(#httpd{method='GET'}=Req) ->
-    send_json(Req, {[
-        {name, barrel},
-        {uuid, couch_server:get_uuid()}
-        ] ++ case barrel_config:get("vendor") of
+    send_json(Req, maps:from_list(
+        [{name, barrel}, {uuid, couch_server:get_uuid()}] ++
+        case barrel_config:get("vendor") of
             [] -> [];
             Properties ->
-                [{vendor, {[{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties]}}]
+                [{vendor, maps:from_list([{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties])
+                }]
         end
-    });
+    ));
 handle_welcome_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
@@ -84,8 +84,7 @@ handle_all_dbs_req(#httpd{method='GET'}=Req) ->
     Limit0 = couch_util:to_integer(couch_httpd:qs_value(Req, "limit",
                                                         ?DEFAULT_LIMIT)),
     Skip0 = couch_util:to_integer(couch_httpd:qs_value(Req, "skip", -1)),
-    {ok, {DbNames, _, _}} = couch_server:all_databases(fun all_dbs_fun/2,
-                                                       {[], Skip0, Limit0}),
+    {ok, {DbNames, _, _}} = couch_server:all_databases(fun all_dbs_fun/2, {[], Skip0, Limit0}),
     send_json(Req, lists:usort(DbNames));
 handle_all_dbs_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
@@ -103,7 +102,7 @@ all_dbs_fun (DbName, {Acc, Skip, Limit}) ->
 handle_task_status_req(#httpd{method='GET'}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
     % convert the list of prop lists to a list of json objects
-    send_json(Req, [{Props} || Props <- barrel_task_status:all()]);
+    send_json(Req, [maps:from_list(Props) || Props <- barrel_task_status:all()]);
 handle_task_status_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
@@ -111,7 +110,7 @@ handle_task_status_req(Req) ->
 handle_restart_req(#httpd{method='POST'}=Req) ->
     couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_httpd:verify_is_server_admin(Req),
-    Result = send_json(Req, 202, {[{ok, true}]}),
+    Result = send_json(Req, 202, #{ok => true}),
     init:restart(),
     Result;
 handle_restart_req(Req) ->
@@ -131,7 +130,7 @@ handle_uuids_req(#httpd{method='GET'}=Req) ->
             {"Pragma", "no-cache"},
             {"ETag", Etag}
         ],
-        send_json(Req, 200, CacheBustingHeaders, {[{<<"uuids">>, UUIDs}]})
+        send_json(Req, 200, CacheBustingHeaders, #{<<"uuids">> => UUIDs})
     end);
 handle_uuids_req(Req) ->
     send_method_not_allowed(Req, "GET").
@@ -148,12 +147,12 @@ handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
                 Values = [{list_to_binary(K), ?l2b(V)} || {K, V} <- Values0],
                 [{list_to_binary(Section), {Values}} | Acc]
     end, [], barrel_config:all()),
-    send_json(Req, 200, {KVs});
+    send_json(Req, 200, KVs);
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
     KVs = [{list_to_binary(K), ?l2b(V)} || {K, V} <- barrel_config:get(binary_to_list(Section))],
-    send_json(Req, 200, {KVs});
+    send_json(Req, 200, KVs);
 % GET /_config/Section/Key
 handle_config_req(#httpd{method='GET', path_parts=[_, Section, Key]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
@@ -323,15 +322,15 @@ handle_log_req(#httpd{method='POST'}=Req) ->
     case Level of
     <<"debug">> ->
         lager:debug(Message, []),
-        send_json(Req, 200, {[{ok, true}]});
+        send_json(Req, 200, #{ok => true});
     <<"info">> ->
         lager:info(Message, []),
-        send_json(Req, 200, {[{ok, true}]});
+        send_json(Req, 200, #{ok => true});
     <<"error">> ->
         lager:error(Message, []),
-        send_json(Req, 200, {[{ok, true}]});
+        send_json(Req, 200, #{ok => true});
     _ ->
-        send_json(Req, 400, {[{error, list_to_binary(io_lib:format("Unrecognized log level '~s'", [Level]))}]})
+        send_json(Req, 400, #{error => list_to_binary(io_lib:format("Unrecognized log level '~s'", [Level]))})
     end;
 handle_log_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
@@ -339,9 +338,9 @@ handle_log_req(Req) ->
 handle_up_req(#httpd{method='GET'} = Req) ->
     case barrel_config:get("couchdb", "maintenance_mode") of
         "true" ->
-            couch_httpd:send_json(Req, 404, {[{status, maintenance_mode}]});
+            couch_httpd:send_json(Req, 404, #{status => maintenance_mode});
         _ ->
-            couch_httpd:send_json(Req, 200, {[{status, ok}]})
+            couch_httpd:send_json(Req, 200, #{status => ok})
     end;
 handle_up_req(Req) ->
     couch_httpd:send_method_not_allowed(Req, "GET,HEAD").

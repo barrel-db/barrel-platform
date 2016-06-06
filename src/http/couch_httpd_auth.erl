@@ -47,8 +47,7 @@ basic_name_pw(Req) ->
     AuthorizationHeader = header_value(Req, "Authorization"),
     case AuthorizationHeader of
     "Basic " ++ Base64Value ->
-        case re:split(base64:decode(Base64Value), ":",
-                      [{return, list}, {parts, 2}]) of
+        case re:split(base64:decode(Base64Value), ":", [{return, list}, {parts, 2}]) of
         ["_", "_"] ->
             % special name and pass to be logged out
             nil;
@@ -286,11 +285,10 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
                     {302, [Cookie, {"Location", couch_httpd:absolute_uri(Req, Redirect)}]}
             end,
             send_json(Req#httpd{req_body=ReqBody}, Code, Headers,
-                {[
-                    {ok, true},
-                    {name, couch_util:get_value(<<"name">>, User, null)},
-                    {roles, couch_util:get_value(<<"roles">>, User, [])}
-                ]});
+                #{ok => true,
+                  name => couch_util:get_value(<<"name">>, User, null),
+                  roles => couch_util:get_value(<<"roles">>, User, [])
+                  });
         _Else ->
             % clear the session
             Cookie = mochiweb_cookies:cookie("AuthSession", "", [{path, "/"}] ++ cookie_scheme(Req)),
@@ -311,21 +309,20 @@ handle_session_req(#httpd{method='GET', user_ctx=UserCtx}=Req) ->
         {null, "true"} ->
             throw({unauthorized, <<"Please login.">>});
         {Name, _} ->
-            send_json(Req, {[
+            send_json(Req, #{
                 % remove this ok
-                {ok, true},
-                {<<"userCtx">>, {[
-                    {name, Name},
-                    {roles, Roles}
-                ]}},
-                {info, {[
-                    {authentication_db, barrel_config:get_binary("couch_httpd_auth", "authentication_db", <<"_users">>)},
-                    {authentication_handlers, [auth_name(H) || H <- couch_httpd:make_fun_spec_strs(
-                            barrel_config:get("httpd", "authentication_handlers"))]}
-                ] ++ maybe_value(authenticated, Handler, fun(Handler1) ->
-                        auth_name(binary_to_list(Handler1))
-                    end)}}
-            ]})
+                ok => true,
+                <<"userCtx">> => #{name => Name, roles => Roles},
+                info => maps:from_list(
+                          [{authentication_db, barrel_config:get_binary("couch_httpd_auth", "authentication_db",
+                                                                        <<"_users">>)},
+                           {authentication_handlers, [auth_name(H)
+                                                      || H <- couch_httpd:make_fun_spec_strs(
+                                                                barrel_config:get("httpd", "authentication_handlers"))]}
+                          ] ++ maybe_value(authenticated, Handler, fun(Handler1) ->
+                                                                       auth_name(binary_to_list(Handler1))
+                                                                   end))
+                       })
     end;
 % logout by deleting the session
 handle_session_req(#httpd{method='DELETE'}=Req) ->
@@ -336,7 +333,7 @@ handle_session_req(#httpd{method='DELETE'}=Req) ->
         Redirect ->
             {302, [Cookie, {"Location", couch_httpd:absolute_uri(Req, Redirect)}]}
     end,
-    send_json(Req, Code, Headers, {[{ok, true}]});
+    send_json(Req, Code, Headers, #{ok => true});
 handle_session_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD,POST,DELETE").
 

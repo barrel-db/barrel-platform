@@ -130,25 +130,28 @@ db_close(DbName) ->
 
 get_db_info(#httpdb{} = Db) ->
     send_req(Db, [],
-        fun(200, _, {Props}) ->
+        fun(200, _, Props) ->
             {ok, Props}
         end);
 get_db_info(#db{name = DbName, user_ctx = UserCtx}) ->
     {ok, Db} = couch_db:open(DbName, [{user_ctx, UserCtx}]),
     {ok, Info} = couch_db:get_db_info(Db),
     couch_db:close(Db),
-    {ok, [{couch_util:to_binary(K), V} || {K, V} <- Info]}.
+    Info2 = maps:fold(fun(K, V, M) ->
+        M#{ barrel_lib:to_binary(K) =>  V}
+    end, #{}, Info),
+    {ok, Info2}.
 
 
 get_view_info(#httpdb{} = Db, DDocId, ViewName) ->
     Path = iolist_to_binary([DDocId, "/_view/", ViewName, "/_last_seq"]),
     send_req(Db, [{path, binary_to_list(Path)}],
-        fun(200, _, {Props}) ->
+        fun(200, _, Props) ->
             {ok, Props}
         end);
 get_view_info(#db{name = DbName}, DDocId, ViewName) ->
     {ok, Info} = couch_mrview:get_view_info(DbName, DDocId, ViewName),
-    {ok, [{<<"last_seq">>, get_value(last_seq, Info)}]}.
+    {ok, #{<<"last_seq">> => get_value(last_seq, Info)}}.
 
 
 ensure_full_commit(#httpdb{} = Db) ->
@@ -156,22 +159,24 @@ ensure_full_commit(#httpdb{} = Db) ->
         Db,
         [{method, post}, {path, "_ensure_full_commit"},
             {headers, [{"Content-Type", "application/json"}]}],
-        fun(201, _, {Props}) ->
-            {ok, get_value(<<"instance_start_time">>, Props)};
-        (_, _, {Props}) ->
-            {error, get_value(<<"error">>, Props)}
+        fun(201, _, Props) ->
+            {ok, maps:get(<<"instance_start_time">>, Props, 0)};
+        (_, _, Props) ->
+            {error, maps:get(<<"error">>, Props, undefined)}
         end);
 ensure_full_commit(Db) ->
     couch_db:ensure_full_commit(Db).
 
 
 get_missing_revs(#httpdb{} = Db, IdRevs) ->
-    JsonBody = {[{Id, couch_doc:revs_to_strs(Revs)} || {Id, Revs} <- IdRevs]},
+    JsonBody = lists:foldl(fun({Id, Revs}, Acc) ->
+            Acc#{Id => couch_doc:revs_to_strs(Revs)}
+        end, #{}, IdRevs),
     send_req(
         Db,
         [{method, post}, {path, "_revs_diff"}, {body, ?JSON_ENCODE(JsonBody)},
             {headers, [{"Content-Type", "application/json"}]}],
-        fun(200, _, {Props}) ->
+        fun(200, _, Props) ->
             ConvertToNativeFun = fun({Id, {Result}}) ->
                 MissingRevs = couch_doc:parse_revs(
                     get_value(<<"missing">>, Result)
@@ -181,7 +186,7 @@ get_missing_revs(#httpdb{} = Db, IdRevs) ->
                 ),
                 {Id, MissingRevs, PossibleAncestors}
             end,
-            {ok, lists:map(ConvertToNativeFun, Props)}
+            {ok, lists:map(ConvertToNativeFun, maps:to_list(Props))}
         end);
 get_missing_revs(Db, IdRevs) ->
     couch_db:get_missing_revs(Db, IdRevs).
@@ -284,8 +289,8 @@ open_doc(#httpdb{} = Db, Id, Options) ->
         [{path, encode_doc_id(Id)}, {qs, options_to_query_args(Options, [])}],
         fun(200, _, Body) ->
             {ok, couch_doc:from_json_obj(Body)};
-        (_, _, {Props}) ->
-            {error, get_value(<<"error">>, Props)}
+        (_, _, Props) ->
+            {error, maps:get(<<"error">>, Props, undefined)}
         end);
 open_doc(Db, Id, Options) ->
     case couch_db:open_doc(Db, Id, Options) of
@@ -327,18 +332,18 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
         HttpDb#httpdb{retries = 0},
         [{method, put}, {path, encode_doc_id(DocId)},
             {qs, QArgs}, {headers, Headers}, {body, Body}],
-        fun(Code, _, {Props}) when Code =:= 200 orelse Code =:= 201 orelse Code =:= 202 ->
-                {ok, couch_doc:parse_rev(get_value(<<"rev">>, Props))};
+        fun(Code, _, Props) when Code =:= 200 orelse Code =:= 201 orelse Code =:= 202 ->
+                {ok, couch_doc:parse_rev(maps:get(<<"rev">>, Props))};
             (409, _, _) ->
                 throw(conflict);
-            (Code, _, {Props}) ->
-                case {Code, get_value(<<"error">>, Props)} of
+            (Code, _, Props) ->
+                case {Code, maps:get(<<"error">>, Props)} of
                 {401, <<"unauthorized">>} ->
-                    throw({unauthorized, get_value(<<"reason">>, Props)});
+                    throw({unauthorized, maps:get(<<"reason">>, Props)});
                 {403, <<"forbidden">>} ->
-                    throw({forbidden, get_value(<<"reason">>, Props)});
+                    throw({forbidden, maps:get(<<"reason">>, Props)});
                 {412, <<"missing_stub">>} ->
-                    throw({missing_stub, get_value(<<"reason">>, Props)});
+                    throw({missing_stub, maps:get(<<"reason">>, Props)});
                 {_, Error} ->
                     {error, Error}
                 end
@@ -406,7 +411,7 @@ update_docs(Db, DocList, Options, UpdateType) ->
 changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
     UserFun, Options) ->
     HeartBeat = erlang:max(1000, HttpDb#httpdb.timeout div 3),
-    BaseQArgs = case get_value(continuous, Options, false) of
+    BaseQArgs = case proplists:get_value(continuous, Options, false) of
     false ->
         [{"feed", "normal"}];
     true ->
@@ -415,7 +420,7 @@ changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
         {"style", atom_to_list(Style)}, {"since", ?JSON_ENCODE(StartSeq)},
         {"heartbeat", integer_to_list(HeartBeat)}
     ],
-    DocIds = get_value(doc_ids, Options),
+    DocIds = proplists:get_value(doc_ids, Options),
     {QArgs, Method, Body, Headers} = case DocIds of
     undefined ->
         QArgs1 = maybe_add_changes_filter_q_args(BaseQArgs, Options),
@@ -424,7 +429,7 @@ changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
         {QArgs1, get, [], Headers1};
     _ when is_list(DocIds) ->
         Headers2 = [{"Content-Type", "application/json"} | Headers1],
-        JsonDocIds = ?JSON_ENCODE({[{<<"doc_ids">>, DocIds}]}),
+        JsonDocIds = ?JSON_ENCODE(#{<<"doc_ids">> => DocIds}),
         {[{"filter", "_doc_ids"} | BaseQArgs], post, JsonDocIds, Headers2}
     end,
     send_req(
@@ -471,7 +476,7 @@ changes_since(Db, Style, StartSeq, UserFun, Options) ->
         end,
         timeout = infinity
     },
-    QueryParams = get_value(query_params, Options, {[]}),
+    QueryParams = get_value(query_params, Options, #{}),
     Req = changes_json_req(Db, Filter, QueryParams, Options),
     ChangesFeedFun = couch_changes:handle_changes(Args, {json_req, Req}, Db),
     ChangesFeedFun(fun({change, Change, _}, _) ->
@@ -484,7 +489,7 @@ changes_since(Db, Style, StartSeq, UserFun, Options) ->
 % internal functions
 
 maybe_add_changes_filter_q_args(BaseQS, Options) ->
-    case get_value(filter, Options) of
+    case proplists:get_value(filter, Options) of
     undefined ->
         BaseQS;
     FilterName ->
@@ -492,9 +497,9 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         ViewFields0 = [atom_to_list(F) || F <- record_info(fields,  mrargs)],
         ViewFields = ["key" | ViewFields0],
 
-        {Params} = get_value(query_params, Options, {[]}),
-        [{"filter", binary_to_list(FilterName)} | lists:foldl(
-            fun({K, V}, QSAcc) ->
+        Params = proplists:get_value(query_params, Options, #{}),
+        [{"filter", binary_to_list(FilterName)} | maps:fold(
+            fun(K, V, QSAcc) ->
                 Ks = couch_util:to_list(K),
                 case lists:keymember(Ks, 1, QSAcc) of
                 true ->
@@ -524,25 +529,24 @@ parse_changes_feed(Options, UserFun, DataStreamFun) ->
     end.
 
 changes_json_req(_Db, "", _QueryParams, _Options) ->
-    {[]};
+    #{};
 changes_json_req(_Db, "_doc_ids", _QueryParams, Options) ->
-    {[{<<"doc_ids">>, get_value(doc_ids, Options)}]};
-changes_json_req(Db, FilterName, {QueryParams}, _Options) ->
+    #{<<"doc_ids">> => proplists:get_value(doc_ids, Options)};
+changes_json_req(Db, FilterName, QueryParams, _Options) ->
     {ok, Info} = couch_db:get_db_info(Db),
     % simulate a request to db_name/_changes
-    {[
-        {<<"info">>, {Info}},
-        {<<"id">>, null},
-        {<<"method">>, 'GET'},
-        {<<"path">>, [couch_db:name(Db), <<"_changes">>]},
-        {<<"query">>, {[{<<"filter">>, FilterName} | QueryParams]}},
-        {<<"headers">>, []},
-        {<<"body">>, []},
-        {<<"peer">>, <<"replicator">>},
-        {<<"form">>, []},
-        {<<"cookie">>, []},
-        {<<"userCtx">>, couch_util:json_user_ctx(Db)}
-    ]}.
+    #{ <<"info">> => Info,
+       <<"id">> => null,
+       <<"method">> => 'GET',
+       <<"path">> => [couch_db:name(Db), <<"_changes">>],
+       <<"query">> => QueryParams#{<<"filter">> => FilterName},
+       <<"headers">> => [],
+       <<"body">> => [],
+       <<"peer">> => <<"replicator">>,
+       <<"form">> => [],
+       <<"cookie">> => [],
+       <<"userCtx">> => couch_util:json_user_ctx(Db)
+    }.
 
 
 options_to_query_args(HttpDb, Path, Options) ->
@@ -830,23 +834,23 @@ parse_changes_line(object_start, UserFun) ->
             fun(Obj) -> UserFun(json_to_doc_info(Obj)) end)
     end.
 
-json_to_doc_info({Props}) ->
-    RevsInfo0 = lists:map(fun({Change}) ->
-                    Rev = couch_doc:parse_rev(get_value(<<"rev">>, Change)),
-                    Del = (true =:= get_value(<<"deleted">>, Change)),
+json_to_doc_info(Props) ->
+    RevsInfo0 = lists:map(fun(Change) ->
+                    Rev = couch_doc:parse_rev(maps:get(<<"rev">>, Change)),
+                    Del = (true =:= maps:get(<<"deleted">>, Change, false)),
                     #rev_info{rev=Rev, deleted=Del}
-            end, get_value(<<"changes">>, Props)),
+            end, maps:get(<<"changes">>, Props)),
 
-    RevsInfo = case get_value(<<"removed">>, Props) of
+    RevsInfo = case maps:get(<<"removed">>, Props, false) of
         true -> [];
         _ -> RevsInfo0
     end,
 
-    Seq = get_value(<<"seq">>, Props),
+    Seq = maps:get(<<"seq">>, Props),
 
     DocInfo = #doc_info{
-        id = get_value(<<"id">>, Props),
-        high_seq = get_value(<<"seq">>, Props),
+        id = maps:get(<<"id">>, Props),
+        high_seq = maps:get(<<"seq">>, Props),
         revs = RevsInfo
     },
     {DocInfo, Seq}.
@@ -858,8 +862,8 @@ bulk_results_to_errors(Docs, {ok, Results}, interactive_edit) ->
             Acc;
         ({#doc{id = Id, revs = {Pos, [RevId | _]}}, Error}, Acc) ->
             {_, Error, Reason} = couch_httpd:error_info(Error),
-            [ {[{id, Id}, {rev, rev_to_str({Pos, RevId})},
-                {error, Error}, {reason, Reason}]} | Acc ]
+            [ #{id => Id, rev => rev_to_str({Pos, RevId}),
+                error => Error, reason => Reason} | Acc ]
         end,
         [], lists:zip(Docs, Results)));
 
@@ -870,22 +874,21 @@ bulk_results_to_errors(_Docs, {aborted, Results}, interactive_edit) ->
     lists:map(
         fun({{Id, Rev}, Err}) ->
             {_, Error, Reason} = couch_httpd:error_info(Err),
-            {[{id, Id}, {rev, rev_to_str(Rev)}, {error, Error}, {reason, Reason}]}
+            #{id => Id, rev => rev_to_str(Rev), error => Error, reason => Reason}
         end,
         Results);
 
 bulk_results_to_errors(_Docs, Results, remote) ->
     lists:reverse(lists:foldl(
-        fun({Props}, Acc) ->
-            case get_value(<<"error">>, Props, get_value(error, Props)) of
+        fun(Props, Acc) ->
+            case maps:get(<<"error">>, Props, maps:get(error, Props, undefined)) of
             undefined ->
                 Acc;
             Error ->
-                Id = get_value(<<"id">>, Props, get_value(id, Props)),
-                Rev = get_value(<<"rev">>, Props, get_value(rev, Props)),
-                Reason = get_value(<<"reason">>, Props, get_value(reason, Props)),
-                [ {[{id, Id}, {rev, rev_to_str(Rev)},
-                    {error, Error}, {reason, Reason}]} | Acc ]
+                Id = maps:get(<<"id">>, Props, maps:get(id, Props, undefined)),
+                Rev = maps:get(<<"rev">>, Props, maps:get(rev, Props, undefined)),
+                Reason = maps:get(<<"reason">>, Props, maps:get(reason, Props, undefined)),
+                [ #{id => Id, rev => rev_to_str(Rev), error => Error, reason => Reason} | Acc ]
             end
         end,
         [], Results)).

@@ -57,8 +57,8 @@ before_doc_update(Doc, #db{user_ctx = UserCtx} = Db) ->
 %    newDoc.password_sha = hash_pw(newDoc.password + salt)
 %    newDoc.salt = salt
 %    newDoc.password = null
-save_doc(#doc{body={Body}} = Doc) ->
-    case couch_util:get_value(?PASSWORD, Body) of
+save_doc(#doc{body=Body} = Doc) ->
+    case maps:get(?PASSWORD, Body, undefined) of
     null -> % server admins don't have a user-db password entry
         Doc;
     undefined ->
@@ -68,10 +68,10 @@ save_doc(#doc{body={Body}} = Doc) ->
         Salt = barrel_uuids:random(),
         DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
         Body0 = [{?PASSWORD_SCHEME, ?PBKDF2}, {?ITERATIONS, Iterations}|Body],
-        Body1 = ?replace(Body0, ?DERIVED_KEY, DerivedKey),
-        Body2 = ?replace(Body1, ?SALT, Salt),
-        Body3 = proplists:delete(?PASSWORD, Body2),
-        Doc#doc{body={Body3}}
+        Body1 = maps:put(?DERIVED_KEY, DerivedKey, Body0),
+        Body2 = maps:put(?SALT, Salt, Body1),
+        Body3 = maps:remove(?PASSWORD, Body2),
+        Doc#doc{body=Body3}
     end.
 
 % If the doc is a design doc
@@ -104,18 +104,15 @@ after_doc_read(Doc, #db{user_ctx = UserCtx} = Db) ->
     _ ->
         Doc1 = strip_non_public_fields(Doc),
         case Doc1 of
-          #doc{body={[]}} ->
-              throw(not_found);
-          _ ->
-              Doc1
+            #doc{body=#{}} -> throw(not_found);
+            _ -> Doc1
         end
     end.
 
-get_doc_name(#doc{id= <<"org.couchdb.user:", Name/binary>>}) ->
-    Name;
-get_doc_name(_) ->
-    undefined.
+get_doc_name(#doc{id= <<"org.couchdb.user:", Name/binary>>}) -> Name;
+get_doc_name(_) -> undefined.
 
-strip_non_public_fields(#doc{body={Props}}=Doc) ->
+strip_non_public_fields(#doc{body=Body}=Doc) ->
     Public = barrel_config:get_list("couch_httpd_auth", "public_fields", []),
-    Doc#doc{body={[{K, V} || {K, V} <- Props, lists:member(binary_to_list(K), Public)]}}.
+    Body2 = maps:filter(fun(K, _V) -> lists:member(binary_to_list(K), Public) end, Body),
+    Doc#doc{body=Body2}.

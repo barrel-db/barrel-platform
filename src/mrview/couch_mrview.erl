@@ -232,7 +232,7 @@ map_fold(#full_doc_info{} = FullDocInfo, OffsetReds, Acc) ->
     % matches for _all_docs and translates #full_doc_info{} -> KV pair
     case couch_doc:to_doc_info(FullDocInfo) of
         #doc_info{id=Id, revs=[#rev_info{deleted=false, rev=Rev}|_]} = DI ->
-            Value = {[{rev, couch_doc:rev_to_str(Rev)}]},
+            Value = #{rev => couch_doc:rev_to_str(Rev)},
             map_fold({{Id, Id}, Value}, OffsetReds, Acc#mracc{doc_info=DI});
         #doc_info{revs=[#rev_info{deleted=true}|_]} ->
             {ok, Acc}

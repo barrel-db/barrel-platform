@@ -43,7 +43,6 @@ handle_external_req(HttpReq, Db, Name) ->
     process_external_req(HttpReq, Db, Name).
 
 process_external_req(HttpReq, Db, Name) ->
-
     Response = couch_external_manager:execute(binary_to_list(Name),
         json_req_obj(HttpReq, Db)),
 
@@ -80,44 +79,36 @@ json_req_obj(#httpd{mochi_req=Req,
     {ok, Info} = couch_db:get_db_info(Db),
 
 % add headers...
-    {[{<<"info">>, {Info}},
-        {<<"id">>, DocId},
-        {<<"uuid">>, barrel_uuids:new()},
-        {<<"method">>, Method},
-        {<<"requested_path">>, RequestedPath},
-        {<<"path">>, Path},
-        {<<"raw_path">>, list_to_binary(Req:get(raw_path))},
-        {<<"query">>, json_query_keys(to_json_terms(Req:parse_qs()))},
-        {<<"headers">>, to_json_terms(Hlist)},
-        {<<"body">>, Body},
-        {<<"peer">>, list_to_binary(Req:get(peer))},
-        {<<"form">>, to_json_terms(ParsedForm)},
-        {<<"cookie">>, to_json_terms(Req:parse_cookie())},
-        {<<"userCtx">>, couch_util:json_user_ctx(Db)},
-        {<<"secObj">>, couch_db:get_security(Db)}]}.
+    #{<<"info">> => Info,
+      <<"id">> => DocId,
+      <<"uuid">> => barrel_uuids:new(),
+      <<"method">> => Method,
+      <<"requested_path">> => RequestedPath,
+      <<"path">> => Path,
+      <<"raw_path">> => list_to_binary(Req:get(raw_path)),
+      <<"query">> => json_query_keys(to_json_terms(Req:parse_qs())),
+      <<"headers">> => to_json_terms(Hlist),
+      <<"body">> => Body,
+      <<"peer">> => list_to_binary(Req:get(peer)),
+      <<"form">> => to_json_terms(ParsedForm),
+      <<"cookie">> => to_json_terms(Req:parse_cookie()),
+      <<"userCtx">> => couch_util:json_user_ctx(Db),
+      <<"secObj">> => couch_db:get_security(Db)}.
 
 to_json_terms(Data) ->
-    to_json_terms(Data, []).
+    to_json_terms(Data, #{}).
 
-to_json_terms([], Acc) ->
-    {lists:reverse(Acc)};
-to_json_terms([{Key, Value} | Rest], Acc) when is_atom(Key) ->
-    to_json_terms(Rest, [{list_to_binary(atom_to_list(Key)), list_to_binary(Value)} | Acc]);
-to_json_terms([{Key, Value} | Rest], Acc) ->
-    to_json_terms(Rest, [{list_to_binary(Key), list_to_binary(Value)} | Acc]).
+to_json_terms([], O) -> O;
+to_json_terms([{K, V} | R], O) ->
+    to_json_terms(R, O#{ barrel_lib:to_binary(K) => list_to_binary(V)}).
 
-json_query_keys({Json}) ->
-    json_query_keys(Json, []).
-json_query_keys([], Acc) ->
-    {lists:reverse(Acc)};
-json_query_keys([{<<"startkey">>, Value} | Rest], Acc) ->
-    json_query_keys(Rest, [{<<"startkey">>, ?JSON_DECODE(Value)}|Acc]);
-json_query_keys([{<<"endkey">>, Value} | Rest], Acc) ->
-    json_query_keys(Rest, [{<<"endkey">>, ?JSON_DECODE(Value)}|Acc]);
-json_query_keys([{<<"key">>, Value} | Rest], Acc) ->
-    json_query_keys(Rest, [{<<"key">>, ?JSON_DECODE(Value)}|Acc]);
-json_query_keys([Term | Rest], Acc) ->
-    json_query_keys(Rest, [Term|Acc]).
+json_query_keys(Json) ->
+    maps:map(fun
+        (<<"startkey">>, V) -> ?JSON_DECODE(V);
+        (<<"endkey">>, V) -> ?JSON_DECODE(V);
+        (<<"key">>, V) -> ?JSON_DECODE(V);
+        (_, V) -> V
+    end, Json).
 
 send_external_response(Req, Response) ->
     #extern_resp_args{

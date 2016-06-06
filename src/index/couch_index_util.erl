@@ -33,8 +33,8 @@ index_file(Module, DbName, FileName) ->
     filename:join(index_dir(Module, DbName), FileName).
 
 
-sort_lib({Lib}) ->
-    sort_lib(Lib, []).
+sort_lib(Lib) when is_map(Lib) ->
+    sort_lib(maps:to_list(Lib), []).
 sort_lib([], LAcc) ->
     lists:keysort(1, LAcc);
 sort_lib([{LName, {LObj}}|Rest], LAcc) ->

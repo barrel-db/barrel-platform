@@ -40,73 +40,67 @@ to_branch(Doc, [RevId | Rest]) ->
     [{RevId, ?REV_MISSING, to_branch(Doc, Rest)}].
 
 % helpers used by to_json_obj
-to_json_rev(0, []) ->
-    [];
-to_json_rev(Start, [FirstRevId|_]) ->
-    [{<<"_rev">>, list_to_binary([integer_to_list(Start),"-",revid_to_str(FirstRevId)])}].
+to_json_rev(0, [], Body) -> Body;
+to_json_rev(Start, [FirstRevId|_], Body) ->
+    Body#{<<"_rev">> => rev_to_str({Start, FirstRevId})}.
 
-to_json_body(true, {Body}) ->
-    Body ++ [{<<"_deleted">>, true}];
-%% only for view changes
-to_json_body(removed, {Body}) ->
-    Body ++ [{<<"_removed">>, true}];
-to_json_body(false, {Body}) ->
-    Body.
+to_json_body(true, Body) -> Body#{<<"_deleted">> => true};
+to_json_body(removed, Body) -> Body#{<<"_removed">> => true}; %% only for view changes
+to_json_body(false, Body) -> Body.
 
-to_json_revisions(Options, Start, RevIds) ->
+to_json_revisions(Options, Start, RevIds, Body) ->
     case lists:member(revs, Options) of
-    false -> [];
-    true ->
-        [{<<"_revisions">>, {[{<<"start">>, Start},
-                {<<"ids">>, [revid_to_str(R) ||R <- RevIds]}]}}]
+        false -> Body;
+        true ->
+            Revisions = #{ <<"start">> => Start,
+                           <<"ids">> => [revid_to_str(R) || R <- RevIds]
+                        },
+            Body#{<<"_revisions">> => Revisions}
     end.
 
-revid_to_str(RevId) when size(RevId) =:= 16 ->
-    list_to_binary(couch_util:to_hex(RevId));
-revid_to_str(RevId) ->
-    RevId.
+revid_to_str(RevId) when size(RevId) =:= 16 -> list_to_binary(couch_util:to_hex(RevId));
+revid_to_str(RevId) -> RevId.
 
 rev_to_str({Pos, RevId}) ->
     list_to_binary([integer_to_list(Pos),"-",revid_to_str(RevId)]).
 
+revs_to_strs([]) -> [];
+revs_to_strs([{Pos, RevId}| Rest]) -> [rev_to_str({Pos, RevId}) | revs_to_strs(Rest)].
 
-revs_to_strs([]) ->
-    [];
-revs_to_strs([{Pos, RevId}| Rest]) ->
-    [rev_to_str({Pos, RevId}) | revs_to_strs(Rest)].
-
-to_json_meta(Meta) ->
-    lists:map(
-        fun({revs_info, Start, RevsInfo}) ->
+to_json_meta(Meta, Body) ->
+    lists:foldl(
+        fun({revs_info, Start, RevsInfo}, Body1) ->
             {JsonRevsInfo, _Pos}  = lists:mapfoldl(
                 fun({RevId, Status}, PosAcc) ->
-                    JsonObj = {[{<<"rev">>, rev_to_str({PosAcc, RevId})},
-                        {<<"status">>, list_to_binary(atom_to_list(Status))}]},
+                    JsonObj = #{<<"rev">> => rev_to_str({PosAcc, RevId}),
+                                <<"status">> => list_to_binary(atom_to_list(Status))},
                     {JsonObj, PosAcc - 1}
                 end, Start, RevsInfo),
-            {<<"_revs_info">>, JsonRevsInfo};
-        ({local_seq, Seq}) ->
-            {<<"_local_seq">>, Seq};
-        ({conflicts, Conflicts}) ->
-            {<<"_conflicts">>, revs_to_strs(Conflicts)};
-        ({deleted_conflicts, DConflicts}) ->
-            {<<"_deleted_conflicts">>, revs_to_strs(DConflicts)}
-        end, Meta).
+            Body1#{<<"_revs_info">> => JsonRevsInfo};
+        ({local_seq, Seq}, Body1) ->
+            Body1#{<<"_local_seq">> => Seq};
+        ({conflicts, Conflicts}, Body1) ->
+            Body1#{<<"_conflicts">> => revs_to_strs(Conflicts)};
+        ({deleted_conflicts, DConflicts}, Body1) ->
+            Body1#{<<"_deleted_conflicts">> => revs_to_strs(DConflicts)}
+        end, Body, Meta).
 
-to_json_attachments(Attachments, Options) ->
+%% TODO: optimize the way we retrieve an attachements map
+to_json_attachments(Attachments, Options, Body) ->
     to_json_attachments(
         Attachments,
         lists:member(attachments, Options),
         lists:member(follows, Options),
-        lists:member(att_encoding_info, Options)
+        lists:member(att_encoding_info, Options),
+        Body
     ).
 
-to_json_attachments([], _OutputData, _DataToFollow, _ShowEncInfo) ->
-    [];
-to_json_attachments(Atts, OutputData, DataToFollow, ShowEncInfo) ->
+to_json_attachments([], _OutputData, _DataToFollow, _ShowEncInfo, Body) ->
+    Body;
+to_json_attachments(Atts, OutputData, DataToFollow, ShowEncInfo, Body) ->
     AttProps = lists:map(
         fun(#att{disk_len=DiskLen, att_len=AttLen, encoding=Enc}=Att) ->
-            {Att#att.name, {[
+            {Att#att.name, maps:from_list([
                 {<<"content_type">>, Att#att.type},
                 {<<"revpos">>, Att#att.revpos}] ++
                 case Att#att.md5 of
@@ -142,28 +136,25 @@ to_json_attachments(Atts, OutputData, DataToFollow, ShowEncInfo) ->
                             {<<"encoded_length">>, AttLen}
                         ]
                     end
-            }}
+            )}
         end, Atts),
-    [{<<"_attachments">>, {AttProps}}].
+    Body#{<<"_attachments">> => maps:from_list(AttProps)}.
 
 to_json_obj(Doc, Options) ->
     doc_to_json_obj(with_ejson_body(Doc), Options).
 
 doc_to_json_obj(#doc{id=Id,deleted=Del,body=Body,revs={Start, RevIds},
             meta=Meta}=Doc,Options)->
-    {[{<<"_id">>, Id}]
-        ++ to_json_rev(Start, RevIds)
-        ++ to_json_body(Del, Body)
-        ++ to_json_revisions(Options, Start, RevIds)
-        ++ to_json_meta(Meta)
-        ++ to_json_attachments(Doc#doc.atts, Options)
-    }.
 
-from_json_obj({Props}) ->
-    transfer_fields(Props, #doc{body=[]});
+    to_json_attachments(Doc#doc.atts, Options,
+        to_json_meta(Meta,
+            to_json_revisions(Options, Start, RevIds,
+                to_json_rev(Start, RevIds,
+                    to_json_body(Del, Body#{ <<"_id">> => Id}))))).
 
-from_json_obj(_Other) ->
-    throw({bad_request, "Document must be a JSON object"}).
+
+from_json_obj(Obj) when is_map(Obj) -> transfer_fields(Obj, #doc{body=#{}});
+from_json_obj(_Other) -> throw({bad_request, "Document must be a JSON object"}).
 
 parse_revid(RevId) when size(RevId) =:= 32 ->
     RevInt = erlang:list_to_integer(binary_to_list(RevId), 16),
@@ -212,120 +203,106 @@ validate_docid(Id) ->
     lager:debug("Document id is not a string: ~p", [Id]),
     throw({bad_request, <<"Document id must be a string">>}).
 
-transfer_fields([], #doc{body=Fields}=Doc) ->
-    % convert fields back to json object
-    Doc#doc{body={lists:reverse(Fields)}};
 
-transfer_fields([{<<"_id">>, Id} | Rest], Doc) ->
+transfer_fields(Obj, Doc) ->
+    maps:fold(fun transfer_fields1/3, Doc, Obj).
+
+
+transfer_fields1(<<"_id">>, Id, Doc) ->
     validate_docid(Id),
-    transfer_fields(Rest, Doc#doc{id=Id});
+    Doc#doc{id=Id};
 
-transfer_fields([{<<"_rev">>, Rev} | Rest], #doc{revs={0, []}}=Doc) ->
+transfer_fields1(<<"_rev">>, Rev, #doc{revs={0, []}}=Doc) ->
     {Pos, RevId} = parse_rev(Rev),
-    transfer_fields(Rest,
-            Doc#doc{revs={Pos, [RevId]}});
+    Doc#doc{revs={Pos, [RevId]}};
 
-transfer_fields([{<<"_rev">>, _Rev} | Rest], Doc) ->
-    % we already got the rev from the _revisions
-    transfer_fields(Rest,Doc);
+transfer_fields1(<<"_rev">>, _Rev, Doc) ->
+    Doc;
 
-transfer_fields([{<<"_attachments">>, {JsonBins}} | Rest], Doc) ->
-    Atts = lists:map(fun({Name, {BinProps}}) ->
-        Md5 = case couch_util:get_value(<<"digest">>, BinProps) of
-            <<"md5-",EncodedMd5/binary>> ->
-                base64:decode(EncodedMd5);
-            _ ->
-               <<>>
+transfer_fields1(<<"_attachments">>, JsonBins, Doc) ->
+    Atts =  maps:fold(fun(Name, BinProps, Atts1) ->
+        Md5 = case BinProps of
+            #{ <<"digest">> := <<"md5-",EncodedMd5/binary>>} -> base64:decode(EncodedMd5);
+            _ -> <<>>
         end,
-        case couch_util:get_value(<<"stub">>, BinProps) of
-        true ->
-            Type = couch_util:get_value(<<"content_type">>, BinProps),
-            RevPos = couch_util:get_value(<<"revpos">>, BinProps, nil),
-            DiskLen = couch_util:get_value(<<"length">>, BinProps),
-            {Enc, EncLen} = att_encoding_info(BinProps),
-            #att{name=Name, data=stub, type=Type, att_len=EncLen,
-                disk_len=DiskLen, encoding=Enc, revpos=RevPos, md5=Md5};
-        _ ->
-            Type = couch_util:get_value(<<"content_type">>, BinProps,
-                    ?DEFAULT_ATTACHMENT_CONTENT_TYPE),
-            RevPos = couch_util:get_value(<<"revpos">>, BinProps, 0),
-            case couch_util:get_value(<<"follows">>, BinProps) of
-            true ->
-                DiskLen = couch_util:get_value(<<"length">>, BinProps),
+
+        case BinProps of
+            #{ <<"stub">> := true} ->
+                Type = maps:get(<<"content_type">>, BinProps, ?DEFAULT_ATTACHMENT_CONTENT_TYPE),
+                RevPos = maps:get(<<"revpos">>, BinProps, nil),
+                DiskLen = maps:get(<<"length">>, BinProps, undefined),
                 {Enc, EncLen} = att_encoding_info(BinProps),
-                #att{name=Name, data=follows, type=Type, encoding=Enc,
-                    att_len=EncLen, disk_len=DiskLen, revpos=RevPos, md5=Md5};
+                [#att{name=Name, data=stub, type=Type, att_len=EncLen,
+                      disk_len=DiskLen, encoding=Enc, revpos=RevPos, md5=Md5} | Atts1];
             _ ->
-                Value = couch_util:get_value(<<"data">>, BinProps),
-                Bin = base64:decode(Value),
-                LenBin = size(Bin),
-                #att{name=Name, data=Bin, type=Type, att_len=LenBin,
-                        disk_len=LenBin, revpos=RevPos}
-            end
+                Type = maps:get(<<"content_type">>, BinProps, ?DEFAULT_ATTACHMENT_CONTENT_TYPE),
+                RevPos = maps:get(<<"revpos">>, BinProps, 0),
+                case BinProps of
+                    #{ <<"follows">> := true } ->
+                        DiskLen = maps:get(<<"length">>, BinProps, undefined),
+                        {Enc, EncLen} = att_encoding_info(BinProps),
+                        [#att{name=Name, data=follows, type=Type, encoding=Enc,
+                              att_len=EncLen, disk_len=DiskLen, revpos=RevPos, md5=Md5} | Atts1];
+                    _ ->
+                        Bin = base64:decode(maps:get(<<"data">>, BinProps, <<"">>)),
+                        LenBin = size(Bin),
+                        [#att{name=Name, data=Bin, type=Type, att_len=LenBin,
+                              disk_len=LenBin, revpos=RevPos} | Atts1]
+                end
         end
-    end, JsonBins),
-    transfer_fields(Rest, Doc#doc{atts=Atts});
+    end, [], JsonBins),
+    Doc#doc{atts=Atts};
 
-transfer_fields([{<<"_revisions">>, {Props}} | Rest], Doc) ->
-    RevIds = couch_util:get_value(<<"ids">>, Props),
-    Start = couch_util:get_value(<<"start">>, Props),
-    if not is_integer(Start) ->
-        throw({doc_validation, "_revisions.start isn't an integer."});
-    not is_list(RevIds) ->
-        throw({doc_validation, "_revisions.ids isn't a array."});
-    true ->
-        ok
+transfer_fields1(<<"_revisions">>, Obj, Doc) ->
+    RevIds = maps:get(<<"ids">>, Obj, undefined),
+    Start = maps:get(<<"start">>, Obj, undefined),
+    if
+        not is_integer(Start) ->
+            throw({doc_validation, "_revisions.start isn't an integer."});
+        not is_list(RevIds) ->
+            throw({doc_validation, "_revisions.ids isn't a array."});
+        true ->
+            ok
     end,
-    [throw({doc_validation, "RevId isn't a string"}) ||
-            RevId <- RevIds, not is_binary(RevId)],
+    [throw({doc_validation, "RevId isn't a string"}) ||  RevId <- RevIds, not is_binary(RevId)],
     RevIds2 = [parse_revid(RevId) || RevId <- RevIds],
-    transfer_fields(Rest, Doc#doc{revs={Start, RevIds2}});
+    Doc#doc{revs={Start, RevIds2}};
 
-transfer_fields([{<<"_deleted">>, B} | Rest], Doc) when is_boolean(B) ->
-    transfer_fields(Rest, Doc#doc{deleted=B});
+transfer_fields1(<<"_deleted">>, B, Doc) when is_boolean(B) ->  Doc#doc{deleted=B};
 
 % ignored fields
-transfer_fields([{<<"_revs_info">>, _} | Rest], Doc) ->
-    transfer_fields(Rest, Doc);
-transfer_fields([{<<"_local_seq">>, _} | Rest], Doc) ->
-    transfer_fields(Rest, Doc);
-transfer_fields([{<<"_conflicts">>, _} | Rest], Doc) ->
-    transfer_fields(Rest, Doc);
-transfer_fields([{<<"_deleted_conflicts">>, _} | Rest], Doc) ->
-    transfer_fields(Rest, Doc);
+transfer_fields1(<<"_revs_info">>, _, Doc) ->  Doc;
+transfer_fields1(<<"_local_seq">>, _, Doc) -> Doc;
+transfer_fields1(<<"_conflicts">>, _, Doc) -> Doc;
+transfer_fields1(<<"_deleted_conflicts">>, _, Doc) -> Doc;
 
 % special fields for replication documents
-transfer_fields([{<<"_replication_state">>, _} = Field | Rest],
-    #doc{body=Fields} = Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]});
-transfer_fields([{<<"_replication_state_time">>, _} = Field | Rest],
-    #doc{body=Fields} = Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]});
-transfer_fields([{<<"_replication_state_reason">>, _} = Field | Rest],
-    #doc{body=Fields} = Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]});
-transfer_fields([{<<"_replication_id">>, _} = Field | Rest],
-    #doc{body=Fields} = Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]});
-transfer_fields([{<<"_replication_stats">>, _} = Field | Rest],
-    #doc{body=Fields} = Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]});
+transfer_fields1(<<"_replication_state">>, V, #doc{body=Body} = Doc) ->
+    Doc#doc{body=Body#{<<"_replication_state">> => V}};
+transfer_fields1(<<"_replication_state_time">>, V, #doc{body=Body} = Doc) ->
+    Doc#doc{body=Body#{<<"_replication_state">> => V}};
+transfer_fields1(<<"_replication_state_reason">>, V, #doc{body=Body} = Doc) ->
+    Doc#doc{body=Body#{<<"_replication_state_reason">> => V}};
+transfer_fields1(<<"_replication_id">>, V, #doc{body=Body} = Doc) ->
+    Doc#doc{body=Body#{<<"_replication_idv">> => V}};
+transfer_fields1(<<"_replication_stats">>, V, #doc{body=Body} = Doc) ->
+    Doc#doc{body=Body#{<<"_replication_id">> => V}};
 
 % unknown special field
-transfer_fields([{<<"_",Name/binary>>, _} | _], _) ->
+transfer_fields1(<<"_",Name/binary>>, _, _) ->
     throw({doc_validation,
             list_to_binary(io_lib:format("Bad special document member: _~s", [Name]))});
 
-transfer_fields([Field | Rest], #doc{body=Fields}=Doc) ->
-    transfer_fields(Rest, Doc#doc{body=[Field|Fields]}).
+transfer_fields1(K, V, #doc{body=Body}=Doc) ->
+    Doc#doc{body=Body#{K => V}}.
 
 att_encoding_info(BinProps) ->
-    DiskLen = couch_util:get_value(<<"length">>, BinProps),
-    case couch_util:get_value(<<"encoding">>, BinProps) of
+    DiskLen = maps:get(<<"length">>, BinProps, undefined),
+    case maps:get(<<"encoding">>, BinProps, undefined) of
     undefined ->
         {identity, DiskLen};
     Enc ->
-        EncodedLen = couch_util:get_value(<<"encoded_length">>, BinProps, DiskLen),
+        EncodedLen = maps:get(<<"encoded_length">>, BinProps, DiskLen),
         {list_to_existing_atom(binary_to_list(Enc)), EncodedLen}
     end.
 
@@ -407,37 +384,30 @@ att_to_bin(#att{data=DataFun, att_len=Len}) when is_function(DataFun)->
         ))
     ).
 
-get_validate_doc_fun(#doc{body={Props}}=DDoc) ->
-    case couch_util:get_value(<<"validate_doc_update">>, Props) of
-    undefined ->
-        nil;
-    _Else ->
-        fun(EditDoc, DiskDoc, Ctx, SecObj) ->
-            couch_query_servers:validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj)
-        end
-    end.
-
-
-get_validate_read_doc_fun(#doc{body={Props}}=DDoc) ->
-    case couch_util:get_value(<<"validate_doc_read">>, Props) of
-        undefined ->
-            nil;
-        _Else ->
-            fun(Doc, Ctx, SecObj) ->
-                    couch_query_servers:validate_doc_read(DDoc, Doc, Ctx,
-                                                          SecObj)
+get_validate_doc_fun(#doc{body=Body}=DDoc) ->
+    case maps:is_key(<<"validate_doc_update">>, Body) of
+        false -> nil;
+        true ->
+            fun(EditDoc, DiskDoc, Ctx, SecObj) ->
+                couch_query_servers:validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj)
             end
     end.
 
 
-has_stubs(#doc{atts=Atts}) ->
-    has_stubs(Atts);
-has_stubs([]) ->
-    false;
-has_stubs([#att{data=stub}|_]) ->
-    true;
-has_stubs([_Att|Rest]) ->
-    has_stubs(Rest).
+get_validate_read_doc_fun(#doc{body=Body}=DDoc) ->
+    case maps:is_key(<<"validate_doc_read">>, Body) of
+        false -> nil;
+        true ->
+            fun(Doc, Ctx, SecObj) ->
+                couch_query_servers:validate_doc_read(DDoc, Doc, Ctx, SecObj)
+            end
+    end.
+
+
+has_stubs(#doc{atts=Atts}) ->has_stubs(Atts);
+has_stubs([]) -> false;
+has_stubs([#att{data=stub}|_]) -> true;
+has_stubs([_Att|Rest]) -> has_stubs(Rest).
 
 merge_stubs(#doc{id = Id}, nil) ->
     throw({missing_stub, <<"Previous revision missing for document ", Id/binary>>});
@@ -689,7 +659,7 @@ abort_multi_part_stream(Parser, MonRef) ->
 
 with_ejson_body(#doc{body = Body} = Doc) when is_binary(Body) ->
     Doc#doc{body = couch_compress:decompress(Body)};
-with_ejson_body(#doc{body = {_}} = Doc) ->
+with_ejson_body(#doc{body = Body} = Doc) when is_map(Body)->
     Doc.
 
 

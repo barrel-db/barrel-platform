@@ -202,7 +202,7 @@ sum_terms(_, _) ->
     throw({invalid_value, <<"builtin _sum function requires map values to be numbers or lists of numbers">>}).
 
 builtin_stats(reduce, []) ->
-    {[]};
+    #{};
 builtin_stats(reduce, [[_,First]|Rest]) when is_number(First) ->
     Stats = lists:foldl(fun([_K,V], {S,C,Mi,Ma,Sq}) when is_number(V) ->
         {S+V, C+1, lists:min([Mi, V]), lists:max([Ma, V]), Sq+(V*V)};
@@ -211,7 +211,7 @@ builtin_stats(reduce, [[_,First]|Rest]) when is_number(First) ->
             <<"builtin _stats function requires map values to be numbers">>})
     end, {First,1,First,First,First*First}, Rest),
     {Sum, Cnt, Min, Max, Sqr} = Stats,
-    {[{sum,Sum}, {count,Cnt}, {min,Min}, {max,Max}, {sumsqr,Sqr}]};
+    #{sum => Sum, count => Cnt, min => Min, max => Max, sumsqr => Sqr};
 
 builtin_stats(rereduce, [[_,First]|Rest]) ->
     {[{sum,Sum0}, {count,Cnt0}, {min,Min0}, {max,Max0}, {sumsqr,Sqr0}]} = First,
@@ -220,7 +220,7 @@ builtin_stats(rereduce, [[_,First]|Rest]) ->
         {Sum+S, Cnt+C, lists:min([Min, Mi]), lists:max([Max, Ma]), Sqr+Sq}
     end, {Sum0,Cnt0,Min0,Max0,Sqr0}, Rest),
     {Sum, Cnt, Min, Max, Sqr} = Stats,
-    {[{sum,Sum}, {count,Cnt}, {min,Min}, {max,Max}, {sumsqr,Sqr}]}.
+    #{sum => Sum, count => Cnt, min => Min, max => Max, sumsqr => Sqr}.
 
 % use the function stored in ddoc.validate_doc_update to test an update.
 validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj) ->
@@ -229,9 +229,9 @@ validate_doc_update(DDoc, EditDoc, DiskDoc, Ctx, SecObj) ->
     case ddoc_prompt(DDoc, [<<"validate_doc_update">>], [JsonEditDoc, JsonDiskDoc, Ctx, SecObj]) of
         1 ->
             ok;
-        {[{<<"forbidden">>, Message}]} ->
+        #{<<"forbidden">> := Message} ->
             throw({forbidden, Message});
-        {[{<<"unauthorized">>, Message}]} ->
+        #{<<"unauthorized">> := Message} ->
             throw({unauthorized, Message})
     end.
 
@@ -241,9 +241,9 @@ validate_doc_read(DDoc, Doc, Ctx, SecObj) ->
                      [JsonDoc, Ctx, SecObj]) of
         1 ->
             ok;
-        {[{<<"forbidden">>, Message}]} ->
+        #{<<"forbidden">> := Message} ->
             throw({forbidden, Message});
-        {[{<<"unauthorized">>, Message}]} ->
+        #{<<"unauthorized">> := Message} ->
             throw({unauthorized, Message})
     end.
 
@@ -325,7 +325,7 @@ init([]) ->
         pid_procs = PidProcs, % Keyed by PID, valus is a #proc record.
         lang_procs = LangProcs, % Keyed by language name, value is a #proc record
         lang_limits = LangLimits, % Keyed by language name, value is {Lang, Limit, Current}
-        config = {[{<<"reduce_limit">>, ReduceLimit},{<<"timeout">>, ProcTimeout}]}
+        config = #{<<"reduce_limit">> => ReduceLimit, <<"timeout">> => ProcTimeout}
     }}.
 
 terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
@@ -334,7 +334,7 @@ terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
     ok.
 
 handle_call({get_proc, DDoc1, DDocKey}, From, Server) ->
-    #doc{body = {Props}} = DDoc = couch_doc:with_ejson_body(DDoc1),
+    #doc{body = Props} = DDoc = couch_doc:with_ejson_body(DDoc1),
     Lang = couch_util:get_value(<<"language">>, Props, <<"javascript">>),
     case lang_proc(Lang, Server, fun(Procs) ->
             % find a proc in the set that has the DDoc
@@ -438,8 +438,8 @@ service_waitlist(#qserver{waitlist=Waitlist}=Server) ->
     end.
 
 % todo get rid of duplication
-service_waiting({{#doc{body={Props}}=DDoc, DDocKey}, From}, Server) ->
-    Lang = couch_util:get_value(<<"language">>, Props, <<"javascript">>),
+service_waiting({{#doc{body=Props}=DDoc, DDocKey}, From}, Server) ->
+    Lang = maps:get(<<"language">>, Props, <<"javascript">>),
     case lang_proc(Lang, Server, fun(Procs) ->
             % find a proc in the set that has the DDoc
             proc_with_ddoc(DDoc, DDocKey, Procs)
@@ -565,11 +565,11 @@ teach_ddoc(DDoc, {DDocId, _Rev}=DDocKey, #proc{ddoc_keys=Keys}=Proc) ->
 get_ddoc_process(#doc{} = DDoc, DDocKey) ->
     % remove this case statement
     case gen_server:call(couch_query_servers, {get_proc, DDoc, DDocKey}, infinity) of
-    {ok, Proc, {QueryConfig}} ->
+    {ok, Proc, QueryConfig} ->
         % process knows the ddoc
-        case (catch proc_prompt(Proc, [<<"reset">>, {QueryConfig}])) of
+        case (catch proc_prompt(Proc, [<<"reset">>, QueryConfig])) of
         true ->
-            proc_set_timeout(Proc, couch_util:get_value(<<"timeout">>, QueryConfig)),
+            proc_set_timeout(Proc, maps:get(<<"timeout">>, QueryConfig, undefined)),
             link(Proc#proc.pid),
             gen_server:call(couch_query_servers, {unlink_proc, Proc#proc.pid}, infinity),
             Proc;
@@ -583,10 +583,10 @@ get_ddoc_process(#doc{} = DDoc, DDocKey) ->
 
 get_os_process(Lang) ->
     case gen_server:call(couch_query_servers, {get_proc, Lang}, infinity) of
-    {ok, Proc, {QueryConfig}} ->
-        case (catch proc_prompt(Proc, [<<"reset">>, {QueryConfig}])) of
+    {ok, Proc, QueryConfig} ->
+        case (catch proc_prompt(Proc, [<<"reset">>, QueryConfig])) of
         true ->
-            proc_set_timeout(Proc, couch_util:get_value(<<"timeout">>, QueryConfig)),
+            proc_set_timeout(Proc, maps:get(<<"timeout">>, QueryConfig, undefined)),
             link(Proc#proc.pid),
             gen_server:call(couch_query_servers, {unlink_proc, Proc#proc.pid}, infinity),
             Proc;

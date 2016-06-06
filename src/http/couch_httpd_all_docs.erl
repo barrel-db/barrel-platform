@@ -61,7 +61,7 @@ handle_req(Req, _Db) ->
 
 all_docs_fold(Db, #all_docs_args{keys=undefined}=Args, Callback, UAcc) ->
     {ok, Info} = couch_db:get_db_info(Db),
-    Total = couch_util:get_value(doc_count, Info),
+    Total =  maps:get(doc_count, Info),
     UpdateSeq = couch_db:get_update_seq(Db),
     Acc = #fold_acc{
         db=Db,
@@ -104,7 +104,7 @@ all_docs_fold(Db, #all_docs_args{direction=Dir, keys=Keys0}=Args, Callback, UAcc
                     true -> [{deleted, true}];
                     false -> []
                 end,
-                {{{Id, Id}, {Props}}, Acc0#fold_acc{doc_info=DI}};
+                {{{Id, Id}, Props}, Acc0#fold_acc{doc_info=DI}};
             not_found ->
                 {{{Key, error}, not_found}, Acc0}
         end,
@@ -172,7 +172,7 @@ all_docs_fold1(#full_doc_info{} = FullDocInfo, OffsetReds, Acc) ->
     % matches for _all_docs and translates #full_doc_info{} -> KV pair
     case couch_doc:to_doc_info(FullDocInfo) of
         #doc_info{id=Id, revs=[#rev_info{deleted=false, rev=Rev}|_]} = DI ->
-            Value = {[{rev, couch_doc:rev_to_str(Rev)}]},
+            Value = [{rev, couch_doc:rev_to_str(Rev)}],
             all_docs_fold1({{Id, Id}, Value}, OffsetReds, Acc#fold_acc{doc_info=DI});
         #doc_info{revs=[#rev_info{deleted=true}|_]} ->
             {ok, Acc}
@@ -314,7 +314,7 @@ view_cb({row, Row}, Acc) ->
     end;
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
     % Nothing in view
-    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
+    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, #{rows => []}),
     {ok, Acc#vacc{resp=Resp}};
 
 
@@ -342,7 +342,7 @@ row_to_json(error, Row) ->
     % match prior behavior.
     Key = couch_util:get_value(key, Row),
     Val = couch_util:get_value(value, Row),
-    Obj = {[{key, Key}, {error, Val}]},
+    Obj =  #{key => Key, error => Val},
     ?JSON_ENCODE(Obj);
 row_to_json(Id0, Row) ->
     Id = case Id0 of
@@ -355,7 +355,7 @@ row_to_json(Id0, Row) ->
         undefined -> [];
         Doc0 -> [{doc, Doc0}]
     end,
-    Obj = {Id ++ [{key, Key}, {value, Val}] ++ Doc},
+    Obj = Id ++ [{key, Key}, {value, Val}] ++ Doc,
     ?JSON_ENCODE(Obj).
 
 maybe_load_doc(_Db, _DI, #all_docs_args{include_docs=false}) ->
@@ -378,15 +378,10 @@ doc_row(null, _Opts) ->
 doc_row(Doc, Opts) ->
     [{doc, couch_doc:to_json_obj(Doc, Opts)}].
 
-docid_rev(Id, {Props}) ->
-    DocId = couch_util:get_value(<<"_id">>, Props, Id),
-    Rev = case couch_util:get_value(<<"_rev">>, Props, nil) of
-        nil -> nil;
-        Rev0 -> couch_doc:parse_rev(Rev0)
-    end,
-    {DocId, Rev};
-docid_rev(Id, _) ->
-    {Id, nil}.
+docid_rev(_Id, #{ <<"_id">> := DocId, <<"_rev">> := Rev }) -> {DocId, couch_doc:parse_rev(Rev)};
+docid_rev(_Id, #{ <<"_id">> := DocId }) -> {DocId, nil};
+docid_rev(Id, #{ <<"_rev">> := Rev }) -> {Id, couch_doc:parse_rev(Rev)};
+docid_rev(Id, _) -> {Id, nil}.
 
 make_meta(Args, UpdateSeq, Base) ->
     case Args#all_docs_args.update_seq of
@@ -435,8 +430,8 @@ ad_ekey_opts(#all_docs_args{end_key_docid=EKeyDocId}=Args) ->
 
 %% parse arguments
 
-is_keys({Props}) ->
-    case couch_util:get_value(<<"keys">>, Props) of
+is_keys(Props) ->
+    case maps:get(<<"keys">>, Props, undefined) of
         undefined ->
             lager:debug("POST with no keys member.", []),
             undefined;

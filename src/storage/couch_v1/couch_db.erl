@@ -271,20 +271,18 @@ get_db_info(Db) ->
     } = Db,
     {ok, Size} = couch_file:bytes(Fd),
     {ok, DbReduction} = couch_btree:full_reduce(by_id_btree(Db)),
-    InfoList = [
-        {db_name, Name},
-        {doc_count, element(1, DbReduction)},
-        {doc_del_count, element(2, DbReduction)},
-        {update_seq, SeqNum},
-        {purge_seq, couch_db:get_purge_seq(Db)},
-        {compact_running, Compactor/=nil},
-        {disk_size, Size},
-        {data_size, db_data_size(DbReduction, [SeqBtree, IdBtree, LocalBtree])},
-        {instance_start_time, StartTime},
-        {disk_format_version, DiskVersion},
-        {committed_update_seq, CommittedUpdateSeq}
-        ],
-    {ok, InfoList}.
+    Info = #{db_name => Name,
+             doc_count => element(1, DbReduction),
+             doc_del_count => element(2, DbReduction),
+             update_seq => SeqNum,
+             purge_seq => couch_db:get_purge_seq(Db),
+             compact_running => Compactor/=nil,
+             disk_size => Size,
+             data_size => db_data_size(DbReduction, [SeqBtree, IdBtree, LocalBtree]),
+             instance_start_time => StartTime,
+             disk_format_version => DiskVersion,
+             committed_update_seq => CommittedUpdateSeq},
+    {ok, Info}.
 
 db_data_size({_Count, _DelCount}, _Trees) ->
     % pre 1.2 format, upgraded on compaction
@@ -391,14 +389,14 @@ validate_security_object(SecProps) ->
     ok.
 
 % validate user input
-validate_names_and_roles({Props}) when is_list(Props) ->
-    case couch_util:get_value(<<"names">>,Props,[]) of
+validate_names_and_roles(Props) when is_list(Props) ->
+    case maps:get(<<"names">>,Props,[]) of
     Ns when is_list(Ns) ->
             [throw("names must be a JSON list of strings") ||N <- Ns, not is_binary(N)],
             Ns;
     _ -> throw("names must be a JSON list of strings")
     end,
-    case couch_util:get_value(<<"roles">>,Props,[]) of
+    case maps:get(<<"roles">>,Props,[]) of
     Rs when is_list(Rs) ->Rs;
     _ -> throw("roles must be a JSON list of strings")
     end,

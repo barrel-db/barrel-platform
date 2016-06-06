@@ -56,8 +56,8 @@ handle_changes_req1(Req, #db{name=DbName}=Db) ->
         ({stop, StartSeq, EndSeq}, "continuous") ->
             couch_httpd:send_chunk(
                 Resp,
-                [?JSON_ENCODE({[{<<"start_seq">>, StartSeq},
-                                {<<"last_seq">>, EndSeq}]}) | "\n"]
+                [?JSON_ENCODE(#{<<"start_seq">> => StartSeq,
+                                <<"last_seq">> => EndSeq}) | "\n"]
             ),
             couch_httpd:end_json_response(Resp);
         ({stop, StartSeq, EndSeq}, _) ->

@@ -128,10 +128,10 @@ handle_rewrite_req(#httpd{
             erlang:put(?REWRITE_COUNT, RewritesSoFar + 1)
     end,
 
-    #doc{body={Props}} = DDoc,
+    #doc{body=Props} = DDoc,
 
     % get rules from ddoc
-    case couch_util:get_value(<<"rewrites">>, Props) of
+    case maps:get(<<"rewrites">>, Props, undefined) of
         undefined ->
             couch_httpd:send_error(Req, 404, <<"rewrite_error">>,
                 <<"Invalid path.">>);

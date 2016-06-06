@@ -63,13 +63,15 @@ get_view(Db, DDoc, ViewName, Args0) ->
     {ok, {Type, View}, Sig, Args3}.
 
 
-ddoc_to_mrst(DbName, #doc{id=Id, body={Fields}}) ->
-    MakeDict = fun({Name, {MRFuns}}, DictBySrcAcc) ->
-        case couch_util:get_value(<<"map">>, MRFuns) of
-            MapSrc when is_binary(MapSrc) ->
-                RedSrc = couch_util:get_value(<<"reduce">>, MRFuns, null),
-                {ViewOpts} = couch_util:get_value(<<"options">>, MRFuns, {[]}),
-                View = case dict:find({MapSrc, ViewOpts}, DictBySrcAcc) of
+ddoc_to_mrst(DbName, #doc{id=Id, body=Fields}) ->
+    DesignOpts = maps:get(<<"options">>, Fields, #{}),
+    RawViews = maps:get(<<"views">>, Fields, #{}),
+    BySrc = maps:fold(fun(Name, MRFuns, BySrcAcc) ->
+        case MRFuns of
+            #{ <<"map">> := MapSrc } ->
+                RedSrc = maps:get(<<"reduce">>, MRFuns, null),
+                ViewOpts = maps:get(<<"options">>, MRFuns, #{}),
+                View = case dict:find({MapSrc, ViewOpts}, BySrcAcc) of
                     {ok, View0} -> View0;
                     error -> #mrview{def=MapSrc, options=ViewOpts}
                 end,
@@ -80,24 +82,21 @@ ddoc_to_mrst(DbName, #doc{id=Id, body={Fields}}) ->
                     _ ->
                         RedFuns = [{Name, RedSrc} | View#mrview.reduce_funs],
                         {View#mrview.map_names, RedFuns}
-                end,
+                    end,
                 View2 = View#mrview{map_names=MapNames, reduce_funs=RedSrcs},
-                dict:store({MapSrc, ViewOpts}, View2, DictBySrcAcc);
-            undefined ->
-                DictBySrcAcc
+                dict:store({MapSrc, ViewOpts}, View2, BySrcAcc);
+            _ ->
+                BySrcAcc
         end
-    end,
-    {DesignOpts} = proplists:get_value(<<"options">>, Fields, {[]}),
-    {RawViews} = couch_util:get_value(<<"views">>, Fields, {[]}),
-    BySrc = lists:foldl(MakeDict, dict:new(), RawViews),
+    end, dict:new(), RawViews),
 
     NumViews = fun({_, View}, N) ->
             {View#mrview{id_num=N}, N+1}
     end,
     {Views, _} = lists:mapfoldl(NumViews, 0, lists:sort(dict:to_list(BySrc))),
 
-    Language = couch_util:get_value(<<"language">>, Fields, <<"javascript">>),
-    Lib = couch_util:get_value(<<"lib">>, RawViews, {[]}),
+    Language = maps:get(<<"language">>, Fields, <<"javascript">>),
+    Lib = maps:get(<<"lib">>, RawViews, #{}),
 
     IdxState = #mrst{
         db_name=DbName,
@@ -231,7 +230,7 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq, GSeq},
             {Count, Result}
         end,
 
-    Less = case couch_util:get_value(<<"collation">>, View#mrview.options) of
+    Less = case maps:get(<<"collation">>, View#mrview.options, undefind) of
         <<"raw">> -> fun(A, B) -> A < B end;
         _ -> fun couch_ejson_compare:less_json_ids/2
     end,
@@ -269,22 +268,20 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq, GSeq},
                 group_seq=GSeq}.
 
 
-temp_view_to_ddoc({Props}) ->
-    Language = couch_util:get_value(<<"language">>, Props, <<"javascript">>),
-    Options = couch_util:get_value(<<"options">>, Props, {[]}),
-    View0 = [{<<"map">>, couch_util:get_value(<<"map">>, Props)}],
-    View1 = View0 ++ case couch_util:get_value(<<"reduce">>, Props) of
-        RedSrc when is_binary(RedSrc) -> [{<<"reduce">>, RedSrc}];
-        _ -> []
+temp_view_to_ddoc(Props) ->
+    Language = maps:get(<<"language">>, Props, <<"javascript">>),
+    Options = maps:get(<<"options">>, Props, #{}),
+    View0 = #{<<"map">> => maps:get(<<"map">>, Props)},
+    View1 = case Props of
+        #{ <<"reduce">> := RedSrc} when is_binary(RedSrc) ->
+            View0#{<<"reduce">> => RedSrc};
+        _ ->
+            View0
     end,
-    DDoc = {[
-        {<<"_id">>, barrel_uuids:random()},
-        {<<"language">>, Language},
-        {<<"options">>, Options},
-        {<<"views">>, {[
-            {<<"temp">>, {View1}}
-        ]}}
-    ]},
+    DDoc = #{<<"_id">> => barrel_uuids:random(),
+             <<"language">> => Language,
+             <<"options">> => Options,
+             <<"views">> => #{<<"temp">> => View1}},
     couch_doc:from_json_obj(DDoc).
 
 

@@ -375,14 +375,14 @@ check_frag(Threshold, Frag) ->
     Frag >= Threshold.
 
 
-frag(Props) ->
-    FileSize = couch_util:get_value(disk_size, Props),
+frag(Info) ->
+    FileSize = maps:get(disk_size, Info),
     MinFileSize = barrel_config:get_integer("compaction_daemon", "min_file_size", ?DEFAULT_MIN_FILESIZE),
     case FileSize < MinFileSize of
     true ->
         {0, FileSize};
     false ->
-        case couch_util:get_value(data_size, Props) of
+        case maps:get(data_size, Info) of
         null ->
             {100, FileSize};
         0 ->

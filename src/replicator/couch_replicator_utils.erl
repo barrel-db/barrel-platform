@@ -30,51 +30,52 @@
 ]).
 
 
-parse_rep_doc({Props}, UserCtx) ->
-    ProxyParams = parse_proxy_params(get_value(<<"proxy">>, Props, <<>>)),
-    Options = make_options(Props),
-    case get_value(cancel, Options, false) andalso
-        (get_value(id, Options, nil) =/= nil) of
+parse_rep_doc(Props, UserCtx) ->
+  lager:info("props is ~p~n", [Props]),
+  ProxyParams = parse_proxy_params(maps:get(<<"proxy">>, Props, <<>>)),
+  Options = make_options(Props),
+  case proplists:get_value(cancel, Options, false) andalso
+       (proplists:get_value(id, Options, nil) =/= nil) of
     true ->
-        {ok, #rep{options = Options, user_ctx = UserCtx}};
+      {ok, #rep{options = Options, user_ctx = UserCtx}};
     false ->
-        Source = parse_rep_db(get_value(<<"source">>, Props),
-                              ProxyParams, Options),
-        Target = parse_rep_db(get_value(<<"target">>, Props),
-                              ProxyParams, Options),
+      Source = parse_rep_db(maps:get(<<"source">>, Props),
+                            ProxyParams, Options),
+      Target = parse_rep_db(maps:get(<<"target">>, Props),
+                            ProxyParams, Options),
 
 
-        {RepType, View} = case get_value(<<"filter">>, Props) of
-                <<"_view">> ->
-                    {QP}  = get_value(query_params, Options, {[]}),
-                    ViewParam = get_value(<<"view">>, QP),
-                    View1 = case re:split(ViewParam, <<"/">>) of
-                        [DName, ViewName] ->
-                            {<< "_design/", DName/binary >>, ViewName};
-                        _ ->
-                            throw({bad_request, "Invalid `view` parameter."})
-                    end,
-                    {view, View1};
-                _ ->
-                    {db, nil}
-            end,
+      {RepType, View} = case catch maps:get(<<"filter">>, Props) of
+                          <<"_view">> ->
+                            QP  = proplists:get_value(query_params, Options, #{}),
+                            ViewParam = maps:get(<<"view">>, QP),
+                            View1 = case binary:split(ViewParam, <<"/">>) of
+                                      [DName, ViewName] ->
+                                        {<< "_design/", DName/binary >>, ViewName};
+                                      _ ->
+                                        throw({bad_request, "Invalid `view` parameter."})
+                                    end,
+                            {view, View1};
+                          _ ->
+                            {db, nil}
+                        end,
 
-        Rep = #rep{
-            source = Source,
-            target = Target,
-            options = Options,
-            user_ctx = UserCtx,
-            type = RepType,
-            view = View,
-            doc_id = get_value(<<"_id">>, Props, null)
-        },
-        {ok, Rep#rep{id = replication_id(Rep)}}
-    end.
+      Rep = #rep{
+               source = Source,
+               target = Target,
+               options = Options,
+               user_ctx = UserCtx,
+               type = RepType,
+               view = View,
+               doc_id = maps:get(<<"_id">>, Props, null)
+              },
+      {ok, Rep#rep{id = replication_id(Rep)}}
+  end.
 
 
 replication_id(#rep{options = Options} = Rep) ->
-    BaseId = replication_id(Rep, ?REP_ID_VERSION),
-    {BaseId, maybe_append_options([continuous, create_target], Options)}.
+  BaseId = replication_id(Rep, ?REP_ID_VERSION),
+  {BaseId, maybe_append_options([continuous, create_target], Options)}.
 
 
 % Versioned clauses for generating replication IDs.
@@ -123,10 +124,10 @@ maybe_append_filters(Base,
                 [DocIds]
             end;
         <<"_", _/binary>> = Filter ->
-                [Filter, get_value(query_params, Options, {[]})];
+                [Filter, proplists:get_value(query_params, Options, #{})];
         Filter ->
             [filter_code(Filter, Source, UserCtx),
-                get_value(query_params, Options, {[]})]
+                proplists:get_value(query_params, Options, #{})]
         end,
     couch_util:to_hex(crypto:hash(md5, term_to_binary(Base2))).
 
@@ -191,23 +192,23 @@ get_rep_endpoint(UserCtx, <<DbName/binary>>) ->
     {local, DbName, UserCtx}.
 
 
-parse_rep_db({Props}, ProxyParams, Options) ->
-    Url = maybe_add_trailing_slash(get_value(<<"url">>, Props)),
-    {AuthProps} = get_value(<<"auth">>, Props, {[]}),
-    {BinHeaders} = get_value(<<"headers">>, Props, {[]}),
-    Headers = lists:ukeysort(1, [{binary_to_list(K), ?b2l(V)} || {K, V} <- BinHeaders]),
+parse_rep_db(Props, ProxyParams, Options) when is_map(Props) ->
+    Url = maybe_add_trailing_slash(maps:get(<<"url">>, Props)),
+    AuthProps = maps:get(<<"auth">>, Props, #{}),
+    BinHeaders = maps:get(<<"headers">>, Props, #{}),
+    Headers = lists:ukeysort(1, [{binary_to_list(K), ?b2l(V)} || {K, V} <- maps:to_list(BinHeaders)]),
     DefaultHeaders = (#httpdb{})#httpdb.headers,
-    OAuth = case get_value(<<"oauth">>, AuthProps) of
+    OAuth = case maps:get(<<"oauth">>, AuthProps, undefined) of
     undefined ->
         nil;
-    {OauthProps} ->
+    OauthProps ->
         #oauth{
-            consumer_key = binary_to_list(get_value(<<"consumer_key">>, OauthProps)),
-            token = binary_to_list(get_value(<<"token">>, OauthProps)),
-            token_secret = binary_to_list(get_value(<<"token_secret">>, OauthProps)),
-            consumer_secret = binary_to_list(get_value(<<"consumer_secret">>, OauthProps)),
+            consumer_key = binary_to_list(maps:get(<<"consumer_key">>, OauthProps)),
+            token = binary_to_list(maps:get(<<"token">>, OauthProps)),
+            token_secret = binary_to_list(maps:get(<<"token_secret">>, OauthProps)),
+            consumer_secret = binary_to_list(maps:get(<<"consumer_secret">>, OauthProps)),
             signature_method =
-                case get_value(<<"signature_method">>, OauthProps) of
+                case maps:get(<<"signature_method">>, OauthProps, undefined) of
                 undefined ->        hmac_sha1;
                 <<"PLAINTEXT">> ->  plaintext;
                 <<"HMAC-SHA1">> ->  hmac_sha1;
@@ -220,16 +221,16 @@ parse_rep_db({Props}, ProxyParams, Options) ->
         oauth = OAuth,
         headers = lists:ukeymerge(1, Headers, DefaultHeaders),
         ibrowse_options = lists:keysort(1,
-            [{socket_options, get_value(socket_options, Options)} |
+            [{socket_options, proplists:get_value(socket_options, Options)} |
                 ProxyParams ++ ssl_params(Url)]),
-        timeout = get_value(connection_timeout, Options),
-        http_connections = get_value(http_connections, Options),
-        retries = get_value(retries, Options)
+        timeout = proplists:get_value(connection_timeout, Options),
+        http_connections = proplists:get_value(http_connections, Options),
+        retries = proplists:get_value(retries, Options)
     };
 parse_rep_db(<<"http://", _/binary>> = Url, ProxyParams, Options) ->
-    parse_rep_db({[{<<"url">>, Url}]}, ProxyParams, Options);
+    parse_rep_db(#{<<"url">> => Url}, ProxyParams, Options);
 parse_rep_db(<<"https://", _/binary>> = Url, ProxyParams, Options) ->
-    parse_rep_db({[{<<"url">>, Url}]}, ProxyParams, Options);
+    parse_rep_db(#{<<"url">> => Url}, ProxyParams, Options);
 parse_rep_db(<<DbName/binary>>, _ProxyParams, _Options) ->
     DbName.
 
@@ -246,7 +247,7 @@ maybe_add_trailing_slash(Url) ->
 
 
 make_options(Props) ->
-    Options = lists:ukeysort(1, convert_options(Props)),
+    Options = lists:ukeysort(1, convert_options(maps:to_list(Props))),
     DefWorkers = barrel_config:get_integer("replicator", "worker_processes", 4),
     DefBatchSize = barrel_config:get_integer("replicator", "worker_batch_size", 500),
     DefConns = barrel_config:get_integer("replicator", "http_connections", 20),

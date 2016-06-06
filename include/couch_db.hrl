@@ -25,8 +25,14 @@
 
 -define(REWRITE_COUNT, couch_rewrite_count).
 
--define(JSON_ENCODE(V), jiffy:encode(V, [force_utf8])).
--define(JSON_DECODE(V), couch_util:json_decode(V)).
+-define(JSON_ENCODE(V), jsx:encode(V)).
+-define(JSON_DECODE(V),
+        try
+          jsx:decode(V, [return_maps])
+        catch
+          throw:Error ->
+            throw({invalid_json, Error})
+        end).
 
 -define(b2l(V), binary_to_list(V)).
 -define(l2b(V), list_to_binary(V)).
@@ -69,7 +75,7 @@
                 requested_path_parts,
                 path_parts,
                 db_url_handlers,
-                user_ctx,
+                user_ctx = undefined,
                 req_body = undefined,
                 design_url_handlers,
                 auth,
@@ -82,7 +88,7 @@
               revs = {0, []},
 
               % the json body object.
-              body = {[]},
+              body = #{},
 
               atts = [], % attachments
 

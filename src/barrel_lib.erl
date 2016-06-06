@@ -15,7 +15,8 @@
 -module(barrel_lib).
 
 -export([to_binary/1]).
--export([userctx/0, userctx/1, userctx_get/2, 
+-export([to_error/1]).
+-export([userctx/0, userctx/1, userctx_get/2,
          userctx_put/2, userctx_put/3, is_userctx/1]).
 -export([adminctx/0]).
 -export([load_config/2]).
@@ -30,6 +31,12 @@ to_binary(V) when is_list(V) -> list_to_binary(V);
 to_binary(V) when is_integer(V) -> integer_to_binary(V);
 to_binary(V) when is_atom(V) -> atom_to_binary(V, latin1);
 to_binary(_) -> erlang:error(badarg).
+
+to_error(V) ->
+  try to_binary(V)
+  catch
+    _:_ -> list_to_binary(io_lib:format("~p", [V]))
+  end.
 
 -spec userctx() -> userctx().
 userctx() -> #{}.

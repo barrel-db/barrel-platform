@@ -172,7 +172,7 @@ handle_info({'EXIT', Pid, Reason}, Server) ->
                 ets:match_object(?BY_DB, {DbName, {'$1', Sig}}),
             rem_from_ets(DbName, Sig, DDocId, Pid);
         [] when Reason /= normal ->
-            lager:warn("unhandled error ~p~n", [Reason]),
+            lager:warning("unhandled error ~p~n", [Reason]),
             ok;
         _Else ->
             ok

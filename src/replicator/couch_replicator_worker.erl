@@ -458,11 +458,11 @@ flush_docs(Target, DocList) ->
         Target, DocList, [delay_commit], replicated_changes),
     DbUri = couch_replicator_api_wrap:db_uri(Target),
     lists:foreach(
-        fun({Props}) ->
+        fun(Props) ->
             lager:error("Replicator: couldn't write document `~s`, revision `~s`,"
                 " to target database `~s`. Error: `~s`, reason: `~s`.",
-                [get_value(id, Props, ""), get_value(rev, Props, ""), DbUri,
-                    get_value(error, Props, ""), get_value(reason, Props, "")])
+                [maps:get(id, Props, ""), maps:get(rev, Props, ""), DbUri,
+                    maps:get(error, Props, ""), maps:get(reason, Props, "")])
         end, Errors),
     #rep_stats{
         docs_written = length(DocList) - length(Errors),

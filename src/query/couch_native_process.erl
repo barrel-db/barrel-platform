@@ -175,8 +175,8 @@ ddoc(State, {_DDoc}, [[<<"run">>, Source], Args]) ->
 ddoc(State, {DDoc}, [FunPath, Args]) ->
     % load fun from the FunPath
     BFun = lists:foldl(fun
-        (Key, {Props}) when is_list(Props) ->
-            couch_util:get_value(Key, Props, nil);
+        (Key, Props) when is_map(Props) ->
+            maps:get(Key, Props, nil);
         (_Key, Fun) when is_binary(Fun) ->
             Fun;
         (_Key, nil) ->
@@ -377,7 +377,7 @@ start_list_resp(Self, Sig) ->
         undefined ->
             Headers =
             case erlang:get(list_headers) of
-                undefined -> {[{<<"headers">>, {[]}}]};
+                undefined -> #{<<"headers">> => #{}};
                 CurrHdrs -> CurrHdrs
             end,
             Chunks =

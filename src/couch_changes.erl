@@ -166,9 +166,9 @@ handle_changes(Args1, Req, Db0) ->
 make_view_args(#httpd{}=Req) ->
     Query = couch_httpd:qs(Req),
     parse_view_options(Query, false, []);
-make_view_args({json_req, {Props}}) ->
-    {Query} = couch_util:get_value(<<"query">>, Props, {[]}),
-    parse_view_options(Query, true, []).
+make_view_args({json_req, Req}) ->
+    Query = maps:get(<<"query">>, Req, #{}),
+    parse_view_options(maps:to_list(Query), true, []).
 
 
 get_callback_acc({Callback, _UserAcc} = Pair) when is_function(Callback, 3) ->
@@ -200,8 +200,8 @@ os_filter_fun(FilterName, Style, Req, Db) ->
         DesignId = <<"_design/", DName/binary>>,
         DDoc = couch_httpd_db:couch_doc_open(Db, DesignId, nil, [ejson_body]),
         % validate that the ddoc has the filter fun
-        #doc{body={Props}} = DDoc,
-        couch_util:get_nested_json_value({Props}, [<<"filters">>, FName]),
+        #doc{body=DocBody} = DDoc,
+        couch_util:get_nested_json_value(DocBody, [<<"filters">>, FName]),
         fun(Db2, DocInfo) ->
             DocInfos =
             case Style of
@@ -216,7 +216,7 @@ os_filter_fun(FilterName, Style, Req, Db) ->
             {ok, Passes} = couch_query_servers:filter_docs(
                 Req, Db2, DDoc, FName, Docs
             ),
-            [{[{<<"rev">>, couch_doc:rev_to_str({RevPos,RevId})}]}
+            [#{<<"rev">> => couch_doc:rev_to_str({RevPos, RevId})}
                 || {Pass, #doc{revs={RevPos,[RevId|_]}}}
                 <- lists:zip(Passes, Docs), Pass == true]
         end;
@@ -225,12 +225,12 @@ os_filter_fun(FilterName, Style, Req, Db) ->
             "filter parameter must be of the form `designname/filtername`"})
     end.
 
-builtin_filter_fun("_doc_ids", Style, {json_req, {Props}}, _Db) ->
-    DocIds = couch_util:get_value(<<"doc_ids">>, Props),
+builtin_filter_fun("_doc_ids", Style, {json_req, Req}, _Db) ->
+    DocIds = maps:get(<<"doc_ids">>, Req, nil),
     {filter_docids(DocIds, Style), DocIds};
 builtin_filter_fun("_doc_ids", Style, #httpd{method='POST'}=Req, _Db) ->
-    {Props} = couch_httpd:json_body_obj(Req),
-    DocIds =  couch_util:get_value(<<"doc_ids">>, Props, nil),
+    Obj = couch_httpd:json_body_obj(Req),
+    DocIds =  maps:get(<<"doc_ids">>, Obj, nil),
     {filter_docids(DocIds, Style), DocIds};
 builtin_filter_fun("_doc_ids", Style, #httpd{method='GET'}=Req, _Db) ->
     DocIds = ?JSON_DECODE(couch_httpd:qs_value(Req, "doc_ids", "null")),
@@ -263,10 +263,9 @@ filter_designdoc(Style) ->
 builtin_results(Style, [#rev_info{rev=Rev}|_]=Revs) ->
     case Style of
         main_only ->
-            [{[{<<"rev">>, couch_doc:rev_to_str(Rev)}]}];
+            [#{<<"rev">> => couch_doc:rev_to_str(Rev)}];
         all_docs ->
-            [{[{<<"rev">>, couch_doc:rev_to_str(R)}]}
-                || #rev_info{rev=R} <- Revs]
+            [#{<<"rev">> => couch_doc:rev_to_str(R)} || #rev_info{rev=R} <- Revs]
     end.
 
 get_changes_timeout(Args, Callback) ->
@@ -584,27 +583,28 @@ changes_row(Results, DocInfo, Acc, Seq) ->
         doc_options = DocOpts,
         conflicts = Conflicts
     } = Acc,
-    {[{<<"seq">>, Seq}, {<<"id">>, Id}, {<<"changes">>, Results}] ++
-        deleted_item(Del) ++ case IncDoc of
-            true ->
-                Opts = case Conflicts of
-                    true -> [deleted, conflicts];
-                    false -> [deleted]
-                end,
-                Doc = couch_doc:load(Db, DocInfo, Opts),
-                case Doc of
-                    null ->
-                        [{doc, null}];
-                    _ ->
-                        [{doc, couch_doc:to_json_obj(Doc, DocOpts)}]
-                end;
-            false ->
-                []
-        end}.
+    Row = #{ <<"seq">> => Seq, <<"id">> => Id, <<"changes">> => Results },
+    include_doc(IncDoc, Db, DocInfo, DocOpts, Conflicts,
+                add_deleted(Del, Row)).
 
-deleted_item(true) -> [{<<"deleted">>, true}];
-deleted_item(removed) -> [{<<"removed">>, true}];
-deleted_item(_) -> [].
+include_doc(false, _, _, _, _, Row) -> Row;
+include_doc(true, Db, DocInfo, DocOpts, Conflicts, Row) ->
+    Opts = case Conflicts of
+        true -> [deleted, conflicts];
+        false -> [deleted]
+    end,
+
+    Doc = couch_doc:load(Db, DocInfo, Opts),
+    case Doc of
+        null ->
+            Row#{doc => null};
+        _ ->
+            Row#{doc => couch_doc:to_json_obj(Doc, DocOpts)}
+    end.
+
+add_deleted(true, Row) -> Row#{ <<"deleted">> => true};
+add_deleted(removed, Row) -> Row#{ <<"removed">> => true};
+add_deleted(_, Row) -> Row.
 
 use_seq(Seq, nil) -> Seq;
 use_seq(_, ViewSeq) -> ViewSeq.
@@ -668,14 +668,14 @@ maybe_heartbeat(Timeout, TimeoutFun, Acc) ->
 %% view changes items
 %%
 
-parse_view_param({json_req, {Props}}) ->
-    {Query} = couch_util:get_value(<<"query">>, Props),
-    parse_view_param1(couch_util:get_value(<<"view">>, Query, <<"">>));
+parse_view_param({json_req, Req}) ->
+    Query = maps:get(<<"query">>, Req, #{}),
+    parse_view_param1(maps:get(<<"view">>, Query, <<"">>));
 parse_view_param(Req) ->
     parse_view_param1(list_to_binary(couch_httpd:qs_value(Req, "view", ""))).
 
 parse_view_param1(ViewParam) ->
-    case re:split(ViewParam, <<"/">>) of
+    case binary:split(ViewParam, <<"/">>) of
         [DName, ViewName] ->
             {<< "_design/", DName/binary >>, ViewName};
         _ ->

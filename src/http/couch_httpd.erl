@@ -520,15 +520,15 @@ body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
 
-json_body(Httpd) ->
-    ?JSON_DECODE(body(Httpd)).
+json_body(Req) ->
+    ?JSON_DECODE(body(Req)).
 
-json_body_obj(Httpd) ->
-    case json_body(Httpd) of
-        {Props} -> {Props};
-        _Else ->
-            throw({bad_request, "Request body must be a JSON object"})
-    end.
+json_body_obj(Req) ->
+  case json_body(Req) of
+    #{} = Obj -> Obj;
+    _Else ->
+      throw({bad_request, "Request body must be a JSON object"})
+  end.
 
 
 
@@ -898,30 +898,28 @@ send_error(Req, Code, ErrorStr, ReasonStr) ->
     send_error(Req, Code, [], ErrorStr, ReasonStr).
 
 send_error(Req, Code, Headers, ErrorStr, ReasonStr) ->
-    send_json(Req, Code, Headers,
-        {[{<<"error">>,  ErrorStr},
-         {<<"reason">>, ReasonStr}]}).
+    send_json(Req, Code, Headers, #{<<"error">> => ErrorStr,
+                                    <<"reason">> => ReasonStr}).
 
 
 send_error(Req, Code, Headers, ErrorStr, ReasonStr, Stack) ->
-    send_json(Req, Code, Headers,
-        {[{<<"error">>, ErrorStr},
-        {<<"reason">>, ReasonStr} |
-        case Stack of [] -> []; _ -> [{stack, Stack}] end
-    ]}).
+    Error = #{<<"error">> => ErrorStr, <<"reason">> => ReasonStr},
+    send_json(Req, Code, Headers, add_error_stack(Stack, Error)).
 
+add_error_stack([], ErrorObj) -> ErrorObj;
+add_error_stack(Stack, ErrorObj) -> ErrorObj#{ <<"stack">> => Stack}.
 
 
 % give the option for list functions to output html or other raw errors
-send_chunked_error(Resp, {_Error, {[{<<"body">>, Reason}]}}) ->
+send_chunked_error(Resp, {_Error, #{<<"body">> := Reason}}) ->
     send_chunk(Resp, Reason),
     last_chunk(Resp);
 
 send_chunked_error(Resp, Error) ->
     {Code, ErrorStr, ReasonStr} = error_info(Error),
-    JsonError = {[{<<"code">>, Code},
-        {<<"error">>,  ErrorStr},
-        {<<"reason">>, ReasonStr}]},
+    JsonError = #{<<"code">> => Code,
+                  <<"error">> => ErrorStr,
+                  <<"reason">> => ReasonStr},
     send_chunk(Resp, list_to_binary([$\n,?JSON_ENCODE(JsonError),$\n])),
     last_chunk(Resp).
 

@@ -60,14 +60,14 @@ handle_update(Event, #state{resp=Resp, feed="continuous"}=State) ->
                             "\n"]),
     {ok, State#state{resp=Resp1}};
 handle_update(Event, #state{resp=Resp, feed="longpoll"}) ->
-    {Props} = event_obj(Event),
-    JsonObj = {[{<<"ok">>, true} | Props]},
+    Props = event_obj(Event),
+    JsonObj = Props#{<<"ok">> => true},
     couch_httpd:send_chunk(Resp, ?JSON_ENCODE(JsonObj)),
     stop.
 
 event_obj({DbName, Type}) ->
-    {[{<<"type">>, couch_util:to_binary(Type)},
-      {<<"db_name">>, couch_util:to_binary(DbName)}]}.
+    #{<<"type">> => barrel_lib:to_binary(Type), 
+      <<"db_name">> => barrel_lib:to_binary(DbName)}.
 
 
 handle_dbupdates(Fun, Acc, Options) ->

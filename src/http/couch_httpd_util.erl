@@ -123,7 +123,7 @@ parse_pos_int(Val) ->
         throw({query_parse_error, list_to_binary(Msg)})
     end.
 
-parse_json(V, false) when is_list(V) ->
+parse_json(V, false) when is_map(V) ->
     ?JSON_DECODE(V);
 parse_json(V, _) ->
     V.

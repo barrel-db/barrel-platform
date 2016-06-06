@@ -72,17 +72,17 @@ get_user_creds(UserName) ->
     validate_user_creds(UserCreds).
 
 make_admin_doc(HashedPwd, Salt, ExtraRoles) ->
-    [{<<"roles">>, [<<"_admin">>|ExtraRoles]},
-     {<<"salt">>, list_to_binary(Salt)},
-     {<<"password_scheme">>, <<"simple">>},
-     {<<"password_sha">>, list_to_binary(HashedPwd)}].
+    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
+      <<"salt">> => list_to_binary(Salt),
+      <<"password_scheme">> => <<"simple">>,
+      <<"password_sha">> => list_to_binary(HashedPwd)}.
 
 make_admin_doc(DerivedKey, Salt, Iterations, ExtraRoles) ->
-    [{<<"roles">>, [<<"_admin">>|ExtraRoles]},
-     {<<"salt">>, list_to_binary(Salt)},
-     {<<"iterations">>, list_to_integer(Iterations)},
-     {<<"password_scheme">>, <<"pbkdf2">>},
-     {<<"derived_key">>, list_to_binary(DerivedKey)}].
+    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
+      <<"salt">> => list_to_binary(Salt),
+      <<"iterations">> => list_to_integer(Iterations),
+      <<"password_scheme">> => <<"pbkdf2">>,
+      <<"derived_key">> => list_to_binary(DerivedKey)}.
 
 get_from_cache(UserName) ->
     exec_if_auth_db(
@@ -418,23 +418,19 @@ ensure_auth_ddoc_exists(Db, DDocId) ->
         {ok, AuthDesign} = auth_design_doc(DDocId),
         {ok, _Rev} = couch_db:update_doc(Db, AuthDesign, []);
     {ok, Doc} ->
-        {Props} = couch_doc:to_json_obj(Doc, []),
-        case couch_util:get_value(<<"validate_doc_update">>, Props, []) of
-            ?AUTH_DB_DOC_VALIDATE_FUNCTION ->
-                ok;
+        Obj = couch_doc:to_json_obj(Doc, []),
+        case maps:get(<<"validate_doc_update">>, Obj, []) of
+            ?AUTH_DB_DOC_VALIDATE_FUNCTION -> ok;
             _ ->
-                Props1 = lists:keyreplace(<<"validate_doc_update">>, 1, Props,
-                    {<<"validate_doc_update">>,
-                    ?AUTH_DB_DOC_VALIDATE_FUNCTION}),
-                couch_db:update_doc(Db, couch_doc:from_json_obj({Props1}), [])
+                Obj1 = Obj#{ <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION},
+                couch_db:update_doc(Db, couch_doc:from_json_obj(Obj1), [])
         end
     end,
     ok.
 
 auth_design_doc(DocId) ->
-    DocProps = [
-        {<<"_id">>, DocId},
-        {<<"language">>,<<"javascript">>},
-        {<<"validate_doc_update">>, ?AUTH_DB_DOC_VALIDATE_FUNCTION}
-    ],
-    {ok, couch_doc:from_json_obj({DocProps})}.
+    Obj = #{<<"_id">> => DocId,
+            <<"language">> => <<"javascript">>,
+            <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION
+            },
+    {ok, couch_doc:from_json_obj(Obj)}.

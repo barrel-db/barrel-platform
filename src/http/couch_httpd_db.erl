@@ -55,7 +55,7 @@ handle_compact_req(#httpd{method='POST'}=Req, Db) ->
             ok = couch_db:check_is_admin(Db),
             couch_httpd:validate_ctype(Req, "application/json"),
             {ok, _} = couch_db:start_compact(Db),
-            send_json(Req, 202, {[{ok, true}]});
+            send_json(Req, 202, #{ok => true});
         [_DbName, <<"_compact">>, DesignName | _] ->
             DesignId = <<"_design/", DesignName/binary>>,
             DDoc = couch_httpd_db:couch_doc_open(
@@ -108,7 +108,7 @@ create_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     {ok, Db} ->
         couch_db:close(Db),
         DbUrl = absolute_uri(Req, "/" ++ couch_util:url_encode(DbName)),
-        send_json(Req, 201, [{"Location", DbUrl}], {[{ok, true}]});
+        send_json(Req, 201, [{"Location", DbUrl}], #{ok => true});
     Error ->
         throw(Error)
     end.
@@ -117,7 +117,7 @@ delete_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     ok = couch_httpd:verify_is_server_admin(Req),
     case couch_server:delete(DbName, [{user_ctx, UserCtx}]) of
     ok ->
-        send_json(Req, 200, {[{ok, true}]});
+        send_json(Req, 200, #{ok => true});
     Error ->
         throw(Error)
     end.
@@ -136,7 +136,7 @@ do_db_req(#httpd{user_ctx=UserCtx,path_parts=[DbName|_]}=Req, Fun) ->
 
 db_req(#httpd{method='GET',path_parts=[_DbName]}=Req, Db) ->
     {ok, DbInfo} = couch_db:get_db_info(Db),
-    send_json(Req, {DbInfo});
+    send_json(Req, DbInfo);
 
 db_req(#httpd{method='POST',path_parts=[_DbName]}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
@@ -173,10 +173,8 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_ensure_full_commit">>]}=Req, Db) -
             {ok, Db#db.instance_start_time}
         end
     end,
-    send_json(Req, 201, {[
-        {ok, true},
-        {instance_start_time, StartTime}
-    ]});
+    send_json(Req, 201, #{ok => true,
+                          instance_start_time => StartTime});
 
 db_req(#httpd{path_parts=[_,<<"_ensure_full_commit">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
@@ -248,6 +246,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
 db_req(#httpd{path_parts=[_,<<"_bulk_docs">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
 
+%% TODO: replace maps:from_list
 db_req(#httpd{method='POST',path_parts=[_,<<"_purge">>]}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
     {IdsRevs} = couch_httpd:json_body_obj(Req),
@@ -256,7 +255,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_purge">>]}=Req, Db) ->
     case couch_db:purge_docs(Db, IdsRevs2) of
     {ok, PurgeSeq, PurgedIdsRevs} ->
         PurgedIdsRevs2 = [{Id, couch_doc:revs_to_strs(Revs)} || {Id, Revs} <- PurgedIdsRevs],
-        send_json(Req, 200, {[{<<"purge_seq">>, PurgeSeq}, {<<"purged">>, {PurgedIdsRevs2}}]});
+        send_json(Req, 200, #{<<"purge_seq">> => PurgeSeq, <<"purged">> => maps:from_list(PurgedIdsRevs2)});
     Error ->
         throw(Error)
     end;
@@ -264,35 +263,31 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_purge">>]}=Req, Db) ->
 db_req(#httpd{path_parts=[_,<<"_purge">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
 
+%% TODO: replace maps:from_list
 db_req(#httpd{method='POST',path_parts=[_,<<"_missing_revs">>]}=Req, Db) ->
     {JsonDocIdRevs} = couch_httpd:json_body_obj(Req),
     JsonDocIdRevs2 = [{Id, [couch_doc:parse_rev(RevStr) || RevStr <- RevStrs]} || {Id, RevStrs} <- JsonDocIdRevs],
     {ok, Results} = couch_db:get_missing_revs(Db, JsonDocIdRevs2),
     Results2 = [{Id, couch_doc:revs_to_strs(Revs)} || {Id, Revs, _} <- Results],
-    send_json(Req, {[
-        {missing_revs, {Results2}}
-    ]});
+    send_json(Req, #{missing_revs => maps:from_list(Results2)});
 
 db_req(#httpd{path_parts=[_,<<"_missing_revs">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
 
+%% TODO: replace maps:from_list
 db_req(#httpd{method='POST',path_parts=[_,<<"_revs_diff">>]}=Req, Db) ->
     {JsonDocIdRevs} = couch_httpd:json_body_obj(Req),
     JsonDocIdRevs2 =
         [{Id, couch_doc:parse_revs(RevStrs)} || {Id, RevStrs} <- JsonDocIdRevs],
     {ok, Results} = couch_db:get_missing_revs(Db, JsonDocIdRevs2),
-    Results2 =
-    lists:map(fun({Id, MissingRevs, PossibleAncestors}) ->
-        {Id,
-            {[{missing, couch_doc:revs_to_strs(MissingRevs)}] ++
-                if PossibleAncestors == [] ->
-                    [];
-                true ->
-                    [{possible_ancestors,
-                        couch_doc:revs_to_strs(PossibleAncestors)}]
-                end}}
+    Results2 = lists:map(fun
+        ({Id, MissingRevs, []}) ->
+            {Id, #{missing => couch_doc:revs_to_strs(MissingRevs)}};
+        ({Id, MissingRevs, PossibleAncestors}) ->
+            {Id, #{missing => couch_doc:revs_to_strs(MissingRevs),
+                   possible_ancestors =>  couch_doc:revs_to_strs(PossibleAncestors)}}
     end, Results),
-    send_json(Req, {Results2});
+    send_json(Req, maps:from_list(Results2));
 
 db_req(#httpd{path_parts=[_,<<"_revs_diff">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
@@ -300,7 +295,7 @@ db_req(#httpd{path_parts=[_,<<"_revs_diff">>]}=Req, _Db) ->
 db_req(#httpd{method='PUT',path_parts=[_,<<"_security">>]}=Req, Db) ->
     SecObj = couch_httpd:json_body(Req),
     ok = couch_db:set_security(Db, SecObj),
-    send_json(Req, {[{<<"ok">>, true}]});
+    send_json(Req, #{<<"ok">> => true});
 
 db_req(#httpd{method='GET',path_parts=[_,<<"_security">>]}=Req, Db) ->
     send_json(Req, couch_db:get_security(Db));
@@ -314,7 +309,7 @@ db_req(#httpd{method='PUT',path_parts=[_,<<"_revs_limit">>]}=Req,
    case is_integer(Limit) of
    true ->
        ok = couch_db:set_revs_limit(Db, Limit),
-       send_json(Req, {[{<<"ok">>, true}]});
+       send_json(Req, #{<<"ok">> => true});
    false ->
        throw({bad_request, <<"Rev limit has to be an integer">>})
    end;
@@ -329,8 +324,7 @@ db_req(#httpd{path_parts=[_,<<"_revs_limit">>]}=Req, _Db) ->
 % as slashes in document IDs must otherwise be URL encoded.
 db_req(#httpd{method='GET',mochi_req=MochiReq, path_parts=[DbName,<<"_design/",_/binary>>|_]}=Req, _Db) ->
     PathFront = "/" ++ couch_httpd:quote(binary_to_list(DbName)) ++ "/",
-    [_|PathTail] = re:split(MochiReq:get(raw_path), "_design%2F",
-        [{return, list}]),
+    [_|PathTail] = re:split(MochiReq:get(raw_path), "_design%2F", [{return, list}]),
     couch_httpd:send_redirect(Req, PathFront ++ "_design/" ++
         mochiweb_util:join(PathTail, "_design%2F"));
 
@@ -368,11 +362,11 @@ db_doc_req(#httpd{method='DELETE'}=Req, Db, DocId) ->
     case couch_httpd:qs_value(Req, "rev") of
     undefined ->
         update_doc(Req, Db, DocId,
-                couch_doc_from_req(Req, DocId, {[{<<"_deleted">>,true}]}));
+                couch_doc_from_req(Req, DocId, #{<<"_deleted">> => true}));
     Rev ->
         update_doc(Req, Db, DocId,
                 couch_doc_from_req(Req, DocId,
-                    {[{<<"_rev">>, list_to_binary(Rev)},{<<"_deleted">>,true}]}))
+                    #{<<"_rev">> => list_to_binary(Rev), <<"_deleted">> => true}))
     end;
 
 db_doc_req(#httpd{method = 'GET', mochi_req = MochiReq} = Req, Db, DocId) ->
@@ -405,11 +399,11 @@ db_doc_req(#httpd{method = 'GET', mochi_req = MochiReq} = Req, Db, DocId) ->
                     case Result of
                     {ok, Doc} ->
                         JsonDoc = couch_doc:to_json_obj(Doc, Options),
-                        Json = ?JSON_ENCODE({[{ok, JsonDoc}]}),
+                        Json = ?JSON_ENCODE(#{ok => JsonDoc}),
                         send_chunk(Resp, AccSeparator ++ Json);
                     {{not_found, missing}, RevId} ->
                         RevStr = couch_doc:rev_to_str(RevId),
-                        Json = ?JSON_ENCODE({[{"missing", RevStr}]}),
+                        Json = ?JSON_ENCODE(#{"missing" => RevStr}),
                         send_chunk(Resp, AccSeparator ++ Json)
                     end,
                     "," % AccSeparator now has a comma
@@ -552,7 +546,7 @@ send_docs_multipart(Req, Results, Options1) ->
              couch_httpd:send_chunk(Resp, <<"\r\n--", OuterBoundary/binary>>);
         ({{not_found, missing}, RevId}) ->
              RevStr = couch_doc:rev_to_str(RevId),
-             Json = ?JSON_ENCODE({[{<<"missing">>, RevStr}]}),
+             Json = ?JSON_ENCODE(#{<<"missing">> => RevStr}),
              couch_httpd:send_chunk(Resp,
                 [<<"\r\nContent-Type: application/json; error=\"true\"\r\n\r\n">>,
                 Json,
@@ -595,17 +589,16 @@ make_content_range(From, To, Len) ->
     io_lib:format("bytes ~B-~B/~B", [From, To, Len]).
 
 update_doc_result_to_json({{Id, Rev}, Error}) ->
-        {_Code, Err, Msg} = couch_httpd:error_info(Error),
-        {[{id, Id}, {rev, couch_doc:rev_to_str(Rev)},
-            {error, Err}, {reason, Msg}]}.
+    {_Code, Err, Msg} = couch_httpd:error_info(Error),
+    #{id => Id, rev => couch_doc:rev_to_str(Rev), error => Err, reason => Msg}.
 
 update_doc_result_to_json(#doc{id=DocId}, Result) ->
     update_doc_result_to_json(DocId, Result);
 update_doc_result_to_json(DocId, {ok, NewRev}) ->
-    {[{ok, true}, {id, DocId}, {rev, couch_doc:rev_to_str(NewRev)}]};
+    #{ok => true, id => DocId, rev => couch_doc:rev_to_str(NewRev)};
 update_doc_result_to_json(DocId, Error) ->
     {_Code, ErrorStr, Reason} = couch_httpd:error_info(Error),
-    {[{id, DocId}, {error, ErrorStr}, {reason, Reason}]}.
+    #{id => DocId, error => ErrorStr, reason => Reason}.
 
 
 update_doc(Req, Db, DocId, #doc{deleted=false}=Doc) ->
@@ -639,22 +632,18 @@ update_doc(Req, Db, DocId, #doc{deleted=Deleted}=Doc, Headers, UpdateType) ->
                     lager:info("Batch doc error (~s): ~p",[DocId, Error])
                 end
             end),
-        send_json(Req, 202, Headers, {[
-            {ok, true},
-            {id, DocId}
-        ]});
+        send_json(Req, 202, Headers, #{ok => true, id => DocId});
     _Normal ->
         % normal
         {ok, NewRev} = couch_db:update_doc(Db, Doc, Options, UpdateType),
         NewRevStr = couch_doc:rev_to_str(NewRev),
         ResponseHeaders = [{"ETag", <<"\"", NewRevStr/binary, "\"">>}] ++ Headers,
         send_json(Req,
-            if Deleted orelse Req#httpd.method == 'DELETE' -> 200;
-            true -> 201 end,
-            ResponseHeaders, {[
-                {ok, true},
-                {id, DocId},
-                {rev, NewRevStr}]})
+            if
+                Deleted orelse Req#httpd.method == 'DELETE' -> 200;
+                true -> 201
+            end,
+            ResponseHeaders, #{ok => true, id => DocId, rev => NewRevStr})
     end.
 
 couch_doc_from_req(Req, DocId, #doc{revs=Revs}=Doc) ->

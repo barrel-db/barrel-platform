@@ -67,11 +67,10 @@ replication_started(#rep{id = {BaseId, _} = RepId}) ->
     nil ->
         ok;
     #rep_state{rep = #rep{doc_id = DocId}} ->
-        update_rep_doc(DocId, [
-            {<<"_replication_state">>, <<"triggered">>},
-            {<<"_replication_state_reason">>, undefined},
-            {<<"_replication_id">>, list_to_binary(BaseId)},
-            {<<"_replication_stats">>, undefined}]),
+        update_rep_doc(DocId, #{<<"_replication_state">> => <<"triggered">>,
+                                <<"_replication_state_reason">> => undefined,
+                                <<"_replication_id">> => list_to_binary(BaseId),
+                                <<"_replication_stats">> => undefined}),
         ok = gen_server:call(?MODULE, {rep_started, RepId}, infinity),
         lager:info("Document `~s` triggered replication `~s`",
             [DocId, pp_rep_id(RepId)])
@@ -79,31 +78,29 @@ replication_started(#rep{id = {BaseId, _} = RepId}) ->
 
 
 replication_completed(#rep{id = RepId}, Stats) ->
-    case rep_state(RepId) of
+  case rep_state(RepId) of
     nil ->
-        ok;
+      ok;
     #rep_state{rep = #rep{doc_id = DocId}} ->
-        update_rep_doc(DocId, [
-            {<<"_replication_state">>, <<"completed">>},
-            {<<"_replication_state_reason">>, undefined},
-            {<<"_replication_stats">>, {Stats}}]),
-        ok = gen_server:call(?MODULE, {rep_complete, RepId}, infinity),
-        lager:info("Replication `~s` finished (triggered by document `~s`)",
-            [pp_rep_id(RepId), DocId])
-    end.
+      update_rep_doc(DocId, #{<<"_replication_state">> => <<"completed">>,
+                              <<"_replication_state_reason">> => undefined,
+                              <<"_replication_stats">> => Stats}),
+      ok = gen_server:call(?MODULE, {rep_complete, RepId}, infinity),
+      lager:info("Replication `~s` finished (triggered by document `~s`)",
+                 [pp_rep_id(RepId), DocId])
+  end.
 
 
 replication_error(#rep{id = {BaseId, _} = RepId}, Error) ->
-    case rep_state(RepId) of
+  case rep_state(RepId) of
     nil ->
-        ok;
+      ok;
     #rep_state{rep = #rep{doc_id = DocId}} ->
-        update_rep_doc(DocId, [
-            {<<"_replication_state">>, <<"error">>},
-            {<<"_replication_state_reason">>, to_binary(error_reason(Error))},
-            {<<"_replication_id">>, list_to_binary(BaseId)}]),
-        ok = gen_server:call(?MODULE, {rep_error, RepId, Error}, infinity)
-    end.
+      update_rep_doc(DocId, #{<<"_replication_state">> => <<"error">>,
+                              <<"_replication_state_reason">> => to_binary(error_reason(Error)),
+                              <<"_replication_id">> => list_to_binary(BaseId)}),
+      ok = gen_server:call(?MODULE, {rep_error, RepId, Error}, infinity)
+  end.
 
 
 
@@ -124,13 +121,13 @@ init(_) ->
                 max_retries = Retries}}.
 
 
-handle_call({rep_db_update, {ChangeProps} = Change}, _From, State) ->
+handle_call({rep_db_update, Change}, _From, State) ->
     NewState = try
         process_update(State, Change)
     catch
     _Tag:Error ->
-        {RepProps} = get_value(doc, ChangeProps),
-        DocId = get_value(<<"_id">>, RepProps),
+        RepProps = maps:get(doc, Change),
+        DocId = maps:get(<<"_id">>, RepProps),
         rep_db_update_error(Error, DocId),
         State
     end,
@@ -280,8 +277,8 @@ changes_feed_loop() ->
     {Pid, RepDbName}.
 
 
-has_valid_rep_id({Change}) ->
-    has_valid_rep_id(get_value(<<"id">>, Change));
+has_valid_rep_id(Change) when is_map(Change) ->
+    has_valid_rep_id(maps:get(<<"id">>, Change));
 has_valid_rep_id(<<?DESIGN_DOC_PREFIX, _Rest/binary>>) ->
     false;
 has_valid_rep_id(_Else) ->
@@ -303,26 +300,26 @@ restart(#state{changes_feed_loop = Loop, rep_start_pids = StartPids} = State) ->
     }.
 
 
-process_update(State, {Change}) ->
-    {RepProps} = JsonRepDoc = get_value(doc, Change),
-    DocId = get_value(<<"_id">>, RepProps),
-    case get_value(<<"deleted">>, Change, false) of
+process_update(State, Change) ->
+    RepDoc = maps:get(doc, Change),
+    DocId = maps:get(<<"_id">>, RepDoc),
+    case maps:get(<<"deleted">>, Change, false) of
     true ->
         rep_doc_deleted(DocId),
         State;
     false ->
-        case get_value(<<"_replication_state">>, RepProps) of
+        case maps:get(<<"_replication_state">>, RepDoc, undefined) of
         undefined ->
-            maybe_start_replication(State, DocId, JsonRepDoc);
+            maybe_start_replication(State, DocId, RepDoc);
         <<"triggered">> ->
-            maybe_start_replication(State, DocId, JsonRepDoc);
+            maybe_start_replication(State, DocId, RepDoc);
         <<"completed">> ->
             replication_complete(DocId),
             State;
         <<"error">> ->
             case ets:lookup(?DOC_TO_REP, DocId) of
             [] ->
-                maybe_start_replication(State, DocId, JsonRepDoc);
+                maybe_start_replication(State, DocId, RepDoc);
             _ ->
                 State
             end
@@ -331,24 +328,22 @@ process_update(State, {Change}) ->
 
 
 rep_db_update_error(Error, DocId) ->
-    case Error of
-    {bad_rep_doc, Reason} ->
-        ok;
-    _ ->
-        Reason = to_binary(Error)
-    end,
-    lager:error("Replication manager, error processing document `~s`: ~s",
-        [DocId, Reason]),
-    update_rep_doc(DocId, [{<<"_replication_state">>, <<"error">>},
-                           {<<"_replication_state_reason">>, Reason}]).
+  Reason = case Error of
+             {bad_rep_doc, R} -> R;
+             _ ->to_binary(Error)
+           end,
+  lager:error("Replication manager, error processing document `~s`: ~s",
+              [DocId, Reason]),
+  update_rep_doc(DocId, #{<<"_replication_state">> => <<"error">>,
+                          <<"_replication_state_reason">> => Reason}).
 
 
-rep_user_ctx({RepDoc}) ->
-    case get_value(<<"user_ctx">>, RepDoc) of
+rep_user_ctx(RepDoc) ->
+  case maps:get(<<"user_ctx">>, RepDoc, undefined) of
     undefined -> barrel_lib:userctx();
-    {UserCtx} -> 
-        Name = proplists:get_value(<<"name">>, UserCtx, null),
-        Roles = proplists:get_value(<<"roles">>, UserCtx, []),
+    UserCtx ->
+        Name = maps:get(<<"name">>, UserCtx, null),
+        Roles = maps:get(<<"roles">>, UserCtx, []),
         barrel_lib:userctx([{name, Name}, {roles, Roles}])
     end.
 
@@ -521,32 +516,28 @@ update_rep_doc(RepDocId, KVs) ->
         couch_db:close(RepDb)
     end.
 
-update_rep_doc(RepDb, #doc{body = {RepDocBody}} = RepDoc, KVs) ->
-    NewRepDocBody = lists:foldl(
-        fun({K, undefined}, Body) ->
-                lists:keydelete(K, 1, Body);
-            ({<<"_replication_state">> = K, State} = KV, Body) ->
-                case get_value(K, Body) of
-                State ->
-                    Body;
-                _ ->
-                    Body1 = lists:keystore(K, 1, Body, KV),
-                    lists:keystore(
-                        <<"_replication_state_time">>, 1, Body1,
-                        {<<"_replication_state_time">>, timestamp()})
-                end;
-            ({K, _V} = KV, Body) ->
-                lists:keystore(K, 1, Body, KV)
-        end,
-        RepDocBody, KVs),
-    case NewRepDocBody of
+update_rep_doc(RepDb, #doc{body = RepDocBody} = RepDoc, KVs) ->
+  NewRepDocBody = maps:fold(fun
+                              (K, undefined, Body) ->
+                                maps:remove(K, Body);
+                              (<<"_replication_state">> = K, State, Body) ->
+                                case maps:find(K, Body) of
+                                  {ok, State} -> Body;
+                                  _ ->
+                                    Body#{K => State,
+                                          <<"_replication_state_time">> => timestamp()}
+                                end;
+                              (K, V, Body) ->
+                                Body#{ K => V }
+                            end, RepDocBody, KVs),
+  case NewRepDocBody of
     RepDocBody ->
-        ok;
+      ok;
     _ ->
-        % Might not succeed - when the replication doc is deleted right
-        % before this update (not an error, ignore).
-        couch_db:update_doc(RepDb, RepDoc#doc{body = {NewRepDocBody}}, [])
-    end.
+      % Might not succeed - when the replication doc is deleted right
+      % before this update (not an error, ignore).
+      couch_db:update_doc(RepDb, RepDoc#doc{body = NewRepDocBody}, [])
+  end.
 
 
 % RFC3339 timestamps.
@@ -589,11 +580,10 @@ ensure_rep_ddoc_exists(RepDb, DDocID) ->
     {ok, _Doc} ->
         ok;
     _ ->
-        DDoc = couch_doc:from_json_obj({[
-            {<<"_id">>, DDocID},
-            {<<"language">>, <<"javascript">>},
-            {<<"validate_doc_update">>, ?REP_DB_DOC_VALIDATE_FUN}
-        ]}),
+        DDoc = couch_doc:from_json_obj(#{<<"_id">> => DDocID,
+                                         <<"language">> => <<"javascript">>,
+                                         <<"validate_doc_update">> => ?REP_DB_DOC_VALIDATE_FUN
+                                        }),
         {ok, _Rev} = couch_db:update_doc(RepDb, DDoc, [])
      end.
 
@@ -697,5 +687,5 @@ strip_credentials(Url) when is_binary(Url) ->
         "http(s)?://(?:[^:]+):[^@]+@(.*)$",
         "http\\1://\\2",
         [{return, binary}]);
-strip_credentials({Props}) ->
-    {lists:keydelete(<<"oauth">>, 1, Props)}.
+strip_credentials(Props) ->
+    maps:remove(<<"oauth">>,Props).

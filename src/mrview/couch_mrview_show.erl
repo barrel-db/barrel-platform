@@ -135,27 +135,22 @@ send_doc_update_response(Req, Db, DDoc, UpdateName, Doc, DocId) ->
     Cmd = [<<"updates">>, UpdateName],
     UpdateResp = couch_query_servers:ddoc_prompt(DDoc, Cmd, [JsonDoc, JsonReq]),
     JsonResp = case UpdateResp of
-        [<<"up">>, {NewJsonDoc}, {JsonResp0}] ->
-            case couch_httpd:header_value(
-                    Req, "X-Couch-Full-Commit", "false") of
+        [<<"up">>, NewJsonDoc, JsonResp0] when is_map(NewJsonDoc) ->
+            case couch_httpd:header_value(Req, "X-Couch-Full-Commit", "false") of
                 "true" ->
                     Options = [full_commit, {user_ctx, Req#httpd.user_ctx}];
                 _ ->
                     Options = [{user_ctx, Req#httpd.user_ctx}]
             end,
-            NewDoc = couch_doc:from_json_obj({NewJsonDoc}),
+            NewDoc = couch_doc:from_json_obj(NewJsonDoc),
             couch_doc:validate_docid(NewDoc#doc.id),
             {ok, NewRev} = couch_db:update_doc(Db, NewDoc, Options),
             NewRevStr = couch_doc:rev_to_str(NewRev),
-            {[
-                {<<"code">>, 201},
-                {<<"headers">>, {[
-                    {<<"X-Couch-Update-NewRev">>, NewRevStr},
-                    {<<"X-Couch-Id">>, NewDoc#doc.id}
-                ]}}
-                | JsonResp0]};
-        [<<"up">>, _Other, {JsonResp0}] ->
-            {[{<<"code">>, 200} | JsonResp0]}
+            JsonResp0#{<<"code">> => 201,
+                       <<"headers">> => #{<<"X-Couch-Update-NewRev">> => NewRevStr,
+                                          <<"X-Couch-Id">> => NewDoc#doc.id}};
+        [<<"up">>, _Other, JsonResp0] ->
+            JsonResp0#{<<"code">> => 200}
     end,
     % todo set location field
     couch_httpd_external:send_external_response(Req, JsonResp).
@@ -176,8 +171,8 @@ handle_view_list_req(#httpd{method=Method}=Req, Db, DDoc)
             couch_httpd:send_error(Req, 404, <<"list_error">>, <<"Bad path.">>)
     end;
 handle_view_list_req(#httpd{method='POST'}=Req, Db, DDoc) ->
-    {Props} = couch_httpd:json_body_obj(Req),
-    Keys = proplists:get_value(<<"keys">>, Props),
+    Obj = couch_httpd:json_body_obj(Req),
+    Keys = maps:get(<<"keys">>, Obj, []),
     case Req#httpd.path_parts of
         [_, _, _DName, _, LName, VName] ->
             handle_view_list(Req, Db, DDoc, LName, DDoc, VName, Keys);
@@ -247,14 +242,14 @@ list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
     end,
     start_list_resp({MetaProps}, Acc);
 list_cb({row, Row}, #lacc{code=undefined} = Acc) ->
-    {ok, NewAcc} = start_list_resp({[]}, Acc),
+    {ok, NewAcc} = start_list_resp(#{}, Acc),
     send_list_row(Row, NewAcc);
 list_cb({row, Row}, Acc) ->
     send_list_row(Row, Acc);
 list_cb(complete, Acc) ->
     #lacc{qserver = {Proc, _}, resp = Resp0} = Acc,
     if Resp0 =:= nil ->
-        {ok, #lacc{resp = Resp}} = start_list_resp({[]}, Acc);
+        {ok, #lacc{resp = Resp}} = start_list_resp(#{}, Acc);
     true ->
         Resp = Resp0
     end,
@@ -341,24 +336,13 @@ send_non_empty_chunk(#lacc{resp=Resp} = Acc, Chunk) ->
     couch_httpd:send_chunk(Resp, Chunk),
     Acc.
 
-
-apply_etag({ExternalResponse}, CurrentEtag) ->
-    % Here we embark on the delicate task of replacing or creating the
-    % headers on the JsonResponse object. We need to control the Etag and
-    % Vary headers. If the external function controls the Etag, we'd have to
-    % run it to check for a match, which sort of defeats the purpose.
-    case couch_util:get_value(<<"headers">>, ExternalResponse, nil) of
-    nil ->
-        % no JSON headers
-        % add our Etag and Vary headers to the response
-        {[{<<"headers">>, {[{<<"Etag">>, CurrentEtag}, {<<"Vary">>, <<"Accept">>}]}} | ExternalResponse]};
-    JsonHeaders ->
-        {[case Field of
-        {<<"headers">>, JsonHeaders} -> % add our headers
-            JsonHeadersEtagged = couch_util:json_apply_field({<<"Etag">>, CurrentEtag}, JsonHeaders),
-            JsonHeadersVaried = couch_util:json_apply_field({<<"Vary">>, <<"Accept">>}, JsonHeadersEtagged),
-            {<<"headers">>, JsonHeadersVaried};
-        _ -> % skip non-header fields
-            Field
-        end || Field <- ExternalResponse]}
-    end.
+% Replacr or creatir the headers on the JsonResponse object. We need to control the Etag and
+% Vary headers. If the external function controls the Etag, we'd have to
+% run it to check for a match, which sort of defeats the purpose.
+apply_etag(#{ <<"headers">> := JsonHeaders } = ExternalResponse, CurrentEtag) ->
+    JsonHeaders2 = JsonHeaders#{<<"Etag">> => CurrentEtag, <<"Vary">> => <<"Accept">>},
+    ExternalResponse#{ <<"headers">> => JsonHeaders2};
+apply_etag(ExternalResponse, CurrentEtag) ->
+    % no JSON headers
+    % add our Etag and Vary headers to the response
+    ExternalResponse#{<<"headers">> => #{<<"Etag">> => CurrentEtag, <<"Vary">> => <<"Accept">>}}.

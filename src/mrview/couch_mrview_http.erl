@@ -42,7 +42,7 @@ handle_reindex_req(#httpd{method='POST',
                    Db, _DDoc) ->
     ok = couch_db:check_is_admin(Db),
     couch_mrview:trigger_update(Db, <<"_design/", DName/binary>>),
-    couch_httpd:send_json(Req, 201, {[{<<"ok">>, true}]});
+    couch_httpd:send_json(Req, 201, #{ok => true});
 handle_reindex_req(Req, _Db, _DDoc) ->
     couch_httpd:send_method_not_allowed(Req, "POST").
 
@@ -52,21 +52,18 @@ handle_view_req(#httpd{method='GET',
                 Db, DDoc) ->
     {ok, Info} = couch_mrview:get_view_info(Db, DDoc, VName),
     LastSeq = proplists:get_value(last_seq, Info, 0),
-    couch_httpd:send_json(Req, 200, {[
-        {name, VName},
-        {last_seq, LastSeq}
-    ]});
+    couch_httpd:send_json(Req, 200, #{name => VName, last_seq => LastSeq});
 handle_view_req(#httpd{method='GET',
                       path_parts=[_, _, DDocName, _, VName, <<"_info">>]}=Req,
                 Db, _DDoc) ->
 
     DDocId = <<"_design/", DDocName/binary >>,
-    {ok, Info} = couch_mrview:get_view_info(Db#db.name, DDocId, VName),
-
-    FinalInfo = [{db_name, Db#db.name},
-                 {ddoc, DDocId},
-                 {view, VName}] ++ Info,
-    couch_httpd:send_json(Req, 200, {FinalInfo});
+    {ok, Info0} = couch_mrview:get_view_info(Db#db.name, DDocId, VName),
+    Info = maps:from_list(Info0),
+    FinalInfo =  Info#{db_name => Db#db.name,
+                       ddoc => DDocId,
+                       view => VName},
+    couch_httpd:send_json(Req, 200, FinalInfo);
 handle_view_req(#httpd{method='GET'}=Req, Db, DDoc) ->
     [_, _, _, _, ViewName] = Req#httpd.path_parts,
     exometer:update([httpd, view_reads], 1),
@@ -99,22 +96,20 @@ handle_view_req(Req, _Db, _DDoc) ->
 handle_temp_view_req(#httpd{method='POST'}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_db:check_is_admin(Db),
-    {Body} = couch_httpd:json_body_obj(Req),
-    DDoc = couch_mrview_util:temp_view_to_ddoc({Body}),
-    Keys = couch_httpd_all_docs:is_keys({Body}),
+    Body = couch_httpd:json_body_obj(Req),
+    DDoc = couch_mrview_util:temp_view_to_ddoc(Body),
+    Keys = couch_httpd_all_docs:is_keys(Body),
     exometer:update([httpd, temporary_view_reads], 1),
     design_doc_view(Req, Db, DDoc, <<"temp">>, Keys);
 handle_temp_view_req(Req, _Db) ->
     couch_httpd:send_method_not_allowed(Req, "POST").
 
-
+%% TODO: replace maps:from_list
 handle_info_req(#httpd{method='GET'}=Req, Db, DDoc) ->
     [_, _, Name, _] = Req#httpd.path_parts,
     {ok, Info} = couch_mrview:get_info(Db, DDoc),
-    couch_httpd:send_json(Req, 200, {[
-        {name, Name},
-        {view_index, {Info}}
-    ]});
+    couch_httpd:send_json(Req, 200, #{name => Name,
+                                      view_index => maps:from_list(Info)});
 handle_info_req(Req, _Db, _DDoc) ->
     couch_httpd:send_method_not_allowed(Req, "GET").
 
@@ -123,7 +118,7 @@ handle_compact_req(#httpd{method='POST'}=Req, Db, DDoc) ->
     ok = couch_db:check_is_admin(Db),
     couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_mrview:compact(Db, DDoc),
-    couch_httpd:send_json(Req, 202, {[{ok, true}]});
+    couch_httpd:send_json(Req, 202, #{ok => true});
 handle_compact_req(Req, _Db, _DDoc) ->
     couch_httpd:send_method_not_allowed(Req, "POST").
 
@@ -132,7 +127,7 @@ handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
     ok = couch_db:check_is_admin(Db),
     couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_mrview:cleanup(Db),
-    couch_httpd:send_json(Req, 202, {[{ok, true}]});
+    couch_httpd:send_json(Req, 202, #{ok => true});
 handle_cleanup_req(Req, _Db) ->
     couch_httpd:send_method_not_allowed(Req, "POST").
 
@@ -225,7 +220,7 @@ view_cb({row, Row}, Acc) ->
     end;
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
     % Nothing in view
-    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
+    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, #{rows => []}),
     {ok, Acc#vacc{resp=Resp}};
 
 
@@ -253,7 +248,7 @@ row_to_json(error, Row) ->
     % match prior behavior.
     Key = couch_util:get_value(key, Row),
     Val = couch_util:get_value(value, Row),
-    Obj = {[{key, Key}, {error, Val}]},
+    Obj = #{key => Key, error => Val},
     ?JSON_ENCODE(Obj);
 row_to_json(Id0, Row) ->
     Id = case Id0 of
@@ -266,17 +261,14 @@ row_to_json(Id0, Row) ->
         undefined -> [];
         Doc0 -> [{doc, Doc0}]
     end,
-    Obj = {Id ++ [{key, Key}, {value, Val}] ++ Doc},
-    ?JSON_ENCODE(Obj).
+    Obj = Id ++ [{key, Key}, {value, Val}] ++ Doc,
+    ?JSON_ENCODE(maps:from_list(Obj)).
 
-get_view_queries({Props}) ->
-    case couch_util:get_value(<<"queries">>, Props) of
-        undefined ->
-            undefined;
-        Queries when is_list(Queries) ->
-            Queries;
-        _ ->
-            throw({bad_request, "`queries` member must be a array."})
+get_view_queries(Props) ->
+    case Props of
+        #{ <<"queries">> := Queries} when is_list(Queries) -> Queries;
+        #{ <<"queries">> := _Queries} -> throw({bad_request, "`queries` member must be a array."});
+        _ -> undefined
     end.
 
 

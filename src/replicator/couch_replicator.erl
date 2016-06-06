@@ -571,7 +571,7 @@ init_state(Rep) ->
     } = Rep,
     {ok, Source} = couch_replicator_api_wrap:db_open(Src, [{user_ctx, UserCtx}]),
     {ok, Target} = couch_replicator_api_wrap:db_open(Tgt, [{user_ctx, UserCtx}],
-        get_value(create_target, Options, false)),
+                                                     proplists:get_value(create_target, Options, false)),
 
     {ok, SourceInfo} = couch_replicator_api_wrap:get_db_info(Source),
     {ok, TargetInfo} = couch_replicator_api_wrap:get_db_info(Target),
@@ -583,16 +583,16 @@ init_state(Rep) ->
     StartSeq = {0, StartSeq1},
 
     SourceSeq = case Type of
-        db -> get_value(<<"update_seq">>, SourceInfo, ?LOWEST_SEQ);
+        db -> maps:get(<<"update_seq">>, SourceInfo, ?LOWEST_SEQ);
         view ->
             {DDoc, VName} = View,
             {ok, VInfo} = couch_replicator_api_wrap:get_view_info(Source, DDoc,
                                                                   VName),
-            get_value(<<"last_seq">>, VInfo, ?LOWEST_SEQ)
+            proplists:get_value(<<"last_seq">>, VInfo, ?LOWEST_SEQ)
     end,
 
 
-    #doc{body={CheckpointHistory}} = SourceLog,
+    #doc{body=CheckpointHistory} = SourceLog,
     State = #rep_state{
         rep_details = Rep,
         source_name = couch_replicator_api_wrap:db_uri(Source),
@@ -600,15 +600,15 @@ init_state(Rep) ->
         source = Source,
         target = Target,
         history = History,
-        checkpoint_history = {[{<<"no_changes">>, true}| CheckpointHistory]},
+        checkpoint_history = CheckpointHistory#{<<"no_changes">> => true},
         start_seq = StartSeq,
         current_through_seq = StartSeq,
         committed_seq = StartSeq,
         source_log = SourceLog,
         target_log = TargetLog,
         rep_starttime = couch_util:rfc1123_date(),
-        src_starttime = get_value(<<"instance_start_time">>, SourceInfo),
-        tgt_starttime = get_value(<<"instance_start_time">>, TargetInfo),
+        src_starttime = maps:get(<<"instance_start_time">>, SourceInfo),
+        tgt_starttime = maps:get(<<"instance_start_time">>, TargetInfo),
         session_id = barrel_uuids:random(),
         db_compaction_notifier = start_db_compaction_notifier(Source, Target),
         source_monitor = db_monitor(Source),
@@ -732,7 +732,7 @@ changes_manager_loop_open(Parent, ChangesQueue, BatchSize, Ts) ->
 
 
 do_checkpoint(#rep_state{use_checkpoints=false} = State) ->
-    NewState = State#rep_state{checkpoint_history = {[{<<"use_checkpoints">>, false}]} },
+    NewState = State#rep_state{checkpoint_history = #{<<"use_checkpoints">> => false} },
     {ok, NewState};
 do_checkpoint(#rep_state{current_through_seq=Seq, committed_seq=Seq} = State) ->
     SourceCurSeq = source_cur_seq(State),
@@ -769,43 +769,38 @@ do_checkpoint(State) ->
             [SourceName, TargetName, NewSeq]),
         StartTime = list_to_binary(ReplicationStartTime),
         EndTime = list_to_binary(couch_util:rfc1123_date()),
-        NewHistoryEntry = {[
-            {<<"session_id">>, SessionId},
-            {<<"start_time">>, StartTime},
-            {<<"end_time">>, EndTime},
-            {<<"start_last_seq">>, StartSeq},
-            {<<"end_last_seq">>, NewSeq},
-            {<<"recorded_seq">>, NewSeq},
-            {<<"missing_checked">>, Stats#rep_stats.missing_checked},
-            {<<"missing_found">>, Stats#rep_stats.missing_found},
-            {<<"docs_read">>, Stats#rep_stats.docs_read},
-            {<<"docs_written">>, Stats#rep_stats.docs_written},
-            {<<"doc_write_failures">>, Stats#rep_stats.doc_write_failures}
-        ]},
-        BaseHistory = [
-            {<<"session_id">>, SessionId},
-            {<<"source_last_seq">>, NewSeq},
-            {<<"replication_id_version">>, ?REP_ID_VERSION}
-        ] ++ case get_value(doc_ids, Options) of
-        undefined ->
-            [];
-        _DocIds ->
-            % backwards compatibility with the result of a replication by
-            % doc IDs in versions 0.11.x and 1.0.x
-            % TODO: deprecate (use same history format, simplify code)
-            [
-                {<<"start_time">>, StartTime},
-                {<<"end_time">>, EndTime},
-                {<<"docs_read">>, Stats#rep_stats.docs_read},
-                {<<"docs_written">>, Stats#rep_stats.docs_written},
-                {<<"doc_write_failures">>, Stats#rep_stats.doc_write_failures}
-            ]
+        NewHistoryEntry =  #{
+          <<"session_id">> => SessionId,
+          <<"start_time">> => StartTime,
+          <<"end_time">> => EndTime,
+          <<"start_last_seq">> => StartSeq,
+          <<"end_last_seq">> => NewSeq,
+          <<"recorded_seq">> => NewSeq,
+          <<"missing_checked">> => Stats#rep_stats.missing_checked,
+          <<"missing_found">> => Stats#rep_stats.missing_found,
+          <<"docs_read">> => Stats#rep_stats.docs_read,
+          <<"docs_written">> => Stats#rep_stats.docs_written,
+          <<"doc_write_failures">> => Stats#rep_stats.doc_write_failures},
+
+        BaseHistory0 = #{<<"session_id">> => SessionId,
+                         <<"source_last_seq">> => NewSeq,
+                         <<"replication_id_version">> => ?REP_ID_VERSION},
+
+        BaseHistory = case proplists:get_value(doc_ids, Options) of
+            undefined -> BaseHistory0;
+            _DocIds ->
+                % backwards compatibility with the result of a replication by
+                % doc IDs in versions 0.11.x and 1.0.x
+                % TODO: deprecate (use same history format, simplify code)
+                BaseHistory0#{<<"start_time">> => StartTime,
+                              <<"end_time">> => EndTime,
+                              <<"docs_read">> => Stats#rep_stats.docs_read,
+                              <<"docs_written">> => Stats#rep_stats.docs_written,
+                              <<"doc_write_failures">> => Stats#rep_stats.doc_write_failures}
         end,
+
         % limit history to 50 entries
-        NewRepHistory = {
-            BaseHistory ++
-            [{<<"history">>, lists:sublist([NewHistoryEntry | OldHistory], 50)}]
-        },
+        NewRepHistory = BaseHistory#{<<"history">> => lists:sublist([NewHistoryEntry | OldHistory], 50)},
 
         try
             {SrcRevPos, SrcRevId} = update_checkpoint(
@@ -905,19 +900,19 @@ commit_to_both(Source, Target) ->
 
 
 compare_replication_logs(SrcDoc, TgtDoc) ->
-    #doc{body={RepRecProps}} = SrcDoc,
-    #doc{body={RepRecPropsTgt}} = TgtDoc,
-    case get_value(<<"session_id">>, RepRecProps) ==
-            get_value(<<"session_id">>, RepRecPropsTgt) of
+    #doc{body=RepRecProps} = SrcDoc,
+    #doc{body=RepRecPropsTgt} = TgtDoc,
+    case maps:get(<<"session_id">>, RepRecProps, undefined) ==
+            maps:get(<<"session_id">>, RepRecPropsTgt, undefined) of
     true ->
         % if the records have the same session id,
         % then we have a valid replication history
-        OldSeqNum = get_value(<<"source_last_seq">>, RepRecProps, ?LOWEST_SEQ),
-        OldHistory = get_value(<<"history">>, RepRecProps, []),
+        OldSeqNum = maps:get(<<"source_last_seq">>, RepRecProps, ?LOWEST_SEQ),
+        OldHistory = maps:get(<<"history">>, RepRecProps, []),
         {OldSeqNum, OldHistory};
     false ->
-        SourceHistory = get_value(<<"history">>, RepRecProps, []),
-        TargetHistory = get_value(<<"history">>, RepRecPropsTgt, []),
+        SourceHistory = maps:get(<<"history">>, RepRecProps, []),
+        TargetHistory = maps:get(<<"history">>, RepRecPropsTgt, []),
         lager:info("Replication records differ. "
                 "Scanning histories to find a common ancestor.", []),
         lager:debug("Record on source:~p~nRecord on target:~p~n",
@@ -928,19 +923,19 @@ compare_replication_logs(SrcDoc, TgtDoc) ->
 compare_rep_history(S, T) when S =:= [] orelse T =:= [] ->
     lager:info("no common ancestry -- performing full replication", []),
     {?LOWEST_SEQ, []};
-compare_rep_history([{S} | SourceRest], [{T} | TargetRest] = Target) ->
-    SourceId = get_value(<<"session_id">>, S),
+compare_rep_history([S | SourceRest], [T | TargetRest] = Target) ->
+    SourceId = maps:get(<<"session_id">>, S, undefined),
     case has_session_id(SourceId, Target) of
     true ->
-        RecordSeqNum = get_value(<<"recorded_seq">>, S, ?LOWEST_SEQ),
+        RecordSeqNum = maps:get(<<"recorded_seq">>, S, ?LOWEST_SEQ),
         lager:info("found a common replication record with source_seq ~p",
             [RecordSeqNum]),
         {RecordSeqNum, SourceRest};
     false ->
-        TargetId = get_value(<<"session_id">>, T),
+        TargetId = maps:get(<<"session_id">>, T, undefined),
         case has_session_id(TargetId, SourceRest) of
         true ->
-            RecordSeqNum = get_value(<<"recorded_seq">>, T, ?LOWEST_SEQ),
+            RecordSeqNum = maps:get(<<"recorded_seq">>, T, ?LOWEST_SEQ),
             lager:info("found a common replication record with source_seq ~p",
                 [RecordSeqNum]),
             {RecordSeqNum, TargetRest};
@@ -952,12 +947,12 @@ compare_rep_history([{S} | SourceRest], [{T} | TargetRest] = Target) ->
 
 has_session_id(_SessionId, []) ->
     false;
-has_session_id(SessionId, [{Props} | Rest]) ->
-    case get_value(<<"session_id">>, Props, nil) of
-    SessionId ->
-        true;
-    _Else ->
-        has_session_id(SessionId, Rest)
+has_session_id(SessionId, [Props | Rest]) ->
+    case maps:get(<<"session_id">>, Props, nil) of
+        SessionId ->
+            true;
+        _Else ->
+            has_session_id(SessionId, Rest)
     end.
 
 
@@ -984,13 +979,13 @@ source_cur_seq(#rep_state{source = Db, source_seq = Seq,
 source_cur_seq(#rep_state{source = #httpdb{} = Db, source_seq = Seq}) ->
     case (catch couch_replicator_api_wrap:get_db_info(Db#httpdb{retries = 3})) of
     {ok, Info} ->
-        get_value(<<"update_seq">>, Info, Seq);
+        maps:get(<<"update_seq">>, Info, Seq);
     _ ->
         Seq
     end;
 source_cur_seq(#rep_state{source = Db, source_seq = Seq}) ->
     {ok, Info} = couch_replicator_api_wrap:get_db_info(Db),
-    get_value(<<"update_seq">>, Info, Seq).
+    maps:get(<<"update_seq">>, Info, Seq).
 
 
 update_task(State) ->
