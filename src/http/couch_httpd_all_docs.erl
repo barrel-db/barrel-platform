@@ -93,7 +93,7 @@ all_docs_fold(Db, #all_docs_args{keys=undefined}=Args, Callback, UAcc) ->
     finish_fold(FinalAcc, [{total, Total}, {offset, Offset}]);
 all_docs_fold(Db, #all_docs_args{direction=Dir, keys=Keys0}=Args, Callback, UAcc) ->
     {ok, Info} = couch_db:get_db_info(Db),
-    Total = couch_util:get_value(doc_count, Info),
+    Total = maps:get(doc_count, Info),
     UpdateSeq = couch_db:get_update_seq(Db),
     Acc = #fold_acc{
         db=Db,
