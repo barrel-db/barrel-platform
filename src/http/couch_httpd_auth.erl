@@ -81,7 +81,7 @@ default_authentication_handler(Req) ->
                 end
         end;
     nil ->
-        case couch_server:has_admins() of
+        case barrel_server:has_admins() of
         true ->
             Req;
         false ->

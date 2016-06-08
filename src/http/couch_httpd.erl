@@ -120,10 +120,6 @@ start_link(Name, Options) ->
 
     set_auth_handlers(),
 
-    % ensure uuid is set so that concurrent replications
-    % get the same value.
-    couch_server:get_uuid(),
-
     % add barrel log event handler
     lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
 

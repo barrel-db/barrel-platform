@@ -86,7 +86,7 @@ replication_id(#rep{options = Options} = Rep) ->
 % please add a new clause and increase ?REP_ID_VERSION.
 
 replication_id(#rep{user_ctx = UserCtx} = Rep, 3) ->
-    UUID = couch_server:get_uuid(),
+    UUID = barrel_server:node_id(),
     Src = get_rep_endpoint(UserCtx, Rep#rep.source),
     Tgt = get_rep_endpoint(UserCtx, Rep#rep.target),
     maybe_append_filters([UUID, Src, Tgt], Rep);

@@ -107,7 +107,7 @@ handle_design_info_req(#httpd{
 
 create_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    case couch_server:create(DbName, [{user_ctx, UserCtx}]) of
+    case barrel_server:create(DbName, [{user_ctx, UserCtx}]) of
     {ok, Db} ->
         couch_db:close(Db),
         DbUrl = absolute_uri(Req, "/" ++ couch_util:url_encode(DbName)),
@@ -118,7 +118,7 @@ create_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
 
 delete_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     ok = couch_httpd:verify_is_server_admin(Req),
-    case couch_server:delete(DbName, [{user_ctx, UserCtx}]) of
+    case barrel_server:delete(DbName, [{user_ctx, UserCtx}]) of
     ok ->
         send_json(Req, 200, #{ok => true});
     Error ->

@@ -20,14 +20,15 @@
 %%====================================================================
 
 start_link() ->
-	case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
-		{ok, Pid} ->
-			io:format("version: ~s.", [barrel_server:version()]),
-			couch_httpd_util:display_uris(),
-			{ok, Pid};
-		Else ->
-			Else
-	end.
+  case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
+    {ok, Pid} ->
+      io:format("version: ~s.", [barrel_server:version()]),
+      io:format("node id: ~s", [barrel_server:node_id()]),
+      couch_httpd_util:display_uris(),
+      {ok, Pid};
+    Else ->
+      Else
+  end.
 
 
 
@@ -48,9 +49,9 @@ init([]) ->
             {barrel_ext_sup, start_link, []},
             permanent, infinity, supervisor, [barrel_ext_sup]},
 
-  Server = {couch_server,
-            {couch_server, sup_start_link, []},
-            permanent,brutal_kill,	worker,[couch_server]},
+  Server = {barrel_server,
+            {barrel_server, start_link, []},
+            permanent,brutal_kill,	worker,[barrel_server]},
 
 
   Daemons = {barrel_daemons_sup,

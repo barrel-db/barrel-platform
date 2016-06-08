@@ -113,7 +113,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 compact_loop(Parent) ->
-    {ok, _} = couch_server:all_databases(
+    {ok, _} = barrel_server:all_databases(
         fun(DbName, Acc) ->
             case ets:info(?CONFIG_ETS, size) =:= 0 of
             true ->

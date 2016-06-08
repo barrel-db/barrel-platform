@@ -37,7 +37,7 @@
 
 handle_welcome_req(#httpd{method='GET'}=Req) ->
     send_json(Req, maps:from_list(
-        [{name, barrel}, {uuid, couch_server:get_uuid()}] ++
+        [{name, barrel}, {uuid, barrel_server:node_id()}] ++
         case barrel_config:get("vendor") of
             [] -> [];
             Properties ->
@@ -87,7 +87,7 @@ handle_all_dbs_req(#httpd{method='GET'}=Req) ->
     Limit0 = couch_util:to_integer(couch_httpd:qs_value(Req, "limit",
                                                         ?DEFAULT_LIMIT)),
     Skip0 = couch_util:to_integer(couch_httpd:qs_value(Req, "skip", -1)),
-    {ok, {DbNames, _, _}} = couch_server:all_databases(fun all_dbs_fun/2, {[], Skip0, Limit0}),
+    {ok, {DbNames, _, _}} = barrel_server:all_databases(fun all_dbs_fun/2, {[], Skip0, Limit0}),
     send_json(Req, lists:usort(DbNames));
 handle_all_dbs_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").

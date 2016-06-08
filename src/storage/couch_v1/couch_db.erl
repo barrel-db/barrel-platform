@@ -69,17 +69,17 @@ open_db_file(Filepath, Options) ->
 
 
 create(DbName, Options) ->
-    couch_server:create(DbName, Options).
+    barrel_server:create(DbName, Options).
 
 % this is for opening a database for internal purposes like the replicator
 % or the view indexer. it never throws a reader error.
 open_int(DbName, Options) ->
-    couch_server:open(DbName, Options).
+    barrel_server:open(DbName, Options).
 
 % this should be called anytime an http request opens the database.
 % it ensures that the http userCtx is a valid reader
 open(DbName, Options) ->
-    case couch_server:open(DbName, Options) of
+    case barrel_server:open(DbName, Options) of
         {ok, Db} ->
             try
                 check_is_member(Db),
