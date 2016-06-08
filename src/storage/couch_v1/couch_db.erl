@@ -320,9 +320,9 @@ get_design_docs(Db) ->
 
 check_is_admin(#db{user_ctx=UserCtx}=Db) ->
     [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
-    {Admins} = get_admins(Db),
-    AdminRoles = [<<"_admin">> | couch_util:get_value(<<"roles">>, Admins, [])],
-    AdminNames = couch_util:get_value(<<"names">>, Admins,[]),
+    Admins = get_admins(Db),
+    AdminRoles = [<<"_admin">> | maps:get(<<"roles">>, Admins, [])],
+    AdminNames = maps:get(<<"names">>, Admins, []),
     case AdminRoles -- Roles of
     AdminRoles -> % same list, not an admin role
         case AdminNames -- [Name] of
@@ -340,10 +340,10 @@ check_is_member(#db{user_ctx=UserCtx}=Db) ->
     case (catch check_is_admin(Db)) of
     ok -> ok;
     _ ->
-        {Members} = get_members(Db),
-        ReaderRoles = couch_util:get_value(<<"roles">>, Members,[]),
+        Members = get_members(Db),
+        ReaderRoles = maps:get(<<"roles">>, Members,[]),
         WithAdminRoles = [<<"_admin">> | ReaderRoles],
-        ReaderNames = couch_util:get_value(<<"names">>, Members,[]),
+        ReaderNames = maps:get(<<"names">>, Members,[]),
         case ReaderRoles ++ ReaderNames of
         [] -> ok; % no readers == public access
         _Else ->
@@ -366,7 +366,7 @@ get_admins(#db{security=SecProps}) -> maps:get(<<"admins">>, SecProps, #{}).
 
 get_members(#db{security=SecProps}) ->
     % we fallback to readers here for backwards compatibility
-  maps:get(<<"members">>, SecProps, maps:get_value(<<"readers">>, SecProps, #{})).
+  maps:get(<<"members">>, SecProps, maps:get(<<"readers">>, SecProps, #{})).
 
 get_security(#db{security=SecProps}) -> SecProps.
 

@@ -453,7 +453,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
         [{compression, Compression}]),
     case Header#db_header.security_ptr of
     nil ->
-        Security = [],
+        Security = #{},
         SecurityPtr = nil;
     SecurityPtr ->
         {ok, Security} = couch_file:pread_term(Fd, SecurityPtr)

@@ -163,7 +163,7 @@
              filepath,
              validate_doc_funs = [],
              validate_doc_read_funs = [],
-             security = [],
+             security = #{},
              security_ptr = nil,
              user_ctx = #user_ctx{},
              waiting_delayed_commit = nil,
