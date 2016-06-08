@@ -201,7 +201,7 @@ Commands:
     clean:      clean static libs
     -?:         display usage
 
-Report bugs at <https://github.com/refuge/couch_core>.
+Report bugs at <https://barrel-db.org>.
 EOF
 }
 
