@@ -131,20 +131,25 @@ get_view_info(#db{name=DbName}, DDoc, VName) ->
 get_view_info(DbName, DDoc, VName) ->
   {ok, {_, View}, _, _Args} = couch_mrview_util:get_view(DbName, DDoc, VName, #mrargs{direction=rev}),
   %% get the total number of rows
-  {ok, TotalRows} =  couch_mrview_util:get_row_count(View),
+
+  View1 = case View of
+            {_, _, #mrview{}=MRV} -> MRV;
+            #mrview{} -> View
+          end,
+  {ok, TotalRows} =  couch_mrview_util:get_row_count(View1),
 
   %% get the total number of sequence logged in this view
-  SeqBtree = View#mrview.seq_btree,
+  SeqBtree = View1#mrview.seq_btree,
   {ok, TotalSeqs} = case SeqBtree of
                       nil -> {ok, 0};
                       _ ->
                         couch_btree:full_reduce(SeqBtree)
                     end,
 
-  {ok, [{update_seq, View#mrview.update_seq},
-        {purge_seq, View#mrview.purge_seq},
-        {last_seq, View#mrview.group_seq},
-        {group_seq, View#mrview.group_seq},
+  {ok, [{update_seq, View1#mrview.update_seq},
+        {purge_seq, View1#mrview.purge_seq},
+        {last_seq, View1#mrview.group_seq},
+        {group_seq, View1#mrview.group_seq},
         {total_rows, TotalRows},
         {total_seqs, TotalSeqs}]}.
 
@@ -262,7 +267,7 @@ map_fold(_KV, _Offset, #mracc{limit=0}=Acc) ->
   {stop, Acc};
 map_fold({{_Key, _Id}, {removed, _Seq}}, _Offset, Acc) ->
   {ok, Acc#mracc{last_go=ok}};
-map_fold({{Key, Id}, Val}=KV, _Offset, Acc) ->
+map_fold({{Key, Id}, Val}, _Offset, Acc) ->
   #mracc{
      db=Db,
      limit=Limit,
@@ -438,9 +443,9 @@ changes_idx(Options) ->
   end.
 
 make_view_changes_args(Options, by_key) ->
-  to_mrargs(Options);
+  to_mrargs([{reduce, false} |Options]);
 make_view_changes_args(_Option, _) ->
-  #mrargs{}.
+  #mrargs{reduce=false}.
 
 make_view_changes_opts(StartSeq, _Options, Args, by_key) ->
   couch_mrview_util:changes_key_opts(StartSeq, Args);
