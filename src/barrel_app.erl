@@ -22,8 +22,8 @@ start(_StartType, _StartArgs) ->
   Args = init:get_arguments(),
   ok = init_config(Args),
   ok = maybe_set_pidfile(Args),
+  ok = init_node(),
   'barrel_sup':start_link().
-
 
 -spec stop(atom()) -> ok.
 stop(_State) ->
@@ -35,9 +35,17 @@ stop(_State) ->
 %% Internal functions
 %%====================================================================
 
+init_node() ->
+  case application:get_env(barrel, start_mode) of
+    standalone -> ok;
+    _ ->
+      barrel_log:init(),
+      ok
+  end.
 
 
 init_config(Args) ->
+  io:format("init config~n~n", []),
     IniFiles = case proplists:get_value(inifiles, Args) of
                    undefined ->
                        ConfDir =  filename:join([code:root_dir(), "etc"]),
@@ -48,7 +56,8 @@ init_config(Args) ->
                    [IniFilesStr] ->
                        re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
                end,
-    barrel_config:init(IniFiles).
+  io:format("ini files are ~p~n", [IniFiles]),
+  barrel_config:init(IniFiles).
 
 
 maybe_set_pidfile(Args) ->

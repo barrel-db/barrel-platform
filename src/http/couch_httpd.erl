@@ -1065,8 +1065,10 @@ check_for_last(#mp{buffer=Buffer, data_fun=DataFun}=Mp) ->
                 data_fun = DataFun2})
     end.
 
+validate_bind_address(any) -> "0.0.0.0";
 validate_bind_address(Address) ->
     case inet_parse:address(Address) of
         {ok, _} -> ok;
-        _ -> throw({error, invalid_bind_address})
+        _ ->
+            throw({error, {invalid_bind_address, Address}})
     end.

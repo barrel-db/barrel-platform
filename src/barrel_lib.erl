@@ -20,6 +20,7 @@
          userctx_put/2, userctx_put/3, is_userctx/1]).
 -export([adminctx/0]).
 -export([load_config/2]).
+-export([propmerge/3, propmerge1/2]).
 
 -include_lib("syntax_tools/include/merl.hrl").
 
@@ -101,3 +102,16 @@ make_function(K, V) ->
     Cs = [?Q("() -> _@V@")],
       F = erl_syntax:function(merl:term(K), Cs),
         ?Q("'@_F'() -> [].").
+
+
+%% @doc merge 2 proplists. All the Key - Value pairs from both proplists
+%% are included in the new proplists. If a key occurs in both dictionaries
+%% then Fun is called with the key and both values to return a new
+%% value. This a wreapper around dict:merge
+propmerge(F, L1, L2) ->
+  dict:to_list(dict:merge(F, dict:from_list(L1), dict:from_list(L2))).
+
+%% @doc Update a proplist with values of the second. In case the same
+%% key is in 2 proplists, the value from the first are kept.
+propmerge1(L1, L2) ->
+  propmerge(fun(_, V1, _) -> V1 end, L1, L2).

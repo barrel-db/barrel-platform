@@ -22,11 +22,9 @@
 -module(barrel_config).
 
 %% public API
--export([get_env/1, get_env/2]).
-
-
 -export([init/1]).
 -export([all/0]).
+-export([prefix/1]).
 -export([get/1, get/2, get/3]).
 -export([set/2, set/3, set/4]).
 -export([del/2, del/3]).
@@ -37,14 +35,15 @@
 -export([get_binary/2, get_binary/3]).
 -export([subscribe/0, unsubscribe/0]).
 
+-export([pget_boolean/2, pget_boolean/3, pget_int/2, pget_int/3,
+  pget_float/2, pget_float/3, pget_list/2, pget_list/3,
+  pget_binary/2, pget_binary/3]).
 
 %% internal usage
 -export([handle_config_change/1]).
 
 -define(CFGNAME, barrel).
 
-get_env(Key) -> get_env(Key, undefined).
-get_env(Key, Default) -> application:get_env(barrel, Key, Default).
 
 
 %% @doc int with config files
@@ -54,6 +53,8 @@ init(IniFiles) ->
     {change_fun, {barrel_config, handle_config_change}}]).
 
 all() -> econfig:cfg2list(?CFGNAME).
+
+prefix(Prefix) -> econfig:prefix(?CFGNAME, Prefix).
 
 get(Section) -> econfig:get_value(?CFGNAME, Section).
 get(Section, Key) -> econfig:get_value(?CFGNAME, Section, Key).
@@ -81,10 +82,85 @@ get_list(Section, Key, Default) -> econfig:get_list(?CFGNAME, Section, Key, Defa
 get_binary(Section, Key) -> econfig:get_binary(?CFGNAME, Section, Key).
 get_binary(Section, Key, Default) -> econfig:get_binary(?CFGNAME, Section, Key, Default).
 
+
 subscribe() -> econfig:subscribe(?CFGNAME).
 
 unsubscribe() -> econfig:unsubscribe(?CFGNAME).
 
+
+pget_boolean(Key, Props) -> pget_boolean(Key, Props, undefined).
+pget_boolean(Key, Props, Default) ->
+  case proplists:get_value(Key, Props, Default) of
+    undefined -> Default;
+    Val when is_boolean(Val) -> Val;
+    Val ->
+      case string:to_lower(Val) of
+        "true" -> true;
+        "false" -> false;
+        "1" -> true;
+        "0" -> false;
+        "on" -> true;
+        "off" -> false;
+        "yes" -> true;
+        "no" -> false;
+        true -> true;
+        false -> false;
+        _ ->
+          error(badarg)
+      end
+  end.
+
+pget_int(Key, Props) -> pget_int(Key, Props, undefined).
+pget_int(Key, Props, Default) ->
+  case proplists:get_value(Key, Props, Default) of
+    undefined -> Default;
+    Val when is_integer(Val) -> Val;
+    Val ->
+      case string:to_integer(Val) of
+        {IVal, []} -> IVal;
+        _ -> error(badarg)
+      end
+  end.
+
+pget_float(Key, Props) -> pget_float(Key, Props, undefined).
+pget_float(Key, Props, Default) ->
+  case proplists:get_value(Key, Props, Default) of
+    undefined -> Default;
+    Val when is_float(Val) -> Val;
+    Val ->
+      case string:to_float(Val) of
+        {FVal, []} -> FVal;
+        _ -> error(badarg)
+      end
+  end.
+
+pget_list(Key, Props) -> pget_list(Key, Props, undefined).
+pget_list(Key, Props, Default) ->
+  case proplists:get_value(Key, Props, Default) of
+    undefined -> Default;
+    Val when is_list(Val) -> Val;
+    "" -> [];
+    Val ->
+      lists:filtermap(fun(V) ->
+        case string:strip(V) of
+          "" -> false;
+          V2 -> {true, V2}
+        end
+                      end, string:tokens(Val, ","))
+  end.
+
+pget_binary(Key, Props) -> pget_binary(Key, Props, undefined).
+pget_binary(Key, Props, Default) ->
+  case proplists:get_value(Key, Props, Default) of
+    undefined -> Default;
+    Val when is_binary(Val) -> Val;
+    Val ->
+      try list_to_binary(Val) of
+        Bin ->  Bin
+      catch
+        _ -> error(badarg)
+      end
+  end.
 
 %% @private
 handle_config_change({config_updated, ?CFGNAME, {Type, {Section, Key}}}) ->

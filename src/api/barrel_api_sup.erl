@@ -40,7 +40,7 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  Config = application:get_env(barrel, api, []),
+  Config = barrel_config:get("api"),
   WebProcesses = web_processes(barrel_api_http:get_listeners(Config), Config),
    {ok, {{one_for_one, 10, 10}, WebProcesses}}.
 
@@ -49,6 +49,7 @@ init([]) ->
 %%%===================================================================
 web_processes([], _Config) -> [];
 web_processes(Listeners, Config) ->
-  lists:flatten([ web_listeners(Config, Scheme, Binding) ||  {Scheme, Binding} <- Listeners ]).
+  lists:flatten([ web_listeners(barrel_lib:propmerge1(Opts, Config), Scheme, Binding) ||
+    {Scheme, Binding, Opts} <- Listeners ]).
 
 web_listeners(Config, Scheme, Binding) -> barrel_api_http:binding_spec(Config, Scheme, Binding).

@@ -18,14 +18,14 @@
 -include_lib("public_key/include/public_key.hrl").
 
 options(Config) ->
-	CaCertFile = proplists:get_value(cacertfile, Config),
-  CertFile = proplists:get_value(certfile, Config),
-  KeyFile = proplists:get_value(keyfile, Config),
-  Versions = proplists:get_value(tls_protocols, Config, ['tlsv1.2']),
-  HonorCipherOrder = proplists:get_value(honor_cipher_order, Config, false),
-  Ciphers = ciphersuite_transform(proplists:get_value(support_elliptic_curve, Config, true),
-                                  proplists:get_value(ciphers, Config, [])),
-  CheckCRL = proplists:get_value(check_clr, Config, false),
+	CaCertFile = proplists:get_value("cacertfile", Config),
+  CertFile = proplists:get_value("certfile", Config),
+  KeyFile = proplists:get_value("keyfile", Config),
+  Versions = barrel_config:pget_list("tls_protocols", Config, ['tlsv1.2']),
+  HonorCipherOrder = barrel_config:pget_boolean("honor_cipher_order", Config, false),
+  Ciphers = ciphersuite_transform(barrel_config:pget_boolean(support_elliptic_curve, Config, true),
+    barrel_config:pget_list(ciphers, Config, [])),
+  CheckCRL = barrel_config:pget_boolean(check_clr, Config, false),
 
   CACerts = load_certs(CaCertFile),
 
