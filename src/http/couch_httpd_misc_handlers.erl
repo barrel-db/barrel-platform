@@ -319,9 +319,9 @@ handle_log_req(#httpd{method='GET'}=Req) ->
     send_chunk(Resp, Chunk),
     last_chunk(Resp);
 handle_log_req(#httpd{method='POST'}=Req) ->
-    {PostBody} = couch_httpd:json_body_obj(Req),
-    Level = couch_util:get_value(<<"level">>, PostBody),
-    Message = binary_to_list(couch_util:get_value(<<"message">>, PostBody)),
+    PostBody = couch_httpd:json_body_obj(Req),
+    Level = maps:get(<<"level">>, PostBody),
+    Message = binary_to_list(maps:get(<<"message">>, PostBody)),
     case Level of
     <<"debug">> ->
         lager:debug(Message, []),

@@ -613,7 +613,7 @@ doc_from_multi_part_stream(ContentType, DataFun) ->
     end.
 
 mp_parse_doc({headers, H}, []) ->
-    case couch_util:get_value("content-type", H) of
+    case proplists:get_value("content-type", H) of
     {"application/json", _} ->
         fun (Next) ->
             mp_parse_doc(Next, [])

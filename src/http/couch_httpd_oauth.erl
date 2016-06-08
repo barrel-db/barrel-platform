@@ -77,7 +77,7 @@ set_user_ctx(Req, Name) ->
             lager:debug("OAuth handler: user `~p` credentials not found", [Name]),
             Req;
         User ->
-            Roles = couch_util:get_value(<<"roles">>, User, []),
+            Roles = maps:get(<<"roles">>, User, []),
             UserCtx = barrel_lib:userctx([{name=Name, xroles=Roles}]),
             Req#httpd{user_ctx=UserCtx}
     end.
@@ -193,7 +193,7 @@ serve_oauth(#httpd{mochi_req=MochiReq}=Req, Fun, FailSilently) ->
             end
     end,
     HeaderParams = oauth:header_params_decode(AuthHeader),
-    %Realm = couch_util:get_value("realm", HeaderParams),
+    %Realm = proplists:get_value("realm", HeaderParams),
 
     % get requested path
     RequestedPath = case MochiReq:get_header_value("x-couchdb-requested-path") of
@@ -212,9 +212,9 @@ serve_oauth(#httpd{mochi_req=MochiReq}=Req, Fun, FailSilently) ->
     Params = proplists:delete("realm", HeaderParams) ++ mochiweb_util:parse_qs(QueryString),
 
     lager:debug("OAuth Params: ~p", [Params]),
-    case couch_util:get_value("oauth_version", Params, "1.0") of
+    case proplists:get_value("oauth_version", Params, "1.0") of
         "1.0" ->
-            case couch_util:get_value("oauth_consumer_key", Params, undefined) of
+            case proplists:get_value("oauth_consumer_key", Params, undefined) of
                 undefined ->
                     case FailSilently of
                         true -> Req;
@@ -240,11 +240,11 @@ serve_oauth(#httpd{mochi_req=MochiReq}=Req, Fun, FailSilently) ->
 
 
 get_callback_params(ConsumerKey, Params, Url) ->
-    Token = couch_util:get_value("oauth_token", Params),
+    Token = proplists:get_value("oauth_token", Params),
     SigMethod = sig_method(Params),
     CbParams0 = #callback_params{
         token = Token,
-        signature = couch_util:get_value("oauth_signature", Params),
+        signature = proplists:get_value("oauth_signature", Params),
         params = proplists:delete("oauth_signature", Params),
         url = Url
     },
@@ -253,11 +253,11 @@ get_callback_params(ConsumerKey, Params, Url) ->
         invalid_consumer_token_pair;
     {error, _} = Err ->
         Err;
-    {OauthCreds} ->
-        User = couch_util:get_value(<<"username">>, OauthCreds, []),
-        ConsumerSecret = binary_to_list(couch_util:get_value(
+    OauthCreds when is_map(OauthCreds) ->
+        User = maps:get(<<"username">>, OauthCreds, []),
+        ConsumerSecret = binary_to_list(maps:get(
             <<"consumer_secret">>, OauthCreds, <<>>)),
-        TokenSecret = binary_to_list(couch_util:get_value(
+        TokenSecret = binary_to_list(maps:get(
             <<"token_secret">>, OauthCreds, <<>>)),
         case (User =:= []) orelse (ConsumerSecret =:= []) orelse
             (TokenSecret =:= []) of
@@ -279,7 +279,7 @@ get_callback_params(ConsumerKey, Params, Url) ->
 
 
 sig_method(Params) ->
-    sig_method_1(couch_util:get_value("oauth_signature_method", Params)).
+    sig_method_1(proplists:get_value("oauth_signature_method", Params)).
 sig_method_1("PLAINTEXT") ->
     plaintext;
 % sig_method_1("RSA-SHA1") ->
@@ -381,7 +381,7 @@ query_oauth_view(Db, Key) ->
         {end_key, Key}
     ],
     Callback = fun({row, Row}, Acc) ->
-            {ok, [couch_util:get_value(value, Row) | Acc]};
+            {ok, [proplists:get_value(value, Row) | Acc]};
         (_, Acc) ->
             {ok, Acc}
     end,

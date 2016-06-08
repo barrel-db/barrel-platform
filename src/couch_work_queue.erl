@@ -81,9 +81,9 @@ close(Wq) ->
 
 init(Options) ->
     Q = #q{
-        max_size = couch_util:get_value(max_size, Options, nil),
-        max_items = couch_util:get_value(max_items, Options, nil),
-        multi_workers = couch_util:get_value(multi_workers, Options, false)
+        max_size = proplists:get_value(max_size, Options, nil),
+        max_items = proplists:get_value(max_items, Options, nil),
+        multi_workers = proplists:get_value(multi_workers, Options, false)
     },
     {ok, Q}.
 

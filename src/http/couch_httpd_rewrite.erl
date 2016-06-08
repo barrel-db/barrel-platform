@@ -230,7 +230,7 @@ try_bind_path([Dispatch|Rest], Method, PathParts, QueryList) ->
                     % QueryArgs1
                     Bindings2 = lists:foldl(fun({K, V}, Acc) ->
                         K1 = to_binding(K),
-                        KV = case couch_util:get_value(K1, QueryArgs1) of
+                        KV = case proplists:get_value(K1, QueryArgs1) of
                             undefined -> [{K1, V}];
                             _V1 -> []
                         end,
@@ -292,11 +292,11 @@ maybe_json(Key, Value) ->
 
 get_var(VarName, Props, Default, Formats) ->
     VarName1 = to_binding(VarName),
-    Val = couch_util:get_value(VarName1, Props, Default),
+    Val = proplists:get_value(VarName1, Props, Default),
     maybe_format(VarName, Val, Formats).
 
 maybe_format(VarName, Value, Formats) ->
-    case couch_util:get_value(VarName, Formats) of
+    case proplists:get_value(VarName, Formats) of
         undefined ->
              Value;
         Format ->
@@ -337,7 +337,7 @@ make_new_path([?MATCH_ALL|_Rest], _Bindings, Remaining, Acc) ->
     Acc1 = lists:reverse(Acc) ++ Remaining,
     Acc1;
 make_new_path([{bind, P}|Rest], Bindings, Remaining, Acc) ->
-    P2 = case couch_util:get_value({bind, P}, Bindings) of
+    P2 = case proplists:get_value({bind, P}, Bindings) of
         undefined -> << "undefined">>;
         P1 ->
             iolist_to_binary(P1)
@@ -407,28 +407,28 @@ process_rules([Rule | Rest], Req, Db, DDoc, Routes) ->
     process_rules(Rest, Req, Db, DDoc, [make_rule(Rule) | Routes]).
 
 %% @doc transform json rule in erlang for pattern matching
-make_rule({Rule}) ->
+make_rule(Rule) when is_map(Rule) ->
     lager:info("to ~p~n", [Rule]),
-    Method = case couch_util:get_value(<<"method">>, Rule) of
+    Method = case maps:get(<<"method">>, Rule) of
         undefined -> ?MATCH_ALL;
         M -> to_binding(M)
     end,
-    QueryArgs = case couch_util:get_value(<<"query">>, Rule) of
+    QueryArgs = case maps:get(<<"query">>, Rule) of
         undefined -> [];
         {Args} -> Args
         end,
-    FromParts  = case couch_util:get_value(<<"from">>, Rule) of
+    FromParts  = case maps:get(<<"from">>, Rule) of
         undefined -> [?MATCH_ALL];
         From ->
             parse_path(From)
         end,
-    ToParts  = case couch_util:get_value(<<"to">>, Rule) of
+    ToParts  = case maps:get(<<"to">>, Rule) of
         undefined ->
             throw({error, invalid_rewrite_target});
         To ->
             parse_path(To)
         end,
-    Formats = case couch_util:get_value(<<"formats">>, Rule) of
+    Formats = case maps:get(<<"formats">>, Rule) of
         undefined -> [];
         {Fmts} -> Fmts
     end,

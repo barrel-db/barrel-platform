@@ -30,7 +30,7 @@ random_doc(Db, FilterFun) ->
 
 random_doc(Db, FilterFun, Opts) ->
     N = {ok, Info} = couch_db:get_db_info(Db),
-    case couch_util:get_value(doc_count, Info) of
+    case proplists:get_value(doc_count, Info) of
         C when C < 1 -> C;
         C -> crypto:rand_uniform(0, C)
     end,
@@ -65,7 +65,7 @@ random_view_doc(Db, DDoc, ViewName) ->
     {ok, [{meta, Meta}]} = couch_mrview:query_view(Db, DDoc, ViewName,
         [{limit, 0}]),
     %% generate random value
-    N = case couch_util:get_value(total, Meta) of
+    N = case proplists:get_value(total, Meta) of
         C when C < 1 -> C;
         C -> crypto:rand_uniform(0, C)
     end,
@@ -75,7 +75,7 @@ random_view_doc(Db, DDoc, ViewName) ->
     finish_random(Acc).
 
 view_cb({row, Row}, _Acc) ->
-    Doc = couch_util:get_value(doc, Row),
+    Doc = proplists:get_value(doc, Row),
     {ok, couch_doc:from_json_obj(Doc)};
 view_cb(_Other, Acc) ->
     {ok, Acc}.

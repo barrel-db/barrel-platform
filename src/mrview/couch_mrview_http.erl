@@ -190,13 +190,13 @@ view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
      view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
 view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
     % Map function starting
-    Parts = case couch_util:get_value(total, Meta) of
+    Parts = case proplists:get_value(total, Meta) of
         undefined -> [];
         Total -> [io_lib:format("\"total_rows\":~p", [Total])]
-    end ++ case couch_util:get_value(offset, Meta) of
+    end ++ case proplists:get_value(offset, Meta) of
         undefined -> [];
         Offset -> [io_lib:format("\"offset\":~p", [Offset])]
-    end ++ case couch_util:get_value(update_seq, Meta) of
+    end ++ case proplists:get_value(update_seq, Meta) of
         undefined -> [];
         UpdateSeq -> [io_lib:format("\"update_seq\":~p", [UpdateSeq])]
     end ++ ["\"rows\":["],
@@ -242,15 +242,15 @@ is_removed(Row) ->
     proplists:get_value(value, Row) =:= removed.
 
 row_to_json(Row) ->
-    Id = couch_util:get_value(id, Row),
+    Id = proplists:get_value(id, Row),
     row_to_json(Id, Row).
 
 
 row_to_json(error, Row) ->
     % Special case for _all_docs request with KEYS to
     % match prior behavior.
-    Key = couch_util:get_value(key, Row),
-    Val = couch_util:get_value(value, Row),
+    Key = proplists:get_value(key, Row),
+    Val = proplists:get_value(value, Row),
     Obj = #{key => Key, error => Val},
     ?JSON_ENCODE(Obj);
 row_to_json(Id0, Row) ->
@@ -258,9 +258,9 @@ row_to_json(Id0, Row) ->
         undefined -> [];
         Id0 -> [{id, Id0}]
     end,
-    Key = couch_util:get_value(key, Row, null),
-    Val = couch_util:get_value(value, Row),
-    Doc = case couch_util:get_value(doc, Row) of
+    Key = proplists:get_value(key, Row, null),
+    Val = proplists:get_value(value, Row),
+    Doc = case proplists:get_value(doc, Row) of
         undefined -> [];
         Doc0 -> [{doc, Doc0}]
     end,

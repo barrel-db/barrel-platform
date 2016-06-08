@@ -199,7 +199,7 @@ make_target([?MATCH_ALL|_Rest], _Bindings, Remaining, Acc) ->
     Acc1 = lists:reverse(Acc) ++ Remaining,
     Acc1;
 make_target([{bind, P}|Rest], Bindings, Remaining, Acc) ->
-    P2 = case couch_util:get_value({bind, P}, Bindings) of
+    P2 = case proplists:get_value({bind, P}, Bindings) of
         undefined ->  "undefined";
         P1 -> P1
     end,

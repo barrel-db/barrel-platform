@@ -51,23 +51,17 @@ handle_randomdoc_show_req(Req, _Db, _DDoc) ->
     couch_httpd:send_error(Req, 404, <<"show_error">>, <<"Invalid path.">>).
 
 
-apply_etag({ExternalResponse}, CurrentEtag) ->
+apply_etag(ExternalResponse, CurrentEtag) ->
     % Here we embark on the delicate task of replacing or creating the
     % headers on the JsonResponse object. We need to control the Etag and
     % Vary headers. If the external function controls the Etag, we'd have to
     % run it to check for a match, which sort of defeats the purpose.
-    case couch_util:get_value(<<"headers">>, ExternalResponse, nil) of
-    nil ->
-        % no JSON headers
-        % add our Etag and Vary headers to the response
-        {[{<<"headers">>, {[{<<"Etag">>, CurrentEtag}, {<<"Vary">>, <<"Accept">>}]}} | ExternalResponse]};
-    JsonHeaders ->
-        {[case Field of
-        {<<"headers">>, JsonHeaders} -> % add our headers
-            JsonHeadersEtagged = couch_util:json_apply_field({<<"Etag">>, CurrentEtag}, JsonHeaders),
-            JsonHeadersVaried = couch_util:json_apply_field({<<"Vary">>, <<"Accept">>}, JsonHeadersEtagged),
-            {<<"headers">>, JsonHeadersVaried};
-        _ -> % skip non-header fields
-            Field
-        end || Field <- ExternalResponse]}
+    case maps:find(<<"headers">>, ExternalResponse) of
+        error ->
+            % no JSON headers
+            % add our Etag and Vary headers to the response
+            ExternalResponse#{<<"headers">> => #{ <<"Etag">> => CurrentEtag, <<"Vary">> =>  <<"Accept">>}};
+        {ok, JsonHeaders} ->
+            JsonHeaders2 = JsonHeaders#{<<"Etag">> => CurrentEtag, <<"Vary">> =>  <<"Accept">>},
+            ExternalResponse#{<<"headers">> => JsonHeaders2
     end.

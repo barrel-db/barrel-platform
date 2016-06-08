@@ -370,7 +370,7 @@ verify(_X, _Y) -> false.
 
 % linear search is faster for small lists, length() is 0.5 ms for 100k list
 reorder_results(Keys, SortedResults) when length(Keys) < 100 ->
-    [couch_util:get_value(Key, SortedResults) || Key <- Keys];
+    [proplists:get_value(Key, SortedResults) || Key <- Keys];
 reorder_results(Keys, SortedResults) ->
     KeyDict = dict:from_list(SortedResults),
     [dict:fetch(Key, KeyDict) || Key <- Keys].

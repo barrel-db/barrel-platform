@@ -441,7 +441,7 @@ qs_value(Req, Key) ->
     qs_value(Req, Key, undefined).
 
 qs_value(Req, Key, Default) ->
-    couch_util:get_value(Key, qs(Req), Default).
+    proplists:get_value(Key, qs(Req), Default).
 
 qs_json_value(Req, Key, Default) ->
     case qs_value(Req, Key, Default) of
@@ -970,7 +970,7 @@ nil_callback(_Data)->
     fun nil_callback/1.
 
 get_boundary({"multipart/" ++ _, Opts}) ->
-    case couch_util:get_value("boundary", Opts) of
+    case proplists:get_value("boundary", Opts) of
         S when is_list(S) ->
             S
     end;

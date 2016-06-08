@@ -337,7 +337,7 @@ terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
 
 handle_call({get_proc, DDoc1, DDocKey}, From, Server) ->
     #doc{body = Props} = DDoc = barrel_doc:with_ejson_body(DDoc1),
-    Lang = couch_util:get_value(<<"language">>, Props, <<"javascript">>),
+    Lang = maps:get(<<"language">>, Props, <<"javascript">>),
     case lang_proc(Lang, Server, fun(Procs) ->
             % find a proc in the set that has the DDoc
             proc_with_ddoc(DDoc, DDocKey, Procs)

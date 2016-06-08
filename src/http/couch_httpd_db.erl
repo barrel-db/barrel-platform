@@ -185,8 +185,8 @@ db_req(#httpd{path_parts=[_,<<"_ensure_full_commit">>]}=Req, _Db) ->
 db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
     exometer:update([httpd, bulk_requests], 1),
     couch_httpd:validate_ctype(Req, "application/json"),
-    {JsonProps} = couch_httpd:json_body_obj(Req),
-    case couch_util:get_value(<<"docs">>, JsonProps) of
+    JsonProps = couch_httpd:json_body_obj(Req),
+    case maps:get(<<"docs">>, JsonProps, undefined) of
     undefined ->
         send_error(Req, 400, <<"bad_request">>, <<"Missing JSON list of 'docs'">>);
     DocsArray ->
@@ -198,28 +198,27 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
         _ ->
             Options = []
         end,
-        case couch_util:get_value(<<"new_edits">>, JsonProps, true) of
+        case maps:get(<<"new_edits">>, JsonProps, true) of
         true ->
             Docs = lists:map(
-                fun({ObjProps} = JsonObj) ->
+                fun(JsonObj) ->
                     Doc = barrel_doc:from_json_obj(JsonObj),
                     validate_attachment_names(Doc),
                     Id = case Doc#doc.id of
                         <<>> -> barrel_uuids:new();
                         Id0 -> Id0
                     end,
-                    case couch_util:get_value(<<"_rev">>, ObjProps) of
-                    undefined ->
-                       Revs = {0, []};
-                    Rev  ->
-                        {Pos, RevId} = barrel_doc:parse_rev(Rev),
-                        Revs = {Pos, [RevId]}
+                    case maps:find(<<"_rev">>, JsonObj) of
+                        error -> Revs = {0, []};
+                        {ok, Rev}  ->
+                            {Pos, RevId} = barrel_doc:parse_rev(Rev),
+                            Revs = {Pos, [RevId]}
                     end,
                     Doc#doc{id=Id,revs=Revs}
                 end,
                 DocsArray),
             Options2 =
-            case couch_util:get_value(<<"all_or_nothing">>, JsonProps) of
+            case maps:get(<<"all_or_nothing">>, JsonProps, false) of
             true  -> [all_or_nothing|Options];
             _ -> Options
             end,
@@ -425,9 +424,9 @@ db_doc_req(#httpd{method='POST'}=Req, Db, DocId) ->
     barrel_doc:validate_docid(DocId),
     couch_httpd:validate_ctype(Req, "multipart/form-data"),
     Form = couch_httpd:parse_form(Req),
-    case couch_util:get_value("_doc", Form) of
+    case proplists:get_value("_doc", Form) of
     undefined ->
-        Rev = barrel_doc:parse_rev(couch_util:get_value("_rev", Form)),
+        Rev = barrel_doc:parse_rev(proplists:get_value("_rev", Form)),
         {ok, [{ok, Doc}]} = couch_db:open_doc_revs(Db, DocId, [Rev], []);
     Json ->
         Doc = couch_doc_from_req(Req, DocId, ?JSON_DECODE(Json))

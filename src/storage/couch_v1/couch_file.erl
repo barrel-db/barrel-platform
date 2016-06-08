@@ -90,14 +90,14 @@ append_term(Fd, Term) ->
     append_term(Fd, Term, []).
 
 append_term(Fd, Term, Options) ->
-    Comp = couch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
+    Comp = proplists:get_value(compression, Options, ?DEFAULT_COMPRESSION),
     append_binary(Fd, couch_compress:compress(Term, Comp)).
 
 append_term_md5(Fd, Term) ->
     append_term_md5(Fd, Term, []).
 
 append_term_md5(Fd, Term, Options) ->
-    Comp = couch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
+    Comp = proplists:get_value(compression, Options, ?DEFAULT_COMPRESSION),
     append_binary_md5(Fd, couch_compress:compress(Term, Comp)).
 
 %%----------------------------------------------------------------------

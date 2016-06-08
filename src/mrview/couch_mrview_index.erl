@@ -59,8 +59,8 @@ get(Property, State) ->
             {ok, DataSize} = couch_mrview_util:calculate_data_size(IdBtree, Views),
 
 
-            IncDesign = couch_util:get_value(<<"include_design">>, Opts, false),
-            LocalSeq = couch_util:get_value(<<"local_seq">>, Opts, false),
+            IncDesign = maps:get(<<"include_design">>, Opts, false),
+            LocalSeq = maps:get(<<"local_seq">>, Opts, false),
 
             UpdateOptions =
                 if IncDesign -> [<<"include_design">>]; true -> [] end

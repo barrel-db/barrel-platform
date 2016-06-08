@@ -769,8 +769,8 @@ doc_row(Doc, Opts) ->
 
 
 docid_rev(Id, {Props}) ->
-    DocId = couch_util:get_value(<<"_id">>, Props, Id),
-    Rev = case couch_util:get_value(<<"_rev">>, Props, nil) of
+    DocId = maps:get(<<"_id">>, Props, Id),
+    Rev = case maps:get(<<"_rev">>, Props, nil) of
         nil -> nil;
         Rev0 -> barrel_doc:parse_rev(Rev0)
     end,

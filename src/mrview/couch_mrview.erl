@@ -425,7 +425,7 @@ lookup_index(Key) ->
     Index = lists:zip(
         record_info(fields, mrargs), lists:seq(2, record_info(size, mrargs))
     ),
-    couch_util:get_value(Key, Index).
+    proplists:get_value(Key, Index).
 
 
 changes_idx(Options) ->

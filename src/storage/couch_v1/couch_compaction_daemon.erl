@@ -330,7 +330,7 @@ can_view_compact(Config, DbName, GroupId, GroupInfo) ->
     false ->
         false;
     true ->
-        case couch_util:get_value(updater_running, GroupInfo) of
+        case proplists:get_value(updater_running, GroupInfo) of
         true ->
             false;
         false ->

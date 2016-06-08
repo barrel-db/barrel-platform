@@ -483,8 +483,8 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
         fsync_options = FsyncOptions,
         options = Options,
         compression = Compression,
-        before_doc_update = couch_util:get_value(before_doc_update, Options, nil),
-        after_doc_read = couch_util:get_value(after_doc_read, Options, nil)
+        before_doc_update = proplists:get_value(before_doc_update, Options, nil),
+        after_doc_read = proplists:get_value(after_doc_read, Options, nil)
         }.
 
 open_reader_fd(Filepath, Options) ->

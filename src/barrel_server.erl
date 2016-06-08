@@ -91,7 +91,7 @@ open(DbName, Options0) ->
   Options = maybe_add_sys_db_callbacks(DbName, Options0),
   case gen_server:call(barrel_server, {open, DbName, Options}, infinity) of
     {ok, Db} ->
-      Ctx = couch_util:get_value(user_ctx, Options, barrel_lib:userctx()),
+      Ctx = proplists:get_value(user_ctx, Options, barrel_lib:userctx()),
       {ok, Db#db{user_ctx=Ctx}};
     Error ->
       Error
@@ -101,7 +101,7 @@ create(DbName, Options0) ->
   Options = maybe_add_sys_db_callbacks(DbName, Options0),
   case gen_server:call(barrel_server, {create, DbName, Options}, infinity) of
     {ok, Db} ->
-      Ctx = couch_util:get_value(user_ctx, Options, barrel_lib:userctx()),
+      Ctx = proplists:get_value(user_ctx, Options, barrel_lib:userctx()),
       {ok, Db#db{user_ctx=Ctx}};
     {error, eexist} ->
       file_exists;

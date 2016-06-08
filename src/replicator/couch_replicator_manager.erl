@@ -634,13 +634,13 @@ state_after_error(#rep_state{retries_left = Left, wait = Wait} = State) ->
 
 before_doc_update(#doc{id = <<?DESIGN_DOC_PREFIX, _/binary>>} = Doc, _Db) ->
     Doc;
-before_doc_update(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
+before_doc_update(#doc{body = Body} = Doc, #db{user_ctx=UserCtx} = Db) ->
     [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
     case lists:member(<<"_replicator">>, Roles) of
     true ->
         Doc;
     false ->
-        case couch_util:get_value(?OWNER, Body) of
+        case maps:get(?OWNER, Body) of
         undefined ->
             Doc#doc{body = {?replace(Body, ?OWNER, Name)}};
         Name ->
@@ -661,18 +661,18 @@ before_doc_update(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
 
 after_doc_read(#doc{id = <<?DESIGN_DOC_PREFIX, _/binary>>} = Doc, _Db) ->
     Doc;
-after_doc_read(#doc{body = {Body}} = Doc, #db{user_ctx=UserCtx} = Db) ->
+after_doc_read(#doc{body = Body} = Doc, #db{user_ctx=UserCtx} = Db) ->
     Name = barrel_lib:userctx_get(name, UserCtx),
     case (catch couch_db:check_is_admin(Db)) of
     ok ->
         Doc;
     _ ->
-        case couch_util:get_value(?OWNER, Body) of
+        case maps:get(?OWNER, Body, undefined) of
         Name ->
             Doc;
         _Other ->
-            Source = strip_credentials(couch_util:get_value(<<"source">>, Body)),
-            Target = strip_credentials(couch_util:get_value(<<"target">>, Body)),
+            Source = strip_credentials(maps:get(<<"source">>, Body, undefined)),
+            Target = strip_credentials(maps:get(<<"target">>, Body, undefined)),
             NewBody0 = ?replace(Body, <<"source">>, Source),
             NewBody = ?replace(NewBody0, <<"target">>, Target),
             #doc{revs = {Pos, [_ | Revs]}} = Doc,

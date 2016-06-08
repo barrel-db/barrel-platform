@@ -74,7 +74,7 @@ default_authentication_handler(Req) ->
                 case authenticate(list_to_binary(Pass), UserProps) of
                     true ->
                         UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
-                                                       {roles, couch_util:get_value(<<"roles">>, UserProps, [])}]),
+                                                       {roles, maps:get(<<"roles">>, UserProps, [])}]),
                         Req#httpd{user_ctx=UserCtx};
                     _Else ->
                         throw({unauthorized, <<"Name or password is incorrect.">>})
@@ -185,7 +185,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
             case couch_auth_cache:get_user_creds(User) of
             nil -> Req;
             UserProps ->
-                UserSalt = couch_util:get_value(<<"salt">>, UserProps, <<"">>),
+                UserSalt = maps:get(<<"salt">>, UserProps, <<"">>),
                 FullSecret = <<Secret/binary, UserSalt/binary>>,
                 ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeStr),
                 Hash = list_to_binary(HashStr),
@@ -199,7 +199,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
                                 lager:debug("Successful cookie auth as: ~p", [User]),
 
                                 UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
-                                                              {roles, couch_util:get_value(<<"roles">>, UserProps, [])}]),
+                                                              {roles, maps:get(<<"roles">>, UserProps, [])}]),
                                 Req#httpd{user_ctx=UserCtx, auth={FullSecret, TimeLeft < Timeout*0.9}};
                             _Else ->
                                 Req
@@ -222,9 +222,9 @@ cookie_auth_header(#httpd{user_ctx=UserCtx, auth=Auth}=Req, Headers) when UserCt
             %    or logout handler.
             % The login and logout handlers need to set the AuthSession cookie
             % themselves.
-            CookieHeader = couch_util:get_value("Set-Cookie", Headers, ""),
+            CookieHeader = proplists:get_value("Set-Cookie", Headers, ""),
             Cookies = mochiweb_cookies:parse_cookie(CookieHeader),
-            AuthSession = couch_util:get_value("AuthSession", Cookies),
+            AuthSession = proplists:get_value("AuthSession", Cookies),
             if AuthSession == undefined ->
                 TimeStamp = make_cookie_time(),
                 [cookie_auth_cookie(Req, binary_to_list(User), Secret, TimeStamp)];
@@ -267,14 +267,14 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
         _ ->
             []
     end,
-    UserName = list_to_binary(couch_util:get_value("name", Form, "")),
-    Password = list_to_binary(couch_util:get_value("password", Form, "")),
+    UserName = list_to_binary(proplists:get_value("name", Form, "")),
+    Password = list_to_binary(proplists:get_value("password", Form, "")),
     lager:debug("Attempt Login: ~s",[UserName]),
     User = case couch_auth_cache:get_user_creds(UserName) of
         nil -> [];
         Result -> Result
     end,
-    UserSalt = couch_util:get_value(<<"salt">>, User, <<>>),
+    UserSalt = maps:get(<<"salt">>, User, <<>>),
     case authenticate(Password, User) of
         true ->
             % setup the session cookie
@@ -290,8 +290,8 @@ handle_session_req(#httpd{method='POST', mochi_req=MochiReq}=Req) ->
             end,
             send_json(Req#httpd{req_body=ReqBody}, Code, Headers,
                 #{ok => true,
-                  name => couch_util:get_value(<<"name">>, User, null),
-                  roles => couch_util:get_value(<<"roles">>, User, [])
+                  name => maps:get(<<"name">>, User, null),
+                  roles => maps:get(<<"roles">>, User, [])
                   });
         _Else ->
             % clear the session
@@ -346,16 +346,16 @@ maybe_value(Key, Else, Fun) ->
     [{Key, Fun(Else)}].
 
 authenticate(Pass, UserProps) ->
-    UserSalt = couch_util:get_value(<<"salt">>, UserProps, <<>>),
+    UserSalt = proplists:get_value(<<"salt">>, UserProps, <<>>),
     {PasswordHash, ExpectedHash} =
-        case couch_util:get_value(<<"password_scheme">>, UserProps, <<"simple">>) of
+        case maps:get(<<"password_scheme">>, UserProps, <<"simple">>) of
         <<"simple">> ->
             {couch_passwords:simple(Pass, UserSalt),
-            couch_util:get_value(<<"password_sha">>, UserProps, nil)};
+            maps:get(<<"password_sha">>, UserProps, nil)};
         <<"pbkdf2">> ->
-            Iterations = couch_util:get_value(<<"iterations">>, UserProps, 10000),
+            Iterations = maps:get(<<"iterations">>, UserProps, 10000),
             {couch_passwords:pbkdf2(Pass, UserSalt, Iterations),
-             couch_util:get_value(<<"derived_key">>, UserProps, nil)}
+             maps:get(<<"derived_key">>, UserProps, nil)}
     end,
     couch_passwords:verify(PasswordHash, ExpectedHash).
 

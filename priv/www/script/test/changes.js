@@ -512,7 +512,7 @@ couchTests.changes = function(debug) {
       filters: {
         foo:
           'fun({Doc}, Req) -> ' +
-          '  case couch_util:get_value(<<"value">>, Doc) of' +
+          '  case proplists:get_value(<<"value">>, Doc) of' +
           '  undefined -> false;' +
           '  Value -> (Value rem 2) =:= 0;' +
           '  _ -> false' +

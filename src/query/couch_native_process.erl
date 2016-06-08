@@ -27,7 +27,7 @@
 %
 %  fun({Doc}) ->
 %    % Below, we emit a single record - the _id as key, null as value
-%    DocId = couch_util:get_value(<<"_id">>, Doc, null),
+%    DocId = proplists:get_value(<<"_id">>, Doc, null),
 %    Emit(DocId, null)
 %  end.
 %
@@ -171,10 +171,10 @@ run(_, Unknown) ->
     lager:error("Native Process: Unknown command: ~p~n", [Unknown]),
     throw({error, unknown_command}).
     
-ddoc(State, {_DDoc}, [[<<"run">>, Source], Args]) ->
+ddoc(State, _DDoc, [[<<"run">>, Source], Args]) ->
     Fun = makefun(State, Source),
     {State, (catch apply(Fun, Args))};
-ddoc(State, {DDoc}, [FunPath, Args]) ->
+ddoc(State, DDoc, [FunPath, Args]) ->
     % load fun from the FunPath
     BFun = lists:foldl(fun
         (Key, Props) when is_map(Props) ->
@@ -185,7 +185,7 @@ ddoc(State, {DDoc}, [FunPath, Args]) ->
             throw({error, not_found});
         (_Key, _Fun) ->
             throw({error, malformed_ddoc})
-        end, {DDoc}, FunPath),
+        end, DDoc, FunPath),
     ddoc(State, makefun(State, BFun, {DDoc}), FunPath, Args).
 
 ddoc(State, {_, Fun}, [<<"validate_doc_update">>], Args) ->

@@ -244,8 +244,8 @@ handle_port_message(Daemon, [<<"register">>, Sec, Key])
 handle_port_message(#daemon{name=Name}=Daemon, [<<"log">>, Msg]) ->
     handle_log_message(Name, Msg, <<"info">>),
     {ok, Daemon};
-handle_port_message(#daemon{name=Name}=Daemon, [<<"log">>, Msg, {Opts}]) ->
-    Level = couch_util:get_value(<<"level">>, Opts, <<"info">>),
+handle_port_message(#daemon{name=Name}=Daemon, [<<"log">>, Msg, Opts]) ->
+    Level = maps:get(<<"level">>, Opts, <<"info">>),
     handle_log_message(Name, Msg, Level),
     {ok, Daemon};
 handle_port_message(#daemon{name=Name}=Daemon, Else) ->

@@ -152,7 +152,7 @@ foldl_decode(DecFun, Fd, [Pos|Rest], Md5, Md5Acc, Fun, Acc) ->
     foldl_decode(DecFun, Fd, Rest, Md5, Md5Acc2, Fun, Fun(Bin, Acc)).
 
 gzip_init(Options) ->
-    case couch_util:get_value(compression_level, Options, 0) of
+    case proplists:get_value(compression_level, Options, 0) of
     Lvl when Lvl >= 1 andalso Lvl =< 9 ->
         Z = zlib:open(),
         % 15 = ?MAX_WBITS (defined in the zlib module)
@@ -200,7 +200,7 @@ write(Pid, Bin) ->
 
 init({Fd, Options}) ->
     {EncodingFun, EndEncodingFun} =
-    case couch_util:get_value(encoding, Options, identity) of
+    case proplists:get_value(encoding, Options, identity) of
     identity ->
         identity_enc_dec_funs();
     gzip ->
@@ -212,7 +212,7 @@ init({Fd, Options}) ->
             identity_md5=crypto:hash_init(md5),
             encoding_fun=EncodingFun,
             end_encoding_fun=EndEncodingFun,
-            max_buffer=couch_util:get_value(
+            max_buffer=proplists:get_value(
                 buffer_size, Options, ?DEFAULT_BUFFER_SIZE)
         }
     }.

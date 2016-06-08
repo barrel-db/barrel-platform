@@ -57,16 +57,16 @@ get_user_creds(UserName) ->
         case get_from_cache(UserName) of
         nil ->
             make_admin_doc(HashedPwd, Salt, []);
-        UserProps when is_list(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, couch_util:get_value(<<"roles">>, UserProps))
+        UserProps when is_map(UserProps) ->
+            make_admin_doc(HashedPwd, Salt, maps:get(<<"roles">>, UserProps, []))
         end;
     "-pbkdf2-" ++ HashedPwdSaltAndIterations ->
         [HashedPwd, Salt, Iterations] = string:tokens(HashedPwdSaltAndIterations, ","),
         case get_from_cache(UserName) of
         nil ->
             make_admin_doc(HashedPwd, Salt, Iterations, []);
-        UserProps when is_list(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, Iterations, couch_util:get_value(<<"roles">>, UserProps))
+        UserProps when is_map(UserProps) ->
+            make_admin_doc(HashedPwd, Salt, Iterations, maps:get(<<"roles">>, []))
     end;
     _Else ->
         get_from_cache(UserName)
@@ -106,7 +106,7 @@ get_from_cache(UserName) ->
 validate_user_creds(nil) ->
     nil;
 validate_user_creds(UserCreds) ->
-    case couch_util:get_value(<<"_conflicts">>, UserCreds) of
+    case maps:get(<<"_conflicts">>, UserCreds, undefined) of
     undefined ->
         ok;
     _ConflictList ->
@@ -262,7 +262,7 @@ add_cache_entry(UserName, Credentials, ATime, State) ->
     end,
     true = ets:insert(?BY_ATIME, {ATime, UserName}),
     true = ets:insert(?BY_USER, {UserName, {Credentials, ATime}}),
-    State#state{cache_size = couch_util:get_value(size, ets:info(?BY_USER))}.
+    State#state{cache_size = proplists:get_value(size, ets:info(?BY_USER))}.
 
 free_mru_cache_entries(0) ->
     ok;
@@ -421,7 +421,7 @@ ensure_auth_ddoc_exists(Db, DDocId) ->
         {ok, _Rev} = couch_db:update_doc(Db, AuthDesign, []);
     {ok, Doc} ->
         Obj = barrel_doc:to_json_obj(Doc, []),
-        case maps:get(<<"validate_doc_update">>, Obj, []) of
+        case maps:get(<<"validate_doc_update">>, Obj, #{}) of
             ?AUTH_DB_DOC_VALIDATE_FUNCTION -> ok;
             _ ->
                 Obj1 = Obj#{ <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION},

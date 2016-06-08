@@ -233,13 +233,13 @@ handle_view_list(Req, Db, DDoc, LName, VDDoc, VName, Keys) ->
 
 
 list_cb({meta, Meta}, #lacc{code=undefined} = Acc) ->
-    MetaProps = case couch_util:get_value(total, Meta) of
+    MetaProps = case proplists:get_value(total, Meta) of
         undefined -> [];
         Total -> [{total_rows, Total}]
-    end ++ case couch_util:get_value(offset, Meta) of
+    end ++ case proplists:get_value(offset, Meta) of
         undefined -> [];
         Offset -> [{offset, Offset}]
-    end ++ case couch_util:get_value(update_seq, Meta) of
+    end ++ case proplists:get_value(update_seq, Meta) of
         undefined -> [];
         UpdateSeq -> [{update_seq, UpdateSeq}]
     end,
@@ -286,16 +286,16 @@ fixup_headers(Headers, #lacc{etag=ETag} = Acc) ->
     Acc#lacc{code=Code, headers=Headers3}.
 
 send_list_row(Row, #lacc{qserver = {Proc, _}, resp = Resp} = Acc) ->
-    RowObj = case couch_util:get_value(id, Row) of
+    RowObj = case proplists:get_value(id, Row) of
         undefined -> [];
         Id -> [{id, Id}]
-    end ++ case couch_util:get_value(key, Row) of
+    end ++ case proplists:get_value(key, Row) of
         undefined -> [];
         Key -> [{key, Key}]
-    end ++ case couch_util:get_value(value, Row) of
+    end ++ case proplists:get_value(value, Row) of
         undefined -> [];
         Val -> [{value, Val}]
-    end ++ case couch_util:get_value(doc, Row) of
+    end ++ case proplists:get_value(doc, Row) of
         undefined -> [];
         Doc -> [{doc, Doc}]
     end,
