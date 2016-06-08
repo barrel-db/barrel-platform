@@ -81,15 +81,15 @@ version() -> {ok, Vsn} = application:get_key(barrel, vsn), Vsn.
 
 get_stats() ->
   {ok, #state{start_time=Time,dbs_open=Open}} =
-  gen_server:call(couch_server, get_state),
+  gen_server:call(barrel_server, get_state),
   [{start_time, list_to_binary(Time)}, {dbs_open, Open}].
 
 start_link() ->
-  gen_server:start_link({local, couch_server}, couch_server, [], []).
+  gen_server:start_link({local, barrel_server}, barrel_server, [], []).
 
 open(DbName, Options0) ->
   Options = maybe_add_sys_db_callbacks(DbName, Options0),
-  case gen_server:call(couch_server, {open, DbName, Options}, infinity) of
+  case gen_server:call(barrel_server, {open, DbName, Options}, infinity) of
     {ok, Db} ->
       Ctx = couch_util:get_value(user_ctx, Options, barrel_lib:userctx()),
       {ok, Db#db{user_ctx=Ctx}};
@@ -99,7 +99,7 @@ open(DbName, Options0) ->
 
 create(DbName, Options0) ->
   Options = maybe_add_sys_db_callbacks(DbName, Options0),
-  case gen_server:call(couch_server, {create, DbName, Options}, infinity) of
+  case gen_server:call(barrel_server, {create, DbName, Options}, infinity) of
     {ok, Db} ->
       Ctx = couch_util:get_value(user_ctx, Options, barrel_lib:userctx()),
       {ok, Db#db{user_ctx=Ctx}};
@@ -110,7 +110,7 @@ create(DbName, Options0) ->
   end.
 
 delete(DbName, Options) ->
-  gen_server:call(couch_server, {delete, DbName, Options}, infinity).
+  gen_server:call(barrel_server, {delete, DbName, Options}, infinity).
 
 
 is_admin(User, ClearPwd) ->
@@ -143,7 +143,7 @@ all_databases() ->
   {ok, lists:usort(DbList)}.
 
 all_databases(Fun, Acc0) ->
-  {ok, #state{root_dir=Root}} = gen_server:call(couch_server, get_state),
+  {ok, #state{root_dir=Root}} = gen_server:call(barrel_server, get_state),
   NormRoot = couch_util:normpath(Root),
   FinalAcc = try
                filelib:fold_files(Root, "^[a-z0-9\\_\\$()\\+\\-]*[\\.]couch$", true,
@@ -270,7 +270,7 @@ ddoc_updated(DbName, Event) ->
 
 %% CONFIG hooks
 config_change("couchdb", "database_dir", _) ->
-  gen_server:cast(couch_server, config_change);
+  gen_server:cast(barrel_server, config_change);
 config_change(_, _, _) ->
   ok.
 
