@@ -16,3 +16,7 @@ _build
 .dists
 .idea
 priv/barreljs
+/cover
+/deps
+*.ez
+rel/barrel
