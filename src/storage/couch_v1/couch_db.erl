@@ -362,18 +362,15 @@ check_is_member(#db{user_ctx=UserCtx}=Db) ->
         end
     end.
 
-get_admins(#db{security=SecProps}) ->
-    couch_util:get_value(<<"admins">>, SecProps, {[]}).
+get_admins(#db{security=SecProps}) -> maps:get(<<"admins">>, SecProps, #{}).
 
 get_members(#db{security=SecProps}) ->
     % we fallback to readers here for backwards compatibility
-    couch_util:get_value(<<"members">>, SecProps,
-        couch_util:get_value(<<"readers">>, SecProps, {[]})).
+  maps:get(<<"members">>, SecProps, maps:get_value(<<"readers">>, SecProps, #{})).
 
-get_security(#db{security=SecProps}) ->
-    {SecProps}.
+get_security(#db{security=SecProps}) -> SecProps.
 
-set_security(#db{update_pid=Pid}=Db, {NewSecProps}) when is_list(NewSecProps) ->
+set_security(#db{update_pid=Pid}=Db, NewSecProps) when is_map(NewSecProps) ->
     check_is_admin(Db),
     ok = validate_security_object(NewSecProps),
     ok = gen_server:call(Pid, {set_security, NewSecProps}, infinity),
@@ -383,10 +380,9 @@ set_security(_, _) ->
     throw(bad_request).
 
 validate_security_object(SecProps) ->
-    Admins = couch_util:get_value(<<"admins">>, SecProps, {[]}),
+    Admins = maps:get(<<"admins">>, SecProps, #{}),
     % we fallback to readers here for backwards compatibility
-    Members = couch_util:get_value(<<"members">>, SecProps,
-        couch_util:get_value(<<"readers">>, SecProps, {[]})),
+    Members = maps:get(<<"members">>, SecProps, maps:get(<<"readers">>, SecProps, #{})),
     ok = validate_names_and_roles(Admins),
     ok = validate_names_and_roles(Members),
     ok.
