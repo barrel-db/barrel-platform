@@ -84,7 +84,7 @@ get_stats() ->
   gen_server:call(couch_server, get_state),
   [{start_time, list_to_binary(Time)}, {dbs_open, Open}].
 
-sup_start_link() ->
+start_link() ->
   gen_server:start_link({local, couch_server}, couch_server, [], []).
 
 open(DbName, Options0) ->
