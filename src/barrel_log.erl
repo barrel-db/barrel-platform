@@ -19,7 +19,7 @@
 %% API
 -export([init/0]).
 -export([log_level/1]).
-
+-export([read/2]).
 
 
 %% TODO: add syslog config & custom backends
@@ -55,3 +55,41 @@ log_level("error") -> error;
 log_level("warning") -> warning;
 log_level("info") -> info;
 log_level(_) -> error(badarg).
+
+% Read Bytes bytes from the end of log file, jumping Offset bytes towards
+% the beginning of the file first.
+%
+%  Log File    FilePos
+%  ----------
+% |          |  10
+% |          |  20
+% |          |  30
+% |          |  40
+% |          |  50
+% |          |  60
+% |          |  70 -- Bytes = 20  --
+% |          |  80                 | Chunk
+% |          |  90 -- Offset = 10 --
+% |__________| 100
+
+read(Bytes, Offset) ->
+  LogFileName = barrel_config:get("log", "error_log", "log/error.log"),
+  LogFileSize = filelib:file_size(LogFileName),
+  MaxChunkSize = barrel_config:get_integer("httpd", "log_max_chunk_size", 1000000),
+  case Bytes > MaxChunkSize of
+    true ->
+      throw({bad_request, "'bytes' cannot exceed " ++
+        integer_to_list(MaxChunkSize)});
+    false ->
+      ok
+  end,
+
+  {ok, Fd} = file:open(LogFileName, [read]),
+  Start = lists:max([LogFileSize - Bytes - Offset, 0]),
+
+  % TODO: truncate chopped first line
+  % TODO: make streaming
+
+  {ok, Chunk} = file:pread(Fd, Start, Bytes),
+  ok = file:close(Fd),
+  Chunk.
