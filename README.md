@@ -67,11 +67,11 @@ large data systems through:
 * Request a feature and share ideas
 * Pick an [issue on JIRA](https://barrel-db.atlassian.net/) and get hacking
 * Follow us on [twitter](https://twitter.com/barreldb)
-
+* Join us on [slack](https://barrel-db.slack.com) ([request invite](https://slack.barrel-db.org/))
 
 ## Ownership and License
 
 We use the [C4.1 (Collective Code Construction
 Contract)](http://rfc.zeromq.org/spec:22) process for contributions. Please read and get involved.
 
-Barrel is distributed under the Apache-2.0 license, see [LICENSE](https://github.com/pjhampton/barrel-platform/blob/couch-1.x/LICENSE).
+Barrel is distributed under the Apache-2.0 license, see [LICENSE](https://github.com/barrel-db/barrel-platform/blob/master/LICENSE).

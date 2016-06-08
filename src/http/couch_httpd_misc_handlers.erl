@@ -151,6 +151,7 @@ handle_config_req(#httpd{method='GET', path_parts=[_]}=Req) ->
                 [{list_to_binary(Section), {Values}} | Acc]
     end, [], barrel_config:all()),
     send_json(Req, 200, KVs);
+
 % GET /_config/Section
 handle_config_req(#httpd{method='GET', path_parts=[_,Section]}=Req) ->
     ok = couch_httpd:verify_is_server_admin(Req),
