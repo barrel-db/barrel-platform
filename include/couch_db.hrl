@@ -27,10 +27,9 @@
 
 -define(JSON_ENCODE(V), jsx:encode(V)).
 -define(JSON_DECODE(V),
-        try
-          jsx:decode(V, [return_maps])
+        try jsx:decode(V, [return_maps])
         catch
-          throw:Error ->
+          _:Error ->
             throw({invalid_json, Error})
         end).
 

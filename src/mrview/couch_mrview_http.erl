@@ -145,6 +145,7 @@ design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
             end,
   Args = Args0#mrargs{preflight_fun=ETagFun},
   {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
+                                               io:format("do uery ~p~n", [Args]),
                                                VAcc0 = #vacc{db=Db, req=Req},
                                                couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, VAcc0)
                                            end),
@@ -186,45 +187,45 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
 
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
   Headers = [{"ETag", Acc#vacc.etag}],
-    {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
-    view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
+  {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
+  view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
 view_cb({meta, Meta}, #vacc{resp=Resp}=Acc) ->
-    % Map function starting
-    Parts = case proplists:get_value(total, Meta) of
-              undefined -> [];
-              Total -> [io_lib:format("\"total_rows\":~p", [Total])]
-            end ++ case proplists:get_value(offset, Meta) of
-        undefined -> [];
-        Offset -> [io_lib:format("\"offset\":~p", [Offset])]
-    end ++ case proplists:get_value(update_seq, Meta) of
-             undefined -> [];
-             UpdateSeq -> [io_lib:format("\"update_seq\":~p", [UpdateSeq])]
-           end ++ ["\"rows\":["],
-    Chunk = lists:flatten("{" ++ string:join(Parts, ",") ++ "\r\n"),
-    couch_httpd:send_chunk(Resp, Chunk),
-    {ok, Acc#vacc{resp=Resp, prepend=""}};
+  % Map function starting
+  Parts = case proplists:get_value(total, Meta) of
+            undefined -> [];
+            Total -> [io_lib:format("\"total_rows\":~p", [Total])]
+          end ++ case proplists:get_value(offset, Meta) of
+                   undefined -> [];
+                   Offset -> [io_lib:format("\"offset\":~p", [Offset])]
+                 end ++ case proplists:get_value(update_seq, Meta) of
+                          undefined -> [];
+                          UpdateSeq -> [io_lib:format("\"update_seq\":~p", [UpdateSeq])]
+                        end ++ ["\"rows\":["],
+  Chunk = lists:flatten("{" ++ string:join(Parts, ",") ++ "\r\n"),
+  couch_httpd:send_chunk(Resp, Chunk),
+  {ok, Acc#vacc{resp=Resp, prepend=""}};
 view_cb({row, Row}, #vacc{resp=undefined}=Acc) ->
-    case is_removed(Row) of
-      true -> {ok, Acc};
-      false ->
-        % Reduce function starting
-        Headers = [{"ETag", Acc#vacc.etag}],
-        {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
-        couch_httpd:send_chunk(Resp, ["{\"rows\":[\r\n", row_to_json(Row)]),
-        {ok, #vacc{resp=Resp, prepend=",\r\n"}}
-    end;
+  case is_removed(Row) of
+    true -> {ok, Acc};
+    false ->
+      % Reduce function starting
+      Headers = [{"ETag", Acc#vacc.etag}],
+      {ok, Resp} = couch_httpd:start_json_response(Acc#vacc.req, 200, Headers),
+      couch_httpd:send_chunk(Resp, ["{\"rows\":[\r\n", row_to_json(Row)]),
+      {ok, #vacc{resp=Resp, prepend=",\r\n"}}
+  end;
 view_cb({row, Row}, Acc) ->
-    case is_removed(Row) of
-      true -> {ok, Acc};
-      false ->
-        % Adding another row
-        couch_httpd:send_chunk(Acc#vacc.resp, [Acc#vacc.prepend, row_to_json(Row)]),
-        {ok, Acc#vacc{prepend=",\r\n"}}
-    end;
+  case is_removed(Row) of
+    true -> {ok, Acc};
+    false ->
+      % Adding another row
+      couch_httpd:send_chunk(Acc#vacc.resp, [Acc#vacc.prepend, row_to_json(Row)]),
+      {ok, Acc#vacc{prepend=",\r\n"}}
+  end;
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
-    % Nothing in view
-    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, #{rows => []}),
-    {ok, Acc#vacc{resp=Resp}};
+  % Nothing in view
+  {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, #{rows => []}),
+  {ok, Acc#vacc{resp=Resp}};
 
 
 view_cb(complete, #vacc{resp=Resp}=Acc) ->

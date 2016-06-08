@@ -544,6 +544,7 @@ etag_match(Req, CurrentEtag) when is_binary(CurrentEtag) ->
 etag_match(Req, CurrentEtag) ->
     EtagsToMatch = string:tokens(
         header_value(Req, "If-None-Match", ""), ", "),
+    lager:info("match etag : ~p <> ~p~n", [EtagsToMatch, CurrentEtag]),
     lists:member(CurrentEtag, EtagsToMatch).
 
 etag_respond(Req, CurrentEtag, RespFun) ->

@@ -760,7 +760,7 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
 
 parse_json(V, true) when is_binary(V) ->
     ?JSON_DECODE(V);
-parse_json(V, false) when is_map(V) ->
-    ?JSON_DECODE(V);
+parse_json(V, false) when is_list(V) ->
+    ?JSON_DECODE(list_to_binary(V));
 parse_json(V, _) ->
     V.
