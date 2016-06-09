@@ -55,13 +55,13 @@ defmodule Barrel.Mixfile do
       {:ucol, "~> 2.0"},
       {:gproc, "~> 0.5.0"},
       {:cowboy, "~> 1.0"},
-      {:mochiweb, "~> 2.12"},
+      {:mochiweb, "~> 2.12.2"},
       {:oauth, "~> 1.6", hex: :barrel_oauth},
       {:ibrowse, "~> 4.2", hex: :barrel_ibrowse},
       {:hackney, "~> 1.6"},
-      {:jsx, "~> 2.8"},
-      {:econfig, "~> 0.7.1"},
-      {:exometer_core, "~> 1.4"}
+      {:jsx, "~ 2.8"},
+      {:econfig, "~> 0.7.2"},
+      {:exometer_core, "~> 1.0"}
     ]
   end
 end
