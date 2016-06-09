@@ -59,7 +59,7 @@ defmodule Barrel.Mixfile do
       {:oauth, "~> 1.6", hex: :barrel_oauth},
       {:ibrowse, "~> 4.2", hex: :barrel_ibrowse},
       {:hackney, "~> 1.6"},
-      {:jsx, "~ 2.8"},
+      {:jsx, "~> 2.8.0"},
       {:econfig, "~> 0.7.2"},
       {:exometer_core, "~> 1.0"}
     ]

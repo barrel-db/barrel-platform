@@ -4,7 +4,7 @@
   "conform": {:hex, :conform, "0.16.0"},
   "cowboy": {:hex, :cowboy, "1.0.4"},
   "cowlib": {:hex, :cowlib, "1.0.2"},
-  "econfig": {:hex, :econfig, "0.7.1"},
+  "econfig": {:hex, :econfig, "0.7.2"},
   "edown": {:hex, :edown, "0.7.0"},
   "erlware_commons": {:hex, :erlware_commons, "0.13.0"},
   "exometer_core": {:hex, :exometer_core, "1.4.0"},
