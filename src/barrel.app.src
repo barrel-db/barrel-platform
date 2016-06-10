@@ -21,6 +21,8 @@
         oauth,
         hackney,
         mochiweb,
+        mochicow,
+        cowlib,
         ranch,
         cowboy,
         hooks,

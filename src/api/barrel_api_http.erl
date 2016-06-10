@@ -96,7 +96,10 @@ common_opts(Ip, Port, Config) ->
 
 protocol_opts() ->
   Dispatch = cowboy_router:compile([
-                                    {'_', [{"/", barrel_http_root, []}]}
+                                    {'_', [
+                                      {"/", barrel_http_root, []},
+                                      {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
+                                    ]}
                                    ]),
   [{env, [{dispatch, Dispatch}]}].
 
