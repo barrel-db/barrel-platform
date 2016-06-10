@@ -19,10 +19,15 @@
 -export([binding_spec/3]).
 -export([web_uris/1]).
 
+%% http helpers
+-export([host/1]).
+
+
 %% internal apis
 -export([parse_address/1]).
 -export([transport_opts/4]).
 -export([scheme_to_transport/1]).
+
 
 %% NOTE: until the old mochiweb interface is enabled start on the port 5985.
 -define(DEFAULT_ADDRESS, "127.0.0.1").
@@ -113,6 +118,16 @@ protocol_opts() ->
                                       {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
                                     ]}
                                    ]),
-  [{env, [{dispatch, Dispatch}]}].
+  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware]}].
 
 
+host(Req) ->
+  XHost = barrel_config:get_binary("api", "x_forwarded_host", <<"x-forwarded-host">>),
+  case cowboy_req:header(XHost, Req) of
+    {undefined, _Req} ->
+      case cowboy_req:header(<<"host">>, Req) of
+        {undefined, _} -> <<>>;
+        {Host, _} -> Host
+      end;
+    {Host, _} -> Host
+  end.

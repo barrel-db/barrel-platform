@@ -17,6 +17,8 @@
 -export([to_binary/1]).
 -export([to_error/1]).
 -export([to_atom/1]).
+-export([join/2]).
+
 -export([userctx/0, userctx/1, userctx_get/2,
          userctx_put/2, userctx_put/3, is_userctx/1]).
 -export([adminctx/0]).
@@ -43,6 +45,20 @@ to_error(V) ->
 to_atom(V) when is_atom(V) -> V;
 to_atom(V) when is_list(V) -> list_to_atom(V);
 to_atom(V) when is_binary(V) -> binary_to_atom(V, latin1).
+
+join([], _Separator) ->
+  <<>>;
+join([S], _separator) ->
+  S;
+join(L, Separator) ->
+  iolist_to_binary(join(lists:reverse(L), Separator, [])).
+
+join([], _Separator, Acc) ->
+  Acc;
+join([S | Rest], Separator, []) ->
+  join(Rest, Separator, [S]);
+join([S | Rest], Separator, Acc) ->
+  join(Rest, Separator, [S, Separator | Acc]).
 
 -spec userctx() -> userctx().
 userctx() -> #{}.

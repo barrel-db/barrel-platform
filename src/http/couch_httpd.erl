@@ -175,14 +175,9 @@ handle_request_int(MochiReq, DefaultFun,
 
     {ok, Resp} =
     try
-        case couch_httpd_cors:is_preflight_request(HttpReq) of
-        #httpd{} ->
-            case authenticate_request(HttpReq, AuthHandlers) of
-            #httpd{} = Req ->
-                HandlerFun(Req);
-            Response ->
-                Response
-            end;
+        case authenticate_request(HttpReq, AuthHandlers) of
+        #httpd{} = Req ->
+            HandlerFun(Req);
         Response ->
             Response
         end

@@ -40,6 +40,7 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
+  init_config(),
   Config = barrel_config:section_to_opts("api"),
   WebProcesses = web_processes(barrel_api_http:get_listeners(Config), Config),
    {ok, {{one_for_one, 10, 10}, WebProcesses}}.
@@ -53,5 +54,9 @@ web_processes(Listeners, Config) ->
     {Scheme, Binding, Opts} <- Listeners ]).
 
 web_listeners(Config, Scheme, Binding) -> barrel_api_http:binding_spec(Config, Scheme, Binding).
+
+init_config() ->
+  barrel_cors_middleware:init_config(),
+  ok.
 
 
