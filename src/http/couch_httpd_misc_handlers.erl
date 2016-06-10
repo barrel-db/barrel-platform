@@ -15,11 +15,9 @@
 
 -module(couch_httpd_misc_handlers).
 
--export([handle_welcome_req/1,handle_favicon_req/2,handle_utils_dir_req/2,
-         handle_all_dbs_req/1,handle_restart_req/1,
+-export([handle_welcome_req/1, handle_all_dbs_req/1,handle_restart_req/1,
          handle_uuids_req/1,handle_config_req/1,handle_log_req/1,
-         handle_task_status_req/1, handle_file_req/2,
-         handle_up_req/1]).
+         handle_task_status_req/1,  handle_up_req/1]).
 
 -export([increment_update_seq_req/2]).
 
@@ -46,41 +44,6 @@ handle_welcome_req(#httpd{method='GET'}=Req) ->
         end
     ));
 handle_welcome_req(Req) ->
-    send_method_not_allowed(Req, "GET,HEAD").
-
-handle_favicon_req(#httpd{method='GET'}=Req, DocumentRoot) ->
-    {{Year,Month,Day},Time} = erlang:universaltime(),
-    OneYearFromNow = {{Year+1,Month,Day},Time},
-    CachingHeaders = [
-        %favicon should expire a year from now
-        {"Cache-Control", "public, max-age=31536000"},
-        {"Expires", couch_util:rfc1123_date(OneYearFromNow)}
-    ],
-    couch_httpd:serve_file(Req, "favicon.ico", DocumentRoot, CachingHeaders);
-
-handle_favicon_req(Req, _) ->
-    send_method_not_allowed(Req, "GET,HEAD").
-
-handle_file_req(#httpd{method='GET'}=Req, Document) ->
-    couch_httpd:serve_file(Req, filename:basename(Document), filename:dirname(Document));
-
-handle_file_req(Req, _) ->
-    send_method_not_allowed(Req, "GET,HEAD").
-
-handle_utils_dir_req(#httpd{method='GET'}=Req, DocumentRoot) ->
-    "/" ++ UrlPath = couch_httpd:path(Req),
-    case couch_httpd:partition(UrlPath) of
-    {_ActionKey, "/", RelativePath} ->
-        % GET /_utils/path or GET /_utils/
-        CachingHeaders =
-                [{"Cache-Control", "private, must-revalidate"}],
-        couch_httpd:serve_file(Req, RelativePath, DocumentRoot, CachingHeaders);
-    {_ActionKey, "", _RelativePath} ->
-        % GET /_utils
-        RedirectPath = couch_httpd:path(Req) ++ "/",
-        couch_httpd:send_redirect(Req, RedirectPath)
-    end;
-handle_utils_dir_req(Req, _) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
 handle_all_dbs_req(#httpd{method='GET'}=Req) ->

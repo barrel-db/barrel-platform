@@ -16,6 +16,7 @@
 
 -export([to_binary/1]).
 -export([to_error/1]).
+-export([to_atom/1]).
 -export([userctx/0, userctx/1, userctx_get/2,
          userctx_put/2, userctx_put/3, is_userctx/1]).
 -export([adminctx/0]).
@@ -38,6 +39,10 @@ to_error(V) ->
   catch
     _:_ -> list_to_binary(io_lib:format("~p", [V]))
   end.
+
+to_atom(V) when is_atom(V) -> V;
+to_atom(V) when is_list(V) -> list_to_atom(V);
+to_atom(V) when is_binary(V) -> binary_to_atom(V, latin1).
 
 -spec userctx() -> userctx().
 userctx() -> #{}.

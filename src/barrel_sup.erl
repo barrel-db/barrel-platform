@@ -76,8 +76,15 @@ init([]) ->
          {barrel_api_sup, start_link, []},
          permanent, infinity, supervisor, [barrel_api_sup]},
 
+  Console = case barrel_http_console:is_enabled() of
+              true ->
+                ConsoleCfg = barrel_config:section_to_opts("console"),
+                [barrel_http_console:childspec(ConsoleCfg)];
+              false -> []
+            end,
+
   {ok, { {one_for_all, 0, 10}, [UUIDs, ExtSup, Metrics, Server, Daemons,
-                                Http, Api, Index, Replicator]} }.
+                                Http, Api, Index, Replicator] ++ Console} }.
 
 %%====================================================================
 %% Internal functions
@@ -85,16 +92,20 @@ init([]) ->
 
 
 boot_status() ->
-  Config = barrel_config:get("api"),
+  Config = barrel_config:section_to_opts("api"),
   Listeners = barrel_api_http:get_listeners(Config),
   URIs = barrel_api_http:web_uris(Listeners),
-  io:format("version: ~s.", [barrel_server:version()]),
-  io:format("node id: ~s", [barrel_server:node_id()]),
+  io:format("version: ~s~n", [barrel_server:version()]),
+  io:format("node id: ~s~n", [barrel_server:node_id()]),
   display_uris(URIs),
+  case barrel_http_console:is_enabled() of
+    true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()])
+
+  end,
   write_uri_file(Config, URIs).
 
 display_uris(URIs) ->
-  [io:format("HTPP API started on ~s~n", [URI]) || URI <- URIs].
+  [io:format("HTPP API: ~s~n", [URI]) || URI <- URIs].
 
 write_uri_file(Config, URIs) ->
   case proplists:get_value(uri_file, Config) of

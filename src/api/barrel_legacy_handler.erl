@@ -25,27 +25,36 @@ init(_, _, _) ->  {upgrade, protocol, mochicow_upgrade}.
 
 loop(Req) ->
   Opts = Req:get(opts),
+  Req2 = case proplists:get_value(prefix, Opts) of
+           undefined ->
+             Req;
+           Prefix ->
+             Path = Req:get(raw_path),
+             case re:split(Path, Prefix, [{return, list}]) of
+               ["", NewPath] ->
+                 NewPath1 = case NewPath of
+                              "" -> "/";
+                              _ -> NewPath
+                            end,
+                 mochiweb_request:new(Req:get(socket),
+                   Req:get(method),
+                   NewPath1,
+                   Req:get(version),
+                   Req:get(headers));
+               _Else ->
+                 Req
+             end
+         end,
+
+
+
   DefaultFun = proplists:get_value(default_fun, Opts),
   UrlHandlers = proplists:get_value(url_handlers, Opts),
   DbUrlHandlers = proplists:get_value(db_url_handlers, Opts),
   DesignUrlHandlers = proplists:get_value(design_url_handlers, Opts),
 
-  H = mochiweb_request:get_header_value("Upgrade", Req),
-  IsWebsocket = (H =/= undefined andalso string:to_lower(H) =:= "websocket"),
-  {ok, SocketOptions} = couch_util:parse_term(barrel_config:get("httpd", "socket_options", "[]")),
-
-  case SocketOptions of
-    [] -> ok;
-    _ ->  ok = mochiweb_socket:setopts(Req:get(socket), SocketOptions)
-  end,
-
-  case IsWebsocket of
-    false -> couch_httpd:handle_request(Req, DefaultFun, UrlHandlers, DbUrlHandlers, DesignUrlHandlers);
-    true ->
-      {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(Req,
-        fun barrel_websocket:ws_loop/3),
-      ReentryWs([])
-  end.
+  couch_httpd:handle_request(Req2, DefaultFun, UrlHandlers, DbUrlHandlers,
+    DesignUrlHandlers).
 
 options() ->
   DefaultSpec = "{couch_httpd_db, handle_request}",

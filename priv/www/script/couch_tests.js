@@ -11,7 +11,7 @@
 // the License.
 
 
-CouchDB.urlPrefix = "..";
+CouchDB.urlPrefix = "/dbs";
 var couchTests = {};
 
 function loadTest(file) {

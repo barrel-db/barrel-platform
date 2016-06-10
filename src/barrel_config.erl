@@ -39,6 +39,8 @@
   pget_float/2, pget_float/3, pget_list/2, pget_list/3,
   pget_binary/2, pget_binary/3]).
 
+-export([section_to_opts/1]).
+
 %% internal usage
 -export([handle_config_change/1]).
 
@@ -86,6 +88,9 @@ get_binary(Section, Key, Default) -> econfig:get_binary(?CFGNAME, Section, Key, 
 subscribe() -> econfig:subscribe(?CFGNAME).
 
 unsubscribe() -> econfig:unsubscribe(?CFGNAME).
+
+
+section_to_opts(Name) -> [{barrel_lib:to_atom(K), V} || {K, V} <- barrel_config:get(Name)].
 
 
 pget_boolean(Key, Props) -> pget_boolean(Key, Props, undefined).

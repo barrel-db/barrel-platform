@@ -17,7 +17,7 @@
 -include_lib("couch_db.hrl").
 -include("couch_httpd.hrl").
 
--export([start_link/1,  handle_request/5]).
+-export([handle_request/5]).
 
 -export([header_value/2,header_value/3,qs_value/2,qs_value/3,qs/1,qs_json_value/3]).
 -export([path/1,absolute_uri/2,body_length/1]).
@@ -37,120 +37,6 @@
 -export([accepted_encodings/1,handle_request_int/5,validate_referer/1,validate_ctype/2]).
 -export([http_1_0_keep_alive/2]).
 -export([set_auth_handlers/0]).
-
-start_link(couch_http) ->
-    Port = barrel_config:get_integer("httpd", "port", 5984),
-    start_link(couch_http, [{port, Port}]);
-start_link(couch_https) ->
-    Port = barrel_config:get_integer("ssl", "port", 6984),
-    CertFile = barrel_config:get("ssl", "cert_file", nil),
-    KeyFile = barrel_config:get("ssl", "key_file", nil),
-    Options = case CertFile /= nil andalso KeyFile /= nil of
-        true ->
-            SslOpts = [{certfile, CertFile}, {keyfile, KeyFile}],
-
-            %% set password if one is needed for the cert
-            SslOpts1 = case barrel_config:get("ssl", "password", nil) of
-                nil -> SslOpts;
-                Password ->
-                    SslOpts ++ [{password, Password}]
-            end,
-            % do we verify certificates ?
-            FinalSslOpts = case barrel_config:get("ssl", "verify_ssl_certificates", "false") of
-                "false" -> SslOpts1;
-                "true" ->
-                    case barrel_config:get("ssl", "cacert_file", nil) of
-                        nil ->
-                            throw({error, missing_cacerts});
-                        CaCertFile ->
-                            Depth = barrel_config:get_integer("ssl", "ssl_certificate_max_depth", 1),
-                            FinalOpts = [
-                                {cacertfile, CaCertFile},
-                                {depth, Depth},
-                                {verify, verify_peer}],
-                            % allows custom verify fun.
-                            case barrel_config:get("ssl", "verify_fun", nil) of
-                                nil -> FinalOpts;
-                                SpecStr ->
-                                    FinalOpts
-                                    ++ [{verify_fun, make_arity_3_fun(SpecStr)}]
-                            end
-                    end
-            end,
-
-            [{port, Port}, {ssl, true}, {ssl_opts, FinalSslOpts}];
-        false ->
-            throw({error, missing_certs})
-    end,
-    start_link(couch_https, Options).
-
-start_link(Name, Options) ->
-    % read config and register for configuration changes
-
-    % just stop if one of the config settings change. couch_sup
-    % will restart us and then we will pick up the new settings.
-
-    BindAddress = barrel_config:get("httpd", "bind_address", any),
-    validate_bind_address(BindAddress),
-    DefaultSpec = "{couch_httpd_db, handle_request}",
-    DefaultFun = make_arity_1_fun(
-        barrel_config:get("httpd", "default_handler", DefaultSpec)
-    ),
-
-    UrlHandlersList = lists:map(
-        fun({UrlKey, SpecStr}) ->
-            {list_to_binary(UrlKey), make_arity_1_fun(SpecStr)}
-        end, barrel_config:get("httpd_global_handlers")),
-
-    DbUrlHandlersList = lists:map(
-        fun({UrlKey, SpecStr}) ->
-            {list_to_binary(UrlKey), make_arity_2_fun(SpecStr)}
-        end, barrel_config:get("httpd_db_handlers")),
-
-    DesignUrlHandlersList = lists:map(
-        fun({UrlKey, SpecStr}) ->
-            {list_to_binary(UrlKey), make_arity_3_fun(SpecStr)}
-        end, barrel_config:get("httpd_design_handlers")),
-
-    UrlHandlers = dict:from_list(UrlHandlersList),
-    DbUrlHandlers = dict:from_list(DbUrlHandlersList),
-    DesignUrlHandlers = dict:from_list(DesignUrlHandlersList),
-    {ok, ServerOptions} = couch_util:parse_term(barrel_config:get("httpd", "server_options", "[]")),
-    {ok, SocketOptions} = couch_util:parse_term(barrel_config:get("httpd", "socket_options", "[]")),
-
-    set_auth_handlers(),
-
-    % add barrel log event handler
-    lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
-
-    Loop = fun(Req)->
-        H = mochiweb_request:get_header_value("Upgrade", Req),
-        IsWebsocket = (H =/= undefined andalso string:to_lower(H) =:= "websocket"),
-        case SocketOptions of
-        [] ->
-            ok;
-        _ ->
-            ok = mochiweb_socket:setopts(Req:get(socket), SocketOptions)
-        end,
-
-        case IsWebsocket of
-        false -> apply(?MODULE, handle_request, [
-                    Req, DefaultFun, UrlHandlers, DbUrlHandlers, DesignUrlHandlers
-                 ]);
-        true -> {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
-                                  Req, fun barrel_websocket:ws_loop/3),
-                ReentryWs([])
-        end
-    end,
-
-    % set mochiweb options
-    FinalOptions = lists:append([Options, ServerOptions, [
-            {loop, Loop},
-            {name, Name},
-            {ip, BindAddress}]]),
-
-    % launch mochiweb
-    mochiweb_http:start_link(FinalOptions).
 
 set_auth_handlers() ->
     AuthenticationSrcs = make_fun_spec_strs(barrel_config:get("httpd", "authentication_handlers", "")),
@@ -204,6 +90,8 @@ handle_request_int(MochiReq, DefaultFun,
     % for the path, use the raw path with the query string and fragment
     % removed, but URL quoting left intact
     RawUri = MochiReq:get(raw_path),
+
+
     {"/" ++ Path, _, _} = mochiweb_util:urlsplit_path(RawUri),
 
     % get requested path

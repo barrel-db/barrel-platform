@@ -40,7 +40,7 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  Config = barrel_config:get("api"),
+  Config = barrel_config:section_to_opts("api"),
   WebProcesses = web_processes(barrel_api_http:get_listeners(Config), Config),
    {ok, {{one_for_one, 10, 10}, WebProcesses}}.
 
