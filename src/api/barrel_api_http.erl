@@ -118,7 +118,8 @@ protocol_opts() ->
                                       {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
                                     ]}
                                    ]),
-  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware]}].
+  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware,
+    cowboy_router, cowboy_handler]}].
 
 
 host(Req) ->

@@ -40,11 +40,11 @@ execute(Req, Env) ->
     {<<"OPTIONS">>, Req2} when IsEnabled =:= true ->
       {Origin, Req3} = cowboy_req:header(<<"origin">>, Req2),
       handle_preflight_request(Origin, Req3, Env);
-    _ when IsEnabled =:= true ->
-      {Origin, _} = cowboy_req:header(<<"origin">>, Req),
-      apply_cors_headers(Origin, Req, Env);
-    _ ->
-      {ok, Req, Env}
+    {_, Req2} when IsEnabled =:= true ->
+      {Origin, Req2} = cowboy_req:header(<<"origin">>, Req),
+      apply_cors_headers(Origin, Req2, Env);
+    {_, Req2} ->
+      {ok, Req2, Env}
   end.
 
 init_config() ->
@@ -118,13 +118,14 @@ check_req_headers(Req, Headers) ->
       end
   end.
 
-apply_cors_headers(undefined, Req, Env) -> {ok, Req, Env};
+apply_cors_headers(undefined, Req, Env) ->
+  {ok, Req, Env};
 apply_cors_headers(Origin, Req, Env) ->
   Host = barrel_api_http:host(Req),
   case barrel_cors_config:allow_all() of
     true -> do_apply_cors_headers(Origin, Host, Req, Env);
     false ->
-      case match_origin(barrel_cors_config:allows_origins(), Origin) of
+      case match_origin(barrel_cors_config:allow_origins(), Origin) of
         true -> do_apply_cors_headers(Origin, Host, Req, Env);
         false -> {ok, Req, Env}
       end
