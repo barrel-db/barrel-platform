@@ -4,7 +4,7 @@
   "conform": {:hex, :conform, "0.16.0", "f6d6b207c693f2f939af8edeab7c735c4fd48552c63c0a019a52b6d2d98a1ca4", [:mix], [{:neotoma, "~> 1.7.3", [hex: :neotoma, optional: false]}]},
   "cowboy": {:git, "git://github.com/extend/cowboy.git", "d08c2ab39d38c181abda279d5c2cadfac33a50c1", [tag: "1.0.4"]},
   "cowlib": {:git, "https://github.com/ninenines/cowlib.git", "d544a494af4dbc810fc9c15eaf5cc050cced1501", [ref: "1.0.0"]},
-  "econfig": {:hex, :econfig, "0.7.2", "3a1c7b0b4546cf2071a2eb849d6b3fc1d9090d348ee2afe4ddf901854a49d9c6", [:rebar3], []},
+  "econfig": {:hex, :econfig, "0.7.3", "b60f285efa39c16bdd15a66477390d8e7dfb9a2e60fa5a6c512727e9704ba371", [:rebar3], []},
   "edown": {:hex, :edown, "0.7.0", "6803599606b10f8e328d6d60c44cd16244cd2429908894c415fce4211c3bfefd", [:rebar, :rebar, :make], []},
   "erlware_commons": {:hex, :erlware_commons, "0.13.0", "b86d493f3c3e52acba16f0a78900c12525e9eb46db3450b0d25b419aa8221115", [:rebar], []},
   "exometer_core": {:hex, :exometer_core, "1.4.0", "a546ccd38be910de6ea75ea95b724b6b2db513c26f02e30919b25eb19651815a", [:rebar3], [{:setup, "1.7.0", [hex: :setup, optional: false]}, {:parse_trans, "2.9.0", [hex: :parse_trans, optional: false]}, {:lager, "3.0.2", [hex: :lager, optional: false]}, {:folsom, "0.8.3", [hex: :folsom, optional: false]}, {:edown, "0.7.0", [hex: :edown, optional: false]}]},
