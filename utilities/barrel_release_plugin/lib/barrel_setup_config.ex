@@ -5,6 +5,12 @@ defmodule BarrelRelease.SetupConfig do
     file = File.open! destination, [:write]
     IO.binwrite file, new_config
   end
+  
+  def update_config(source, destination, vars) do
+    new_config = Stache.eval_file(source, vars)
+    file = File.open! destination, [:write]
+    IO.binwrite file, new_config
+  end
 
   def get_vars(path) do
     {:ok, terms} = :file.consult(path)

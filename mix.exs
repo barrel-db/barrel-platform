@@ -60,6 +60,7 @@ defmodule Barrel.Mixfile do
       {:ibrowse, "~> 4.2", hex: :barrel_ibrowse},
       {:hackney, "~> 1.6"},
       {:jsx, "~> 2.8.0"},
+      {:stache, "~> 0.2.1"},
       {:econfig, "~> 0.7.2"},
       {:exometer_core, "~> 1.0"}
     ]
