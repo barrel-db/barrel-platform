@@ -20,6 +20,10 @@
 -export([init/3, loop/1]).
 -export([options/0]).
 
+-export([apply_cors_headers/2]).
+-export([host/1]).
+
+-include_lib("couch_db.hrl").
 
 init(_, _, _) ->  {upgrade, protocol, mochicow_upgrade}.
 
@@ -45,8 +49,6 @@ loop(Req) ->
                  Req
              end
          end,
-
-
 
   DefaultFun = proplists:get_value(default_fun, Opts),
   UrlHandlers = proplists:get_value(url_handlers, Opts),
@@ -97,3 +99,47 @@ set_auth_handlers() ->
   AuthHandlers = lists:map(
     fun(A) -> {couch_httpd:make_arity_1_fun(A), list_to_binary(A)} end, AuthenticationSrcs),
   ok = application:set_env(couch_httpd, auth_handlers, AuthHandlers).
+
+apply_cors_headers(#httpd{mochi_req=MochiReq}, Headers) ->
+  apply_cors_headers(MochiReq, Headers);
+apply_cors_headers(Req, Headers) ->
+  case barrel_cors_config:enabled() of
+    true ->
+      Origin = Req:get_header_value("Origin"),
+      Host = host(Req),
+      AllowAll = barrel_cors_config:allow_all(),
+      case Origin of
+        undefined -> Headers;
+        _ when AllowAll =:= true ->
+          do_apply_cors_headers(barrel_lib:to_binary(Origin), Host, Headers);
+        _ ->
+          Origin1 = barrel_lib:to_binary(Origin),
+          case barrel_cors_middleware:match_origin(barrel_cors_config:allow_origins(), Origin1) of
+            true ->
+              do_apply_cors_headers(Origin1, Host, Headers);
+            false ->
+              Headers
+          end
+      end;
+    false ->
+      Headers
+  end.
+
+do_apply_cors_headers(Origin, Host, Headers0) ->
+  Headers = [{"Access-Control-Allow-Origin", binary_to_list(Origin)} | Headers0],
+  case barrel_cors_middleware:allow_credentials(Origin, Host) of
+    true -> [{"Access-Control-Allow-Credentials", "true"} | Headers];
+    false -> Headers
+  end.
+
+
+host(Req) ->
+  XHost = barrel_config:get("api", "x_forwarded_host", "X-Forwarded-Host"),
+  case Req:get_header_value(XHost) of
+    undefined ->
+      case Req:get_header_value("Host") of
+        undefined -> <<>>;
+        Value -> barrel_lib:to_binary(Value)
+      end;
+    Value -> barrel_lib:to_binary(Value)
+  end.

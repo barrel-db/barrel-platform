@@ -24,6 +24,10 @@
 -export([execute/2]).
 -export([init_config/0]).
 
+%% internal
+-export([match_origin/2]).
+-export([allow_credentials/2]).
+
 -define(MAX_AGE, 1728000). %% 20 days
 -define(HEADERS_ALLOWED,  [<<"Accept">>, <<"Accept-Language">>, <<"Content-Type">>,
   <<"Expires">>, <<"Last-Modified">>, <<"Pragma">>, <<"Origin">>, <<"Content-Length">>,

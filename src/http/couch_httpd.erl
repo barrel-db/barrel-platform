@@ -318,7 +318,7 @@ serve_file(#httpd{mochi_req=MochiReq}=Req, RelativePath, DocumentRoot,
         ++ couch_httpd_auth:cookie_auth_header(Req, [])
         ++ ExtraHeaders,
     {ok, MochiReq:serve_file(RelativePath, DocumentRoot,
-            couch_httpd_cors:cors_headers(Req, ResponseHeaders))}.
+            barrel_legacy_handler:apply_cors_headers(Req, ResponseHeaders))}.
 
 qs_value(Req, Key) ->
     qs_value(Req, Key, undefined).
@@ -471,7 +471,7 @@ start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
     exometer:update([httpd_status_codes, Code], 1),
     Headers1 = Headers ++ server_header() ++
                couch_httpd_auth:cookie_auth_header(Req, Headers),
-    Headers2 = couch_httpd_cors:cors_headers(Req, Headers1),
+    Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
     Resp = MochiReq:start_response_length({Code, Headers2, Length}),
     case MochiReq:get(method) of
     'HEAD' -> throw({http_head_abort, Resp});
@@ -484,7 +484,7 @@ start_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     exometer:update([httpd_status_codes, Code], 1),
     CookieHeader = couch_httpd_auth:cookie_auth_header(Req, Headers),
     Headers1 = Headers ++ server_header() ++ CookieHeader,
-    Headers2 = couch_httpd_cors:cors_headers(Req, Headers1),
+    Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
     Resp = MochiReq:start_response({Code, Headers2}),
     case MochiReq:get(method) of
         'HEAD' -> throw({http_head_abort, Resp});
@@ -519,7 +519,7 @@ start_chunked_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     Headers2 = Headers1 ++ server_header() ++
                couch_httpd_auth:cookie_auth_header(Req, Headers1),
-    Headers3 = couch_httpd_cors:cors_headers(Req, Headers2),
+    Headers3 = barrel_legacy_handler:apply_cors_headers(Req, Headers2),
     Resp = MochiReq:respond({Code, Headers3, chunked}),
     case MochiReq:get(method) of
     'HEAD' -> throw({http_head_abort, Resp});
@@ -550,7 +550,7 @@ send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     end,
     Headers2 = Headers1 ++ server_header() ++
                couch_httpd_auth:cookie_auth_header(Req, Headers1),
-    Headers3 = couch_httpd_cors:cors_headers(Req, Headers2),
+    Headers3 = barrel_legacy_handler:apply_cors_headers(Req, Headers2),
 
     {ok, MochiReq:respond({Code, Headers3, Body})}.
 
@@ -946,12 +946,4 @@ check_for_last(#mp{buffer=Buffer, data_fun=DataFun}=Mp) ->
         {Data, DataFun2} = DataFun(),
         check_for_last(Mp#mp{buffer= <<Buffer/binary, Data/binary>>,
                 data_fun = DataFun2})
-    end.
-
-validate_bind_address(any) -> "0.0.0.0";
-validate_bind_address(Address) ->
-    case inet_parse:address(Address) of
-        {ok, _} -> ok;
-        _ ->
-            throw({error, {invalid_bind_address, Address}})
     end.
