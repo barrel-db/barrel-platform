@@ -6,7 +6,7 @@ defmodule ReleaseManager.Plugin.BarrelRelease do
     info result
   end
 
-  def after_release(%Config{name: app, version: version, relx_config: relx_config} = config) do
+  def after_release(%Config{name: app, version: version} = _config) do
     {result, _errcode} = System.cmd("make", ["-C", "c_src/barrel_js", "clean"])
     info result
     BarrelRelease.SetupConfig.update_config("config/sys.config", "rel/#{app}/releases/#{version}/sys.config")
