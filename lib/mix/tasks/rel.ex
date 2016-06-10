@@ -1,11 +1,21 @@
 defmodule Mix.Tasks.Rel do
-use Mix.Task
+  use Mix.Task
 
-  @shortdoc "Barrel development release"
+  @shortdoc "Barrel release manager"
 
   def run(_args) do
-    BarrelRelease.SetupConfig.update_config("config/relx.config", "rel/relx.config", %{dev_mode: "false", include_erts: "true"})
-    System.put_env("MIX_ENV", "PROD")
+    case Mix.env do
+        :prod -> config(:rel)
+        _ -> config(:devrel)
+    end
     System.cmd("mix", ["release"], into: IO.stream(:stdio, :line))
+  end
+
+  def config(:devrel) do
+    BarrelRelease.SetupConfig.update_config("config/relx.config", "rel/relx.config", %{dev_mode: "true", include_erts: "false"})
+  end
+
+  def config(:rel) do
+    BarrelRelease.SetupConfig.update_config("config/relx.config", "rel/relx.config", %{dev_mode: "false", include_erts: "true"})
   end
 end
