@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_root).
+-module(barrel_root_handler).
 
 -export([init/3]).
 -export([rest_init/2]).

@@ -24,7 +24,8 @@
 -export([node_info/0,
          node_id/0,
          version/0,
-         node_name/0]).
+         node_name/0,
+         vendors_info/0]).
 
 -export([all_databases/0, all_databases/2]).
 -export([is_admin/2,
@@ -59,10 +60,12 @@
 
 
 node_info() ->
+
   #{ <<"name">> => <<"barrel">>,
      <<"cluster_name">> => node_name(),
      <<"uuid">> => node_id(),
-     <<"version">> => #{ <<"number">> => list_to_binary(version()) }
+     <<"version">> => #{ <<"number">> => list_to_binary(version())},
+     <<"vendor">> => vendors_info()
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.
@@ -78,6 +81,12 @@ node_id() ->
   end.
 
 version() -> {ok, Vsn} = application:get_key(barrel, vsn), Vsn.
+
+vendors_info() ->
+  case barrel_config:get("vendor") of
+    [] -> #{};
+    Properties -> maps:from_list([{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties])
+  end.
 
 get_stats() ->
   {ok, #state{start_time=Time,dbs_open=Open}} =

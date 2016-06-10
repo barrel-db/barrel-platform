@@ -32,8 +32,6 @@ start_link() ->
     %% register to config events
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
-    %% write_uris
-    couch_httpd_util:write_uri_file(),
 
     {ok, Pid}.
 
@@ -78,12 +76,12 @@ reload_listeners() ->
 
 -spec init([]) -> {ok, {{one_for_one, 5, 10}, [supervisor:child_spec()]}}.
 init([]) ->
-    Listeners = [listener_spec(Id) || Id <- couch_httpd_util:get_listeners()],
+    %%Listeners = [listener_spec(Id) || Id <- couch_httpd_util:get_listeners()],
 
   Vhost = {couch_httpd_vhost,
              {couch_httpd_vhost, start_link, []},
              permanent, brutal_kill, worker, [couch_httpd_vhost]},
-    {ok, {{one_for_one, 9, 10}, Listeners ++ [Vhost]}}.
+    {ok, {{one_for_one, 9, 10}, [Vhost]}}.
 
 
 listener_spec(Id) ->

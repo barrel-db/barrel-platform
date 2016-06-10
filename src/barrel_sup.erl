@@ -22,9 +22,7 @@
 start_link() ->
   case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
     {ok, Pid} ->
-      io:format("version: ~s.", [barrel_server:version()]),
-      io:format("node id: ~s", [barrel_server:node_id()]),
-      couch_httpd_util:display_uris(),
+      boot_status(),
       {ok, Pid};
     Else ->
       Else
@@ -84,3 +82,32 @@ init([]) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+
+boot_status() ->
+  Config = barrel_config:get("api"),
+  Listeners = barrel_api_http:get_listeners(Config),
+  URIs = barrel_api_http:web_uris(Listeners),
+  io:format("version: ~s.", [barrel_server:version()]),
+  io:format("node id: ~s", [barrel_server:node_id()]),
+  display_uris(URIs),
+  write_uri_file(Config, URIs).
+
+display_uris(URIs) ->
+  [io:format("HTPP API started on ~s~n", [URI]) || URI <- URIs].
+
+write_uri_file(Config, URIs) ->
+  case proplists:get_value(uri_file, Config) of
+    undefined -> ok;
+    Filepath ->
+      Lines = [io_lib:format("~s~n", [URI]) || URI <- URIs],
+      case file:write_file(Filepath, Lines) of
+        ok -> ok;
+        {error, eacces} ->
+          lager:info("Permission error when writing to URI file ~s", [Filepath]),
+          throw({file_permission_error, Filepath});
+        Error ->
+          lager:info("Failed to write to URI file ~s: ~p~n", [Filepath, Error]),
+          throw(Error)
+      end
+  end.

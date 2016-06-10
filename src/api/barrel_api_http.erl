@@ -17,6 +17,7 @@
 
 -export([get_listeners/1]).
 -export([binding_spec/3]).
+-export([web_uris/1]).
 
 %% NOTE: until the old mochiweb interface is enabled start on the port 5985.
 -define(DEFAULT_ADDRESS, "127.0.0.1").
@@ -34,7 +35,7 @@ get_listeners(Config) ->
 
 get_listeners(_Config, Scheme) ->
   Listeners = barrel_config:prefix(lists:flatten(atom_to_list(Scheme) ++ " ")),
-  lager:info("listeners are ~p~n", [Listeners]),
+  io:format("listeners for ~p are ~p~n", [Scheme, Listeners]),
   lists:foldl(fun(Name, Acc) ->
       Opts = barrel_config:get(Name),
       case catch barrel_config:pget_int("port", Opts) of
@@ -59,6 +60,13 @@ binding_spec(Config, Scheme, Binding) ->
   ProtoOpts = protocol_opts(),
   ranch:child_spec(Ref, NbAcceptors, Transport, TransportOpts, cowboy_protocol, ProtoOpts).
 
+web_uris([]) -> [];
+web_uris(Listeners) ->
+  Acc = lists:foldl(fun({Scheme, {Addr, Port}, _Opt}, Acc1) ->
+                      URI = lists:flatten([atom_to_list(Scheme), "://", Addr, integer_to_list(Port)]),
+                      [URI | Acc1]
+                    end, [], Listeners),
+  lists:usort(Acc).
 
 %% @doc convenient function to parse an address
 -spec parse_address(AddrIn) -> AddrOut when
@@ -89,15 +97,15 @@ scheme_to_transport(http) -> ranch_tcp;
 scheme_to_transport(https) -> ranch_ssl.
 
 common_opts(Ip, Port, Config) ->
-  Backlog = barrel_config:pget_int(backlog, Config, ?DEFAULT_BACKLOG),
-  Nodelay = barrel_config:pget_boolean(nodelay, Config, ?DEFAULT_NODELAY),
-  MaxConn = barrel_config:pget_int(max_connections, Config, ?DEFAULT_MAX_CONNECTIONS),
+  Backlog = barrel_config:pget_int("backlog", Config, ?DEFAULT_BACKLOG),
+  Nodelay = barrel_config:pget_boolean("nodelay", Config, ?DEFAULT_NODELAY),
+  MaxConn = barrel_config:pget_int("max_connections", Config, ?DEFAULT_MAX_CONNECTIONS),
   [{max_connections, MaxConn}, {ip, Ip}, {port, Port}, {backlog, Backlog}, {nodelay, Nodelay}].
 
 protocol_opts() ->
   Dispatch = cowboy_router:compile([
                                     {'_', [
-                                      {"/", barrel_http_root, []},
+                                      {"/", barrel_root_handler, []},
                                       {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
                                     ]}
                                    ]),

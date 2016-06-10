@@ -8,7 +8,7 @@
   {git,"https://github.com/ninenines/cowlib.git",
        {ref,"d544a494af4dbc810fc9c15eaf5cc050cced1501"}},
   2},
- {<<"econfig">>,{pkg,<<"econfig">>,<<"0.7.2">>},0},
+ {<<"econfig">>,{pkg,<<"econfig">>,<<"0.7.3">>},0},
  {<<"edown">>,{pkg,<<"edown">>,<<"0.7.0">>},2},
  {<<"exometer_core">>,{pkg,<<"exometer_core">>,<<"1.0.0">>},0},
  {<<"folsom">>,{pkg,<<"folsom">>,<<"0.8.3">>},1},
