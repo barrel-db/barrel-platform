@@ -56,10 +56,6 @@ init([]) ->
              {barrel_daemons_sup, start_link, []},
              permanent, infinity, supervisor, [barrel_daemons_sup]},
 
-  Http = {couch_httpd_sup,
-          {couch_httpd_sup, start_link, []},
-          permanent, infinity, supervisor, [couch_httpd_sup]},
-
   Index = {couch_index_sup,
            {couch_index_sup, start_link, []},
            permanent, infinity, supervisor, [couch_index_sup]},
@@ -84,7 +80,7 @@ init([]) ->
             end,
 
   {ok, { {one_for_all, 0, 10}, [UUIDs, ExtSup, Metrics, Server, Daemons,
-                                Http, Api, Index, Replicator] ++ Console} }.
+                                Api, Index, Replicator] ++ Console} }.
 
 %%====================================================================
 %% Internal functions

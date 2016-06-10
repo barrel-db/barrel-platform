@@ -34,7 +34,7 @@
         send_error/4,send_error/5, send_error/6, send_redirect/2,send_chunked_error/2]).
 -export([send_json/2,send_json/3,send_json/4,last_chunk/1,parse_multipart_request/3]).
 -export([send_json2/2,send_json2/3,send_json2/4]).
--export([accepted_encodings/1,handle_request_int/5,validate_referer/1,validate_ctype/2]).
+-export([accepted_encodings/1, validate_referer/1, validate_ctype/2]).
 -export([http_1_0_keep_alive/2]).
 -export([set_auth_handlers/0]).
 
@@ -76,33 +76,14 @@ make_fun_spec_strs(SpecStr) ->
 
 handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
     DesignUrlHandlers) ->
-    %% reset rewrite count for new request
-    erlang:put(?REWRITE_COUNT, 0),
 
-    MochiReq1 = couch_httpd_vhost:dispatch_host(MochiReq),
-
-    handle_request_int(MochiReq1, DefaultFun,
-                UrlHandlers, DbUrlHandlers, DesignUrlHandlers).
-
-handle_request_int(MochiReq, DefaultFun,
-            UrlHandlers, DbUrlHandlers, DesignUrlHandlers) ->
     Begin = os:timestamp(),
     % for the path, use the raw path with the query string and fragment
     % removed, but URL quoting left intact
-    RawUri = MochiReq:get(raw_path),
+    RequestedPath = MochiReq:get(raw_path),
 
 
-    {"/" ++ Path, _, _} = mochiweb_util:urlsplit_path(RawUri),
-
-    % get requested path
-    RequestedPath = case MochiReq:get_header_value("x-couchdb-vhost-path") of
-        undefined ->
-            case MochiReq:get_header_value("x-couchdb-requested-path") of
-                undefined -> RawUri;
-                R -> R
-            end;
-        P -> P
-    end,
+    {"/" ++ Path, _, _} = mochiweb_util:urlsplit_path(RequestedPath),
 
     HandlerKey =
     case mochiweb_util:partition(Path, "/") of
@@ -113,7 +94,7 @@ handle_request_int(MochiReq, DefaultFun,
     end,
     lager:debug("~p ~s ~p from ~p~nHeaders: ~p", [
         MochiReq:get(method),
-        RawUri,
+        RequestedPath,
         MochiReq:get(version),
         MochiReq:get(peer),
         mochiweb_headers:to_list(MochiReq:get(headers))
@@ -737,12 +718,7 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
                                 true ->
                                     % Redirect to the path the user requested, not
                                     % the one that is used internally.
-                                    UrlReturnRaw = case MochiReq:get_header_value("x-couchdb-vhost-path") of
-                                    undefined ->
-                                        MochiReq:get(path);
-                                    VHostPath ->
-                                        VHostPath
-                                    end,
+                                    UrlReturnRaw = MochiReq:get(path),
                                     RedirectLocation = lists:flatten([
                                         AuthRedirect,
                                         "?return=", couch_util:url_encode(UrlReturnRaw),
