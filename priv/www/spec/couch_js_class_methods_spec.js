@@ -279,7 +279,7 @@ describe 'CouchDB class'
       
       it 'should prepend the urlPrefix to the uri'
         var oldPrefix = CouchDB.urlPrefix;
-        CouchDB.urlPrefix = "/dbs";
+        CouchDB.urlPrefix = "/_utils";
        
         var xhr = CouchDB.newXhr();
         stub(CouchDB, 'newXhr').and_return(xhr);

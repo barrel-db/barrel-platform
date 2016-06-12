@@ -510,7 +510,7 @@ function $$(node) {
 
   }
 
-  $.couch.urlPrefix = "/dbs";
+  $.couch.urlPrefix = "../dbs";
   $.futon = $.futon || {};
   $.extend($.futon, {
     navigation: new Navigation(),

@@ -26,7 +26,21 @@ specific language governing permissions and limitations under the License.
     <script src="script/futon.js"></script>
     <script src="script/couch.js"></script>
     <script src="script/couch_test_runner.js"></script>
-    <script>
+
+  </head>
+  <body><div id="wrap">
+    <h1>
+      <a href="index.html">Overview</a>
+      <strong>Verify Install</strong>
+    </h1>
+    <div id="content">
+      <ul id="toolbar">
+        <li><button class="run" id="run">Verify Your Installation.</button><span id="result"></span></li>
+      </ul>
+    </div>
+  </div></body>
+
+      <script>
     $(function($) {
       $("#result").html("");
       $("#run").click(verify_install);
@@ -45,7 +59,7 @@ specific language governing permissions and limitations under the License.
     }
 
     function tests() {
-      CouchDB.urlPrefix = "/dbs";
+      CouchDB.urlPrefix = "../dbs";
       var db = new CouchDB("test_suite_db", {"X-Couch-Full-Commit":"false"});
 
       // cleanup, ignore the 404
@@ -104,16 +118,4 @@ specific language governing permissions and limitations under the License.
       }
     }
     </script>
-  </head>
-  <body><div id="wrap">
-    <h1>
-      <a href="index.html">Overview</a>
-      <strong>Verify Install</strong>
-    </h1>
-    <div id="content">
-      <ul id="toolbar">
-        <li><button class="run" id="run">Verify Your Installation.</button><span id="result"></span></li>
-      </ul>
-    </div>
-  </div></body>
 </html>
