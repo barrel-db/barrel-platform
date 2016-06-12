@@ -24,7 +24,7 @@
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.2">>},1},
  {<<"mochicow">>,
   {git,"https://github.com/benoitc/mochicow.git",
-       {ref,"dfc246e786af93ca6efeafb8daf23b9f3caf092b"}},
+       {ref,"015632be28d735dce6444b072419f5e850992493"}},
   0},
  {<<"mochiweb">>,
   {git,"git://github.com/mochi/mochiweb.git",

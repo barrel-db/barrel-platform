@@ -91,6 +91,7 @@ boot_status() ->
   Config = barrel_config:section_to_opts("api"),
   Listeners = barrel_api_http:get_listeners(Config),
   URIs = barrel_api_http:web_uris(Listeners),
+  io:format("~n~n==> Barrel node started~n", []),
   io:format("version: ~s~n", [barrel_server:version()]),
   io:format("node id: ~s~n", [barrel_server:node_id()]),
   display_uris(URIs),
