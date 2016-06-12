@@ -69,8 +69,8 @@ couchTests.list_views = function(debug) {
           if (!firstKey) firstKey = row.key;
           prevKey = row.key;
           send('\n<li>Key: '+row.key
-          +' Value: '+row.value
-          +' LineNo: '+row_number+'</li>');
+              +' Value: '+row.value
+              +' LineNo: '+row_number+'</li>');
         }
         return '</ul><p>FirstKey: '+ firstKey + ' LastKey: '+ prevKey+'</p>';
       }),
@@ -83,8 +83,8 @@ couchTests.list_views = function(debug) {
           while (row = getRow()) {
             num ++;
             send('\n<li>Key: '
-              +row.key+' Value: '+row.value
-              +' LineNo: '+num+'</li>');
+                +row.key+' Value: '+row.value
+                +' LineNo: '+num+'</li>');
           }
 
           // tail
@@ -183,17 +183,17 @@ couchTests.list_views = function(debug) {
     _id: "_design/erlang",
     language: "erlang",
     lists: {
-        simple:
-            'fun(Head, {Req}) -> ' +
-            '  Send(<<"[">>), ' +
-            '  Fun = fun({Row}, Sep) -> ' +
-            '    Val = couch_util:get_value(<<"key">>, Row, 23), ' +
-            '    Send(list_to_binary(Sep ++ integer_to_list(Val))), ' +
-            '    {ok, ","} ' +
-            '  end, ' +
-            '  {ok, _} = FoldRows(Fun, ""), ' +
-            '  Send(<<"]">>) ' +
-            'end.'
+      simple:
+      'fun(Head, Req) -> ' +
+      '  Send(<<"[">>), ' +
+      '  Fun = fun(Row, Sep) -> ' +
+      '    Val = maps:get(<<"key">>, Row, 23), ' +
+      '    Send(list_to_binary(Sep ++ integer_to_list(Val))), ' +
+      '    {ok, ","} ' +
+      '  end, ' +
+      '  {ok, _} = FoldRows(Fun, ""), ' +
+      '  Send(<<"]">>) ' +
+      'end.'
     }
   };
 
@@ -221,14 +221,14 @@ couchTests.list_views = function(debug) {
     headers: {"if-none-match": etag}
   });
   T(xhr.status == 304);
-  
+
   // confirm ETag changes with different POST bodies
   xhr = CouchDB.request("POST", "/test_suite_db/_design/lists/_list/basicBasic/basicView",
-    {body: JSON.stringify({keys:[1]})}
+      {body: JSON.stringify({keys:[1]})}
   );
   var etag1 = xhr.getResponseHeader("etag");
   xhr = CouchDB.request("POST", "/test_suite_db/_design/lists/_list/basicBasic/basicView",
-    {body: JSON.stringify({keys:[2]})}
+      {body: JSON.stringify({keys:[2]})}
   );
   var etag2 = xhr.getResponseHeader("etag");
   T(etag1 != etag2, "POST to map _list generates key-depdendent ETags");
@@ -240,26 +240,26 @@ couchTests.list_views = function(debug) {
   TEquals(10, resp.head.total_rows);
   TEquals(0, resp.head.offset);
   TEquals(11, resp.head.update_seq);
-  
+
   T(resp.rows.length == 10);
   TEquals(resp.rows[0], {"id": "0","key": 0,"value": "0"});
 
   TEquals(resp.req.info.db_name, "test_suite_db");
   TEquals(resp.req.method, "GET");
   TEquals(resp.req.path, [
-      "test_suite_db",
-      "_design",
-      "lists",
-      "_list",
-      "basicJSON",
-      "basicView"
+    "test_suite_db",
+    "_design",
+    "lists",
+    "_list",
+    "basicJSON",
+    "basicView"
   ]);
   T(resp.req.headers.Accept);
   T(resp.req.headers.Host);
   T(resp.req.headers["User-Agent"]);
   T(resp.req.cookie);
   TEquals("/test_suite_db/_design/lists/_list/basicJSON/basicView?update_seq=true",
-    resp.req.raw_path, "should include raw path");
+      resp.req.raw_path, "should include raw path");
 
   // get with query params
   xhr = CouchDB.request("GET", "/test_suite_db/_design/lists/_list/simpleForm/basicView?startkey=3&endkey=8");
@@ -305,11 +305,11 @@ couchTests.list_views = function(debug) {
 
   // confirm ETag changes with different POST bodies
   xhr = CouchDB.request("POST", "/test_suite_db/_design/lists/_list/simpleForm/withReduce?group=true",
-    {body: JSON.stringify({keys:[1]})}
+      {body: JSON.stringify({keys:[1]})}
   );
   var etag1 = xhr.getResponseHeader("etag");
   xhr = CouchDB.request("POST", "/test_suite_db/_design/lists/_list/simpleForm/withReduce?group=true",
-    {body: JSON.stringify({keys:[2]})}
+      {body: JSON.stringify({keys:[2]})}
   );
   var etag2 = xhr.getResponseHeader("etag");
   T(etag1 != etag2, "POST to reduce _list generates key-depdendent ETags");
@@ -341,7 +341,7 @@ couchTests.list_views = function(debug) {
 
   // multi-key fetch with GET
   var xhr = CouchDB.request("GET", "/test_suite_db/_design/lists/_list/simpleForm/basicView" +
-    "?keys=[2,4,5,7]");
+      "?keys=[2,4,5,7]");
 
   T(xhr.status == 200, "multi key");
   T(!(/Key: 1 /.test(xhr.responseText)));
@@ -402,7 +402,7 @@ couchTests.list_views = function(debug) {
   // Test we can run lists and views from separate docs.
   T(db.save(viewOnlyDesignDoc).ok);
   var url = "/test_suite_db/_design/lists/_list/simpleForm/views/basicView" +
-                "?startkey=-3";
+      "?startkey=-3";
   xhr = CouchDB.request("GET", url);
   T(xhr.status == 200, "multiple design docs.");
   T(!(/Key: -4/.test(xhr.responseText)));
@@ -414,14 +414,14 @@ couchTests.list_views = function(debug) {
   xhr = CouchDB.request("POST", url, {
     body: '{"keys":[-2,-4,-5,-7]}'
   });
-  
+
   T(xhr.status == 200, "multi key separate docs");
   T(!(/Key: -3/.test(xhr.responseText)));
   T(/Key: -7/.test(xhr.responseText));
   T(/FirstKey: -2/.test(xhr.responseText));
   T(/LastKey: -7/.test(xhr.responseText));
 
-    // Test if secObj is available
+  // Test if secObj is available
   var xhr = CouchDB.request("GET", "/test_suite_db/_design/lists/_list/secObj/basicView");
   T(xhr.status == 200, "standard get should be 200");
   var resp = JSON.parse(xhr.responseText);
@@ -430,14 +430,14 @@ couchTests.list_views = function(debug) {
   var erlViewTest = function() {
     T(db.save(erlListDoc).ok);
     var url = "/test_suite_db/_design/erlang/_list/simple/views/basicView" +
-                "?startkey=-3";
+        "?startkey=-3";
     xhr = CouchDB.request("GET", url);
     T(xhr.status == 200, "multiple languages in design docs.");
     var list = JSON.parse(xhr.responseText);
     T(list.length == 4);
     for(var i = 0; i < list.length; i++)
     {
-        T(list[i] + 3 == i);
+      T(list[i] + 3 == i);
     }
   };
 

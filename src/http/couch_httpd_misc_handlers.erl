@@ -47,9 +47,9 @@ handle_welcome_req(Req) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
 handle_all_dbs_req(#httpd{method='GET'}=Req) ->
-    Limit0 = couch_util:to_integer(couch_httpd:qs_value(Req, "limit",
+    Limit0 = barrel_lib:to_integer(couch_httpd:qs_value(Req, "limit",
                                                         ?DEFAULT_LIMIT)),
-    Skip0 = couch_util:to_integer(couch_httpd:qs_value(Req, "skip", -1)),
+    Skip0 = barrel_lib:to_integer(couch_httpd:qs_value(Req, "skip", -1)),
     {ok, {DbNames, _, _}} = barrel_server:all_databases(fun all_dbs_fun/2, {[], Skip0, Limit0}),
     send_json(Req, lists:usort(DbNames));
 handle_all_dbs_req(Req) ->
@@ -89,7 +89,7 @@ handle_uuids_req(#httpd{method='GET'}=Req) ->
     Etag = couch_httpd:make_etag(UUIDs),
     couch_httpd:etag_respond(Req, Etag, fun() ->
         CacheBustingHeaders = [
-            {"Date", couch_util:rfc1123_date()},
+            {"Date", barrel_lib:rfc1123_date()},
             {"Cache-Control", "no-cache"},
             % Past date, ON PURPOSE!
             {"Expires", "Fri, 01 Jan 1990 00:00:00 GMT"},
@@ -146,7 +146,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
             % variable itself.
             FallbackWhitelist = [{"httpd", "config_whitelist"}],
 
-            Whitelist = case couch_util:parse_term(WhitelistValue) of
+            Whitelist = case barrel_lib:parse_term(WhitelistValue) of
                 {ok, Value} when is_list(Value) ->
                     Value;
                 {ok, _NonListValue} ->
@@ -163,7 +163,7 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
                     {A, B} ->
                         % For readability, tuples may be used instead of binaries
                         % in the whitelist.
-                        case {couch_util:to_binary(A), couch_util:to_binary(B)} of
+                        case {barrel_lib:to_binary(A), barrel_lib:to_binary(B)} of
                             {Section, Key} ->
                                 true;
                             {Section, <<"*">>} ->

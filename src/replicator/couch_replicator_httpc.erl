@@ -24,11 +24,6 @@
 -export([send_req/3]).
 -export([full_url/2]).
 
--import(couch_util, [
-    get_value/2,
-    get_value/3
-]).
-
 -define(replace(L, K, V), lists:keystore(K, 1, L, {K, V})).
 -define(MAX_WAIT, 5 * 60 * 1000).
 
@@ -40,9 +35,9 @@ setup(#httpdb{httpc_pool = nil, url = Url, http_connections = MaxConns} = Db) ->
 
 send_req(HttpDb, Params1, Callback) ->
     Params2 = ?replace(Params1, qs,
-                       [{K, binary_to_list(to_param(V))} || {K, V} <- get_value(qs, Params1, [])]),
+                       [{K, binary_to_list(to_param(V))} || {K, V} <- proplists:get_value(qs, Params1, [])]),
     Params = ?replace(Params2, ibrowse_options,
-        lists:keysort(1, get_value(ibrowse_options, Params2, []))),
+        lists:keysort(1, proplists:get_value(ibrowse_options, Params2, []))),
     {Worker, Response, IsChanges} = send_ibrowse_req(HttpDb, Params),
     Ret = try
         process_response(Response, Worker, HttpDb, Params, Callback)
@@ -73,13 +68,13 @@ to_param(V) ->
 
 
 send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
-    Method = get_value(method, Params, get),
-    UserHeaders = lists:keysort(1, get_value(headers, Params, [])),
+    Method = proplists:get_value(method, Params, get),
+    UserHeaders = lists:keysort(1, proplists:get_value(headers, Params, [])),
     Headers1 = lists:ukeymerge(1, UserHeaders, BaseHeaders),
     Headers2 = oauth_header(HttpDb, Params) ++ Headers1,
     Url = full_url(HttpDb, Params),
-    Body = get_value(body, Params, []),
-    IsChanges = get_value(path, Params) == "_changes",
+    Body = proplists:get_value(body, Params, []),
+    IsChanges = proplists:get_value(path, Params) == "_changes",
     {Worker, Timeout} = case IsChanges of
     true ->
         {ok, Worker1} = ibrowse:spawn_link_worker_process(Url),
@@ -94,7 +89,7 @@ send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
     end,
     IbrowseOptions = [
         {response_format, binary}, {inactivity_timeout, HttpDb#httpdb.timeout} |
-        lists:ukeymerge(1, get_value(ibrowse_options, Params, []),
+        lists:ukeymerge(1, proplists:get_value(ibrowse_options, Params, []),
             HttpDb#httpdb.ibrowse_options)
     ],
     Response = ibrowse:send_req_direct(Worker, Url, Headers2, Method,
@@ -205,8 +200,8 @@ maybe_retry(Error, Worker, #httpdb{retries = 0} = HttpDb, Params) ->
 
 maybe_retry(Error, _Worker, #httpdb{retries = Retries, wait = Wait} = HttpDb,
     Params) ->
-    Method = string:to_upper(atom_to_list(get_value(method, Params, get))),
-    Url = couch_util:url_strip_password(full_url(HttpDb, Params)),
+    Method = string:to_upper(atom_to_list(proplists:get_value(method, Params, get))),
+    Url = barrel_lib:url_strip_password(full_url(HttpDb, Params)),
     lager:info("Retrying ~s request to ~s in ~p seconds due to error ~s",
         [Method, Url, Wait / 1000, error_cause(Error)]),
     ok = timer:sleep(Wait),
@@ -215,8 +210,8 @@ maybe_retry(Error, _Worker, #httpdb{retries = Retries, wait = Wait} = HttpDb,
     throw({retry, NewHttpDb, Params}).
 
 report_error(_Worker, HttpDb, Params, Error) ->
-    Method = string:to_upper(atom_to_list(get_value(method, Params, get))),
-    Url = couch_util:url_strip_password(full_url(HttpDb, Params)),
+    Method = string:to_upper(atom_to_list(proplists:get_value(method, Params, get))),
+    Url = barrel_lib:url_strip_password(full_url(HttpDb, Params)),
     do_report_error(Url, Method, Error),
     exit({http_request_failed, Method, Url, Error}).
 
@@ -268,8 +263,8 @@ accumulate_messages(ReqId, Acc, Timeout) ->
 
 
 full_url(#httpdb{url = BaseUrl}, Params) ->
-    Path = get_value(path, Params, []),
-    QueryArgs = get_value(qs, Params, []),
+    Path = proplists:get_value(path, Params, []),
+    QueryArgs = proplists:get_value(qs, Params, []),
     BaseUrl ++ Path ++ query_args_to_string(QueryArgs, []).
 
 
@@ -289,15 +284,15 @@ oauth_header(#httpdb{url = BaseUrl, oauth = OAuth}, ConnParams) ->
         OAuth#oauth.consumer_secret,
         OAuth#oauth.signature_method
     },
-    Method = case get_value(method, ConnParams, get) of
+    Method = case proplists:get_value(method, ConnParams, get) of
     get -> "GET";
     post -> "POST";
     put -> "PUT";
     head -> "HEAD"
     end,
-    QSL = get_value(qs, ConnParams, []),
+    QSL = proplists:get_value(qs, ConnParams, []),
     OAuthParams = oauth:sign(Method,
-        BaseUrl ++ get_value(path, ConnParams, []),
+        BaseUrl ++ proplists:get_value(path, ConnParams, []),
         QSL, Consumer, OAuth#oauth.token, OAuth#oauth.token_secret) -- QSL,
     [{"Authorization",
         "OAuth " ++ oauth:header_params_encode(OAuthParams)}].

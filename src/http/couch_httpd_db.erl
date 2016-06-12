@@ -48,7 +48,7 @@ handle_request(#httpd{path_parts=[DbName|RestParts],method=Method,
     {_, []} ->
         do_db_req(Req, fun db_req/2);
     {_, [SecondPart|_]} ->
-        Handler = couch_util:dict_find(SecondPart, DbUrlHandlers, fun db_req/2),
+        Handler = barrel_lib:dict_find(SecondPart, DbUrlHandlers, fun db_req/2),
         do_db_req(Req, Handler)
     end.
 
@@ -89,7 +89,7 @@ handle_design_req(#httpd{
     % load ddoc
     DesignId = <<"_design/", DesignName/binary>>,
     DDoc = couch_httpd_db:couch_doc_open(Db, DesignId, nil, [ejson_body]),
-    Handler = couch_util:dict_find(Action, DesignUrlHandlers, fun(_, _, _) ->
+    Handler = barrel_lib:dict_find(Action, DesignUrlHandlers, fun(_, _, _) ->
         throw({not_found, <<"missing handler: ", Action/binary>>})
     end),
     Handler(Req, Db, DDoc);
@@ -110,7 +110,7 @@ create_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     case barrel_server:create(DbName, [{user_ctx, UserCtx}]) of
     {ok, Db} ->
         couch_db:close(Db),
-        DbUrl = absolute_uri(Req, "/" ++ couch_util:url_encode(DbName)),
+        DbUrl = absolute_uri(Req, "/" ++ barrel_lib:url_encode(DbName)),
         send_json(Req, 201, [{"Location", DbUrl}], #{ok => true});
     Error ->
         throw(Error)
@@ -454,7 +454,7 @@ db_doc_req(#httpd{method='POST'}=Req, Db, DocId) ->
 db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
     barrel_doc:validate_docid(DocId),
 
-    case couch_util:to_list(couch_httpd:header_value(Req, "Content-Type")) of
+    case barrel_lib:to_list(couch_httpd:header_value(Req, "Content-Type")) of
     ("multipart/related;" ++ _) = ContentType ->
         {ok, Doc0, WaitFun, Parser} = barrel_doc:doc_from_multi_part_stream(
             ContentType, fun() -> receive_request_data(Req) end),
@@ -1058,7 +1058,7 @@ validate_attachment_name(Name) when is_list(Name) ->
 validate_attachment_name(<<"_",_/binary>>) ->
     throw({bad_request, <<"Attachment name can't start with '_'">>});
 validate_attachment_name(Name) ->
-    case couch_util:validate_utf8(Name) of
+    case barrel_lib:validate_utf8(Name) of
         true -> Name;
         false -> throw({bad_request, <<"Attachment name is not UTF-8 encoded">>})
     end.

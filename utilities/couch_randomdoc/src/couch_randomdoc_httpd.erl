@@ -138,7 +138,7 @@ os_filter_fun(FilterName, Req, Db) ->
             DDoc = couch_httpd_db:couch_doc_open(Db, DesignId, nil, [ejson_body]),
             % validate that the ddoc has the filter fun
             #doc{body={Props}} = DDoc,
-            couch_util:get_nested_json_value({Props}, [<<"filters">>, FName]),
+            barrel_lib:get_nested_json_value({Props}, [<<"filters">>, FName]),
             fun(Db2, Doc) ->
                 {ok, Passes} = couch_query_servers:filter_docs(
                     Req, Db2, DDoc, FName, [Doc]

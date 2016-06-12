@@ -67,7 +67,7 @@ get(Property, State) ->
                 ++ if LocalSeq -> [<<"local_seq">>]; true -> [] end,
 
             {ok, [
-                {signature, list_to_binary(couch_util:hexsig(Sig))},
+                {signature, list_to_binary(barrel_lib:hexsig(Sig))},
                 {language, Lang},
                 {disk_size, Size},
                 {data_size, DataSize},
@@ -122,7 +122,7 @@ delete(#mrst{db_name=DbName, sig=Sig}=State) ->
 
 
 reset(State) ->
-    couch_util:with_db(State#mrst.db_name, fun(Db) ->
+    barrel_lib:with_db(State#mrst.db_name, fun(Db) ->
         NewState = couch_mrview_util:reset_index(Db, State#mrst.fd, State),
         {ok, NewState}
     end).

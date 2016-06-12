@@ -42,12 +42,6 @@
     start_db_compaction_notifier/2,
     stop_db_compaction_notifier/1
 ]).
--import(couch_util, [
-    to_binary/1,
-    get_value/2,
-    get_value/3
-]).
-
 
 -record(batch, {
     docs = [],
@@ -477,7 +471,7 @@ flush_doc(Target, #doc{id = Id, revs = {Pos, [RevId | _]}} = Doc) ->
         ok;
     Error ->
         lager:error("Replicator: error writing document `~s` to `~s`: ~s",
-            [Id, couch_replicator_api_wrap:db_uri(Target), couch_util:to_binary(Error)]),
+            [Id, couch_replicator_api_wrap:db_uri(Target), barrel_lib:to_error(Error)]),
         Error
     catch
     throw:{missing_stub, _} = MissingStub ->
@@ -486,13 +480,13 @@ flush_doc(Target, #doc{id = Id, revs = {Pos, [RevId | _]}} = Doc) ->
         lager:error("Replicator: couldn't write document `~s`, revision `~s`,"
             " to target database `~s`. Error: `~s`, reason: `~s`.",
             [Id, barrel_doc:rev_to_str({Pos, RevId}),
-                couch_replicator_api_wrap:db_uri(Target), to_binary(Error), to_binary(Reason)]),
+                couch_replicator_api_wrap:db_uri(Target), barrel_lib:to_error(Error), barrel_lib:to_error(Reason)]),
         {error, Error};
     throw:Err ->
         lager:error("Replicator: couldn't write document `~s`, revision `~s`,"
             " to target database `~s`. Error: `~s`.",
             [Id, barrel_doc:rev_to_str({Pos, RevId}),
-                couch_replicator_api_wrap:db_uri(Target), to_binary(Err)]),
+                couch_replicator_api_wrap:db_uri(Target), barrel_lib:to_error(Err)]),
         {error, Err}
     end.
 

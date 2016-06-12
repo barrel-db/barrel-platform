@@ -388,3 +388,4 @@ query_oauth_view(Db, Key) ->
     {ok, Result} = couch_mrview:query_view(
         Db, ?OAUTH_DDOC_ID, ?OAUTH_VIEW_NAME, ViewOptions, Callback, []),
     Result.
+

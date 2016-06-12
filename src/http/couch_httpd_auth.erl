@@ -143,7 +143,7 @@ proxy_auth_user(Req) ->
                                                           {roles, Roles}]),
                             Req#httpd{user_ctx=UserCtx};
                         Secret ->
-                            ExpectedToken = couch_util:to_hex(crypto:hmac(sha, Secret, UserName)),
+                            ExpectedToken = barrel_lib:to_hex(crypto:hmac(sha, Secret, UserName)),
                             case header_value(Req, XHeaderToken) of
                                 Token when Token == ExpectedToken ->
                                     UserCtx = barrel_lib:userctx([{name, list_to_binary(UserName)},
@@ -166,7 +166,7 @@ cookie_authentication_handler(#httpd{mochi_req=MochiReq}=Req) ->
     [] -> Req;
     Cookie ->
         [User, TimeStr, HashStr] = try
-            AuthSession = couch_util:decodeBase64Url(Cookie),
+            AuthSession = decodeBase64Url(Cookie),
             [_A, _B, _Cs] = re:split(binary_to_list(AuthSession), ":",
                                      [{return, list}, {parts, 3}])
         catch
@@ -239,7 +239,7 @@ cookie_auth_cookie(Req, User, Secret, TimeStamp) ->
     SessionData = User ++ ":" ++ erlang:integer_to_list(TimeStamp, 16),
     Hash = crypto:hmac(sha, Secret, SessionData),
     mochiweb_cookies:cookie("AuthSession",
-        couch_util:encodeBase64Url(SessionData ++ ":" ++ binary_to_list(Hash)),
+        encodeBase64Url(SessionData ++ ":" ++ binary_to_list(Hash)),
         [{path, "/"}] ++ cookie_scheme(Req) ++ max_age()).
 
 ensure_cookie_auth_secret() ->
@@ -382,3 +382,14 @@ max_age() ->
             Timeout = barrel_config:get_integer("couch_httpd_auth", "timeout", 600),
             [{max_age, Timeout}]
     end.
+
+encodeBase64Url(Url) ->
+    Url1 = re:replace(base64:encode(Url), ["=+", $$], ""),
+    Url2 = re:replace(Url1, "/", "_", [global]),
+    re:replace(Url2, "\\+", "-", [global, {return, binary}]).
+
+decodeBase64Url(Url64) ->
+    Url1 = re:replace(Url64, "-", "+", [global]),
+    Url2 = re:replace(Url1, "_", "/", [global]),
+    Padding = lists:duplicate((4 - iolist_size(Url2) rem 4) rem 4, $=),
+    base64:decode(iolist_to_binary([Url2, Padding])).

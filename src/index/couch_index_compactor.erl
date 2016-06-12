@@ -55,7 +55,7 @@ init({Index, Module}) ->
 
 
 terminate(_Reason, State) ->
-    couch_util:shutdown_sync(State#st.pid),
+    barrel_lib:shutdown_sync(State#st.pid),
     ok.
 
 
@@ -101,7 +101,7 @@ compact(Idx, Mod, IdxState, Opts) ->
     DbName = Mod:get(db_name, IdxState),
     Args = [DbName, Mod:get(idx_name, IdxState)],
     lager:info("Compaction started for db: ~s idx: ~s", Args),
-    {ok, NewIdxState} = couch_util:with_db(DbName, fun(Db) ->
+    {ok, NewIdxState} = barrel_lib:with_db(DbName, fun(Db) ->
         Mod:compact(Db, IdxState, Opts)
     end),
     ok = Mod:commit(NewIdxState),

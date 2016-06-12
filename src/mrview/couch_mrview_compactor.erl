@@ -47,7 +47,7 @@ compact(State) ->
         views=Views
     } = State,
 
-    {EmptyState, NumDocIds} = couch_util:with_db(DbName, fun(Db) ->
+    {EmptyState, NumDocIds} = barrel_lib:with_db(DbName, fun(Db) ->
         CompactFName = couch_mrview_util:compaction_file(DbName, Sig),
         {ok, Fd} = couch_mrview_util:open_file(CompactFName),
         ESt = couch_mrview_util:reset_index(Db, Fd, State),

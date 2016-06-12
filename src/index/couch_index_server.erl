@@ -44,7 +44,7 @@ get_index(Module, DbName, DDoc) ->
 
 
 get_index(Module, DbName, DDoc, Fun) when is_binary(DbName) ->
-    couch_util:with_db(DbName, fun(Db) ->
+    barrel_lib:with_db(DbName, fun(Db) ->
         get_index(Module, Db, DDoc, Fun)
     end);
 get_index(Module, Db, DDoc, Fun) when is_binary(DDoc) ->
@@ -127,7 +127,7 @@ terminate(_Reason, _State) ->
     hooks:unreg(index_reset, ?MODULE, index_reset, 3),
     %% kil index processes
     Pids = [Pid || {Pid, _} <- ets:tab2list(?BY_PID)],
-    lists:map(fun couch_util:shutdown_sync/1, Pids),
+    lists:map(fun barrel_lib:shutdown_sync/1, Pids),
     ok.
 
 

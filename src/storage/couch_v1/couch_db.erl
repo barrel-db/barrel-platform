@@ -465,7 +465,7 @@ validate_doc_update(_Db, #doc{id= <<"_local/",_/binary>>}, _GetDiskDocFun) ->
     ok;
 validate_doc_update(Db, Doc, GetDiskDocFun) ->
     DiskDoc = GetDiskDocFun(),
-    JsonCtx = couch_util:json_user_ctx(Db),
+    JsonCtx = barrel_lib:json_user_ctx(Db),
     SecObj = get_security(Db),
     try [case Fun(Doc, DiskDoc, JsonCtx, SecObj) of
             ok -> ok;
@@ -652,7 +652,7 @@ new_revid(#doc{body=Body,revs={OldStart,OldRevs},
     case [{N, T, M} || #att{name=N,type=T,md5=M} <- Atts, M =/= <<>>] of
     Atts2 when length(Atts) =/= length(Atts2) ->
         % We must have old style non-md5 attachments
-        list_to_binary(integer_to_list(couch_util:rand32()));
+        list_to_binary(integer_to_list(barrel_lib:rand32()));
     Atts2 ->
         OldRev = case OldRevs of [] -> 0; [OldRev0|_] -> OldRev0 end,
         crypto:hash(md5, term_to_binary([Deleted, OldStart, OldRev, Body, Atts2]))
@@ -1091,7 +1091,7 @@ init({DbName, Filepath, Fd, Options}) ->
     {ok, Db}.
 
 terminate(_Reason, Db) ->
-    couch_util:shutdown_sync(Db#db.update_pid),
+    barrel_lib:shutdown_sync(Db#db.update_pid),
     ok.
 
 handle_call({open_ref_count, OpenerPid}, _, #db{fd_ref_counter=RefCntr}=Db) ->
@@ -1328,7 +1328,7 @@ validate_doc_read(Db, Doc) ->
         ok ->
             ok;
         _ ->
-            JsonCtx = couch_util:json_user_ctx(Db),
+            JsonCtx = barrel_lib:json_user_ctx(Db),
             SecObj = get_security(Db),
             try [case Fun(Doc, JsonCtx, SecObj) of
                     ok -> ok;

@@ -21,7 +21,7 @@ start_link() ->
 init([]) ->
     Children = [
         begin
-            {ok, {Module, Fun, Args}} = couch_util:parse_term(SpecStr),
+            {ok, {Module, Fun, Args}} = barrel_lib:parse_term(SpecStr),
 
             {list_to_atom(Name),
                 {Module, Fun, Args},

@@ -95,7 +95,7 @@ json_req_obj(#httpd{mochi_req=Req,
       <<"peer">> => list_to_binary(Req:get(peer)),
       <<"form">> => to_json_terms(ParsedForm),
       <<"cookie">> => to_json_terms(Req:parse_cookie()),
-      <<"userCtx">> => couch_util:json_user_ctx(Db),
+      <<"userCtx">> => barrel_lib:json_user_ctx(Db),
       <<"secObj">> => couch_db:get_security(Db)}.
 
 to_json_terms(Data) ->

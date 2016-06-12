@@ -31,12 +31,6 @@
 -include("couch_replicator_api_wrap.hrl").
 -include("couch_replicator.hrl").
 
--import(couch_util, [
-    get_value/2,
-    get_value/3,
-    to_binary/1
-]).
-
 -import(couch_replicator_utils, [
     start_db_compaction_notifier/2,
     stop_db_compaction_notifier/1
@@ -79,9 +73,9 @@
 
 
 replicate(#rep{id = RepId, options = Options, user_ctx = UserCtx} = Rep) ->
-    case get_value(cancel, Options, false) of
+    case proplists:get_value(cancel, Options, false) of
     true ->
-        case get_value(id, Options, nil) of
+        case proplists:get_value(id, Options, nil) of
         nil ->
             cancel_replication(RepId);
         RepId2 ->
@@ -98,7 +92,7 @@ replicate(#rep{id = RepId, options = Options, user_ctx = UserCtx} = Rep) ->
 do_replication_loop(#rep{id = {BaseId, Ext} = Id, options = Options} = Rep) ->
     case async_replicate(Rep) of
     {ok, _Pid} ->
-        case get_value(continuous, Options, false) of
+        case proplists:get_value(continuous, Options, false) of
         true ->
             {ok, {continuous, list_to_binary(BaseId ++ Ext)}};
         false ->
@@ -113,7 +107,7 @@ async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
     RepChildId = BaseId ++ Ext,
     Source = couch_replicator_api_wrap:db_uri(Src),
     Target = couch_replicator_api_wrap:db_uri(Tgt),
-    Timeout = get_value(connection_timeout, Rep#rep.options),
+    Timeout = proplists:get_value(connection_timeout, Rep#rep.options),
     ChildSpec = {
         RepChildId,
         {gen_server, start_link, [?MODULE, Rep, [{timeout, Timeout}]]},
@@ -261,8 +255,8 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         type = Type
     } = State = init_state(Rep),
 
-    NumWorkers = get_value(worker_processes, Options),
-    BatchSize = get_value(worker_batch_size, Options),
+    NumWorkers = proplists:get_value(worker_processes, Options),
+    BatchSize = proplists:get_value(worker_batch_size, Options),
     {ok, ChangesQueue} = couch_work_queue:new([
         {max_items, BatchSize * NumWorkers * 2},
         {max_size, 100 * 1024 * NumWorkers}
@@ -276,7 +270,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
     % This starts the worker processes. They ask the changes queue manager for a
     % a batch of _changes rows to process -> check which revs are missing in the
     % target, and for the missing ones, it copies them from the source to the target.
-    MaxConns = get_value(http_connections, Options),
+    MaxConns = proplists:get_value(http_connections, Options),
     Workers = lists:map(
         fun(_) ->
             {ok, Pid} = couch_replicator_worker:start_link(
@@ -291,7 +285,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         {doc_id, Rep#rep.doc_id},
         {source, list_to_binary(SourceName)},
         {target, list_to_binary(TargetName)},
-        {continuous, get_value(continuous, Options, false)},
+        {continuous, proplists:get_value(continuous, Options, false)},
         {revisions_checked, 0},
         {missing_revisions_found, 0},
         {docs_read, 0},
@@ -322,9 +316,9 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         "~c~p retries per request~n"
         "~csocket options are: ~s~s",
         [BaseId ++ Ext, $\t, NumWorkers, $\t, BatchSize, $\t,
-            MaxConns, $\t, get_value(connection_timeout, Options),
-            $\t, get_value(retries, Options),
-            $\t, io_lib:format("~p", [get_value(socket_options, Options)]),
+            MaxConns, $\t, proplists:get_value(connection_timeout, Options),
+            $\t, proplists:get_value(retries, Options),
+            $\t, io_lib:format("~p", [proplists:get_value(socket_options, Options)]),
             case StartSeq of
             ?LOWEST_SEQ ->
                 "";
@@ -521,7 +515,7 @@ terminate(Reason, State) ->
         rep_details = #rep{id = {BaseId, Ext} = RepId} = Rep
     } = State,
     lager:error("Replication `~s` (`~s` -> `~s`) failed: ~s",
-        [BaseId ++ Ext, Source, Target, to_binary(Reason)]),
+        [BaseId ++ Ext, Source, Target, barrel_lib:to_binary(Reason)]),
     terminate_cleanup(State),
     couch_replicator_notifier:notify({error, RepId, Reason}),
     couch_replicator_manager:replication_error(Rep, Reason).
@@ -582,7 +576,7 @@ init_state(Rep) ->
     [SourceLog, TargetLog] = find_replication_logs([Source, Target], Rep),
 
     {StartSeq0, History} = compare_replication_logs(SourceLog, TargetLog),
-    StartSeq1 = get_value(since_seq, Options, StartSeq0),
+    StartSeq1 = proplists:get_value(since_seq, Options, StartSeq0),
     StartSeq = {0, StartSeq1},
 
     SourceSeq = case Type of
@@ -609,7 +603,7 @@ init_state(Rep) ->
         committed_seq = StartSeq,
         source_log = SourceLog,
         target_log = TargetLog,
-        rep_starttime = couch_util:rfc1123_date(),
+        rep_starttime = barrel_lib:rfc1123_date(),
         src_starttime = maps:get(<<"instance_start_time">>, SourceInfo),
         tgt_starttime = maps:get(<<"instance_start_time">>, TargetInfo),
         session_id = barrel_uuids:random(),
@@ -617,8 +611,8 @@ init_state(Rep) ->
         source_monitor = db_monitor(Source),
         target_monitor = db_monitor(Target),
         source_seq = SourceSeq,
-        use_checkpoints = get_value(use_checkpoints, Options, true),
-        checkpoint_interval = get_value(checkpoint_interval, Options,
+        use_checkpoints = proplists:get_value(use_checkpoints, Options, true),
+        checkpoint_interval = proplists:get_value(checkpoint_interval, Options,
                                         5000),
         type = Type,
         view = View
@@ -763,15 +757,15 @@ do_checkpoint(State) ->
     case commit_to_both(Source, Target) of
     {source_error, Reason} ->
          {checkpoint_commit_failure,
-             <<"Failure on source commit: ", (to_binary(Reason))/binary>>};
+             <<"Failure on source commit: ", (barrel_lib:to_binary(Reason))/binary>>};
     {target_error, Reason} ->
          {checkpoint_commit_failure,
-             <<"Failure on target commit: ", (to_binary(Reason))/binary>>};
+             <<"Failure on target commit: ", (barrel_lib:to_binary(Reason))/binary>>};
     {SrcInstanceStartTime, TgtInstanceStartTime} ->
         lager:info("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
             [SourceName, TargetName, NewSeq]),
         StartTime = list_to_binary(ReplicationStartTime),
-        EndTime = list_to_binary(couch_util:rfc1123_date()),
+        EndTime = list_to_binary(barrel_lib:rfc1123_date()),
         NewHistoryEntry =  #{
           <<"session_id">> => SessionId,
           <<"start_time">> => StartTime,
@@ -840,8 +834,8 @@ update_checkpoint(Db, Doc, DbType) ->
         update_checkpoint(Db, Doc)
     catch throw:{checkpoint_commit_failure, Reason} ->
         throw({checkpoint_commit_failure,
-            <<"Error updating the ", (to_binary(DbType))/binary,
-                " checkpoint document: ", (to_binary(Reason))/binary>>})
+            <<"Error updating the ", (barrel_lib:to_binary(DbType))/binary,
+                " checkpoint document: ", (barrel_lib:to_binary(Reason))/binary>>})
     end.
 
 update_checkpoint(Db, #doc{id = LogId, body = LogBody} = Doc) ->
@@ -969,7 +963,7 @@ source_cur_seq(#rep_state{source = #httpdb{} = Db, source_seq = Seq,
     case (catch couch_replicator_api_wrap:get_view_info(
                 Db#httpdb{retries = 3}, DDoc, VName)) of
     {ok, Info} ->
-        get_value(<<"last_seq">>, Info, Seq);
+        proplists:get_value(<<"last_seq">>, Info, Seq);
     _ ->
         Seq
     end;
@@ -977,7 +971,7 @@ source_cur_seq(#rep_state{source = #httpdb{} = Db, source_seq = Seq,
 source_cur_seq(#rep_state{source = Db, source_seq = Seq,
                           type = view, view = {DDoc, VName}}) ->
     {ok, Info} = couch_replicator_api_wrap:get_view_info(Db, DDoc, VName),
-    get_value(<<"last_seq">>, Info, Seq);
+    proplists:get_value(<<"last_seq">>, Info, Seq);
 
 source_cur_seq(#rep_state{source = #httpdb{} = Db, source_seq = Seq}) ->
     case (catch couch_replicator_api_wrap:get_db_info(Db#httpdb{retries = 3})) of

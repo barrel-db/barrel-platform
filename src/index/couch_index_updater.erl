@@ -58,7 +58,7 @@ init({Index, Module}) ->
 
 
 terminate(_Reason, State) ->
-    couch_util:shutdown_sync(State#st.pid),
+    barrel_lib:shutdown_sync(State#st.pid),
     ok.
 
 
@@ -73,7 +73,7 @@ handle_call({restart, IdxState}, _From, #st{idx=Idx, mod=Mod}=State) ->
     Args = [Mod:get(db_name, IdxState), Mod:get(idx_name, IdxState)],
     lager:info("Restarting index update for db: ~s idx: ~s", Args),
     case is_pid(State#st.pid) of
-        true -> couch_util:shutdown_sync(State#st.pid);
+        true -> barrel_lib:shutdown_sync(State#st.pid);
         _ -> ok
     end,
     Pid = spawn_link(fun() -> update(Idx, State#st.mod, IdxState) end),
@@ -128,7 +128,7 @@ update(Idx, Mod, IdxState) ->
         _ -> [conflicts, deleted_conflicts]
     end,
 
-    couch_util:with_db(DbName, fun(Db) ->
+    barrel_lib:with_db(DbName, fun(Db) ->
         DbUpdateSeq = couch_db:get_update_seq(Db),
         DbCommittedSeq = couch_db:get_committed_update_seq(Db),
 

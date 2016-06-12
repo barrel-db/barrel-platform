@@ -47,16 +47,10 @@
     send_req/3
     ]).
 
--import(couch_util, [
-    encode_doc_id/1,
-    get_value/2,
-    get_value/3
-    ]).
 
 -define(MAX_WAIT, 5 * 60 * 1000).
 
-db_uri(#httpdb{url = Url}) ->
-    couch_util:url_strip_password(Url);
+db_uri(#httpdb{url = Url}) -> barrel_lib:url_strip_password(Url);
 
 db_uri(#db{name = Name}) ->
     db_uri(Name);
@@ -108,7 +102,7 @@ db_open(DbName, Options, Create) ->
             ok;
         true ->
             ok = couch_httpd:verify_is_server_admin(
-                get_value(user_ctx, Options)),
+                proplists:get_value(user_ctx, Options)),
             couch_db:create(DbName, Options)
         end,
         case couch_db:open(DbName, Options) of
@@ -154,7 +148,7 @@ get_view_info(#httpdb{} = Db, DDocId, ViewName) ->
         end);
 get_view_info(#db{name = DbName}, DDocId, ViewName) ->
     {ok, Info} = couch_mrview:get_view_info(DbName, DDocId, ViewName),
-    {ok, #{<<"last_seq">> => get_value(last_seq, Info)}}.
+    {ok, #{<<"last_seq">> => proplists:get_value(last_seq, Info)}}.
 
 
 ensure_full_commit(#httpdb{} = Db) ->
@@ -180,12 +174,12 @@ get_missing_revs(#httpdb{} = Db, IdRevs) ->
         [{method, post}, {path, "_revs_diff"}, {body, ?JSON_ENCODE(JsonBody)},
             {headers, [{"Content-Type", "application/json"}]}],
         fun(200, _, Props) ->
-            ConvertToNativeFun = fun({Id, {Result}}) ->
+            ConvertToNativeFun = fun({Id, Result}) ->
                 MissingRevs = barrel_doc:parse_revs(
-                    get_value(<<"missing">>, Result)
+                    maps:get(<<"missing">>, Result, undefined)
                 ),
                 PossibleAncestors = barrel_doc:parse_revs(
-                    get_value(<<"possible_ancestors">>, Result, [])
+                    maps:get(<<"possible_ancestors">>, Result, [])
                 ),
                 {Id, MissingRevs, PossibleAncestors}
             end,
@@ -197,22 +191,22 @@ get_missing_revs(Db, IdRevs) ->
 
 
 open_doc_revs(#httpdb{retries = 0} = HttpDb, Id, Revs, Options, _Fun, _Acc) ->
-    Path = encode_doc_id(Id),
+    Path = barrel_doc:encode_doc_id(Id),
     QS = options_to_query_args(HttpDb, Path, [revs, {open_revs, Revs} | Options]),
-    Url = couch_util:url_strip_password(
+    Url = barrel_lib:url_strip_password(
         couch_replicator_httpc:full_url(HttpDb, [{path,Path}, {qs,QS}])
     ),
     lager:error("Replication crashing because GET ~s failed", [Url]),
     exit(kaboom);
 open_doc_revs(#httpdb{} = HttpDb, Id, Revs, Options, Fun, Acc) ->
-    Path = encode_doc_id(Id),
+    Path = barrel_doc:encode_doc_id(Id),
     QS = options_to_query_args(HttpDb, Path, [revs, {open_revs, Revs} | Options]),
     {Pid, Ref} = spawn_monitor(fun() ->
         Self = self(),
         Callback = fun(200, Headers, StreamDataFun) ->
             remote_open_doc_revs_streamer_start(Self),
             {<<"--">>, _, _} = couch_httpd:parse_multipart_request(
-                get_value("Content-Type", Headers),
+                proplists:get_value("Content-Type", Headers),
                 StreamDataFun,
                 fun mp_parse_mixed/1
             )
@@ -258,7 +252,7 @@ open_doc_revs(#httpdb{} = HttpDb, Id, Revs, Options, Fun, Acc) ->
         {'DOWN', Ref, process, Pid, {{nocatch, {missing_stub,_} = Stub}, _}} ->
             throw(Stub);
         {'DOWN', Ref, process, Pid, Else} ->
-            Url = couch_util:url_strip_password(
+            Url = barrel_lib:url_strip_password(
                 couch_replicator_httpc:full_url(HttpDb, [{path,Path}, {qs,QS}])
             ),
             #httpdb{retries = Retries, wait = Wait0} = HttpDb,
@@ -289,7 +283,7 @@ error_reason(Else) ->
 open_doc(#httpdb{} = Db, Id, Options) ->
     send_req(
         Db,
-        [{path, encode_doc_id(Id)}, {qs, options_to_query_args(Options, [])}],
+        [{path, barrel_doc:encode_doc_id(Id)}, {qs, options_to_query_args(Options, [])}],
         fun(200, _, Body) ->
             {ok, barrel_doc:from_json_obj(Body)};
         (_, _, Props) ->
@@ -333,7 +327,7 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
         % appropriate course of action, since we've already started streaming
         % the response body from the GET request.
         HttpDb#httpdb{retries = 0},
-        [{method, put}, {path, encode_doc_id(DocId)},
+        [{method, put}, {path, barrel_doc:encode_doc_id(DocId)},
             {qs, QArgs}, {headers, Headers}, {body, Body}],
         fun(Code, _, Props) when Code =:= 200 orelse Code =:= 201 orelse Code =:= 202 ->
                 {ok, barrel_doc:parse_rev(maps:get(<<"rev">>, Props))};
@@ -461,9 +455,9 @@ changes_since(#httpdb{headers = Headers1} = HttpDb, Style, StartSeq,
                     end)
         end);
 changes_since(Db, Style, StartSeq, UserFun, Options) ->
-    Filter = case get_value(doc_ids, Options) of
+    Filter = case proplists:get_value(doc_ids, Options) of
     undefined ->
-        binary_to_list(get_value(filter, Options, <<>>));
+        binary_to_list(proplists:get_value(filter, Options, <<>>));
     _DocIds ->
         "_doc_ids"
     end,
@@ -471,7 +465,7 @@ changes_since(Db, Style, StartSeq, UserFun, Options) ->
         style = Style,
         since = StartSeq,
         filter = Filter,
-        feed = case get_value(continuous, Options, false) of
+        feed = case proplists:get_value(continuous, Options, false) of
             true ->
                 "continuous";
             false ->
@@ -479,7 +473,7 @@ changes_since(Db, Style, StartSeq, UserFun, Options) ->
         end,
         timeout = infinity
     },
-    QueryParams = get_value(query_params, Options, #{}),
+    QueryParams = proplists:get_value(query_params, Options, #{}),
     Req = changes_json_req(Db, Filter, QueryParams, Options),
     ChangesFeedFun = couch_changes:handle_changes(Args, {json_req, Req}, Db),
     ChangesFeedFun(fun({change, Change, _}, _) ->
@@ -503,25 +497,25 @@ maybe_add_changes_filter_q_args(BaseQS, Options) ->
         Params = proplists:get_value(query_params, Options, #{}),
         [{"filter", binary_to_list(FilterName)} | maps:fold(
             fun(K, V, QSAcc) ->
-                Ks = couch_util:to_list(K),
+                Ks = barrel_lib:to_list(K),
                 case lists:keymember(Ks, 1, QSAcc) of
                 true ->
                     QSAcc;
                 false when FilterName =:= <<"_view">> ->
                     V1 = case lists:member(Ks, ViewFields) of
                         true -> ?JSON_ENCODE(V);
-                        false -> couch_util:to_list(V)
+                        false -> barrel_lib:to_list(V)
                     end,
                     [{Ks, V1} | QSAcc];
                 false ->
-                    [{Ks, couch_util:to_list(V)} | QSAcc]
+                    [{Ks, barrel_lib:to_list(V)} | QSAcc]
                 end
             end,
             BaseQS, Params)]
     end.
 
 parse_changes_feed(Options, UserFun, DataStreamFun) ->
-    case get_value(continuous, Options, false) of
+    case proplists:get_value(continuous, Options, false) of
     true ->
         continuous_changes(DataStreamFun, UserFun);
     false ->
@@ -548,7 +542,7 @@ changes_json_req(Db, FilterName, QueryParams, _Options) ->
        <<"peer">> => <<"replicator">>,
        <<"form">> => [],
        <<"cookie">> => [],
-       <<"userCtx">> => couch_util:json_user_ctx(Db)
+       <<"userCtx">> => barrel_lib:json_user_ctx(Db)
     }.
 
 
@@ -629,7 +623,7 @@ receive_docs(Streamer, UserFun, Ref, UserAcc) ->
     {started_open_doc_revs, NewRef} ->
         restart_remote_open_doc_revs(Ref, NewRef);
     {headers, Ref, Headers} ->
-        case get_value("content-type", Headers) of
+        case proplists:get_value("content-type", Headers) of
         {"multipart/related", _} = ContentType ->
             case doc_from_multi_part_stream(
                 ContentType,
@@ -650,8 +644,8 @@ receive_docs(Streamer, UserFun, Ref, UserAcc) ->
             {_, UserAcc2} = run_user_fun(UserFun, {ok, Doc}, UserAcc, Ref),
             receive_docs(Streamer, UserFun, Ref, UserAcc2);
         {"application/json", [{"error","true"}]} ->
-            {ErrorProps} = ?JSON_DECODE(receive_all(Streamer, Ref, [])),
-            Rev = get_value(<<"missing">>, ErrorProps),
+            ErrorProps = ?JSON_DECODE(receive_all(Streamer, Ref, [])),
+            Rev = maps:get(<<"missing">>, ErrorProps),
             Result = {{not_found, missing}, barrel_doc:parse_rev(Rev)},
             {_, UserAcc2} = run_user_fun(UserFun, Result, UserAcc, Ref),
             receive_docs(Streamer, UserFun, Ref, UserAcc2)

@@ -53,7 +53,7 @@ init({Pid, ChildProcs}) ->
 
 
 terminate(_Reason, #srv{child_procs=ChildProcs}) ->
-    [couch_util:shutdown_sync(Pid) || Pid <- ChildProcs],
+    [barrel_lib:shutdown_sync(Pid) || Pid <- ChildProcs],
     ok.
 
 

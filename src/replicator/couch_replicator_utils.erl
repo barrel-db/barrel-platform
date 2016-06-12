@@ -27,12 +27,6 @@
 -include_lib("ibrowse/include/ibrowse.hrl").
 
 
--import(couch_util, [
-    get_value/2,
-    get_value/3
-]).
-
-
 parse_rep_doc(Props, UserCtx) ->
   lager:info("props is ~p~n", [Props]),
   ProxyParams = parse_proxy_params(maps:get(<<"proxy">>, Props, <<>>)),
@@ -118,9 +112,9 @@ replication_id(#rep{user_ctx = UserCtx} = Rep, 1) ->
 maybe_append_filters(Base,
         #rep{source = Source, user_ctx = UserCtx, options = Options}) ->
     Base2 = Base ++
-        case get_value(filter, Options) of
+        case proplists:get_value(filter, Options) of
         undefined ->
-            case get_value(doc_ids, Options) of
+            case proplists:get_value(doc_ids, Options) of
             undefined ->
                 [];
             DocIds ->
@@ -132,7 +126,7 @@ maybe_append_filters(Base,
             [filter_code(Filter, Source, UserCtx),
                 proplists:get_value(query_params, Options, #{})]
         end,
-    couch_util:to_hex(crypto:hash(md5, term_to_binary(Base2))).
+    barrel_lib:to_hex(crypto:hash(md5, term_to_binary(Base2))).
 
 
 filter_code(Filter, Source, UserCtx) ->
@@ -148,7 +142,7 @@ filter_code(Filter, Source, UserCtx) ->
         Db0;
     DbError ->
         DbErrorMsg = io_lib:format("Could not open source database `~s`: ~s",
-           [couch_replicator_api_wrap:db_uri(Source), couch_util:to_binary(DbError)]),
+           [couch_replicator_api_wrap:db_uri(Source), barrel_lib:to_binary(DbError)]),
         throw({error, iolist_to_binary(DbErrorMsg)})
     end,
     try
@@ -160,10 +154,10 @@ filter_code(Filter, Source, UserCtx) ->
             DocErrorMsg = io_lib:format(
                 "Couldn't open document `_design/~s` from source "
                 "database `~s`: ~s", [DDocName, couch_replicator_api_wrap:db_uri(Source),
-                    couch_util:to_binary(DocError)]),
+                    barrel_lib:to_binary(DocError)]),
             throw({error, iolist_to_binary(DocErrorMsg)})
         end,
-        Code = couch_util:get_nested_json_value(
+        Code = barrel_lib:get_nested_json_value(
             Body, [<<"filters">>, FilterName]),
         re:replace(Code, [$^, "\s*(.*?)\s*", $$], "\\1", [{return, binary}])
     after
@@ -174,7 +168,7 @@ filter_code(Filter, Source, UserCtx) ->
 maybe_append_options(Options, RepOptions) ->
     lists:foldl(fun(Option, Acc) ->
         Acc ++
-        case get_value(Option, RepOptions, false) of
+        case proplists:get_value(Option, RepOptions, false) of
         true ->
             "+" ++ atom_to_list(Option);
         false ->
@@ -258,7 +252,7 @@ make_options(Props) ->
     DefRetries = barrel_config:get_integer("replicator", "retries_per_request", 10),
     UseCheckpoints =  barrel_config:get_boolean("replicator", "use_checkpoints", true),
     DefCheckpointInterval = barrel_config:get_integer("replicator", "checkpoint_interval", 5000),
-    {ok, DefSocketOptions} = couch_util:parse_term(
+    {ok, DefSocketOptions} = barrel_lib:parse_term(
             barrel_config:get("replicator", "socket_options", "[{keepalive, true}, {nodelay, false}]")
     ),
     lists:ukeymerge(1, Options, lists:keysort(1, [
@@ -297,24 +291,24 @@ convert_options([{<<"doc_ids">>, V} | R]) ->
     DocIds = [list_to_binary(couch_httpd:unquote(Id)) || Id <- V],
     [{doc_ids, DocIds} | convert_options(R)];
 convert_options([{<<"worker_processes">>, V} | R]) ->
-    [{worker_processes, couch_util:to_integer(V)} | convert_options(R)];
+    [{worker_processes, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([{<<"worker_batch_size">>, V} | R]) ->
-    [{worker_batch_size, couch_util:to_integer(V)} | convert_options(R)];
+    [{worker_batch_size, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([{<<"http_connections">>, V} | R]) ->
-    [{http_connections, couch_util:to_integer(V)} | convert_options(R)];
+    [{http_connections, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([{<<"connection_timeout">>, V} | R]) ->
-    [{connection_timeout, couch_util:to_integer(V)} | convert_options(R)];
+    [{connection_timeout, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([{<<"retries_per_request">>, V} | R]) ->
-    [{retries, couch_util:to_integer(V)} | convert_options(R)];
+    [{retries, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([{<<"socket_options">>, V} | R]) ->
-    {ok, SocketOptions} = couch_util:parse_term(V),
+    {ok, SocketOptions} = barrel_lib:parse_term(V),
     [{socket_options, SocketOptions} | convert_options(R)];
 convert_options([{<<"since_seq">>, V} | R]) ->
     [{since_seq, V} | convert_options(R)];
 convert_options([{<<"use_checkpoints">>, V} | R]) ->
     [{use_checkpoints, V} | convert_options(R)];
 convert_options([{<<"checkpoint_interval">>, V} | R]) ->
-    [{checkpoint_interval, couch_util:to_integer(V)} | convert_options(R)];
+    [{checkpoint_interval, barrel_lib:to_integer(V)} | convert_options(R)];
 convert_options([_ | R]) -> % skip unknown option
     convert_options(R).
 

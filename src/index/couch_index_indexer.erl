@@ -174,7 +174,7 @@ terminate(_Reason, #state{refresh_pid=RPid, tref=TRef}) ->
     end,
 
     case is_pid(RPid) of
-        true -> couch_util:shutdown_sync(RPid);
+        true -> barrel_lib:shutdown_sync(RPid);
         _ -> ok
     end,
     ok.
@@ -200,7 +200,7 @@ config_change(_, State) ->
 
 %% refresh the index to trigger updates.
 refresh_index(Db, Index) ->
-    UpdateSeq = couch_util:with_db(Db, fun(WDb) ->
+    UpdateSeq = barrel_lib:with_db(Db, fun(WDb) ->
                     couch_db:get_update_seq(WDb)
             end),
 

@@ -25,10 +25,6 @@
 
 -include_lib("couch_db.hrl").
 
--import(couch_util, [
-    get_value/2
-]).
-
 -record(state, {
     url,
     limit,                  % max # of workers allowed
@@ -59,7 +55,7 @@ init({Url, Options}) ->
     process_flag(trap_exit, true),
     State = #state{
         url = Url,
-        limit = get_value(max_connections, Options)
+        limit = proplists:get_value(max_connections, Options)
     },
     {ok, State}.
 

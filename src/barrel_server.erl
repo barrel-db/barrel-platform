@@ -126,7 +126,7 @@ is_admin(User, ClearPwd) ->
   case barrel_config:get("admins", User) of
     "-hashed-" ++ HashedPwdAndSalt ->
       [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
-      couch_util:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
+      barrel_lib:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
     _Else ->
       false
   end.
@@ -153,11 +153,11 @@ all_databases() ->
 
 all_databases(Fun, Acc0) ->
   {ok, #state{root_dir=Root}} = gen_server:call(barrel_server, get_state),
-  NormRoot = couch_util:normpath(Root),
+  NormRoot = normpath(Root),
   FinalAcc = try
                filelib:fold_files(Root, "^[a-z0-9\\_\\$()\\+\\-]*[\\.]couch$", true,
                                   fun(Filename, AccIn) ->
-                                      NormFilename = couch_util:normpath(Filename),
+                                      NormFilename = normpath(Filename),
                                       case NormFilename -- NormRoot of
                                         [$/ | RelativeFilename] -> ok;
                                         RelativeFilename -> ok
@@ -200,7 +200,7 @@ init([]) ->
   process_flag(trap_exit, true),
   {ok, #state{root_dir = RootDir,
               dbname_regexp = RegExp,
-              start_time = couch_util:rfc1123_date(),
+              start_time = barrel_lib:rfc1123_date(),
               pending = []}}.
 
 handle_call(get_state, _From, State) ->
@@ -260,7 +260,7 @@ terminate(_Reason, _Srv) ->
 
   lists:foreach(
     fun({_, Pid}) ->
-        couch_util:shutdown_sync(Pid)
+        barrel_lib:shutdown_sync(Pid)
     end,
     ets:tab2list(couch_dbs_by_name)).
 
@@ -377,7 +377,7 @@ handle_delete(State, Req, From, Db) ->
       UpdateState = case ets:lookup(couch_dbs_by_name, Db) of
                       [] -> false;
                       [{_, Pid}] ->
-                        couch_util:shutdown_sync(Pid),
+                        barrel_lib:shutdown_sync(Pid),
                         true = ets:delete(couch_dbs_by_name, Db),
                         true = ets:delete(couch_dbs_by_pid, Pid)
                     end,
@@ -471,3 +471,17 @@ check_pending(Db, From, State, Req) ->
     false ->
       false
   end.
+
+
+% Normalize a pathname by removing .. and . components.
+normpath(Path) ->
+  normparts(filename:split(Path), []).
+
+normparts([], Acc) ->
+  filename:join(lists:reverse(Acc));
+normparts([".." | RestParts], [_Drop | RestAcc]) ->
+  normparts(RestParts, RestAcc);
+normparts(["." | RestParts], Acc) ->
+  normparts(RestParts, Acc);
+normparts([Part | RestParts], Acc) ->
+  normparts(RestParts, [Part | Acc]).

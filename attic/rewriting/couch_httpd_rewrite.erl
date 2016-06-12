@@ -130,7 +130,7 @@ handle_rewrite_req(#httpd{
 
     % we are in a design handler
     DesignId = <<"_design/", DesignName/binary>>,
-    Prefix = <<"/", (list_to_binary(couch_util:url_encode(DbName)))/binary, "/", DesignId/binary>>,
+    Prefix = <<"/", (list_to_binary(barrel_lib:url_encode(DbName)))/binary, "/", DesignId/binary>>,
     QueryList = lists:map(fun decode_query_value/1, couch_httpd:qs(Req)),
 
     RewritesSoFar = erlang:get(?REWRITE_COUNT),
@@ -155,7 +155,7 @@ handle_rewrite_req(#httpd{
         Rules ->
             % create dispatch list from rules
             DispatchList =  process_rules(Rules, Req, Db, DDoc, []),
-            Method1 = couch_util:to_binary(Method),
+            Method1 = barrel_lib:to_binary(Method),
 
             % get raw path by matching url to a rule. Throws not_found.
             {NewPathParts0, Bindings0} =

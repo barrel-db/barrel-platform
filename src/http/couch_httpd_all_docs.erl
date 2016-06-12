@@ -54,9 +54,9 @@ query_all_docs(Db, Args) ->
 query_all_docs(Db, Args, Callback, Acc) when is_list(Args) ->
     query_all_docs(Db, to_all_docs_args(Args), Callback, Acc);
 query_all_docs(Db, Args0, Callback, Acc) ->
-    Sig = couch_util:with_db(Db, fun(WDb) ->
+    Sig = barrel_lib:with_db(Db, fun(WDb) ->
         {ok, Info} = couch_db:get_db_info(WDb),
-        couch_util:hexsig(crypto:hash(md5, term_to_binary(Info)))
+        barrel_lib:hexsig(crypto:hash(md5, term_to_binary(Info)))
     end),
     Args2 = validate_args(Args0),
     {ok, Acc1} = case Args2#all_docs_args.preflight_fun of
@@ -459,10 +459,10 @@ is_keys(Props) ->
 to_all_docs_args(KeyList) ->
     lists:foldl(fun
                     ({dir, Value}, Acc) ->
-                        Index = lookup_index(couch_util:to_existing_atom(direction)),
+                        Index = lookup_index(barrel_lib:to_existing_atom(direction)),
                         setelement(Index, Acc, Value);
                     ({Key, Value}, Acc) ->
-                        Index = lookup_index(couch_util:to_existing_atom(Key)),
+                        Index = lookup_index(barrel_lib:to_existing_atom(Key)),
                         setelement(Index, Acc, Value)
                 end, #all_docs_args{}, KeyList).
 

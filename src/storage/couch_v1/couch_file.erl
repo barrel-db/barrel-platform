@@ -201,7 +201,7 @@ sync(Fd) ->
 %% Returns: ok
 %%----------------------------------------------------------------------
 close(Fd) ->
-    couch_util:shutdown_sync(Fd).
+    barrel_lib:shutdown_sync(Fd).
 
 
 delete(RootDir, Filepath) ->

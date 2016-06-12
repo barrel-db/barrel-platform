@@ -197,7 +197,7 @@ start_port(Command) ->
     start_port(Command, []).
 
 start_port(Command, EnvPairs) ->
-    PrivDir = couch_util:priv_dir(),
+    PrivDir = barrel_lib:priv_dir(),
     Spawnkiller = filename:join(PrivDir, "couchspawnkillable"),
     Opts = case lists:keytake(env, 1, ?PORT_OPTIONS) of
         false ->

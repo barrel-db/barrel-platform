@@ -44,7 +44,7 @@ get_view(Db, DDoc, ViewName, Args0) ->
         {ok, validate_args(Args1)}
     end,
     {ok, Pid, Args2} = couch_index_server:get_index(?MOD, Db, DDoc, ArgCheck),
-    DbUpdateSeq = couch_util:with_db(Db, fun(WDb) ->
+    DbUpdateSeq = barrel_lib:with_db(Db, fun(WDb) ->
         couch_db:get_update_seq(WDb)
     end),
     MinSeq = case Args2#mrargs.stale of
@@ -152,7 +152,7 @@ view_sig(Db, State, View, #mrargs{include_docs=true}=Args) ->
     UpdateSeq = couch_db:get_update_seq(Db),
     PurgeSeq = couch_db:get_purge_seq(Db),
     Term = view_sig_term(BaseSig, UpdateSeq, PurgeSeq),
-    couch_util:hexsig(crypto:hash(md5, term_to_binary(Term)));
+    barrel_lib:hexsig(crypto:hash(md5, term_to_binary(Term)));
 view_sig(Db, State, {_Nth, _Lang, View}, Args) ->
     view_sig(Db, State, View, Args);
 view_sig(_Db, State, View, Args0) ->
@@ -164,7 +164,7 @@ view_sig(_Db, State, View, Args0) ->
         extra=[]
     },
     Term = view_sig_term(Sig, UpdateSeq, PurgeSeq, Args),
-    couch_util:hexsig(crypto:hash(md5, term_to_binary(Term))).
+    barrel_lib:hexsig(crypto:hash(md5, term_to_binary(Term))).
 
 view_sig_term(BaseSig, UpdateSeq, PurgeSeq) ->
     {BaseSig, UpdateSeq, PurgeSeq}.
@@ -572,12 +572,12 @@ make_header(State) ->
 
 
 index_file(DbName, Sig) ->
-    FileName = couch_util:hexsig(Sig) ++ ".view",
+    FileName = barrel_lib:hexsig(Sig) ++ ".view",
     couch_index_util:index_file(mrview, DbName, FileName).
 
 
 compaction_file(DbName, Sig) ->
-    FileName = couch_util:hexsig(Sig) ++ ".compact.view",
+    FileName = barrel_lib:hexsig(Sig) ++ ".compact.view",
     couch_index_util:index_file(mrview, DbName, FileName).
 
 

@@ -100,7 +100,7 @@ init({Mod, IdxState}) ->
     hooks:reg(config_key_update, ?MODULE, config_change, 3),
 
     DbName = Mod:get(db_name, IdxState),
-    Resp = couch_util:with_db(DbName, fun(Db) ->
+    Resp = barrel_lib:with_db(DbName, fun(Db) ->
         case Mod:open(Db, IdxState) of
             {ok, IdxSt} ->
                 couch_db:monitor(Db),
@@ -126,7 +126,7 @@ init({Mod, IdxState}) ->
             Args = [
                 Mod:get(db_name, IdxState),
                 Mod:get(idx_name, IdxState),
-                couch_util:hexsig(Mod:get(signature, IdxState))
+                barrel_lib:hexsig(Mod:get(signature, IdxState))
             ],
 
             _ = couch_event:subscribe_cond(db_updated, [{{DbName, '$1'},
@@ -146,12 +146,12 @@ terminate(Reason, State) ->
     #st{mod=Mod, idx_state=IdxState}=State,
     Mod:close(IdxState),
     send_all(State#st.waiters, Reason),
-    couch_util:shutdown_sync(State#st.updater),
-    couch_util:shutdown_sync(State#st.compactor),
+    barrel_lib:shutdown_sync(State#st.updater),
+    barrel_lib:shutdown_sync(State#st.compactor),
     Args = [
         Mod:get(db_name, IdxState),
         Mod:get(idx_name, IdxState),
-        couch_util:hexsig(Mod:get(signature, IdxState)),
+        barrel_lib:hexsig(Mod:get(signature, IdxState)),
         Reason
     ],
     lager:info("Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),
@@ -344,7 +344,7 @@ handle_cast(ddoc_updated, State) ->
 
     hooks:run(index_update, [DbName, DDocId, DDocId]),
 
-    Shutdown = couch_util:with_db(DbName, fun(Db) ->
+    Shutdown = barrel_lib:with_db(DbName, fun(Db) ->
         case couch_db:open_doc(Db, DDocId, [ejson_body]) of
             {not_found, deleted} ->
                 true;
@@ -374,7 +374,7 @@ handle_info(commit, State) ->
     #st{mod=Mod, idx_state=IdxState, commit_delay=Delay} = State,
     DbName = Mod:get(db_name, IdxState),
     GetCommSeq = fun(Db) -> couch_db:get_committed_update_seq(Db) end,
-    CommittedSeq = couch_util:with_db(DbName, GetCommSeq),
+    CommittedSeq = barrel_lib:with_db(DbName, GetCommSeq),
     case CommittedSeq >= Mod:get(update_seq, IdxState) of
         true ->
             % Commit the updates
@@ -399,7 +399,7 @@ handle_info({couch_event, db_updated, _}, State) ->
     %% updated
     hooks:run(index_update, [DbName, DDocId, DDocId]),
 
-    Shutdown = couch_util:with_db(DbName, fun(Db) ->
+    Shutdown = barrel_lib:with_db(DbName, fun(Db) ->
         case couch_db:open_doc(Db, DDocId, [ejson_body]) of
             {not_found, deleted} ->
                 true;
@@ -448,7 +448,7 @@ code_change(_OldVsn, State, _Extra) ->
 maybe_restart_updater(#st{waiters=[]}) ->
     ok;
 maybe_restart_updater(#st{mod=Mod, idx_state=IdxState}=State) ->
-    couch_util:with_db(Mod:get(db_name, IdxState), fun(Db) ->
+    barrel_lib:with_db(Mod:get(db_name, IdxState), fun(Db) ->
         UpdateSeq = couch_db:get_update_seq(Db),
         CommittedSeq = couch_db:get_committed_update_seq(Db),
         CanUpdate = UpdateSeq > CommittedSeq,

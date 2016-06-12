@@ -83,7 +83,7 @@ purge(_Db, PurgeSeq, PurgedIdRevs, State) ->
     {KeysToRemove, SeqsToRemove, KSeqsToRemove} = lists:foldl(MakeDictFun, DictAcc0, Lookups),
 
     RemKeysFun = fun(#mrview{id_num=ViewId}=View) ->
-        ToRem = couch_util:dict_find(ViewId, KeysToRemove, []),
+        ToRem = barrel_lib:dict_find(ViewId, KeysToRemove, []),
         {ok, VBtree2} = couch_btree:add_remove(View#mrview.btree, [], ToRem),
         {NewPurgeSeq, IsPurged} = case VBtree2 =/= View#mrview.btree of
                                       true -> {PurgeSeq, true};
@@ -93,8 +93,8 @@ purge(_Db, PurgeSeq, PurgedIdRevs, State) ->
         {ok, SeqBtree2, KSeqBtree2} =
         case IsPurged of
             true ->
-                SToRem = couch_util:dict_find(ViewId, SeqsToRemove, []),
-                KSToRem = couch_util:dict_find(ViewId, KSeqsToRemove, []),
+                SToRem = barrel_lib:dict_find(ViewId, SeqsToRemove, []),
+                KSToRem = barrel_lib:dict_find(ViewId, KSeqsToRemove, []),
                 {ok, SBt} = couch_btree:add_remove(View#mrview.seq_btree, [],
                                                    SToRem),
                 {ok, KSBt} = couch_btree:add_remove(View#mrview.kseq_btree, [],
@@ -301,7 +301,7 @@ write_kvs(State, UpdateSeq, ViewKVs, DocIdKeys, GroupSeq0) ->
 
 
     UpdateView = fun(#mrview{id_num=ViewId}=View, {ViewId, KVs}) ->
-        RemKVs = couch_util:dict_find(ViewId, RemByView, []),
+        RemKVs = barrel_lib:dict_find(ViewId, RemByView, []),
         ToAdd = KVs ++ RemKVs,
         {ToFind, SKVs, KSKVs, Seqs} =
         lists:foldl(fun

@@ -46,12 +46,6 @@
     wait = ?INITIAL_WAIT
 }).
 
--import(couch_util, [
-    get_value/2,
-    get_value/3,
-    to_binary/1
-]).
-
 -record(state, {
     changes_feed_loop = nil,
     db_notifier = nil,
@@ -100,7 +94,7 @@ replication_error(#rep{id = {BaseId, _} = RepId}, Error) ->
       ok;
     #rep_state{rep = #rep{doc_id = DocId}} ->
       update_rep_doc(DocId, #{<<"_replication_state">> => <<"error">>,
-                              <<"_replication_state_reason">> => to_binary(error_reason(Error)),
+                              <<"_replication_state_reason">> => barrel_lib:to_error(error_reason(Error)),
                               <<"_replication_id">> => list_to_binary(BaseId)}),
       ok = gen_server:call(?MODULE, {rep_error, RepId, Error}, infinity)
   end.
@@ -333,7 +327,7 @@ process_update(State, Change) ->
 rep_db_update_error(Error, DocId) ->
   Reason = case Error of
              {bad_rep_doc, R} -> R;
-             _ ->to_binary(Error)
+             _ -> barrel_lib:to_error(Error)
            end,
   lager:error("Replication manager, error processing document `~s`: ~s",
               [DocId, Reason]),
@@ -389,13 +383,13 @@ parse_rep_doc(RepDoc) ->
     throw:{error, Reason} ->
         throw({bad_rep_doc, Reason});
     Tag:Err ->
-        throw({bad_rep_doc, to_binary({Tag, Err})})
+        throw({bad_rep_doc, barrel_lib:to_error({Tag, Err})})
     end,
     Rep.
 
 
-maybe_tag_rep_doc(DocId, {RepProps}, RepId) ->
-    case get_value(<<"_replication_id">>, RepProps) of
+maybe_tag_rep_doc(DocId, RepProps, RepId) ->
+    case maps:get(<<"_replication_id">>, RepProps, undefined) of
     RepId ->
         ok;
     _ ->
@@ -471,7 +465,7 @@ maybe_retry_replication(#rep_state{retries_left = 0} = RepState, Error, State) -
     true = ets:delete(?DOC_TO_REP, DocId),
     lager:error("Error in replication `~s` (triggered by document `~s`): ~s"
         "~nReached maximum retry attempts (~p).",
-        [pp_rep_id(RepId), DocId, to_binary(error_reason(Error)), MaxRetries]),
+        [pp_rep_id(RepId), DocId, barrel_lib:to_error(error_reason(Error)), MaxRetries]),
     State;
 
 maybe_retry_replication(RepState, Error, State) ->
@@ -482,7 +476,7 @@ maybe_retry_replication(RepState, Error, State) ->
     true = ets:insert(?REP_TO_STATE, {RepId, NewRepState}),
     lager:error("Error in replication `~s` (triggered by document `~s`): ~s"
         "~nRestarting replication in ~p seconds.",
-        [pp_rep_id(RepId), DocId, to_binary(error_reason(Error)), Wait]),
+        [pp_rep_id(RepId), DocId, barrel_lib:to_error(error_reason(Error)), Wait]),
     Pid = spawn_link(fun() -> start_replication(Rep, Wait) end),
     State#state{rep_start_pids = [Pid | State#state.rep_start_pids]}.
 

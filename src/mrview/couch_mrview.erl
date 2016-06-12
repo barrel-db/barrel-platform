@@ -160,7 +160,7 @@ refresh(#db{name=DbName}, DDoc) ->
   refresh(DbName, DDoc);
 
 refresh(Db, DDoc) ->
-  UpdateSeq = couch_util:with_db(Db, fun(WDb) ->
+  UpdateSeq = barrel_lib:with_db(Db, fun(WDb) ->
                                          couch_db:get_update_seq(WDb)
                                      end),
 
@@ -178,7 +178,7 @@ trigger_update(#db{name=DbName}, DDoc) ->
   trigger_update(DbName, DDoc);
 
 trigger_update(Db, DDoc) ->
-  UpdateSeq = couch_util:with_db(Db, fun(WDb) ->
+  UpdateSeq = barrel_lib:with_db(Db, fun(WDb) ->
                                          couch_db:get_update_seq(WDb)
                                      end),
 
@@ -417,10 +417,10 @@ default_cb(Row, Acc) ->
 to_mrargs(KeyList) ->
   lists:foldl(fun
                 ({dir, Value}, Acc) ->
-  Index = lookup_index(couch_util:to_existing_atom(direction)),
+  Index = lookup_index(barrel_lib:to_existing_atom(direction)),
   setelement(Index, Acc, Value);
 ({Key, Value}, Acc) ->
-  Index = lookup_index(couch_util:to_existing_atom(Key)),
+  Index = lookup_index(barrel_lib:to_existing_atom(Key)),
   setelement(Index, Acc, Value)
               end, #mrargs{}, KeyList).
 

@@ -52,8 +52,8 @@ init({MainPid, DbName, Filepath, Fd, Options}) ->
 terminate(_Reason, Db) ->
     ok = couch_file:close(Db#db.updater_fd),
     ok = couch_file:close(Db#db.fd),
-    couch_util:shutdown_sync(Db#db.compactor_pid),
-    couch_util:shutdown_sync(Db#db.fd_ref_counter),
+    barrel_lib:shutdown_sync(Db#db.compactor_pid),
+    barrel_lib:shutdown_sync(Db#db.fd_ref_counter),
     ok.
 
 handle_call(get_db, _From, Db) ->
@@ -428,7 +428,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
     _ -> throw({database_disk_version_error, "Incorrect disk header version"})
     end,
 
-    {ok, FsyncOptions} = couch_util:parse_term(
+    {ok, FsyncOptions} = barrel_lib:parse_term(
             barrel_config:get("couchdb", "fsync_options", "[before_header, after_header, on_file_open]")
     ),
 

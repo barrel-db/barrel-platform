@@ -88,7 +88,7 @@ handle_changes(Args1, Req, Db0) ->
                                            fwd ->
                                                case Since of
                                                    now ->
-                                                       couch_util:with_db(Db#db.name, fun(WDb) ->
+                                                       barrel_lib:with_db(Db#db.name, fun(WDb) ->
                                                                                               couch_db:get_update_seq(WDb)
                                                                                       end);
                                                    _ ->
@@ -204,7 +204,7 @@ os_filter_fun(FilterName, Style, Req, Db) ->
         DDoc = couch_httpd_db:couch_doc_open(Db, DesignId, nil, [ejson_body]),
         % validate that the ddoc has the filter fun
         #doc{body=DocBody} = DDoc,
-        couch_util:get_nested_json_value(DocBody, [<<"filters">>, FName]),
+        barrel_lib:get_nested_json_value(DocBody, [<<"filters">>, FName]),
         fun(Db2, DocInfo) ->
             DocInfos =
             case Style of
@@ -690,12 +690,12 @@ parse_view_options([], _JsonReq, Acc) ->
 
 parse_view_options(Options, true, _Acc) ->
      %% get list of view attributes
-    ViewFields0 = [couch_util:to_binary(F) || F <- record_info(fields,  mrargs)],
+    ViewFields0 = [barrel_lib:to_binary(F) || F <- record_info(fields,  mrargs)],
     ViewFields = [<<"key">> | ViewFields0],
 
     [{K, V} || {K, V} <- Options, lists:member(K, ViewFields)];
 parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
-    Acc1 = case couch_util:to_binary(K) of
+    Acc1 = case barrel_lib:to_binary(K) of
         <<"reduce">> ->
             [{reduce, couch_httpd_util:parse_boolean(V)}];
         <<"key">> ->
@@ -708,17 +708,17 @@ parse_view_options([{K, V} | Rest], JsonReq, Acc) ->
         <<"start_key">> ->
             [{start_key, parse_json(V, JsonReq)} | Acc];
         <<"startkey_docid">> ->
-            [{start_key_docid, couch_util:to_binary(V)} | Acc];
+            [{start_key_docid, barrel_lib:to_binary(V)} | Acc];
         <<"start_key_docid">> ->
-            [{start_key_docid, couch_util:to_binary(V)} | Acc];
+            [{start_key_docid, barrel_lib:to_binary(V)} | Acc];
         <<"endkey">> ->
             [{end_key, parse_json(V, JsonReq)} | Acc];
         <<"end_key">> ->
             [{end_key, parse_json(V, JsonReq)} | Acc];
         <<"endkey_docid">> ->
-            [{start_key_docid, couch_util:to_binary(V)} | Acc];
+            [{start_key_docid, barrel_lib:to_binary(V)} | Acc];
         <<"end_key_docid">> ->
-            [{start_key_docid, couch_util:to_binary(V)} | Acc];
+            [{start_key_docid, barrel_lib:to_binary(V)} | Acc];
         <<"limit">> ->
             [{limit, couch_httpd_util:parse_pos_int(V)} | Acc];
         <<"count">> ->

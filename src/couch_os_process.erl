@@ -113,11 +113,11 @@ readjson(OsProc) when is_record(OsProc, os_proc) ->
             lager:info("OS Process ~p Log :: ~s", [OsProc#os_proc.port, Msg]),
             readjson(OsProc);
         [<<"error">>, Id, Reason] ->
-            throw({error, {couch_util:to_existing_atom(Id),Reason}});
+            throw({error, {barrel_lib:to_existing_atom(Id),Reason}});
         [<<"fatal">>, Id, Reason] ->
             lager:info("OS Process ~p Fatal Error :: ~s ~p",
                 [OsProc#os_proc.port, Id, Reason]),
-            throw({couch_util:to_existing_atom(Id),Reason});
+            throw({barrel_lib:to_existing_atom(Id),Reason});
         _Result ->
             {json, Line}
         end
@@ -143,7 +143,7 @@ pick_command1(_) ->
 
 % gen_server API
 init([Command, Options, PortOptions]) ->
-    PrivDir = couch_util:priv_dir(),
+    PrivDir = barrel_lib:priv_dir(),
     Spawnkiller = filename:join(PrivDir, "barrelspawnkillable"),
     BaseProc = #os_proc{
         command=Command,

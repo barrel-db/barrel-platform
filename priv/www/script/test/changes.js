@@ -41,16 +41,16 @@ couchTests.changes = function(debug) {
   // test with callback
 
   run_on_modified_server(
-    [{section: "httpd",
-      key: "allow_jsonp",
-      value: "true"}],
-  function() {
-    var xhr = CouchDB.request("GET", "/test_suite_db/_changes?callback=jsonp");
-    T(xhr.status == 200);
-    jsonp_flag = 0;
-    eval(xhr.responseText);
-    T(jsonp_flag == 1);
-  });
+      [{section: "httpd",
+        key: "allow_jsonp",
+        value: "true"}],
+      function() {
+        var xhr = CouchDB.request("GET", "/test_suite_db/_changes?callback=jsonp");
+        T(xhr.status == 200);
+        jsonp_flag = 0;
+        eval(xhr.responseText);
+        T(jsonp_flag == 1);
+      });
 
   req = CouchDB.request("GET", "/test_suite_db/_changes?feed=continuous&timeout=10");
   var lines = req.responseText.split("\n");
@@ -90,7 +90,7 @@ couchTests.changes = function(debug) {
       change1 = JSON.parse(lines[0]);
       change2 = JSON.parse(lines[1]);
       if (change2.seq != 2) {
-          throw "bad seq, try again";
+        throw "bad seq, try again";
       }
       return true;
     }, "bar-only");
@@ -145,7 +145,7 @@ couchTests.changes = function(debug) {
     // test Server Sent Event (eventsource)
     if (!!window.EventSource) {
       var source = new EventSource(
-              "/test_suite_db/_changes?feed=eventsource");
+          "/test_suite_db/_changes?feed=eventsource");
       var results = [];
       var sourceListener = function(e) {
         var data = JSON.parse(e.data);
@@ -275,10 +275,10 @@ couchTests.changes = function(debug) {
       },
       blah: {
         map : 'function(doc) {' +
-              '  if (doc._id == "blah") {' +
-              '    emit(null, null);' +
-              '  }' +
-              '}'
+        '  if (doc._id == "blah") {' +
+        '    emit(null, null);' +
+        '  }' +
+        '}'
       }
     }
   };
@@ -295,10 +295,10 @@ couchTests.changes = function(debug) {
       },
       blah: {
         map : 'function(doc) {' +
-              '  if ((doc._id == "blah") || (doc._id == "blah2")) {' +
-              '    emit("test", null);' +
-              '  }' +
-              '}'
+        '  if ((doc._id == "blah") || (doc._id == "blah2")) {' +
+        '    emit("test", null);' +
+        '  }' +
+        '}'
       }
     }
   };
@@ -393,26 +393,26 @@ couchTests.changes = function(debug) {
 
   // non-existing design doc
   var req = CouchDB.request("GET",
-    "/test_suite_db/_changes?filter=nothingtosee/bop");
+      "/test_suite_db/_changes?filter=nothingtosee/bop");
   TEquals(404, req.status, "should return 404 for non existant design doc");
 
   // non-existing filter
   var req = CouchDB.request("GET",
-    "/test_suite_db/_changes?filter=changes_filter/movealong");
+      "/test_suite_db/_changes?filter=changes_filter/movealong");
   TEquals(404, req.status, "should return 404 for non existant filter fun");
 
   // both
   var req = CouchDB.request("GET",
-    "/test_suite_db/_changes?filter=nothingtosee/movealong");
+      "/test_suite_db/_changes?filter=nothingtosee/movealong");
   TEquals(404, req.status,
-    "should return 404 for non existant design doc and filter fun");
+      "should return 404 for non existant design doc and filter fun");
 
   // changes get all_docs style with deleted docs
   var doc = {a:1};
   db.save(doc);
   db.deleteDoc(doc);
   var req = CouchDB.request("GET",
-    "/test_suite_db/_changes?filter=changes_filter/bop&style=all_docs");
+      "/test_suite_db/_changes?filter=changes_filter/bop&style=all_docs");
   var resp = JSON.parse(req.responseText);
   var expect = (!is_safari && xhr) ? 3: 1;
   TEquals(expect, resp.results.length, "should return matching rows");
@@ -460,32 +460,32 @@ couchTests.changes = function(debug) {
 
   // test for userCtx
   run_on_modified_server(
-    [{section: "httpd",
-      key: "authentication_handlers",
-      value: "{couch_httpd_auth, special_test_authentication_handler}"},
-     {section:"httpd",
-      key: "WWW-Authenticate",
-      value:  "X-Couch-Test-Auth"}],
+      [{section: "httpd",
+        key: "authentication_handlers",
+        value: "{couch_httpd_auth, special_test_authentication_handler}"},
+        {section:"httpd",
+          key: "WWW-Authenticate",
+          value:  "X-Couch-Test-Auth"}],
 
-    function() {
-      var authOpts = {"headers":{"WWW-Authenticate": "X-Couch-Test-Auth Chris Anderson:mp3"}};
+      function() {
+        var authOpts = {"headers":{"WWW-Authenticate": "X-Couch-Test-Auth Chris Anderson:mp3"}};
 
-      var req = CouchDB.request("GET", "/_session", authOpts);
-      var resp = JSON.parse(req.responseText);
+        var req = CouchDB.request("GET", "/_session", authOpts);
+        var resp = JSON.parse(req.responseText);
 
-      T(db.save({"user" : "Noah Slater"}).ok);
-      var req = CouchDB.request("GET", "/test_suite_db/_changes?filter=changes_filter/userCtx", authOpts);
-      var resp = JSON.parse(req.responseText);
-      T(resp.results.length == 0);
+        T(db.save({"user" : "Noah Slater"}).ok);
+        var req = CouchDB.request("GET", "/test_suite_db/_changes?filter=changes_filter/userCtx", authOpts);
+        var resp = JSON.parse(req.responseText);
+        T(resp.results.length == 0);
 
-      var docResp = db.save({"user" : "Chris Anderson"});
-      T(docResp.ok);
-      T(db.ensureFullCommit().ok);
-      req = CouchDB.request("GET", "/test_suite_db/_changes?filter=changes_filter/userCtx", authOpts);
-      resp = JSON.parse(req.responseText);
-      T(resp.results.length == 1, "userCtx");
-      T(resp.results[0].id == docResp.id);
-    }
+        var docResp = db.save({"user" : "Chris Anderson"});
+        T(docResp.ok);
+        T(db.ensureFullCommit().ok);
+        req = CouchDB.request("GET", "/test_suite_db/_changes?filter=changes_filter/userCtx", authOpts);
+        resp = JSON.parse(req.responseText);
+        T(resp.results.length == 1, "userCtx");
+        T(resp.results[0].id == docResp.id);
+      }
   );
 
   req = CouchDB.request("GET", "/test_suite_db/_changes?limit=1");
@@ -511,13 +511,13 @@ couchTests.changes = function(debug) {
       language: "erlang",
       filters: {
         foo:
-          'fun({Doc}, Req) -> ' +
-          '  case couch_util:get_value(<<"value">>, Doc) of' +
-          '  undefined -> false;' +
-          '  Value -> (Value rem 2) =:= 0;' +
-          '  _ -> false' +
-          '  end ' +
-          'end.'
+        'fun(Doc, Req) -> ' +
+        '  case maps:get(<<"value">>, Doc, undefined) of' +
+        '  undefined -> false;' +
+        '  Value -> (Value rem 2) =:= 0;' +
+        '  _ -> false' +
+        '  end ' +
+        'end.'
       }
     };
 
@@ -544,8 +544,8 @@ couchTests.changes = function(debug) {
     //
 
     var options = {
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({"doc_ids": ["something", "anotherthing", "andmore"]})
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({"doc_ids": ["something", "anotherthing", "andmore"]})
     };
 
     var req = CouchDB.request("POST", "/test_suite_db/_changes?filter=_doc_ids", options);
@@ -579,25 +579,25 @@ couchTests.changes = function(debug) {
 
 
     if (!is_safari && xhr) {
-        // filter docids with continuous
-        xhr = CouchDB.newXhr();
-        xhr.open("POST", CouchDB.proxyUrl("/test_suite_db/_changes?feed=continuous&timeout=500&since=7&filter=_doc_ids"), true);
-        xhr.setRequestHeader("Content-Type", "application/json");
+      // filter docids with continuous
+      xhr = CouchDB.newXhr();
+      xhr.open("POST", CouchDB.proxyUrl("/test_suite_db/_changes?feed=continuous&timeout=500&since=7&filter=_doc_ids"), true);
+      xhr.setRequestHeader("Content-Type", "application/json");
 
-        xhr.send(options.body);
+      xhr.send(options.body);
 
-        T(db.save({"_id":"andmore", "bop" : "plankton"}).ok);
+      T(db.save({"_id":"andmore", "bop" : "plankton"}).ok);
 
-        waitForSuccess(function() {
-            if (xhr.readyState != 4) {
-              throw("still waiting");
-            }
-            return true;
-        }, "andmore-only");
+      waitForSuccess(function() {
+        if (xhr.readyState != 4) {
+          throw("still waiting");
+        }
+        return true;
+      }, "andmore-only");
 
-        var line = JSON.parse(xhr.responseText.split("\n")[0]);
-        T(line.seq == 8);
-        T(line.id == "andmore");
+      var line = JSON.parse(xhr.responseText.split("\n")[0]);
+      T(line.seq == 8);
+      T(line.id == "andmore");
     }
   });
 
@@ -629,14 +629,14 @@ couchTests.changes = function(debug) {
   TEquals(7, resp.results.length);
 
   req = CouchDB.request(
-    "GET", "/"+ db.name + "/_changes?limit=1&filter=testdocs/testdocsonly");
+      "GET", "/"+ db.name + "/_changes?limit=1&filter=testdocs/testdocsonly");
   resp = JSON.parse(req.responseText);
   TEquals(3, resp.last_seq);
   TEquals(1, resp.results.length);
   TEquals("0", resp.results[0].id);
 
   req = CouchDB.request(
-    "GET", "/" + db.name + "/_changes?limit=2&filter=testdocs/testdocsonly");
+      "GET", "/" + db.name + "/_changes?limit=2&filter=testdocs/testdocsonly");
   resp = JSON.parse(req.responseText);
   TEquals(4, resp.last_seq);
   TEquals(2, resp.results.length);
@@ -655,8 +655,8 @@ couchTests.changes = function(debug) {
   T(db.save({"_id":"bar", "a" : 456}).ok);
 
   options = {
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({"_rev":"1-cc609831f0ca66e8cd3d4c1e0d98108a", "a":456})
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({"_rev":"1-cc609831f0ca66e8cd3d4c1e0d98108a", "a":456})
   };
   req = CouchDB.request("PUT", "/" + db.name + "/foo?new_edits=false", options);
 
@@ -685,14 +685,14 @@ couchTests.changes = function(debug) {
 
   // simulate an EventSource request with a Last-Event-ID header
   req = CouchDB.request("GET", "/test_suite_db/_changes?feed=eventsource&timeout=0&since=0",
-        {"headers": {"Accept": "text/event-stream", "Last-Event-ID": "2"}});
+      {"headers": {"Accept": "text/event-stream", "Last-Event-ID": "2"}});
 
   // "parse" the eventsource response and collect only the "id: ..." lines
   var changes = req.responseText.split('\n')
-     .map(function (el) {
+      .map(function (el) {
         return el.split(":").map(function (el) { return el.trim()});
-     })
-     .filter(function (el) { return (el[0] === "id"); })
+      })
+      .filter(function (el) { return (el[0] === "id"); })
 
   // make sure we only got 2 changes, and they are update_seq=3 and update_seq=4
   T(changes.length === 2);

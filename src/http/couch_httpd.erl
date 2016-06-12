@@ -47,7 +47,7 @@ set_auth_handlers() ->
 % SpecStr is a string like "{my_module, my_fun}"
 %  or "{my_module, my_fun, <<"my_arg">>}"
 make_arity_1_fun(SpecStr) ->
-    case couch_util:parse_term(SpecStr) of
+    case barrel_lib:parse_term(SpecStr) of
     {ok, {Mod, Fun, SpecArg}} ->
         fun(Arg) -> Mod:Fun(Arg, SpecArg) end;
     {ok, {Mod, Fun}} ->
@@ -55,7 +55,7 @@ make_arity_1_fun(SpecStr) ->
     end.
 
 make_arity_2_fun(SpecStr) ->
-    case couch_util:parse_term(SpecStr) of
+    case barrel_lib:parse_term(SpecStr) of
     {ok, {Mod, Fun, SpecArg}} ->
         fun(Arg1, Arg2) -> Mod:Fun(Arg1, Arg2, SpecArg) end;
     {ok, {Mod, Fun}} ->
@@ -63,7 +63,7 @@ make_arity_2_fun(SpecStr) ->
     end.
 
 make_arity_3_fun(SpecStr) ->
-    case couch_util:parse_term(SpecStr) of
+    case barrel_lib:parse_term(SpecStr) of
     {ok, {Mod, Fun, SpecArg}} ->
         fun(Arg1, Arg2, Arg3) -> Mod:Fun(Arg1, Arg2, Arg3, SpecArg) end;
     {ok, {Mod, Fun}} ->
@@ -107,7 +107,7 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
 
         % Non standard HTTP verbs aren't atoms (COPY, MOVE etc) so convert when
         % possible (if any module references the atom, then it's existing).
-        Meth -> couch_util:to_existing_atom(Meth)
+        Meth -> barrel_lib:to_existing_atom(Meth)
     end,
     increment_method_stats(Method1),
 
@@ -120,7 +120,7 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
     true ->
         lager:info("MethodOverride: ~s (real method was ~s)", [MethodOverride, Method1]),
         case Method1 of
-        'POST' -> couch_util:to_existing_atom(MethodOverride);
+        'POST' -> barrel_lib:to_existing_atom(MethodOverride);
         _ ->
             % Ignore X-HTTP-Method-Override when the original verb isn't POST.
             % I'd like to send a 406 error to the client, but that'd require a nasty refactor.
@@ -151,7 +151,7 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
         auth = erlang:erase(pre_rewrite_auth)
     },
 
-    HandlerFun = couch_util:dict_find(HandlerKey, UrlHandlers, DefaultFun),
+    HandlerFun = barrel_lib:dict_find(HandlerKey, UrlHandlers, DefaultFun),
     {ok, AuthHandlers} = application:get_env(couch_httpd, auth_handlers),
 
     {ok, Resp} =
@@ -683,13 +683,13 @@ error_info({error, illegal_database_name, Name}) ->
     Message = "Name: '" ++ Name ++ "'. Only lowercase characters (a-z), "
         ++ "digits (0-9), and any of the characters _, $, (, ), +, -, and / "
         ++ "are allowed. Must begin with a letter.",
-    {400, <<"illegal_database_name">>, couch_util:to_binary(Message)};
+    {400, <<"illegal_database_name">>, barrel_lib:to_binary(Message)};
 error_info({missing_stub, Reason}) ->
     {412, <<"missing_stub">>, Reason};
 error_info({Error, Reason}) ->
-    {500, couch_util:to_binary(Error), couch_util:to_binary(Reason)};
+    {500, barrel_lib:to_binary(Error), barrel_lib:to_binary(Reason)};
 error_info(Error) ->
-    {500, <<"unknown_error">>, couch_util:to_binary(Error)}.
+    {500, <<"unknown_error">>, barrel_lib:to_binary(Error)}.
 
 error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
     if Code == 401 ->
@@ -721,8 +721,8 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
                                     UrlReturnRaw = MochiReq:get(path),
                                     RedirectLocation = lists:flatten([
                                         AuthRedirect,
-                                        "?return=", couch_util:url_encode(UrlReturnRaw),
-                                        "&reason=", couch_util:url_encode(ReasonStr)
+                                        "?return=", barrel_lib:url_encode(UrlReturnRaw),
+                                        "&reason=", barrel_lib:url_encode(ReasonStr)
                                     ]),
                                     {302, [{"Location", absolute_uri(Req, RedirectLocation)}]};
                                 false ->
@@ -847,8 +847,10 @@ split_header(Line) ->
     [{string:to_lower(string:strip(Name)),
      mochiweb_util:parse_header(Value)}].
 
+
+
 read_until(#mp{data_fun=DataFun, buffer=Buffer}=Mp, Pattern, Callback) ->
-    case couch_util:find_in_binary(Pattern, Buffer) of
+    case find_in_binary(Pattern, Buffer) of
     not_found ->
         Callback2 = Callback(Buffer),
         {Buffer2, DataFun2} = DataFun(),
@@ -922,4 +924,34 @@ check_for_last(#mp{buffer=Buffer, data_fun=DataFun}=Mp) ->
         {Data, DataFun2} = DataFun(),
         check_for_last(Mp#mp{buffer= <<Buffer/binary, Data/binary>>,
                 data_fun = DataFun2})
+    end.
+
+find_in_binary(_B, <<>>) ->
+    not_found;
+
+find_in_binary(B, Data) ->
+    case binary:match(Data, [B], []) of
+        nomatch ->
+            MatchLength = erlang:min(byte_size(B), byte_size(Data)),
+            match_prefix_at_end(binary:part(B, {0, MatchLength}),
+                binary:part(Data, {byte_size(Data), -MatchLength}),
+                MatchLength, byte_size(Data) - MatchLength);
+        {Pos, _Len} ->
+            {exact, Pos}
+    end.
+
+match_prefix_at_end(Prefix, Data, PrefixLength, N) ->
+    FirstCharMatches = binary:matches(Data, [binary:part(Prefix, {0, 1})], []),
+    match_rest_of_prefix(FirstCharMatches, Prefix, Data, PrefixLength, N).
+
+match_rest_of_prefix([], _Prefix, _Data, _PrefixLength, _N) ->
+    not_found;
+
+match_rest_of_prefix([{Pos, _Len} | Rest], Prefix, Data, PrefixLength, N) ->
+    case binary:match(binary:part(Data, {PrefixLength, Pos - PrefixLength}),
+        [binary:part(Prefix, {0, PrefixLength - Pos})], []) of
+        nomatch ->
+            match_rest_of_prefix(Rest, Prefix, Data, PrefixLength, N);
+        {_Pos, _Len1} ->
+            {partial, N + Pos}
     end.

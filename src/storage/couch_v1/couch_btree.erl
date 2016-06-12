@@ -211,7 +211,7 @@ lookup(#btree{root=Root, less=Less}=Bt, Keys) ->
     % We want to return the results in the same order as the keys were input
     % but we may have changed the order when we sorted. So we need to put the
     % order back into the results.
-    couch_util:reorder_results(Keys, SortedResults).
+    reorder_results(Keys, SortedResults).
 
 lookup(_Bt, nil, Keys) ->
     {ok, [{Key, not_found} || Key <- Keys]};
@@ -713,3 +713,11 @@ stream_kv_node2(Bt, Reds, PrevKVs, [{K,V} | RestKVs], InRange, Dir, Fun, Acc) ->
             {stop, {PrevKVs, Reds}, Acc2}
         end
     end.
+
+
+% linear search is faster for small lists, length() is 0.5 ms for 100k list
+reorder_results(Keys, SortedResults) when length(Keys) < 100 ->
+    [proplists:get_value(Key, SortedResults) || Key <- Keys];
+reorder_results(Keys, SortedResults) ->
+    KeyDict = dict:from_list(SortedResults),
+    [dict:fetch(Key, KeyDict) || Key <- Keys].

@@ -428,7 +428,7 @@ parse_config(DbName, ConfigString) ->
     end.
 
 do_parse_config(ConfigString) ->
-    {ok, ConfProps} = couch_util:parse_term(ConfigString),
+    {ok, ConfProps} = barrel_lib:parse_term(ConfigString),
     {ok, #config{period = Period} = Conf} = config_record(ConfProps, #config{}),
     case Period of
     nil ->

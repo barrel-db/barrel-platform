@@ -19,6 +19,7 @@
 -export([att_foldl/3,range_att_foldl/5,att_foldl_decode/3,
          get_validate_doc_fun/1,get_validate_read_doc_fun/1]).
 -export([from_json_obj/1,to_json_obj/2,has_stubs/1, merge_stubs/2]).
+-export([encode_doc_id/1]).
 -export([validate_docid/1]).
 -export([doc_from_multi_part_stream/2]).
 -export([doc_to_multi_part_stream/5, doc_to_multi_part_stream/6,
@@ -61,7 +62,7 @@ to_json_revisions(Options, Start, RevIds, Body) ->
             Body#{<<"_revisions">> => Revisions}
     end.
 
-revid_to_str(RevId) when size(RevId) =:= 16 -> list_to_binary(couch_util:to_hex(RevId));
+revid_to_str(RevId) when size(RevId) =:= 16 -> list_to_binary(barrel_lib:to_hex(RevId));
 revid_to_str(RevId) -> RevId.
 
 rev_to_str({Pos, RevId}) ->
@@ -135,7 +136,7 @@ to_json_attachments(Atts, OutputData, DataToFollow, ShowEncInfo, Body) ->
                         [];
                     {true, _} ->
                         [
-                            {<<"encoding">>, couch_util:to_binary(Enc)},
+                            {<<"encoding">>, barrel_lib:to_binary(Enc)},
                             {<<"encoded_length">>, AttLen}
                         ]
                     end
@@ -188,10 +189,16 @@ parse_revs([Rev | Rest]) ->
     [parse_rev(Rev) | parse_revs(Rest)].
 
 
+encode_doc_id(#doc{id = Id}) -> encode_doc_id(Id);
+encode_doc_id(Id) when is_list(Id) -> encode_doc_id(list_to_binary(Id));
+encode_doc_id(<<"_design/", Rest/binary>>) -> "_design/" ++ barrel_lib:url_encode(Rest);
+encode_doc_id(<<"_local/", Rest/binary>>) -> "_local/" ++ barrel_lib:url_encode(Rest);
+encode_doc_id(Id) -> barrel_lib:url_encode(Id).
+
 validate_docid(<<"">>) ->
     throw({bad_request, <<"Document id must not be empty">>});
 validate_docid(Id) when is_binary(Id) ->
-    case couch_util:validate_utf8(Id) of
+    case barrel_lib:validate_utf8(Id) of
         false -> throw({bad_request, <<"Document id must be valid UTF-8">>});
         true -> ok
     end,

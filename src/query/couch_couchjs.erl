@@ -20,10 +20,10 @@
 
 
 start_link(Type) ->
-    Command = filename:join([couch_util:priv_dir(), "barreljs"]),
+    Command = filename:join([barrel_lib:priv_dir(), "barreljs"]),
     JsFile = case Type of
-                 javascript -> filename:join([couch_util:priv_dir(), "server", "main.js"]);
-                 coffescript -> filename:join([couch_util:priv_dir(), "server", "main-coffee.js"])
+                 javascript -> filename:join([barrel_lib:priv_dir(), "server", "main.js"]);
+                 coffescript -> filename:join([barrel_lib:priv_dir(), "server", "main-coffee.js"])
              end,
     couch_os_process:start_link(Command ++ " " ++ JsFile).
 

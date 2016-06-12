@@ -314,7 +314,7 @@ init([]) ->
 
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
     lists:foreach(fun({Lang, SpecStr}) ->
-        {ok, {Mod, Fun, SpecArg}} = couch_util:parse_term(SpecStr),
+        {ok, {Mod, Fun, SpecArg}} = barrel_lib:parse_term(SpecStr),
         true = ets:insert(LangLimits, {list_to_binary(Lang), OsProcLimit, 0}), % 0 means no limit
         true = ets:insert(Langs, {list_to_binary(Lang),
                           Mod, Fun, SpecArg})
@@ -332,7 +332,7 @@ init([]) ->
 
 terminate(_Reason, #qserver{pid_procs=PidProcs}) ->
     hooks:unreg(config_section_update, ?MODULE, config_change, 3),
-    [couch_util:shutdown_sync(P) || {P,_} <- ets:tab2list(PidProcs)],
+    [barrel_lib:shutdown_sync(P) || {P,_} <- ets:tab2list(PidProcs)],
     ok.
 
 handle_call({get_proc, DDoc1, DDocKey}, From, Server) ->
