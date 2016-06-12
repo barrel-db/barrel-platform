@@ -145,7 +145,6 @@ design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
             end,
   Args = Args0#mrargs{preflight_fun=ETagFun},
   {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-                                               io:format("do uery ~p~n", [Args]),
                                                VAcc0 = #vacc{db=Db, req=Req},
                                                couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, VAcc0)
                                            end),
