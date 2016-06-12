@@ -145,7 +145,7 @@ init(_) ->
     init_hooks(),
     CacheSize = barrel_config:get_integer("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
     AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
-    _ = couch_event:subscribe_db_updates(AuthDbName),
+    _ = barrel_event:subscribe_db_updates(AuthDbName),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
 
@@ -222,7 +222,7 @@ handle_info(_Info, State) ->
 terminate(_Reason, _State) ->
     unregister_hooks(),
     [{auth_db_name, DbName}] = ets:lookup(?STATE, auth_db_name),
-    catch couch_event:unsubscribe_db_updates(DbName),
+    catch barrel_event:unsubscribe_db_updates(DbName),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete(?BY_USER),
     true = ets:delete(?BY_ATIME),
@@ -244,7 +244,7 @@ clear_cache(State) ->
 reinit_cache(State) ->
     NewState = clear_cache(State),
     AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
-    catch _ = couch_event:change_db(AuthDbName),
+    catch _ = barrel_event:change_db(AuthDbName),
     true = ets:insert(?STATE, {auth_db_name, AuthDbName}),
     AuthDb = open_auth_db(),
     true = ets:insert(?STATE, {auth_db, AuthDb}),

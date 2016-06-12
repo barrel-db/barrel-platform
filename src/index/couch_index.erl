@@ -129,7 +129,7 @@ init({Mod, IdxState}) ->
                 barrel_lib:hexsig(Mod:get(signature, IdxState))
             ],
 
-            _ = couch_event:subscribe_cond(db_updated, [{{DbName, '$1'},
+            _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
                                                          [{'==', '$1',
                                                            'ddoc_updated'}],
                                                          [true]}]),

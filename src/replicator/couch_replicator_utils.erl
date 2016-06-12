@@ -387,7 +387,7 @@ close_db(_HttpDb) ->
 
 
 start_db_compaction_notifier(#db{name = Db1}, #db{name=Db2}) ->
-    _ = couch_event:subscribe_cond(db_updated, [{{'$1', '$2'},
+    _ = barrel_event:subscribe_cond(db_updated, [{{'$1', '$2'},
                                                  [{'==', '$2', created},
                                                   {'orelse',
                                                    {'==', '$1', Db1},
@@ -395,12 +395,12 @@ start_db_compaction_notifier(#db{name = Db1}, #db{name=Db2}) ->
                                                  [true]}]),
     true;
 start_db_compaction_notifier(#db{name=DbName}, _) ->
-    _ = couch_event:subscribe_cond(db_updated, [{{DbName, '$1'},
+    _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
                                                  [{'==', '$1', compacted}],
                                                  [true]}]),
     true;
 start_db_compaction_notifier(_, #db{name=DbName}) ->
-    _ = couch_event:subscribe_cond(db_updated, [{{DbName, '$1'},
+    _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
                                                  [{'==', '$1', compacted}],
                                                  [true]}]),
     true;
@@ -410,7 +410,7 @@ start_db_compaction_notifier(_, _) ->
 stop_db_compaction_notifier(false) ->
     ok;
 stop_db_compaction_notifier(_) ->
-    catch couch_event:unsubscribe(db_updates),
+    catch barrel_event:unsubscribe(db_updates),
     ok.
 
 sum_stats(#rep_stats{} = S1, #rep_stats{} = S2) ->

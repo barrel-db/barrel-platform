@@ -108,7 +108,7 @@ init(_) ->
     barrel_config:subscribe(),
 
     {Loop, RepDbName} = changes_feed_loop(),
-    _ = couch_event:subscribe_cond(db_updated, [{{'_', '$1'},
+    _ = barrel_event:subscribe_cond(db_updated, [{{'_', '$1'},
                                                  [{'==', '$1', created}],
                                                  [true]}]),
 
@@ -220,7 +220,7 @@ terminate(_Reason, State) ->
         rep_start_pids = StartPids,
         changes_feed_loop = Loop
     } = State,
-    catch couch_event:unsubscribe(db_updates),
+    catch barrel_event:unsubscribe(db_updates),
 
     stop_all_replications(),
     lists:foreach(

@@ -91,10 +91,10 @@ release_indexer(Module, DbName, DDoc) ->
 
 
 index_update(DbName, DDocId, Mod) ->
-    couch_event:publish(index_update, {updated, DbName, DDocId, Mod}).
+    barrel_event:publish(index_update, {updated, DbName, DDocId, Mod}).
 
 index_reset(DbName, DDocId, Mod) ->
-    couch_event:publish(index_update, {reset, DbName, DDocId, Mod}).
+    barrel_event:publish(index_update, {reset, DbName, DDocId, Mod}).
 
 
 init([]) ->
@@ -105,7 +105,7 @@ init([]) ->
     ets:new(?BY_DB, [protected, bag, named_table]),
 
     %% register to db changes (only created and deleted events)
-    _ = couch_event:subscribe_cond(db_updated, [{{'_', '$1'},
+    _ = barrel_event:subscribe_cond(db_updated, [{{'_', '$1'},
                                                  [{'orelse',
                                                    {'==', '$1', created},
                                                    {'==', '$1', deleted}}],

@@ -120,7 +120,7 @@ handle_changes(Args1, Req, Db0) ->
                     couch_index_server:acquire_indexer(couch_mrview_index,
                                                        Db0#db.name, DDocId1),
                     %% subscribe to event
-                    couch_event:subscribe_cond(index_update,
+                    barrel_event:subscribe_cond(index_update,
                                                [{{'_', '$1', '$2', '_'},
                                                  [{'==', '$1', Db0#db.name},
                                                   {'==', '$2', DDocId1}],
@@ -128,7 +128,7 @@ handle_changes(Args1, Req, Db0) ->
 
                     {index_update, DDocId1};
                 _ ->
-                    couch_event:subscribe_cond(db_updated, [{{'$1', '_'},
+                    barrel_event:subscribe_cond(db_updated, [{{'$1', '_'},
                                                              [{'==', '$1', Db0#db.name}],
                                                              [true]}]),
                     {db_updated, nil}
@@ -140,7 +140,7 @@ handle_changes(Args1, Req, Db0) ->
             try
                 keep_sending_changes(Args#changes_args{dir=fwd}, Acc0, true)
             after
-                couch_event:unsubscribe(Event),
+                barrel_event:unsubscribe(Event),
                 case FilterName of
                     "_view" ->
                         couch_index_server:release_indexer(couch_mrview_index, Db0#db.name, DDocId);

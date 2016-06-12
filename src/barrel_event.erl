@@ -21,7 +21,7 @@
 %% This code is based on gproc_ps code. Only difference is that we are
 %% sending {couch_event, Event, Msg} instead of {gproc_ps_event, Event, Msg}.
 
--module(couch_event).
+-module(barrel_event).
 
 -export([publish/2,
          publish_all/2,
@@ -78,7 +78,7 @@ publish_all(Event, Msg) ->
 -spec subscribe(event()) -> true.
 %% @doc Subscribe to events of type `Event'
 %%
-%% Any messages published with `couch_event:publish(Event, Msg)' will be
+%% Any messages published with `barrel_event:publish(Event, Msg)' will be
 %% delivered to the current process, along with all other subscribers.
 %%
 %% This function creates a property, `{p, l, {couch_event,Event}}', which
