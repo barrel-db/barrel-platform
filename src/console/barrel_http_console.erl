@@ -63,12 +63,26 @@ admin_uri() ->
   lists:flatten([atom_to_list(Scheme), "://", Addr, ":", integer_to_list(Port)]).
 
 protocol_opts() ->
+  io:format("routes are ~p~n", [routes()]),
   Dispatch = cowboy_router:compile([
-    {'_', [
-      {"/", cowboy_static, {priv_file, barrel, "www/index.html"}},
-      {"/dbs", barrel_legacy_handler, [{prefix, "/dbs"} |barrel_legacy_handler:options()]},
-      {"/dbs/[...]", barrel_legacy_handler, [{prefix, "/dbs"} |barrel_legacy_handler:options()]},
-      {"/[...]", cowboy_static, {priv_dir, barrel, "www"}}
-    ]}
+    {'_', routes()}
   ]),
   [{env, [{dispatch, Dispatch}]}].
+
+
+routes() ->
+ lists:reverse(
+   [{"/[...]", cowboy_static, {priv_dir, barrel, "www"}} |
+    prefix_routes(barrel_api_http:routes(), "/dbs",
+      [{"/", cowboy_static, {priv_file, barrel, "www/index.html"}}])]).
+
+
+
+prefix_routes([{'_', Handler, HandlerOpts} | Rest], Prefix, Acc) ->
+  Path = lists:flatten(Prefix ++ "/[...]"),
+  prefix_routes(Rest,Prefix,  [{Path, Handler, [{prefix, Prefix} |HandlerOpts]} | Acc]);
+prefix_routes([{Path, Handler, HandlerOpts} | Rest], Prefix, Acc) ->
+  NewPath = lists:flatten(Prefix ++ Path),
+  prefix_routes(Rest, Prefix, [{NewPath, Handler, [{prefix, Prefix} |HandlerOpts]} | Acc]);
+prefix_routes([], _Prefix, Acc) ->
+  Acc.

@@ -24,6 +24,7 @@
 
 
 %% internal apis
+-export([routes/0]).
 -export([parse_address/1]).
 -export([transport_opts/4]).
 -export([scheme_to_transport/1]).
