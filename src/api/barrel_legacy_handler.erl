@@ -54,7 +54,6 @@ loop(Req) ->
              end
          end,
 
-
   DefaultFun = proplists:get_value(default_fun, Opts),
   UrlHandlers = proplists:get_value(url_handlers, Opts),
   DbUrlHandlers = proplists:get_value(db_url_handlers, Opts),

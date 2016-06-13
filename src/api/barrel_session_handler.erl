@@ -35,8 +35,8 @@
 
 init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 
-rest_init(Req, Env) ->
-  UserCtx = proplists:get_value(user_ctx, Env, barrel_lib:userctx()),
+rest_init(Req, _Env) ->
+  {UserCtx, _} = cowboy_req:meta(user_ctx, Req, barrel_lib:userctx()),
   {ok, Req, #{user_ctx => UserCtx}}.
 
 allowed_methods(Req, State) ->
