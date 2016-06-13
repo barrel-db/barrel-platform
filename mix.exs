@@ -9,7 +9,9 @@ defmodule Barrel.Mixfile do
      start_permanent: Mix.env == :prod,
      compilers: Mix.compilers,
      erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
-     deps: deps
+     deps: deps,
+     package: package,
+     description: description
    ]
   end
 
@@ -64,5 +66,22 @@ defmodule Barrel.Mixfile do
       {:econfig, "~> 0.7.3"},
       {:exometer_core, "~> 1.0"}
     ]
+  end
+
+  defp description do
+    """
+    Barrel is a distributed database for the modern world. It is a document-oriented database targeting data locality & P2P.
+    """
+  end
+
+  defp package do
+    [
+     name: :barrel,
+     files: ["lib", "priv", "mix.exs", "README*", "LICENSE*", "Makefile", "NOTICE", "rebar.config",
+     "rebar3", "utilities", "support", "src", "rel", "include", "config", "c_src", "attic"],
+     maintainers: ["Benoit Chesneau"],
+     licenses: ["Apache 2.0"],
+     links: %{"GitHub" => "https://github.com/barrel-db/barrel-platform",
+              "Docs" => "https://docs.barrel-db.org/docs"}]
   end
 end
