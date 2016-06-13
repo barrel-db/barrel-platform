@@ -403,29 +403,3 @@ urlencode_digit(D)  -> D.
 urldecode_digit($_) -> $/;
 urldecode_digit($-) -> $+;
 urldecode_digit(D)  -> D.
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
--export([b64url_test/0]).
-
-b64url_test() ->
-  ?assertNotEqual(
-    binary:match(base64:encode([255,127,254,252]), [<<"=">>, <<"/">>, <<"+">>]),
-    nomatch),
-  % this codec produce URL safe output
-  ?assertEqual(
-    binary:match(encodeb64url([255,127,254,252]), [<<"=">>, <<"/">>, <<"+">>]),
-    nomatch),
-
-  ?assertEqual(decodeb64url(encodeb64url(<<"foo">>)), <<"foo">>),
-  ?assertEqual(decodeb64url(encodeb64url(<<"foo1">>)), <<"foo1">>),
-  ?assertEqual(decodeb64url(encodeb64url(<<"foo12">>)), <<"foo12">>),
-  ?assertEqual(decodeb64url(encodeb64url(<<"foo123">>)), <<"foo123">>),
-
-  ?assertEqual(decodeb64url(encodeb64url("foo")), <<"foo">>),
-  ?assertEqual(decodeb64url(encodeb64url(["fo", "o1"])), <<"foo1">>),
-  ?assertEqual(decodeb64url(encodeb64url([255,127,254,252])), <<255,127,254,252>>),
-  ok.
-
--endif.
