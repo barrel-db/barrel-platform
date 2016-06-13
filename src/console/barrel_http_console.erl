@@ -63,20 +63,16 @@ admin_uri() ->
   lists:flatten([atom_to_list(Scheme), "://", Addr, ":", integer_to_list(Port)]).
 
 protocol_opts() ->
-  io:format("routes are ~p~n", [routes()]),
   Dispatch = cowboy_router:compile([
     {'_', routes()}
   ]),
   [{env, [{dispatch, Dispatch}]}].
-
 
 routes() ->
  lists:reverse(
    [{"/[...]", cowboy_static, {priv_dir, barrel, "www"}} |
     prefix_routes(barrel_api_http:routes(), "/dbs",
       [{"/", cowboy_static, {priv_file, barrel, "www/index.html"}}])]).
-
-
 
 prefix_routes([{'_', Handler, HandlerOpts} | Rest], Prefix, Acc) ->
   Path = lists:flatten(Prefix ++ "/[...]"),
