@@ -21,7 +21,7 @@
   "lager": {:hex, :lager, "3.0.2", "25dc81bc3659b62f5ab9bd073e97ddd894fc4c242019fccef96f3889d7366c97", [:rebar3], [{:goldrush, "0.1.7", [hex: :goldrush, optional: false]}]},
   "metrics": {:hex, :metrics, "1.0.1", "25f094dea2cda98213cecc3aeff09e940299d950904393b2a29d191c346a8486", [:rebar3], []},
   "mimerl": {:hex, :mimerl, "1.0.2", "993f9b0e084083405ed8252b99460c4f0563e41729ab42d9074fd5e52439be88", [:rebar3], []},
-  "mochicow": {:git, "https://github.com/benoitc/mochicow.git", "bdfd1c3d8c6f2efae8ac5b61e28b651c2cca1dd8", [tag: "0.5.2"]},
+  "mochicow": {:git, "https://github.com/benoitc/mochicow.git", "015632be28d735dce6444b072419f5e850992493", [tag: "0.6.0"]},
   "mochiweb": {:git, "git://github.com/mochi/mochiweb.git", "5ed5ee18699e63843e2a0a548edee7694d9d6785", [tag: "v2.15.0"]},
   "neotoma": {:hex, :neotoma, "1.7.3", "d8bd5404b73273989946e4f4f6d529e5c2088f5fa1ca790b4dbe81f4be408e61", [:rebar], []},
   "oauth": {:hex, :barrel_oauth, "1.6.0", "36273b2b406bc237a250997b6549b6b9d13506f1cf59fb4c9a7d4ab26a86100c", [:rebar3], []},
