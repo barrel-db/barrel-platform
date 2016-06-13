@@ -67,7 +67,7 @@ save_doc(#doc{body=Body} = Doc) ->
     undefined ->
         Doc;
     ClearPassword ->
-        Iterations = barrel_config:get_integer("couch_httpd_auth", "iterations", 1000),
+        Iterations = barrel_config:get_integer("auth", "iterations", 1000),
         Salt = barrel_uuids:random(),
         DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
         Body0 = [{?PASSWORD_SCHEME, ?PBKDF2}, {?ITERATIONS, Iterations}|Body],
@@ -116,6 +116,6 @@ get_doc_name(#doc{id= <<"org.couchdb.user:", Name/binary>>}) -> Name;
 get_doc_name(_) -> undefined.
 
 strip_non_public_fields(#doc{body=Body}=Doc) ->
-    Public = barrel_config:get_list("couch_httpd_auth", "public_fields", []),
+    Public = barrel_config:get_list("auth", "public_fields", []),
     Body2 = maps:filter(fun(K, _V) -> lists:member(binary_to_list(K), Public) end, Body),
     Doc#doc{body=Body2}.

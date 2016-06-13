@@ -47,6 +47,8 @@
 -export([with_db/2]).
 -export([url_strip_password/1]).
 
+-export([encodeb64url/1, decodeb64url/1]).
+
 
 -include_lib("syntax_tools/include/merl.hrl").
 -include_lib("couch_db.hrl").
@@ -145,7 +147,7 @@ g(roles, #{roles := Ret}) -> Ret;
 g(roles, _C) -> [];
 g(handler, #{handler := Ret}) -> Ret;
 g(handler, _C) -> undefined;
-g(Else, C) -> maps:get(Else, C).
+g(Else, C) -> maps:get(Else, C, undefined).
 
 -spec userctx_put(any(), any(), userctx()) -> userctx().
 userctx_put(K, V, Ctx) when is_map(Ctx) -> Ctx#{K => V};
@@ -376,3 +378,54 @@ with_db(DbName, Fun) ->
     Else ->
       throw(Else)
   end.
+
+-spec encodeb64url(binary() | iolist()) -> binary().
+encodeb64url(Bin) when is_binary(Bin) ->
+  << << (urlencode_digit(D)) >> || <<D>> <= base64:encode(Bin), D =/= $= >>;
+encodeb64url(L) when is_list(L) -> encodeb64url(iolist_to_binary(L)).
+
+-spec decodeb64url(binary() | iolist()) -> binary().
+decodeb64url(Bin) when is_binary(Bin) ->
+  Bin2 = case byte_size(Bin) rem 4 of
+           % 1 -> << Bin/binary, "===" >>;
+           2 -> << Bin/binary, "==" >>;
+           3 -> << Bin/binary, "=" >>;
+           _ -> Bin
+         end,
+  base64:decode(<< << (urldecode_digit(D)) >> || <<D>> <= Bin2 >>);
+decodeb64url(L) when is_list(L) ->
+  decodeb64url(iolist_to_binary(L)).
+
+urlencode_digit($/) -> $_;
+urlencode_digit($+) -> $-;
+urlencode_digit(D)  -> D.
+
+urldecode_digit($_) -> $/;
+urldecode_digit($-) -> $+;
+urldecode_digit(D)  -> D.
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-export([b64url_test/0]).
+
+b64url_test() ->
+  ?assertNotEqual(
+    binary:match(base64:encode([255,127,254,252]), [<<"=">>, <<"/">>, <<"+">>]),
+    nomatch),
+  % this codec produce URL safe output
+  ?assertEqual(
+    binary:match(encodeb64url([255,127,254,252]), [<<"=">>, <<"/">>, <<"+">>]),
+    nomatch),
+
+  ?assertEqual(decodeb64url(encodeb64url(<<"foo">>)), <<"foo">>),
+  ?assertEqual(decodeb64url(encodeb64url(<<"foo1">>)), <<"foo1">>),
+  ?assertEqual(decodeb64url(encodeb64url(<<"foo12">>)), <<"foo12">>),
+  ?assertEqual(decodeb64url(encodeb64url(<<"foo123">>)), <<"foo123">>),
+
+  ?assertEqual(decodeb64url(encodeb64url("foo")), <<"foo">>),
+  ?assertEqual(decodeb64url(encodeb64url(["fo", "o1"])), <<"foo1">>),
+  ?assertEqual(decodeb64url(encodeb64url([255,127,254,252])), <<255,127,254,252>>),
+  ok.
+
+-endif.

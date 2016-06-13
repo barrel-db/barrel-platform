@@ -113,13 +113,18 @@ common_opts(Ip, Port, Config) ->
 
 protocol_opts() ->
   Dispatch = cowboy_router:compile([
-                                    {'_', [
-                                      {"/", barrel_root_handler, []},
-                                      {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
-                                    ]}
+                                    {'_', routes()}
                                    ]),
-  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware,
+  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware, barrel_auth_middleware,
     cowboy_router, cowboy_handler]}].
+
+
+routes() ->
+  [
+    {"/", barrel_root_handler, []},
+    {"/_session", barrel_session_handler, []},
+    {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
+  ].
 
 
 host(Req) ->

@@ -30,7 +30,7 @@ simple(Password, Salt) ->
 %% CouchDB utility functions
 -spec hash_admin_password(binary()) -> binary().
 hash_admin_password(ClearPassword) ->
-    Iterations = barrel_config:get("couch_httpd_auth", "iterations", "10000"),
+    Iterations = barrel_config:get("auth", "iterations", "10000"),
     Salt = barrel_uuids:random(),
     DerivedKey = couch_passwords:pbkdf2(barrel_lib:to_binary(ClearPassword), Salt, list_to_integer(Iterations)),
     list_to_binary("-pbkdf2-" ++ binary_to_list(DerivedKey) ++ ","

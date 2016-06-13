@@ -125,10 +125,10 @@ unregister_hooks() ->
     hooks:unreg(config_key_update, ?MODULE, handle_config_change, 3).
 
 
-handle_config_change("couch_httpd_auth", "auth_cache_size", _Type) ->
-    Size = barrel_config:get_integer("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+handle_config_change("auth", "auth_cache_size", _Type) ->
+    Size = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
     ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
-handle_config_change("couch_httpd_auth", "authentication_db", _Type) ->
+handle_config_change("auth", "authentication_db", _Type) ->
     ok = gen_server:call(?MODULE, reinit_cache);
 handle_config_change(_Section, _Key, _Type) ->
     ok.
@@ -143,8 +143,8 @@ init(_) ->
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
     init_hooks(),
-    CacheSize = barrel_config:get_integer("couch_httpd_auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
-    AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
+    CacheSize = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    AuthDbName = barrel_config:get_binary("auth", "authentication_db", ?DEFAULT_USERDB),
     _ = barrel_event:subscribe_db_updates(AuthDbName),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
@@ -243,7 +243,7 @@ clear_cache(State) ->
 
 reinit_cache(State) ->
     NewState = clear_cache(State),
-    AuthDbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", ?DEFAULT_USERDB),
+    AuthDbName = barrel_config:get_binary("auth", "authentication_db", ?DEFAULT_USERDB),
     catch _ = barrel_event:change_db(AuthDbName),
     true = ets:insert(?STATE, {auth_db_name, AuthDbName}),
     AuthDb = open_auth_db(),

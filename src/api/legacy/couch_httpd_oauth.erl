@@ -1,5 +1,16 @@
-%% Copyright 2009-2014 The Apache Software Foundation
+%% Copyright (c) 2016. Benoit Chesneau
 %%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 % Licensed under the Apache License, Version 2.0 (the "License"); you may not
 % use this file except in compliance with the License. You may obtain a copy of
 % the License at
@@ -341,7 +352,7 @@ use_auth_db() ->
 
 
 open_auth_db() ->
-    DbName = barrel_config:get_binary("couch_httpd_auth", "authentication_db", <<"_users">>),
+    DbName = barrel_config:get_binary("auth", "authentication_db", <<"_users">>),
     DbOptions = [{user_ctx, barrel_lib:adminctx()}],
     {ok, AuthDb} = couch_db:open_int(DbName, DbOptions),
     AuthDb.

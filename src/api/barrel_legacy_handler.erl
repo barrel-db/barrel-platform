@@ -25,10 +25,14 @@
 
 -include_lib("couch_db.hrl").
 
-init(_, _, _) ->  {upgrade, protocol, mochicow_upgrade}.
+init(_, Req, _) ->
+  {UserCtx, _} = cowboy_req:meta(user_ctx, Req, barrel_lib:userctx()),
+  put(user_ctx, UserCtx),
+  {upgrade, protocol, mochicow_upgrade}.
 
 loop(Req) ->
   Opts = Req:get(opts),
+  UserCtx = get(user_ctx),
   Req2 = case proplists:get_value(prefix, Opts) of
            undefined ->
              Req;
@@ -57,7 +61,7 @@ loop(Req) ->
   DesignUrlHandlers = proplists:get_value(design_url_handlers, Opts),
 
   couch_httpd:handle_request(Req2, DefaultFun, UrlHandlers, DbUrlHandlers,
-    DesignUrlHandlers).
+    DesignUrlHandlers, UserCtx).
 
 options() ->
   DefaultSpec = "{couch_httpd_db, handle_request}",

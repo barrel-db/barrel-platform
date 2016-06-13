@@ -1,6 +1,16 @@
-%% Copyright 2016, Benoit Chesneau
-%% Copyright 2009-2014 The Apache Software Foundation
+%% Copyright (c) 2016. Benoit Chesneau
 %%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 % Licensed under the Apache License, Version 2.0 (the "License"); you may not
 % use this file except in compliance with the License. You may obtain a copy of
 % the License at
@@ -17,7 +27,7 @@
 -include_lib("couch_db.hrl").
 -include("couch_httpd.hrl").
 
--export([handle_request/5]).
+-export([handle_request/6]).
 
 -export([header_value/2,header_value/3,qs_value/2,qs_value/3,qs/1,qs_json_value/3]).
 -export([path/1,absolute_uri/2,body_length/1]).
@@ -75,7 +85,7 @@ make_fun_spec_strs(SpecStr) ->
     re:split(SpecStr, "(?<=})\\s*,\\s*(?={)", [{return, list}]).
 
 handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
-    DesignUrlHandlers) ->
+    DesignUrlHandlers, UserCtx) ->
 
     Begin = os:timestamp(),
     % for the path, use the raw path with the query string and fragment
@@ -147,21 +157,14 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
         design_url_handlers = DesignUrlHandlers,
         default_fun = DefaultFun,
         url_handlers = UrlHandlers,
-        user_ctx = erlang:erase(pre_rewrite_user_ctx),
+        user_ctx = UserCtx,
         auth = erlang:erase(pre_rewrite_auth)
     },
 
     HandlerFun = barrel_lib:dict_find(HandlerKey, UrlHandlers, DefaultFun),
-    {ok, AuthHandlers} = application:get_env(couch_httpd, auth_handlers),
 
     {ok, Resp} =
-    try
-        case authenticate_request(HttpReq, AuthHandlers) of
-        #httpd{} = Req ->
-            HandlerFun(Req);
-        Response ->
-            Response
-        end
+    try HandlerFun(HttpReq)
     catch
         throw:{http_head_abort, Resp0} ->
             {ok, Resp0};
@@ -209,28 +212,6 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
     exometer:update([barrel, request_time], RequestTime),
     exometer:update([httpd, requests], 1),
     {ok, Resp}.
-
-% Try authentication handlers in order until one sets a user_ctx
-% the auth funs also have the option of returning a response
-% move this to couch_httpd_auth?
-authenticate_request(#httpd{user_ctx=UserCtx} = Req, _AuthHandlers) when UserCtx /= undefined->
-    Req;
-authenticate_request(#httpd{} = Req, []) ->
-    case barrel_config:get("couch_httpd_auth", "require_valid_user", "false") of
-    "true" ->
-        throw({unauthorized, <<"Authentication required.">>});
-    "false" ->
-        Req#httpd{user_ctx=barrel_lib:userctx()}
-    end;
-authenticate_request(#httpd{} = Req, [{AuthFun, AuthSrc} | RestAuthHandlers]) ->
-    R = case AuthFun(Req) of
-        #httpd{user_ctx=undefined}=Req2 -> Req2;
-        #httpd{user_ctx=UserCtx}=Req2 ->
-            Req2#httpd{user_ctx=barrel_lib:userctx_put(handler, AuthSrc, UserCtx)}
-    end,
-    authenticate_request(R, RestAuthHandlers);
-authenticate_request(Response, _AuthSrcs) ->
-    Response.
 
 increment_method_stats(Method) ->
     exometer:update([httpd_request_methods, Method], 1).
@@ -296,7 +277,7 @@ serve_file(#httpd{mochi_req=MochiReq}=Req, RelativePath, DocumentRoot,
            ExtraHeaders) ->
     log_request(Req, 200),
     ResponseHeaders = server_header()
-        ++ couch_httpd_auth:cookie_auth_header(Req, [])
+        ++ cookie_auth_header(Req, [])
         ++ ExtraHeaders,
     {ok, MochiReq:serve_file(RelativePath, DocumentRoot,
             barrel_legacy_handler:apply_cors_headers(Req, ResponseHeaders))}.
@@ -451,7 +432,7 @@ start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
     log_request(Req, Code),
     exometer:update([httpd_status_codes, Code], 1),
     Headers1 = Headers ++ server_header() ++
-               couch_httpd_auth:cookie_auth_header(Req, Headers),
+               cookie_auth_header(Req, Headers),
     Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
     Resp = MochiReq:start_response_length({Code, Headers2, Length}),
     case MochiReq:get(method) of
@@ -463,7 +444,7 @@ start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
 start_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     log_request(Req, Code),
     exometer:update([httpd_status_codes, Code], 1),
-    CookieHeader = couch_httpd_auth:cookie_auth_header(Req, Headers),
+    CookieHeader = cookie_auth_header(Req, Headers),
     Headers1 = Headers ++ server_header() ++ CookieHeader,
     Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
     Resp = MochiReq:start_response({Code, Headers2}),
@@ -499,7 +480,7 @@ start_chunked_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     Headers2 = Headers1 ++ server_header() ++
-               couch_httpd_auth:cookie_auth_header(Req, Headers1),
+               cookie_auth_header(Req, Headers1),
     Headers3 = barrel_legacy_handler:apply_cors_headers(Req, Headers2),
     Resp = MochiReq:respond({Code, Headers3, chunked}),
     case MochiReq:get(method) of
@@ -530,7 +511,7 @@ send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     true -> ok
     end,
     Headers2 = Headers1 ++ server_header() ++
-               couch_httpd_auth:cookie_auth_header(Req, Headers1),
+               cookie_auth_header(Req, Headers1),
     Headers3 = barrel_legacy_handler:apply_cors_headers(Req, Headers2),
 
     {ok, MochiReq:respond({Code, Headers3, Body})}.
@@ -683,13 +664,13 @@ error_info({error, illegal_database_name, Name}) ->
     Message = "Name: '" ++ Name ++ "'. Only lowercase characters (a-z), "
         ++ "digits (0-9), and any of the characters _, $, (, ), +, -, and / "
         ++ "are allowed. Must begin with a letter.",
-    {400, <<"illegal_database_name">>, barrel_lib:to_binary(Message)};
+    {400, <<"illegal_database_name">>, barrel_lib:to_error(Message)};
 error_info({missing_stub, Reason}) ->
     {412, <<"missing_stub">>, Reason};
 error_info({Error, Reason}) ->
-    {500, barrel_lib:to_binary(Error), barrel_lib:to_binary(Reason)};
+    {500, barrel_lib:to_error(Error), barrel_lib:to_error(Reason)};
 error_info(Error) ->
-    {500, <<"unknown_error">>, barrel_lib:to_binary(Error)}.
+    {500, <<"unknown_error">>, barrel_lib:to_error(Error)}.
 
 error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
     if Code == 401 ->
@@ -705,7 +686,7 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
                     case barrel_config:get("couch_httpd_auth", "authentication_redirect", nil) of
                     nil -> {Code, []};
                     AuthRedirect ->
-                        case barrel_config:get("couch_httpd_auth", "require_valid_user", "false") of
+                        case barrel_config:get("auth", "require_valid_user", "false") of
                         "true" ->
                             % send the browser popup header no matter what if we are require_valid_user
                             {Code, [{"WWW-Authenticate", "Basic realm=\"server\""}]};
@@ -955,3 +936,43 @@ match_rest_of_prefix([{Pos, _Len} | Rest], Prefix, Data, PrefixLength, N) ->
         {_Pos, _Len1} ->
             {partial, N + Pos}
     end.
+
+
+cookie_auth_header(#httpd{user_ctx=UserCtx}=Req, Headers) when UserCtx /= undefined ->
+  [User, Auth] = barrel_lib:userctx_get([name, auth], UserCtx),
+
+  case {User, Auth} of
+    {null, _} -> [];
+    {User, {Secret, true}} ->
+      % Note: we only set the AuthSession cookie if:
+      %  * a valid AuthSession cookie has been received
+      %  * we are outside a 10% timeout window
+      %  * and if an AuthSession cookie hasn't already been set e.g. by a login
+      %    or logout handler.
+      % The login and logout handlers need to set the AuthSession cookie
+      % themselves.
+      CookieHeader = proplists:get_value("Set-Cookie", Headers, ""),
+      Cookies = mochiweb_cookies:parse_cookie(CookieHeader),
+      AuthSession = proplists:get_value("AuthSession", Cookies),
+      if AuthSession == undefined ->
+        [cookie_auth_cookie(Req, User, Secret)];
+        true ->
+          []
+      end;
+    {_, _} -> []
+  end;
+cookie_auth_header(_Req, _Headers) -> [].
+
+cookie_auth_cookie(Req, User, Secret) ->
+  Timestamp = barrel_cookie_auth:cookie_time(),
+  SessionData = << User/binary, ":", (integer_to_binary(Timestamp,16))/binary >>,
+  Hash = crypto:hmac(sha, Secret, SessionData),
+  mochiweb_cookies:cookie("AuthSession",
+    binary_to_list(barrel_lib:encodeb64ur(<< SessionData/binary, ":", Hash/binary>>)),
+    [{path, "/"}, {http_only, true}] ++ cookie_scheme(Req) ++ barrel_cookie_auth:max_age()).
+
+cookie_scheme(#httpd{mochi_req=MochiReq}) ->
+  case MochiReq:get(scheme) of
+    http -> [];
+    https -> [{secure, true}]
+  end.

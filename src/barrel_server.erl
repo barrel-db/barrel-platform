@@ -295,7 +295,7 @@ maybe_add_sys_db_callbacks(DbName, Options) ->
        sys_db | Options
       ];
     _ ->
-      case barrel_config:get("couch_httpd_auth", "authentication_db", "_users") of
+      case barrel_config:get("auth", "authentication_db", "_users") of
         DbName ->
           [
            {before_doc_update, fun couch_users_db:before_doc_update/2},

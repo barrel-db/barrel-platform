@@ -1,6 +1,16 @@
-%% Copyright 2016, Benoit Chesneau
-%% Copyright 2009-2014 The Apache Software Foundation
+%% Copyright (c) 2016. Benoit Chesneau
 %%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 % Licensed under the Apache License, Version 2.0 (the "License"); you may not
 % use this file except in compliance with the License. You may obtain a copy of
 % the License at
@@ -138,10 +148,10 @@ all_docs_req(Req, Db, Keys) ->
             do_all_docs_req(Req, Db, Keys);
         _ ->
             DbName = binary_to_list(Db#db.name),
-            case barrel_config:get("couch_httpd_auth", "authentication_db", "_users") of
+            case barrel_config:get("auth", "authentication_db", "_users") of
             DbName ->
-                UsersDbPublic = barrel_config:get("couch_httpd_auth", "users_db_public", "false"),
-                PublicFields = barrel_config:get("couch_httpd_auth", "public_fields"),
+                UsersDbPublic = barrel_config:get("auth", "users_db_public", "false"),
+                PublicFields = barrel_config:get("auth", "public_fields"),
                 case {UsersDbPublic, PublicFields} of
                 {"true", PublicFields} when PublicFields =/= undefined ->
                     do_all_docs_req(Req, Db, Keys);
@@ -171,7 +181,7 @@ do_all_docs_req(Req, Db, Keys) ->
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
         VAcc0 = #vacc{db=Db, req=Req},
         DbName = binary_to_list(Db#db.name),
-        UsersDbName = barrel_config:get("couch_httpd_auth", "authentication_db", "_users"),
+        UsersDbName = barrel_config:get("auth", "authentication_db", "_users"),
         IsAdmin = is_admin(Db),
         Callback = get_view_callback(DbName, UsersDbName, IsAdmin),
         query_all_docs(Db, Args, Callback, VAcc0)
