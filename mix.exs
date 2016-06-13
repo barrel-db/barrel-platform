@@ -52,7 +52,7 @@ defmodule Barrel.Mixfile do
     [
       {:lager, "3.0.2"},
       {:exrm, "~> 0.18.1"},
-      {:barrel_nifs, path: "utilities/barrel_release_plugin"},
+      {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:hooks,  "~> 1.1.1"},
       {:mochicow, git: "https://github.com/benoitc/mochicow.git", tag: "0.6.0"},
       {:snappy, "~> 1.1"},
