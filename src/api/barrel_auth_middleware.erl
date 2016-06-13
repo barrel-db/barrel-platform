@@ -26,12 +26,17 @@ execute(Req, Env) ->
   Handlers = [list_to_atom(M) || M <- barrel_config:get_list("auth", "handlers", [])],
   case run_handlers(Handlers, Req, Env) of
     nil ->
-      case barrel_config:get_boolean("auth", "require_valid_user", false) of
-        true ->
-          {ok, Req2} = cowboy_req:reply(411, Req),
-          {halt, Req2};
+      case barrel_server:has_admins() of
+        true ->  {ok, Req, Env};
         false ->
-          {ok, Req, Env}
+          case barrel_config:get_boolean("auth", "require_valid_user", false) of
+            true ->
+              {ok, Req2} = cowboy_req:reply(411, Req),
+              {halt, Req2};
+            false ->
+              Req2 = cowboy_req:set_meta(user_ctx, barrel_lib:adminctx(), Req),
+              {ok, Req2, Env}
+          end
       end;
     {error, unauthorized} ->
       {ok, Req2} = cowboy_req:reply(411, Req),

@@ -70,7 +70,7 @@ is_authorized(Req, State) ->
 to_json(Req, State) ->
   #{ user_ctx := UserCtx } = State,
   [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
-  Reply = #{ ok => true, name => Name, roles => Roles},
+  Reply = #{ ok => true, <<"userCtx">> => #{name => Name, roles => Roles}},
   {jsx:encode(Reply), Req, State}.
 
 from_form(Req, State) ->

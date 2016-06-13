@@ -66,7 +66,8 @@ protocol_opts() ->
   Dispatch = cowboy_router:compile([
     {'_', routes()}
   ]),
-  [{env, [{dispatch, Dispatch}]}].
+  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_auth_middleware, cowboy_router,
+    cowboy_handler]}].
 
 routes() ->
  lists:reverse(
