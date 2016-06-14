@@ -40,8 +40,6 @@
 -define(MAX_WAIT, 600).     % seconds
 -define(OWNER, <<"owner">>).
 
--define(replace(L, K, V), lists:keystore(K, 1, L, {K, V})).
-
 -record(rep_state, {
     rep,
     starting,
@@ -662,15 +660,15 @@ before_doc_update(#doc{body = Body} = Doc, #db{user_ctx=UserCtx} = Db) ->
     true ->
         Doc;
     false ->
-        case maps:get(?OWNER, Body) of
+        case maps:get(?OWNER, Body, undefined) of
         undefined ->
-            Doc#doc{body = {?replace(Body, ?OWNER, Name)}};
+            Doc#doc{body = maps:put(?OWNER, Name, Body)};
         Name ->
             Doc;
         Other ->
             case (catch couch_db:check_is_admin(Db)) of
             ok when Other =:= null ->
-                Doc#doc{body = {?replace(Body, ?OWNER, Name)}};
+                Doc#doc{body = maps:put(?OWNER, Name, Body)};
             ok ->
                 Doc;
             _ ->
@@ -695,10 +693,10 @@ after_doc_read(#doc{body = Body} = Doc, #db{user_ctx=UserCtx} = Db) ->
         _Other ->
             Source = strip_credentials(maps:get(<<"source">>, Body, undefined)),
             Target = strip_credentials(maps:get(<<"target">>, Body, undefined)),
-            NewBody0 = ?replace(Body, <<"source">>, Source),
-            NewBody = ?replace(NewBody0, <<"target">>, Target),
+            NewBody0 = maps:put(<<"source">>, Source, Body),
+            NewBody = maps:put(<<"target">>, Target, NewBody0),
             #doc{revs = {Pos, [_ | Revs]}} = Doc,
-            NewDoc = Doc#doc{body = {NewBody}, revs = {Pos - 1, Revs}},
+            NewDoc = Doc#doc{body = NewBody, revs = {Pos - 1, Revs}},
             NewRevId = couch_db:new_revid(NewDoc),
             NewDoc#doc{revs = {Pos, [NewRevId | Revs]}}
         end

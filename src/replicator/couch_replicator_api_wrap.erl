@@ -836,7 +836,7 @@ json_to_doc_info(Props) ->
                     Rev = barrel_doc:parse_rev(maps:get(<<"rev">>, Change)),
                     Del = (true =:= maps:get(<<"deleted">>, Change, false)),
                     #rev_info{rev=Rev, deleted=Del}
-            end, maps:get(<<"changes">>, Props)),
+            end, maps:get(<<"changes">>, Props, [])),
 
     RevsInfo = case maps:get(<<"removed">>, Props, false) of
         true -> [];
