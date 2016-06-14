@@ -411,7 +411,7 @@ listen(Dbs) ->
     spawn_link(?MODULE, init_compaction_notifier, [Parent, Dbs]).
 
 init_compaction_notifier(Parent, Dbs) ->
-    barrel:mreg(Dbs),
+    barrel_event:mreg(Dbs),
     process_flag(trap_exit, true),
     compaction_notifier_loop(Parent).
 
