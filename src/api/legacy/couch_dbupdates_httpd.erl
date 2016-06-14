@@ -85,19 +85,19 @@ event_obj({DbName, Type}) ->
 
 
 handle_dbupdates(Fun, Acc, Options) ->
-    _ = barrel_event:subscribe(db_updated),
+    _ = barrel_event:reg_all(),
     try
         loop(Fun, Acc, Options)
     after
-        barrel_event:unsubscribe(db_updated)
+        barrel_event:unreg()
     end.
 
 
 loop(Fun, Acc, Options) ->
     [{timeout, Timeout}, {heartbeat, Heartbeat}] = Options,
     receive
-        {couch_event, db_updated, Event} ->
-            case Fun(Event, Acc) of
+        {'$barrel_event', DbName, Event} ->
+            case Fun({DbName, Event}, Acc) of
                 {ok, Acc1} ->
                     loop(Fun, Acc1, Options);
                 stop ->

@@ -21,6 +21,11 @@
 -export([replication_id/2]).
 -export([sum_stats/2]).
 
+
+%% internal
+
+-export([init_compaction_notifier/2]).
+
 -include_lib("couch_db.hrl").
 -include("couch_replicator_api_wrap.hrl").
 -include("couch_replicator.hrl").
@@ -387,31 +392,41 @@ close_db(_HttpDb) ->
 
 
 start_db_compaction_notifier(#db{name = Db1}, #db{name=Db2}) ->
-    _ = barrel_event:subscribe_cond(db_updated, [{{'$1', '$2'},
-                                                 [{'==', '$2', created},
-                                                  {'orelse',
-                                                   {'==', '$1', Db1},
-                                                   {'==', '$1', Db2}}],
-                                                 [true]}]),
-    true;
+    listen([Db1, Db2]);
 start_db_compaction_notifier(#db{name=DbName}, _) ->
-    _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
-                                                 [{'==', '$1', compacted}],
-                                                 [true]}]),
-    true;
+    listen([DbName]);
 start_db_compaction_notifier(_, #db{name=DbName}) ->
-    _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
-                                                 [{'==', '$1', compacted}],
-                                                 [true]}]),
-    true;
+    listen([DbName]);
 start_db_compaction_notifier(_, _) ->
     false.
 
 stop_db_compaction_notifier(false) ->
     ok;
-stop_db_compaction_notifier(_) ->
-    catch barrel_event:unsubscribe(db_updates),
-    ok.
+stop_db_compaction_notifier(Pid) when is_pid(Pid) ->
+        catch unlink(Pid),
+        catch exit(Pid, stop).
+
+listen(Dbs) ->
+    Parent = self(),
+    spawn_link(?MODULE, init_compaction_notifier, [Parent, Dbs]).
+
+init_compaction_notifier(Parent, Dbs) ->
+    barrel:mreg(Dbs),
+    process_flag(trap_exit, true),
+    compaction_notifier_loop(Parent).
+
+compaction_notifier_loop(Parent) ->
+    receive
+        {'$barrel_event', _, compacted}=Event ->
+            Parent ! Event,
+            compaction_notifier_loop(Parent);
+        {'$barrel_event', _, _} ->
+            compaction_notifier_loop(Parent);
+        _ ->
+            ok
+    end.
+
+
 
 sum_stats(#rep_stats{} = S1, #rep_stats{} = S2) ->
     #rep_stats{

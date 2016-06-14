@@ -129,11 +129,7 @@ init({Mod, IdxState}) ->
                 barrel_lib:hexsig(Mod:get(signature, IdxState))
             ],
 
-            _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
-                                                         [{'==', '$1',
-                                                           'ddoc_updated'}],
-                                                         [true]}]),
-
+            barrel_event:reg(DbName),
             lager:info("Opening index for db: ~s idx: ~s sig: ~p", Args),
             proc_lib:init_ack({ok, self()}),
             gen_server:enter_loop(?MODULE, [], State);
@@ -390,7 +386,7 @@ handle_info(commit, State) ->
             erlang:send_after(Delay, self(), commit),
             {noreply, State}
     end;
-handle_info({couch_event, db_updated, _}, State) ->
+handle_info({'$barrel_event', _, {ddoc_updated, _}}, State) ->
     #st{mod = Mod, idx_state = IdxState, waiters = Waiters} = State,
     DbName = Mod:get(db_name, IdxState),
     DDocId = Mod:get(idx_name, IdxState),
@@ -419,6 +415,8 @@ handle_info({couch_event, db_updated, _}, State) ->
         false ->
             {noreply, State#st{shutdown = false}}
     end;
+handle_info({'$barrel_event', _, _}, State) ->
+    {noreply, State};
 handle_info({'DOWN', _, _, Pid, _}, #st{mod=Mod, idx_state=IdxState,
                                         indexer=Pid}=State) ->
     Args = [Mod:get(db_name, IdxState),

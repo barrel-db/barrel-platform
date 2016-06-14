@@ -1,156 +1,245 @@
-%% ``The contents of this file are subject to the Erlang Public License,
-%% Version 1.1, (the "License"); you may not use this file except in
-%% compliance with the License. You should have received a copy of the
-%% Erlang Public License along with this software. If not, it can be
-%% retrieved via the world wide web at http://www.erlang.org/.
+%% Copyright 2016, Benoit Chesneau
 %%
-%% Software distributed under the License is distributed on an "AS IS"
-%% basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
-%% the License for the specific language governing rights and limitations
-%% under the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License. You may obtain a copy of
+%% the License at
 %%
-%% The Initial Developer of the Original Code is Ericsson Utvecklings AB.
-%% Portions created by Ericsson are Copyright 1999, Ericsson Utvecklings
-%% AB. All Rights Reserved.''
+%%   http://www.apache.org/licenses/LICENSE-2.0
 %%
-%% 2015 (c) Ulf Wiger <ulf@wiger.net>
-%%
-%% @doc couch publish/subscribe pattern
-%% This module implements a few convenient functions for publish/subscribe.
-%%
-%% This code is based on gproc_ps code. Only difference is that we are
-%% sending {couch_event, Event, Msg} instead of {gproc_ps_event, Event, Msg}.
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
+
+%% Created by benoitc on 14/06/16.
 
 -module(barrel_event).
+-author("Benoit Chesneau").
+-behaviour(gen_server).
 
--export([publish/2,
-         publish_all/2,
-         subscribe/1,
-         subscribe_cond/2,
-         change_cond/2,
-         unsubscribe/1,
-         list_subs/1]).
+%% API
+-export([notify/2, notify/3]).
 
--export([publish_db_update/2,
-         subscribe_db_updates/1,
-         unsubscribe_db_updates/1,
-         change_db/1]).
+-export([reg/1]).
+-export([unreg/0]).
+-export([mreg/1]).
+-export([reg_all/0]).
+-export([reg_index/2]).
+-export([mreg_index/1]).
+-export([reg_all_index/0]).
+-export([reg_other/2]).
+-export([unreg_other/1]).
+-export([mreg_other/2]).
+-export([reg_all_other/1]).
+-export([reg_index_other/3]).
+-export([mreg_index_other/2]).
+-export([reg_all_index_other/1]).
 
--export([key_for_event/1]).
+-export([start_link/0]).
 
--define(EVTAG, couch_event).
+%% gen_server callbacks
+-export([init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2,
+  code_change/3]).
 
--type event()  :: any().
--type msg()    :: any().
+-include_lib("stdlib/include/ms_transform.hrl").
 
+-define(SERVER, ?MODULE).
 
--spec publish(event(), msg()) -> ok.
-%% @doc Publish the message `Msg' to all subscribers of `Event'
-%%
-%% The message delivered to each subscriber will be of the form:
-%%
-%% `{couch_event, Event, Msg}'
-%%
-%% The message will be delivered to each subscriber provided their respective
-%% condition tests succeed.
-%% @end
-publish(Event, Msg) ->
-    Message = {?EVTAG, Event, Msg},
-    lists:foreach(
-      fun({Pid, undefined}) ->
-              Pid ! Message;
-         ({Pid, Spec}) ->
-              try   C = ets:match_spec_compile(Spec),
-                    case ets:match_spec_run([Msg], C) of
-                        [true] -> Pid ! Message;
-                        _Else -> ok
-                    end
-              catch
-                  error:_ -> ok
-              end
-      end, gproc:select({l,p}, [{{key_for_event(Event), '$1', '$2'},
-                                  [], [{{'$1','$2'}}] }])).
+-define(TAB, ?MODULE).
 
-%% @doc publish an event to all
-publish_all(Event, Msg) ->
-    gproc:reg({p, l,{?EVTAG, Event, Msg}}).
+%%%===================================================================
+%%% Types
+%%%===================================================================
 
--spec subscribe(event()) -> true.
-%% @doc Subscribe to events of type `Event'
-%%
-%% Any messages published with `barrel_event:publish(Event, Msg)' will be
-%% delivered to the current process, along with all other subscribers.
-%%
-%% This function creates a property, `{p, l, {couch_event,Event}}', which
-%% can be searched and displayed for debugging purposes.
-%% @end
-subscribe(Event) ->
-    gproc:reg(key_for_event(Event)).
+-type state() :: #{}.
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+notify(DbName, Event) -> cast({notify, DbName, Event}).
+
+notify(DbName, DDoc, Event) -> cast({notify, DbName, DDoc, Event}).
+
+reg(DbName) -> mreg([DbName]).
+
+mreg(DbNames) when is_list(DbNames) -> call({register_dbs, self(), DbNames}).
+
+reg_all() -> mreg(['all_dbs']).
+
+reg_index(DbName, DDoc) ->  mreg_index([{DbName, DDoc}]).
+
+mreg_index(Indexes) -> call({register_indexes, self(), Indexes}).
+
+reg_all_index() -> mreg_index(['all_indexes']).
 
 
--spec subscribe_cond(event(), undefined | ets:match_spec()) -> true.
-%% @doc Subscribe conditionally to events of type `Event'
-%%
-%% This function is similar to {@link subscribe/1}, but adds a condition
-%% in the form of a match specification. A spefication should
-%% @end
-subscribe_cond(Event, Spec) ->
-    case Spec of
-        undefined -> ok;
-        [_|_] -> _ = ets:match_spec_compile(Spec);  % validation
-        _ -> error(badarg)
-    end,
-    gproc:reg(key_for_event(Event), Spec).
+reg_other(DbName, Pid) -> mreg_other([DbName], Pid).
 
-publish_db_update(DbName, Msg) ->
-    publish(db_updated, {DbName, Msg}).
+mreg_other(DbNames, Pid) when is_list(DbNames), is_pid(Pid) -> call({register_dbs, Pid, DbNames}).
 
-%% @doc subscribe to updates of a specific database
-subscribe_db_updates(DbName) when is_list(DbName) ->
-    subscribe_db_updates(list_to_binary(DbName));
-subscribe_db_updates(DbName) ->
-    subscribe_cond(db_updated, [{{DbName, '_'}, [], [true]}]).
+reg_all_other(Pid) ->mreg_other(['all_dbs'], Pid).
 
-%% unsubscribe for db updates
-unsubscribe_db_updates(_DbName) ->
-    unsubscribe(db_updated).
+reg_index_other(DbName, DDoc, Pid) -> mreg_index_other([{DbName, DDoc}], Pid).
 
-%% @doc change db subscription for the current process
-change_db(DbName) when is_list(DbName) ->
-    change_db(list_to_binary(DbName));
-change_db(DbName) ->
-    change_cond(db_updated, [{{DbName, '_'}, [], [true]}]).
+mreg_index_other(Indexes, Pid) when is_list(Indexes), is_pid(Pid) -> call({register_indexes, Pid, Indexes}).
 
--spec change_cond(event(), undefined | ets:match_spec()) -> true.
-%% @doc Change the condition specification of an existing subscription.
-%%
-%% This function atomically changes the condition spec of an existing
-%% subscription (see {@link subscribe_cond/3}). An exception is raised if
-%% the subscription doesn't already exist.
-%% @end
-change_cond(Event, Spec) ->
-    case Spec of
-        undefined -> ok;
-        [_|_] -> _ = ets:match_spec_compile(Spec);  % validation
-        _ -> error(badarg)
-    end,
-    gproc:set_value(key_for_event(Event), Spec).
+reg_all_index_other(Pid) -> mreg_index_other(['all_indexes'], Pid).
 
--spec unsubscribe(event()) -> true.
-%% @doc Remove subscribtion created using `subscribe(Event)'
-%%
-%% This removes the property created through `subscribe/2'.
-%% @end
-unsubscribe(Event) ->
-    gproc:unreg(key_for_event(Event)).
+unreg() -> call({unregister, self()}).
 
--spec list_subs(event()) -> [pid()].
-%% @doc List the pids of all processes subscribing to `Event'
-%%
-%% This function uses `gproc:select/2' to find all properties indicating a subscription.
-%% @end
-list_subs(Event)  ->
-    gproc:select({l,p}, [{ {key_for_event(Event), '$1', '_'}, [], ['$1'] }]).
+unreg_other(Pid) when is_pid(Pid) -> call({unregister, Pid}).
 
-key_for_event(Event) ->
-    {p, l, {?EVTAG, Event}}.
+
+-spec start_link() -> {ok, pid()}.
+start_link() ->
+  IsNew = init_tab(),
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [IsNew], []).
+
+init_tab() ->
+  case ets:info(?TAB, name) of
+    undefined ->
+      ets:new(?TAB, [named_table, public, ordered_set]),
+      true;
+    _ ->
+      false
+  end.
+
+
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
+%%%
+-spec init(term()) -> {ok, state()}.
+init([IsNew]) ->
+  case IsNew of
+    true -> ok;
+    false -> init_monitors()
+  end,
+  {ok, #{}}.
+
+-spec handle_call(term(), term(), state()) -> {reply, term(), state()}.
+handle_call({register_dbs, Pid,  DbNames}, _From, State) ->
+  do_register_dbs(Pid, DbNames),
+  {reply, ok, State};
+
+handle_call({register_indexes, Pid, Indexes}, _From, State) ->
+  do_register_indexes(Pid, Indexes),
+  {reply, ok, State};
+
+handle_call({unregister, Pid}, _From, State) ->
+  do_unregister(Pid),
+  {reply, ok, State};
+
+handle_call(_Msg, _From, State) ->
+  {reply, bad_call, State}.
+
+-spec handle_cast(term(), state()) -> {noreply, state()}.
+
+handle_cast({notify, DbName, Event}, State) ->
+  notify_listeners(DbName, Event),
+  {noreply, State};
+
+handle_cast({notify, DbName, DDoc, Event}, State) ->
+  notify_listeners(DbName, DDoc, Event),
+  {noreply, State};
+
+handle_cast(_Msg, State) ->
+  {noreply, State}.
+
+-spec handle_info(term(), state()) -> {noreply, state()}.
+
+handle_info({'DOWN', _, _, Pid, _}, State) ->
+  process_is_down(Pid),
+  {noreply, State};
+handle_info(_Info, State) ->
+  {noreply, State}.
+
+-spec terminate(term(), state()) -> ok.
+terminate(_Reason, _State) ->
+  ets:delete(?TAB),
+  ok.
+
+-spec code_change(term(), state(), term()) -> {ok, state()}.
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+cast(Msg) -> gen_server:cast(?MODULE, Msg).
+call(Msg) -> gen_server:call(?MODULE, Msg).
+
+
+notify_listeners(DbName, Event) ->
+  Msg = {'$barrel_event', DbName, Event},
+  Pattern = ets:fun2ms(fun({{{db, Db}, _}, Pid}) when Db =:= DbName; Db =:= 'all_dbs' -> Pid end),
+  Subs = ets:select(?TAB, Pattern),
+  lists:foreach(fun(Pid) -> Pid ! Msg end, Subs).
+
+notify_listeners(DbName, DDoc, Event) ->
+  Msg = {'$barrel_event', DbName, DDoc, Event},
+  Key = {g, {DbName, DDoc}},
+  Pattern = ets:fun2ms(fun({{K, _}, Pid}) when K =:= Key; K =:= 'all_indexes' -> Pid end),
+  Subs = ets:select(?TAB, Pattern),
+  lists:foreach(fun(Pid) -> Pid ! Msg end, Subs).
+
+
+do_register_dbs(Pid, DbNames) ->
+  lists:foreach(fun(DbName) ->
+      Key = {{db, DbName}, Pid},
+      ets:insert(?TAB, {Key, Pid})
+    end, DbNames),
+  maybe_monitor(Pid).
+
+maybe_monitor(Pid) ->
+  %% only monitor once a process
+  case ets:lookup(?TAB, Pid) of
+    [] ->
+      MRef = erlang:monitor(process, Pid),
+      ets:insert(?TAB, {Pid, MRef}),
+      ok;
+    [_] ->
+      ok
+  end.
+
+do_register_indexes(Pid, Indexes) ->
+  lists:foreach(fun(Index) ->
+      Key = {{g, Index}, Pid},
+      ets:insert(?TAB, {Key, Pid})
+    end, Indexes),
+  maybe_monitor(Pid).
+
+do_unregister(Pid) ->
+  case ets:lookup(?TAB, Pid) of
+    [] -> ok;
+    [{Pid, MRef}] ->
+      erlang:demonitor(process, MRef),
+      Pattern = ets:fun2ms(fun({{K, P}, _}) when P =:= Pid -> {K, P} end),
+      Subs = ets:select(?TAB, Pattern),
+      lists:foreach(fun(Sub) -> ets:delete(?TAB, Sub) end, Subs)
+  end.
+
+process_is_down(Pid) ->
+  case ets:lookup(?TAB, Pid) of
+    [] -> ok;
+    [_] ->
+      ets:delete(?TAB, Pid),
+      Pattern = ets:fun2ms(fun({{Key, P}, _}) when P =:= Pid -> {Key, P} end),
+      Subs = ets:select(?TAB, Pattern),
+      lists:foreach(fun(Sub) -> ets:delete(?TAB, Sub) end, Subs)
+  end.
+
+init_monitors() ->
+  Pattern = ets:fun2ms(fun({Pid, _}) when is_pid(Pid) -> Pid end),
+  Pids = ets:select(?TAB, Pattern),
+  lists:foreach(fun(Pid) ->
+      MRef = erlang:monitor(process, Pid),
+      ets:insert(?TAB, {Pid, MRef})
+    end, Pids).

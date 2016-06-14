@@ -243,7 +243,7 @@ handle_info({update_docs, Client, GroupedDocs, NonRepDocs, MergeConflicts,
         end,
         [catch(ClientPid ! {done, self()}) || ClientPid <- Clients],
         lists:foreach(fun(DDocId) ->
-            hooks:run(ddoc_updated, [Db#db.name, DDocId])
+            hooks:run(ddoc_updated, [Db#db.name, {ddoc_updated, DDocId}])
         end, UpdatedDDocIds),
         {noreply, Db2}
     catch

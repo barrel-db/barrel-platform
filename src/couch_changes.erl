@@ -113,25 +113,18 @@ handle_changes(Args1, Req, Db0) ->
         fun(CallbackAcc) ->
             {Callback, UserAcc} = get_callback_acc(CallbackAcc),
 
-            {Event, DDocId} = case FilterName of
+            DDocId = case FilterName of
                 "_view" ->
                     #changes_args{view_name={DDocId1, _}} = Args,
                     %% start indexer
                     couch_index_server:acquire_indexer(couch_mrview_index,
                                                        Db0#db.name, DDocId1),
                     %% subscribe to event
-                    barrel_event:subscribe_cond(index_update,
-                                               [{{'_', '$1', '$2', '_'},
-                                                 [{'==', '$1', Db0#db.name},
-                                                  {'==', '$2', DDocId1}],
-                                                 [true]}]),
-
-                    {index_update, DDocId1};
+                    barrel_event:reg_index(Db0#db.name, DDocId1),
+                    DDocId1;
                 _ ->
-                    barrel_event:subscribe_cond(db_updated, [{{'$1', '_'},
-                                                             [{'==', '$1', Db0#db.name}],
-                                                             [true]}]),
-                    {db_updated, nil}
+                    barrel_event:reg(Db0#db.name),
+                  nil
             end,
             {Db, StartSeq} = Start(),
             UserAcc2 = start_sending_changes(Callback, UserAcc, Feed),
@@ -140,7 +133,7 @@ handle_changes(Args1, Req, Db0) ->
             try
                 keep_sending_changes(Args#changes_args{dir=fwd}, Acc0, true)
             after
-                barrel_event:unsubscribe(Event),
+                barrel_event:unreg(),
                 case FilterName of
                     "_view" ->
                         couch_index_server:release_indexer(couch_mrview_index, Db0#db.name, DDocId);
@@ -615,10 +608,10 @@ use_seq(_, ViewSeq) -> ViewSeq.
 % waits for a db_updated msg, if there are multiple msgs, collects them.
 wait_db_updated(Timeout, TimeoutFun, UserAcc) ->
     receive
-        {couch_event, db_updated, _}=Ev ->
+        {'$barrel_event', _, updated}=Ev ->
             lager:info("got db update ~p~n", [Ev]),
             get_rest_db_updated(UserAcc);
-        {couch_event, index_update, _} ->
+        {'$barrel_event', _, _, updated} ->
             get_rest_db_updated(UserAcc)
     after Timeout ->
               {Go, UserAcc2} = TimeoutFun(UserAcc),
@@ -632,12 +625,12 @@ wait_db_updated(Timeout, TimeoutFun, UserAcc) ->
 
 get_rest_db_updated(UserAcc) ->
     receive
-        {couch_event, db_updated, _} ->
-            get_rest_db_updated(UserAcc);
-        {couch_event, index_update, _} ->
-            get_rest_db_updated(UserAcc)
+      {'$barrel_event', _, updated} ->
+        get_rest_db_updated(UserAcc);
+      {'$barrel_event', _, _, updated} ->
+        get_rest_db_updated(UserAcc)
     after 0 ->
-              {updated, UserAcc}
+      {updated, UserAcc}
     end.
 
 reset_heartbeat() ->

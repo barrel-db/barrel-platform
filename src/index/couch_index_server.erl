@@ -91,11 +91,10 @@ release_indexer(Module, DbName, DDoc) ->
 
 
 index_update(DbName, DDocId, Mod) ->
-    barrel_event:publish(index_update, {updated, DbName, DDocId, Mod}).
+    barrel_event:notify(DbName, DDocId, {updated, Mod}).
 
 index_reset(DbName, DDocId, Mod) ->
-    barrel_event:publish(index_update, {reset, DbName, DDocId, Mod}).
-
+    barrel_event:notify(DbName, DDocId, {reset, Mod}).
 
 init([]) ->
     process_flag(trap_exit, true),
@@ -105,11 +104,7 @@ init([]) ->
     ets:new(?BY_DB, [protected, bag, named_table]),
 
     %% register to db changes (only created and deleted events)
-    _ = barrel_event:subscribe_cond(db_updated, [{{'_', '$1'},
-                                                 [{'orelse',
-                                                   {'==', '$1', created},
-                                                   {'==', '$1', deleted}}],
-                                                 [true]}]),
+    barrel_event:reg_all(),
 
     %% initiase index hooks
     %%
@@ -163,9 +158,11 @@ handle_cast({reset_indexes, DbName}, State) ->
     reset_indexes(DbName, State#st.root_dir),
     {noreply, State}.
 
-
-handle_info({couch_event, db_updated, {DbName, _}}, Server) ->
-    reset_indexes(DbName, Server#st.root_dir),
+handle_info({'$barrel_event', DbName, Event}, Server) ->
+    case lists:member(Event, [created, deleted]) of
+      true -> reset_indexes(DbName, Server#st.root_dir);
+      false -> ok
+    end,
     {noreply, Server};
 
 handle_info({'EXIT', Pid, Reason}, Server) ->

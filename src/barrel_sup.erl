@@ -37,6 +37,10 @@ start_link() ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
 
+  Event = {barrel_event,
+    {barrel_event, start_link, []},
+    permanent,brutal_kill,	worker,[barrel_event]},
+
   UUIDs = {barrel_uuids,
            {barrel_uuids, start_link, []},
            permanent, brutal_kill, worker, [barrel_uuids]},
@@ -50,6 +54,8 @@ init([]) ->
   Server = {barrel_server,
             {barrel_server, start_link, []},
             permanent,brutal_kill,	worker,[barrel_server]},
+
+
 
 
   Daemons = {barrel_daemons_sup,
@@ -79,7 +85,7 @@ init([]) ->
               false -> []
             end,
 
-  {ok, { {one_for_all, 0, 10}, [UUIDs, ExtSup, Metrics, Server, Daemons,
+  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, ExtSup, Metrics, Server, Daemons,
                                 Api, Index, Replicator] ++ Console} }.
 
 %%====================================================================

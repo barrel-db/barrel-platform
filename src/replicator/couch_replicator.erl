@@ -342,12 +342,12 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
 handle_info(shutdown, St) ->
     {stop, shutdown, St};
 
-handle_info({couch_event, db_updated, {DbName, compacted}},
+handle_info({'$barrel_event', DbName, compacted},
             #rep_state{source = #db{name = DbName} = Source} = State) ->
     {ok, NewSource} = couch_db:reopen(Source),
     {noreply, State#rep_state{source = NewSource}};
 
-handle_info({couch_event, db_updated, {DbName, compacted}},
+handle_info({'$barrel_event', DbName, compacted},
             #rep_state{target = #db{name = DbName} = Target} = State) ->
     {ok, NewTarget} = couch_db:reopen(Target),
     {noreply, State#rep_state{target = NewTarget}};

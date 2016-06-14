@@ -114,9 +114,7 @@ handle_info(start_indexing, #state{index=Index,
 
 
     %% start the db notifier to watch db update events
-    _ = barrel_event:subscribe_cond(db_updated, [{{DbName, '$1'},
-                                                 [{'==', '$1', updated}],
-                                                 [true]}]),
+    barrel_event:reg(DbName),
 
     %% start the timer
     {ok, TRef} = timer:send_interval(R, self(), refresh_index),
@@ -160,8 +158,12 @@ handle_info({'DOWN', MRef, _, Pid, _}, #state{locks=Locks}=State) ->
         false -> {noreply, NState}
     end;
 
-handle_info({couch_event, db_updated, _}, State) ->
-    NState = do_update(State),
+handle_info({'$barrel_event', _, Event}, State) ->
+
+    NState = case Event of
+               updated ->do_update(State);
+               _ -> State
+             end,
     {noreply, NState}.
 
 code_change(_OldVsn, State, _Extra) ->

@@ -25,6 +25,10 @@
 -export([start_link/0, init/1, handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3, terminate/2]).
 
+
+%% internal
+-export([listen_db_changes/1]).
+
 -include_lib("couch_db.hrl").
 -include("couch_replicator.hrl").
 -include("couch_replicator_js_functions.hrl").
@@ -51,7 +55,8 @@
     db_notifier = nil,
     rep_db_name = nil,
     rep_start_pids = [],
-    max_retries
+    max_retries,
+    listener
 }).
 
 
@@ -101,6 +106,8 @@ replication_error(#rep{id = {BaseId, _} = RepId}, Error) ->
 
 
 
+
+
 init(_) ->
     process_flag(trap_exit, true),
     ?DOC_TO_REP = ets:new(?DOC_TO_REP, [named_table, set, protected]),
@@ -108,14 +115,14 @@ init(_) ->
     barrel_config:subscribe(),
 
     {Loop, RepDbName} = changes_feed_loop(),
-    _ = barrel_event:subscribe_cond(db_updated, [{{'_', '$1'},
-                                                 [{'==', '$1', created}],
-                                                 [true]}]),
+
+    Listener = start_listener(self()),
 
     Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
     {ok, #state{changes_feed_loop = Loop,
                 rep_db_name = RepDbName,
-                max_retries = Retries}}.
+                max_retries = Retries,
+                listener=Listener}}.
 
 
 handle_call({rep_db_update, Change}, _From, State) ->
@@ -178,13 +185,16 @@ handle_cast(Msg, State) ->
     lager:error("Replication manager received unexpected cast ~p", [Msg]),
     {stop, {error, {unexpected_cast, Msg}}, State}.
 
-handle_info({couch_event, db_updated, {DbName, created}}, State) ->
+handle_info({'$barrel_event', DbName, created}, State) ->
     case barrel_config:get_binary("replicator", "db", <<"_replicator">>) of
         DbName ->
             {noreply, restart(State)};
         _ ->
             {noreply, State}
     end;
+handle_info({'EXIT', From, _}, #state{listener = From} = State) ->
+    {noreply, State#state{listener = start_listener(self())}};
+
 handle_info({'EXIT', From, normal}, #state{changes_feed_loop = From} = State) ->
     % replicator DB deleted
     {noreply, State#state{changes_feed_loop = nil, rep_db_name = nil}};
@@ -218,9 +228,10 @@ handle_info(Msg, State) ->
 terminate(_Reason, State) ->
     #state{
         rep_start_pids = StartPids,
-        changes_feed_loop = Loop
+        changes_feed_loop = Loop,
+        listener = Listener
     } = State,
-    catch barrel_event:unsubscribe(db_updates),
+    catch barrel_event:unreg(),
 
     stop_all_replications(),
     lists:foreach(
@@ -228,7 +239,7 @@ terminate(_Reason, State) ->
             catch unlink(Pid),
             catch exit(Pid, stop)
         end,
-        [Loop | StartPids]),
+        [Loop, Listener | StartPids]),
     true = ets:delete(?REP_TO_STATE),
     true = ets:delete(?DOC_TO_REP),
     ok.
@@ -236,6 +247,23 @@ terminate(_Reason, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+start_listener(Parent) ->
+    spawn_link(?MODULE, listen_db_changes, [Parent]).
+
+listen_db_changes(Parent) ->
+    barrel:reg_all(),
+    db_changes_loop(Parent).
+
+db_changes_loop(Parent) ->
+    receive
+        {'barrel_event', _DbName, created}=Event ->
+            Parent ! Event,
+            db_changes_loop(Parent);
+        _ ->
+            db_changes_loop(Parent)
+    end.
 
 
 changes_feed_loop() ->

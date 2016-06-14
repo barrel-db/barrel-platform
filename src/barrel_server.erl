@@ -272,10 +272,10 @@ terminate(_Reason, _Srv) ->
 
 %% DB HOOKS
 db_updated(DbName, Event) ->
-  barrel_event:publish(db_updated, {DbName, Event}).
+  barrel_event:notify(DbName, Event).
 
 ddoc_updated(DbName, Event) ->
-  barrel_event:publish(ddoc_updated, {DbName, Event}).
+  barrel_event:notify(DbName, Event).
 
 %% CONFIG hooks
 config_change("couchdb", "database_dir", _) ->

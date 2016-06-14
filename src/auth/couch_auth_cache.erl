@@ -145,7 +145,7 @@ init(_) ->
     init_hooks(),
     CacheSize = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
     AuthDbName = barrel_config:get_binary("auth", "authentication_db", ?DEFAULT_USERDB),
-    _ = barrel_event:subscribe_db_updates(AuthDbName),
+    _ = barrel_event:reg(AuthDbName),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
 
@@ -198,7 +198,7 @@ handle_cast({cache_hit, UserName}, State) ->
     end,
     {noreply, State}.
 
-handle_info({couch_event, db_updated, {_, Event}}, State) ->
+handle_info({'$barrel_event', _, Event}, State) ->
     case Event of
         created ->
             catch erlang:demonitor(State#state.db_mon_ref, [flush]),
@@ -222,7 +222,7 @@ handle_info(_Info, State) ->
 terminate(_Reason, _State) ->
     unregister_hooks(),
     [{auth_db_name, DbName}] = ets:lookup(?STATE, auth_db_name),
-    catch barrel_event:unsubscribe_db_updates(DbName),
+    catch barrel_event:unreg(),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete(?BY_USER),
     true = ets:delete(?BY_ATIME),

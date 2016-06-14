@@ -148,12 +148,12 @@ handle_cast(Msg, State) ->
     {stop, {unexpected_async_call, Msg}, State}.
 
 
-handle_info({couch_event, db_updated, {DbName, compacted}},
+handle_info({'$barrel_event', DbName, compacted},
             #state{source = #db{name = DbName} = Source} = State) ->
     {ok, NewSource} = couch_db:reopen(Source),
     {noreply, State#state{source = NewSource}};
 
-handle_info({couch_event, db_updated, {DbName, compacted}},
+handle_info({'$barrel_event', DbName, compacted},
             #state{target = #db{name = DbName} = Target} = State) ->
     {ok, NewTarget} = couch_db:reopen(Target),
     {noreply, State#state{target = NewTarget}};
