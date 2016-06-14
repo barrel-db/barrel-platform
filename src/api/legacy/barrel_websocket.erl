@@ -22,7 +22,7 @@ ws_loop([PayloadStr], Options, ReplyChannel) ->
     true -> Payload = jsx:decode(PayloadStr),
         Type = proplists:get_value(<<"type">>,Payload),
         Resource = proplists:get_value(<<"resource">>, Payload),
-        case {Type, Resource} ofd
+        case {Type, Resource} of
             {<<"subscribe">>, <<"logs">>} -> 
                 gproc:reg({p, l, {log_event_handler, log}}, ReplyChannel),
                 ReplyChannel("Subscribed to logs");
