@@ -253,7 +253,7 @@ start_listener(Parent) ->
     spawn_link(?MODULE, listen_db_changes, [Parent]).
 
 listen_db_changes(Parent) ->
-    barrel:reg_all(),
+    barrel_event:reg_all(),
     db_changes_loop(Parent).
 
 db_changes_loop(Parent) ->
