@@ -16,7 +16,7 @@
  {<<"gproc">>,{pkg,<<"gproc">>,<<"0.5.0">>},0},
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.5.7">>},0},
  {<<"hooks">>,{pkg,<<"hooks">>,<<"1.1.1">>},0},
- {<<"ibrowse">>,{pkg,<<"barrel_ibrowse">>,<<"4.2.0">>},0},
+ {<<"ibrowse">>,{pkg,<<"barrel_ibrowse">>,<<"4.3.1">>},0},
  {<<"idna">>,{pkg,<<"idna">>,<<"1.2.0">>},1},
  {<<"jsx">>,{pkg,<<"jsx">>,<<"2.8.0">>},0},
  {<<"lager">>,{pkg,<<"lager">>,<<"3.0.1">>},0},

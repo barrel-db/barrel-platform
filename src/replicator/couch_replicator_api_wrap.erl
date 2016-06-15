@@ -610,7 +610,6 @@ atts_since_arg(UrlLen, [PA | Rest], Acc) ->
 receive_docs_loop(Streamer, Fun, Id, Revs, Ref, Acc) ->
     try
         % Left only for debugging purposes via an interactive or remote shell
-        erlang:put(open_doc_revs, {Id, Revs, Ref, Streamer}),
         receive_docs(Streamer, Fun, Ref, Acc)
     catch
     error:{restart_open_doc_revs, NewRef} ->
@@ -630,21 +629,21 @@ receive_docs(Streamer, UserFun, Ref, UserAcc) ->
                 fun() -> receive_doc_data(Streamer, Ref) end,
                 Ref) of
             {ok, Doc, Parser} ->
-                case run_user_fun(UserFun, {ok, Doc}, UserAcc, Ref) of
-                {ok, UserAcc2} ->
-                    ok;
-                {skip, UserAcc2} ->
+                UserAcc2 = case run_user_fun(UserFun, {ok, Doc}, UserAcc, Ref) of
+                {ok, UserAcc1} -> UserAcc1;
+                {skip, _UserAcc1} ->
                     barrel_doc:abort_multi_part_stream(Parser)
                 end,
                 receive_docs(Streamer, UserFun, Ref, UserAcc2)
             end;
         {"application/json", []} ->
-            Doc = barrel_doc:from_json_obj(
-                    ?JSON_DECODE(receive_all(Streamer, Ref, []))),
+            Data = receive_all(Streamer, Ref, []),
+            Doc = barrel_doc:from_json_obj(?JSON_DECODE(Data)),
             {_, UserAcc2} = run_user_fun(UserFun, {ok, Doc}, UserAcc, Ref),
             receive_docs(Streamer, UserFun, Ref, UserAcc2);
         {"application/json", [{"error","true"}]} ->
-            ErrorProps = ?JSON_DECODE(receive_all(Streamer, Ref, [])),
+            Data = receive_all(Streamer, Ref, []),
+            ErrorProps = ?JSON_DECODE(Data),
             Rev = maps:get(<<"missing">>, ErrorProps),
             Result = {{not_found, missing}, barrel_doc:parse_rev(Rev)},
             {_, UserAcc2} = run_user_fun(UserFun, Result, UserAcc, Ref),
@@ -719,7 +718,7 @@ receive_all(Streamer, Ref, Acc) ->
     {body_bytes, Ref, Bytes} ->
         receive_all(Streamer, Ref, [Bytes | Acc]);
     {body_done, Ref} ->
-        lists:reverse(Acc)
+        iolist_to_binary(lists:reverse(Acc))
     end.
 
 
@@ -912,7 +911,7 @@ stream_doc({JsonBytes, Atts, Boundary, Len}) ->
         ok
     end,
     DocStreamer = spawn_link(
-        couch_doc,
+        barrel_doc,
         doc_to_multi_part_stream,
         [Boundary, JsonBytes, Atts, write_fun(), true]
     ),

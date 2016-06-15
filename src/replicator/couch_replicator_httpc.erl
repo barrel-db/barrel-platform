@@ -19,6 +19,7 @@
 -include("couch_replicator_api_wrap.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
 
+-define(STREAM_STATUS, ibrowse_stream_status).
 
 -export([setup/1]).
 -export([send_req/3]).
@@ -26,6 +27,7 @@
 
 -define(replace(L, K, V), lists:keystore(K, 1, L, {K, V})).
 -define(MAX_WAIT, 5 * 60 * 1000).
+-define(MAX_DISCARDED_MSGS, 16).
 
 
 setup(#httpdb{httpc_pool = nil, url = Url, http_connections = MaxConns} = Db) ->
@@ -34,18 +36,19 @@ setup(#httpdb{httpc_pool = nil, url = Url, http_connections = MaxConns} = Db) ->
 
 
 send_req(HttpDb, Params1, Callback) ->
+    put(?STREAM_STATUS, init),
     Params2 = ?replace(Params1, qs,
                        [{K, binary_to_list(to_param(V))} || {K, V} <- proplists:get_value(qs, Params1, [])]),
     Params = ?replace(Params2, ibrowse_options,
         lists:keysort(1, proplists:get_value(ibrowse_options, Params2, []))),
-    {Worker, Response, IsChanges} = send_ibrowse_req(HttpDb, Params),
+    {Worker, Response} = send_ibrowse_req(HttpDb, Params),
     Ret = try
         process_response(Response, Worker, HttpDb, Params, Callback)
     catch
         throw:{retry, NewHttpDb0, NewParams0} ->
             {retry, NewHttpDb0, NewParams0}
     after
-        release_worker(Worker, HttpDb, IsChanges),
+        release_worker(Worker, HttpDb),
         clean_mailbox(Response)
     end,
     % This is necessary to keep this tail-recursive. Calling
@@ -75,18 +78,15 @@ send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
     Url = full_url(HttpDb, Params),
     Body = proplists:get_value(body, Params, []),
     IsChanges = proplists:get_value(path, Params) == "_changes",
-    {Worker, Timeout} = case IsChanges of
-    true ->
-        {ok, Worker1} = ibrowse:spawn_link_worker_process(Url),
-        {Worker1, infinity};
-    _ ->
-        {ok, Worker1} = couch_replicator_httpc_pool:get_worker(HttpDb#httpdb.httpc_pool),
-        Timeout1 = case barrel_config:get("replicator", "request_timeout", "infinity") of
-            "infinity" -> infinity;
-            Milliseconds -> list_to_integer(Milliseconds)
-        end,
-        {Worker1, Timeout1}
-    end,
+    Timeout = case IsChanges of
+                true -> infinity;
+                _ ->
+                  case barrel_config:get("replicator", "request_timeout", "infinity") of
+                    "infinity" -> infinity;
+                    Ms -> list_to_integer(Ms)
+                  end
+              end,
+    {ok, Worker} = couch_replicator_httpc_pool:get_worker(HttpDb#httpdb.httpc_pool),
     IbrowseOptions = [
         {response_format, binary}, {inactivity_timeout, HttpDb#httpdb.timeout} |
         lists:ukeymerge(1, proplists:get_value(ibrowse_options, Params, []),
@@ -94,14 +94,20 @@ send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
     ],
     Response = ibrowse:send_req_direct(Worker, Url, Headers2, Method,
          Body, IbrowseOptions, Timeout),
-    {Worker, Response, IsChanges}.
+    {Worker, Response}.
 
 
 process_response({error, req_timedout}, _Worker, HttpDb, Params, _Cb) ->
     throw({retry, HttpDb, Params});
 
-process_response({error, connection_closing}, _Worker, HttpDb, Params, _Cb) ->
-     throw({retry, HttpDb, Params});
+process_response({error, connection_closing}, Worker, HttpDb, Params, _Cb) ->
+    MRef = erlang:monitor(process, Worker),
+    ibrowse_http_client:stop(Worker),
+    receive
+      {'DOWN', MRef, _, _} -> ok
+    end,
+    couch_replicator_httpc:release_worker_sync(HttpDb#httpdb.httpc_pool, Worker),
+    throw({retry, HttpDb, Params});
 
 process_response({error, sel_conn_closed}, _Worker, HttpDb, Params,  _Cb) ->
     throw({retry, HttpDb, Params});
@@ -143,6 +149,7 @@ process_stream_response(ReqId, Worker, HttpDb, Params, Callback) ->
             StreamDataFun = fun() ->
                 stream_data_self(HttpDb, Params, Worker, ReqId, Callback)
             end,
+            put(?STREAM_STATUS, {streaming, Worker}),
             ibrowse:stream_next(ReqId),
             try
                 Ret = Callback(Ok, Headers, StreamDataFun),
@@ -171,28 +178,46 @@ process_stream_response(ReqId, Worker, HttpDb, Params, Callback) ->
 % on the ibrowse_req_id format. This just drops all
 % messages for the given ReqId on the floor since we're
 % no longer in the HTTP request.
-clean_mailbox({ibrowse_req_id, ReqId}) ->
-    receive
-    {ibrowse_async_response, ReqId, _} ->
-        clean_mailbox({ibrowse_req_id, ReqId});
-    {ibrowse_async_response_end, ReqId} ->
-        clean_mailbox({ibrowse_req_id, ReqId})
-    after 0 ->
+
+clean_mailbox(ReqId) ->
+  clean_mailbox(ReqId, get(?STREAM_STATUS), ?MAX_DISCARDED_MSGS).
+
+clean_mailbox(_ReqId, Status, 0) ->
+  case Status of
+    {streaming, Worker} -> exit(Worker, {timeout, ibrowse_stream_cleanup});
+    _ -> ok
+  end;
+
+clean_mailbox({ibrowse_req_id, ReqId}, Status, N) ->
+  case Status of
+    {streaming, Worker} ->
+      ibrowse:stream_next(ReqId),
+      receive
+        {ibrowse_async_response, ReqId, _} ->
+          clean_mailbox({ibrowse_req_id, ReqId}, Status, N - 1);
+        {ibrowse_async_response_end, ReqId} ->
+          put(?STREAM_STATUS, ended),
+          ok
+      after 30000 ->
+        exit(Worker, {timeout, ibrowse_stream_cleanup}),
+        exit({timeout, ibrowse_stream_cleanup})
+      end;
+    _ when Status =:= init; Status =:= ended ->
+      receive
+        {ibrowse_async_response, ReqId, _} ->
+          clean_mailbox({ibrowse_req_id, ReqId}, Status, N-1);
+        {ibrowse_async_response_end, ReqId} ->
+          clean_mailbox({ibrowse_req_id, ReqId}, Status, N-1)
+      after 0 ->
         ok
-    end;
-clean_mailbox(_) ->
+      end
+  end;
+clean_mailbox(_, _, _) ->
     ok.
 
 
-release_worker(Worker, _, true) ->
-    true = unlink(Worker),
-    ibrowse_http_client:stop(Worker),
-    receive
-        {'EXIT', Worker, _} -> ok
-        after 0 -> ok
-    end;
-release_worker(Worker, #httpdb{httpc_pool = Pool}, false) ->
-    ok = couch_replicator_httpc_pool:release_worker(Pool, Worker).
+release_worker(Worker, #httpdb{httpc_pool = Pool}) ->
+  ok = couch_replicator_httpc_pool:release_worker(Pool, Worker).
 
 
 maybe_retry(Error, Worker, #httpdb{retries = 0} = HttpDb, Params) ->
@@ -237,6 +262,7 @@ stream_data_self(#httpdb{timeout = T} = HttpDb, Params, Worker, ReqId, Cb) ->
         ibrowse:stream_next(ReqId),
         {Data, fun() -> stream_data_self(HttpDb, Params, Worker, ReqId, Cb) end};
     {Data, ibrowse_async_response_end} ->
+        put(?STREAM_STATUS, ended),
         {Data, fun() -> throw({maybe_retry_req, more_data_expected}) end}
     end.
 

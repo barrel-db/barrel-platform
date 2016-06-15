@@ -27,7 +27,7 @@ handle_req(#httpd{method='GET'}=Req, Db) ->
 
     JsonObj = case get_random_doc(Req, Db, FilterName) of
         {ok, Doc} ->
-            couch_doc:to_json_obj(Doc, Opts);
+            barrel_doc:to_json_obj(Doc, Opts);
         nil ->
             null
     end,

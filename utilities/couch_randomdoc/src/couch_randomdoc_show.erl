@@ -32,7 +32,7 @@ handle_randomdoc_show_req(#httpd{
     {JsonDoc, DocId} =
     case couch_randomdoc_httpd:get_random_doc(Req, Db, FilterName) of
         {ok, #doc{id=Id}=Doc} ->
-            {couch_doc:to_json_obj(Doc, Opts), Id};
+            {barrel_doc:to_json_obj(Doc, Opts), Id};
         nil ->
             {null, nil}
     end,

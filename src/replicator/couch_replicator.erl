@@ -111,7 +111,7 @@ async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
     ChildSpec = {
         RepChildId,
         {gen_server, start_link, [?MODULE, Rep, [{timeout, Timeout}]]},
-        temporary,
+        transient,
         250,
         worker,
         [?MODULE]
@@ -559,13 +559,17 @@ cancel_timer(#rep_state{timer = Timer} = State) ->
     {ok, cancel} = timer:cancel(Timer),
     State#rep_state{timer = nil}.
 
+fix_maxconn(#httpdb{http_connections = 1}=Src) -> Src#httpdb{http_connections = 2};
+fix_maxconn(Src) -> Src.
+
 
 init_state(Rep) ->
     #rep{
-        source = Src, target = Tgt,
+        source = Src0, target = Tgt,
         options = Options, user_ctx = UserCtx,
         type = Type, view = View
     } = Rep,
+    Src = fix_maxconn(Src0),
     {ok, Source} = couch_replicator_api_wrap:db_open(Src, [{user_ctx, UserCtx}]),
     {ok, Target} = couch_replicator_api_wrap:db_open(Tgt, [{user_ctx, UserCtx}],
                                                      proplists:get_value(create_target, Options, false)),
@@ -757,15 +761,15 @@ do_checkpoint(State) ->
     case commit_to_both(Source, Target) of
     {source_error, Reason} ->
          {checkpoint_commit_failure,
-             <<"Failure on source commit: ", (barrel_lib:to_binary(Reason))/binary>>};
+             <<"Failure on source commit: ", (barrel_lib:to_error(Reason))/binary>>};
     {target_error, Reason} ->
          {checkpoint_commit_failure,
-             <<"Failure on target commit: ", (barrel_lib:to_binary(Reason))/binary>>};
+             <<"Failure on target commit: ", (barrel_lib:to_error(Reason))/binary>>};
     {SrcInstanceStartTime, TgtInstanceStartTime} ->
         lager:info("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
             [SourceName, TargetName, NewSeq]),
-        StartTime = list_to_binary(ReplicationStartTime),
-        EndTime = list_to_binary(barrel_lib:rfc1123_date()),
+        StartTime = barrel:to_binary(ReplicationStartTime),
+        EndTime = barrel:to_binary(barrel_lib:rfc1123_date()),
         NewHistoryEntry =  #{
           <<"session_id">> => SessionId,
           <<"start_time">> => StartTime,
@@ -857,13 +861,14 @@ update_checkpoint(Db, #doc{id = LogId, body = LogBody} = Doc) ->
             % We confirm this by verifying the doc body we just got is the same
             % that we have just sent.
             {Pos, RevId};
-        _ ->
+        _Else ->
             throw({checkpoint_commit_failure, conflict})
         end
     end.
 
 
 commit_to_both(Source, Target) ->
+
     % commit the src async
     ParentPid = self(),
     SrcCommitPid = spawn_link(

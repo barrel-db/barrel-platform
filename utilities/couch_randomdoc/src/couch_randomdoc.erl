@@ -39,11 +39,11 @@ random_doc(Db, FilterFun, Opts) ->
         (#full_doc_info{}, _O, Skip) when Skip > 0 ->
             {ok, Skip-1};
         (#full_doc_info{} = FullDocInfo, _O, Acc) ->
-            case couch_doc:to_doc_info(FullDocInfo) of
+            case barrel_doc:to_doc_info(FullDocInfo) of
                 #doc_info{revs=[#rev_info{deleted=true}|_]} ->
                     {ok, Acc};
                 DocInfo ->
-                    Doc = couch_doc:load(Db, DocInfo, Opts),
+                    Doc = barrel_doc:load(Db, DocInfo, Opts),
 
                     case FilterFun(Db, Doc) of
                         true ->
@@ -76,7 +76,7 @@ random_view_doc(Db, DDoc, ViewName) ->
 
 view_cb({row, Row}, _Acc) ->
     Doc = proplists:get_value(doc, Row),
-    {ok, couch_doc:from_json_obj(Doc)};
+    {ok, barrel_doc:from_json_obj(Doc)};
 view_cb(_Other, Acc) ->
     {ok, Acc}.
 

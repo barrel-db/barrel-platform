@@ -17,7 +17,7 @@
 
 % public API
 -export([start_link/2, stop/1]).
--export([get_worker/1, release_worker/2]).
+-export([get_worker/1, release_worker/2, release_worker_sync/2]).
 
 % gen_server API
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
@@ -35,20 +35,15 @@
 }).
 
 
-start_link(Url, Options) ->
-    gen_server:start_link(?MODULE, {Url, Options}, []).
+start_link(Url, Options) -> gen_server:start_link(?MODULE, {Url, Options}, []).
 
+stop(Pool) ->  gen_server:call(Pool, stop, infinity).
 
-stop(Pool) ->
-    ok = gen_server:call(Pool, stop, infinity).
+get_worker(Pool) -> gen_server:call(Pool, get_worker, infinity).
 
+release_worker(Pool, Worker) -> gen_server:cast(Pool, {release_worker, Worker}).
 
-get_worker(Pool) ->
-    {ok, _Worker} = gen_server:call(Pool, get_worker, infinity).
-
-
-release_worker(Pool, Worker) ->
-    ok = gen_server:cast(Pool, {release_worker, Worker}).
+release_worker_sync(Pool, Worker) -> gen_server:call(Pool, {release_worker, Worker}).
 
 
 init({Url, Options}) ->
@@ -60,7 +55,7 @@ init({Url, Options}) ->
     {ok, State}.
 
 
-handle_call(get_worker, From, State) ->
+handle_call(get_worker, {Pid, _} = From, State) ->
     #state{
         waiting = Waiting,
         callers = Callers,
@@ -68,16 +63,17 @@ handle_call(get_worker, From, State) ->
         limit = Limit,
         busy = Busy,
         free = Free
-    } = State,    case length(Busy) >= Limit of
+    } = State,
+  case length(Busy) >= Limit of
     true ->
         {noreply, State#state{waiting = queue:in(From, Waiting)}};
     false ->
-        case Free of
+        {Worker, Free2} = case Free of
         [] ->
-           {ok, Worker} = ibrowse:spawn_link_worker_process(Url),
-           Free2 = Free;
-        [Worker | Free2] ->
-           ok
+           {ok, W} = ibrowse:spawn_link_worker_process(Url),
+            {W, Free};
+        [W | Free1] ->
+            {W, Free1}
         end,
         NewState = State#state{
             free = Free2,
@@ -87,38 +83,15 @@ handle_call(get_worker, From, State) ->
         {reply, {ok, Worker}, NewState}
     end;
 
+handle_call({release_worker, Worker}, _From, State) ->
+    {reply, ok, do_release_worker(Worker, State)};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
 
 handle_cast({release_worker, Worker}, State) ->
-    #state{waiting = Waiting, callers = Callers} = State,
-    NewCallers0 = demonitor_client(Callers, Worker),
-    case is_process_alive(Worker) andalso
-        lists:member(Worker, State#state.busy) of
-    true ->
-        case queue:out(Waiting) of
-        {empty, Waiting2} ->
-            NewCallers1 = NewCallers0,
-            Busy2 = State#state.busy -- [Worker],
-            Free2 = [Worker | State#state.free];
-        {{value, From}, Waiting2} ->
-            NewCallers1 = monitor_client(NewCallers0, Worker, From),
-            gen_server:reply(From, {ok, Worker}),
-            Busy2 = State#state.busy,
-            Free2 = State#state.free
-        end,
-        NewState = State#state{
-           busy = Busy2,
-           free = Free2,
-           waiting = Waiting2,
-           callers = NewCallers1
-        },
-        {noreply, NewState};
-   false ->
-        {noreply, State#state{callers = NewCallers0}}
-   end.
-
+    {noreply, do_release_worker(Worker, State)}.
 
 handle_info({'EXIT', Pid, _Reason}, State) ->
     #state{
@@ -159,7 +132,10 @@ handle_info({'DOWN', Ref, process, _, _}, #state{callers = Callers} = State) ->
             handle_cast({release_worker, Worker}, State);
         false ->
             {noreply, State}
-    end.
+    end;
+handle_info(Info, State) ->
+    lager:info("got unexpected message: ~p~n", [Info]),
+    {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -181,3 +157,32 @@ demonitor_client(Callers, Worker) ->
          false ->
              Callers
      end.
+
+do_release_worker(Worker, State) ->
+    #state{waiting = Waiting, callers = Callers} = State,
+    NewCallers0 = demonitor_client(Callers, Worker),
+    case is_process_alive(Worker) andalso
+        lists:member(Worker, State#state.busy) of
+        true ->
+            case queue:out(Waiting) of
+                {empty, Waiting2} ->
+                    NewCallers1 = NewCallers0,
+                    Busy2 = State#state.busy -- [Worker],
+                    Free2 = [Worker | State#state.free];
+                {{value, From}, Waiting2} ->
+                    NewCallers1 = monitor_client(NewCallers0, Worker, From),
+                  {Pid, _} = From,
+                    gen_server:reply(From, {ok, Worker}),
+                    Busy2 = State#state.busy,
+                    Free2 = State#state.free
+            end,
+            NewState = State#state{
+                busy = Busy2,
+                free = Free2,
+                waiting = Waiting2,
+                callers = NewCallers1
+            },
+            NewState;
+        false ->
+            State#state{callers = NewCallers0}
+    end.

@@ -33,7 +33,6 @@
 
 
 parse_rep_doc(Props, UserCtx) ->
-  lager:info("props is ~p~n", [Props]),
   ProxyParams = parse_proxy_params(maps:get(<<"proxy">>, Props, <<>>)),
   Options = make_options(Props),
   case proplists:get_value(cancel, Options, false) andalso
@@ -403,8 +402,8 @@ start_db_compaction_notifier(_, _) ->
 stop_db_compaction_notifier(false) ->
     ok;
 stop_db_compaction_notifier(Pid) when is_pid(Pid) ->
-        catch unlink(Pid),
-        catch exit(Pid, stop).
+    catch unlink(Pid),
+    catch exit(Pid, normal).
 
 listen(Dbs) ->
     Parent = self(),
@@ -412,7 +411,6 @@ listen(Dbs) ->
 
 init_compaction_notifier(Parent, Dbs) ->
     barrel_event:mreg(Dbs),
-    process_flag(trap_exit, true),
     compaction_notifier_loop(Parent).
 
 compaction_notifier_loop(Parent) ->
@@ -425,8 +423,6 @@ compaction_notifier_loop(Parent) ->
         _ ->
             ok
     end.
-
-
 
 sum_stats(#rep_stats{} = S1, #rep_stats{} = S2) ->
     #rep_stats{
