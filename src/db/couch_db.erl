@@ -803,7 +803,7 @@ make_first_doc_on_disk(Db, Id, Pos, [{_Rev, RevValue} |_]=DocPath) ->
 set_commit_option(Options) ->
     CommitSettings = {
         [true || O <- Options, O==full_commit orelse O==delay_commit],
-        barrel_config:get("couchdb", "delayed_commits", "false")
+        barrel_config:get("barrel", "delayed_commits", "false")
     },
     case CommitSettings of
     {[true], _} ->

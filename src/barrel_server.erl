@@ -183,7 +183,7 @@ init([]) ->
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
-  RootDir = barrel_config:get("couchdb", "database_dir", "."),
+  RootDir = barrel_config:get("barrel", "database_dir", "."),
   hooks:reg(config_key_update, ?MODULE, config_change, 3),
   ok = couch_file:init_delete_dir(RootDir),
   hash_admin_passwords(),

@@ -303,7 +303,7 @@ handle_log_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
 
 handle_up_req(#httpd{method='GET'} = Req) ->
-    case barrel_config:get("couchdb", "maintenance_mode") of
+    case barrel_config:get("barrel", "maintenance_mode") of
         "true" ->
             couch_httpd:send_json(Req, 404, #{status => maintenance_mode});
         _ ->

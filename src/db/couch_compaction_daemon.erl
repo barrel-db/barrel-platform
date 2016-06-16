@@ -311,7 +311,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
         false ->
             false;
         true ->
-            Free = free_space(barrel_config:get("couchdb", "database_dir")),
+            Free = free_space(barrel_config:get("barrel", "database_dir")),
             case Free >= SpaceRequired of
             true ->
                 true;

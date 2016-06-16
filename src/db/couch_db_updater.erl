@@ -29,7 +29,7 @@ init({MainPid, DbName, Filepath, Fd, Options}) ->
         Header =  #db_header{},
         ok = couch_file:write_header(Fd, Header),
         % delete any old compaction files that might be hanging around
-        RootDir = barrel_config:get("couchdb", "database_dir", "."),
+        RootDir = barrel_config:get("barrel", "database_dir", "."),
         couch_file:delete(RootDir, Filepath ++ ".compact");
     false ->
         case couch_file:read_header(Fd) of
@@ -169,7 +169,7 @@ handle_call(cancel_compact, _From, #db{compactor_pid = nil} = Db) ->
 handle_call(cancel_compact, _From, #db{compactor_pid = Pid} = Db) ->
     unlink(Pid),
     exit(Pid, kill),
-    RootDir = barrel_config:get("couchdb", "database_dir", "."),
+    RootDir = barrel_config:get("barrel", "database_dir", "."),
     ok = couch_file:delete(RootDir, Db#db.filepath ++ ".compact"),
     {reply, ok, Db#db{compactor_pid = nil}};
 
@@ -198,7 +198,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
 
         lager:debug("CouchDB swapping files ~s and ~s.",
                 [Filepath, CompactFilepath]),
-        RootDir = barrel_config:get("couchdb", "database_dir", "."),
+        RootDir = barrel_config:get("barrel", "database_dir", "."),
         couch_file:delete(RootDir, Filepath),
         ok = file:rename(CompactFilepath, Filepath),
         close_db(Db),
@@ -429,7 +429,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
     end,
 
     {ok, FsyncOptions} = barrel_lib:parse_term(
-            barrel_config:get("couchdb", "fsync_options", "[before_header, after_header, on_file_open]")
+            barrel_config:get("barrel", "fsync_options", "[before_header, after_header, on_file_open]")
     ),
 
     case lists:member(on_file_open, FsyncOptions) of
