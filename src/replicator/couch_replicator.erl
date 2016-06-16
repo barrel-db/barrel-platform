@@ -326,8 +326,6 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
                 io_lib:format("~n~csource start sequence ~p", [$\t, StartSeq])
             end]),
 
-    lager:debug("Worker pids are: ~p", [Workers]),
-
     couch_replicator_manager:replication_started(Rep),
 
     {ok, State#rep_state{
