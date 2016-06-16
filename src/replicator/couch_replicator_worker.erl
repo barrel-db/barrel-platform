@@ -201,6 +201,10 @@ handle_info({'EXIT', Pid, normal}, #state{writer = nil} = State) ->
         {noreply, State2}
     end;
 
+handle_info({'EXIT', Pid, normal}, #state{db_compaction_notifier=Pid}=State) ->
+    NewPid = start_db_compaction_notifier(State#state.source, State#state.target),
+    {noreply, State#state{db_compaction_notifier=NewPid}};
+
 handle_info({'EXIT', Pid, Reason}, State) ->
    {stop, {process_died, Pid, Reason}, State}.
 

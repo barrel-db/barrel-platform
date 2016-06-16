@@ -55,7 +55,7 @@ init({Url, Options}) ->
     {ok, State}.
 
 
-handle_call(get_worker, {Pid, _} = From, State) ->
+handle_call(get_worker, From, State) ->
     #state{
         waiting = Waiting,
         callers = Callers,

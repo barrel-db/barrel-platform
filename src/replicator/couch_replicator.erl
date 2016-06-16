@@ -768,8 +768,8 @@ do_checkpoint(State) ->
     {SrcInstanceStartTime, TgtInstanceStartTime} ->
         lager:info("recording a checkpoint for `~s` -> `~s` at source update_seq ~p",
             [SourceName, TargetName, NewSeq]),
-        StartTime = barrel:to_binary(ReplicationStartTime),
-        EndTime = barrel:to_binary(barrel_lib:rfc1123_date()),
+        StartTime = list_to_binary(ReplicationStartTime),
+        EndTime = list_to_binary(barrel_lib:rfc1123_date()),
         NewHistoryEntry =  #{
           <<"session_id">> => SessionId,
           <<"start_time">> => StartTime,
