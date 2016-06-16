@@ -303,23 +303,23 @@ update_doc(Db, Doc, Options) ->
 
 update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
     QArgs = case Type of
-    replicated_changes ->
-        [{"new_edits", "false"}];
-    _ ->
-        []
-    end ++ options_to_query_args(Options, []),
+                replicated_changes ->
+                    [{"new_edits", "false"}];
+                _ ->
+                    []
+            end ++ options_to_query_args(Options, []),
     Boundary = barrel_uuids:random(),
     JsonBytes = ?JSON_ENCODE(
         barrel_doc:to_json_obj(
-          Doc, [revs, attachments, follows, att_encoding_info | Options])),
+            Doc, [revs, attachments, follows, att_encoding_info | Options])),
     {ContentType, Len} = barrel_doc:len_doc_to_multi_part_stream(Boundary,
         JsonBytes, Doc#doc.atts, true),
     Headers = case lists:member(delay_commit, Options) of
-    true ->
-        [{"X-Couch-Full-Commit", "false"}];
-    false ->
-        []
-    end ++ [{"Content-Type", binary_to_list(ContentType)}, {"Content-Length", Len}],
+                  true ->
+                      [{"X-Couch-Full-Commit", "false"}];
+                  false ->
+                      []
+              end ++ [{"Content-Type", binary_to_list(ContentType)}, {"Content-Length", Len}],
     Body = {fun stream_doc/1, {JsonBytes, Doc#doc.atts, Boundary, Len}},
     send_req(
         % A crash here bubbles all the way back up to run_user_fun inside
@@ -330,19 +330,19 @@ update_doc(#httpdb{} = HttpDb, #doc{id = DocId} = Doc, Options, Type) ->
         [{method, put}, {path, barrel_doc:encode_doc_id(DocId)},
             {qs, QArgs}, {headers, Headers}, {body, Body}],
         fun(Code, _, Props) when Code =:= 200 orelse Code =:= 201 orelse Code =:= 202 ->
-                {ok, barrel_doc:parse_rev(maps:get(<<"rev">>, Props))};
+            {ok, barrel_doc:parse_rev(maps:get(<<"rev">>, Props))};
             (409, _, _) ->
                 throw(conflict);
             (Code, _, Props) ->
                 case {Code, maps:get(<<"error">>, Props)} of
-                {401, <<"unauthorized">>} ->
-                    throw({unauthorized, maps:get(<<"reason">>, Props)});
-                {403, <<"forbidden">>} ->
-                    throw({forbidden, maps:get(<<"reason">>, Props)});
-                {412, <<"missing_stub">>} ->
-                    throw({missing_stub, maps:get(<<"reason">>, Props)});
-                {_, Error} ->
-                    {error, Error}
+                    {401, <<"unauthorized">>} ->
+                        throw({unauthorized, maps:get(<<"reason">>, Props)});
+                    {403, <<"forbidden">>} ->
+                        throw({forbidden, maps:get(<<"reason">>, Props)});
+                    {412, <<"missing_stub">>} ->
+                        throw({missing_stub, maps:get(<<"reason">>, Props)});
+                    {_, Error} ->
+                        {error, Error}
                 end
         end);
 update_doc(Db, Doc, Options, Type) ->
@@ -683,7 +683,6 @@ run_user_fun(UserFun, Arg, UserAcc, OldRef) ->
             erlang:exit(Reason)
     end.
 
-
 restart_remote_open_doc_revs(Ref, NewRef) ->
     receive
     {body_bytes, Ref, _} ->
@@ -918,7 +917,17 @@ stream_doc({JsonBytes, Atts, Boundary, Len}) ->
     erlang:put({doc_streamer, Boundary}, DocStreamer),
     {ok, <<>>, {Len, Boundary}};
 stream_doc({0, Id}) ->
-    erlang:erase({doc_streamer, Id}),
+    case erlang:erase({doc_streamer, Id}) of
+        Pid when is_pid(Pid) ->
+            unlink(Pid),
+            receive
+                {'EXIT', Pid, normal} -> ok
+            after 0 ->
+                ok
+            end;
+        _ ->
+            ok
+    end,
     eof;
 stream_doc({LenLeft, Id}) when LenLeft > 0 ->
     Ref = make_ref(),
