@@ -63,31 +63,48 @@ loop(Req) ->
     DesignUrlHandlers, UserCtx).
 
 options() ->
-  DefaultSpec = "{couch_httpd_db, handle_request}",
-  DefaultFun = couch_httpd:make_arity_1_fun(
-    barrel_config:get("httpd", "default_handler", DefaultSpec)
-  ),
 
-  UrlHandlersList = lists:map(
-    fun({UrlKey, SpecStr}) ->
-      {list_to_binary(UrlKey), couch_httpd:make_arity_1_fun(SpecStr)}
-    end, barrel_config:get("httpd_global_handlers")),
+  DefaultFun = fun couch_httpd_db:handle_request/1,
 
-  DbUrlHandlersList = lists:map(
-    fun({UrlKey, SpecStr}) ->
-      {list_to_binary(UrlKey), couch_httpd:make_arity_2_fun(SpecStr)}
-    end, barrel_config:get("httpd_db_handlers")),
+  UrlHandlersList = [
+    {<<"/">>,  fun couch_httpd_misc_handlers:handle_welcome_req/1},
+    {<<"_all_dbs">>, fun couch_httpd_misc_handlers:handle_all_dbs_req/1},
+    {<<"_active_tasks">>, fun couch_httpd_misc_handlers:handle_task_status_req/1},
+    {<<"_config">>, fun couch_httpd_misc_handlers:handle_config_req/1},
+    {<<"_replicate">>, fun couch_replicator_httpd:handle_req/1},
+    {<<"_uuids">>, fun couch_httpd_misc_handlers:handle_uuids_req/1},
+    {<<"_restart">>, fun couch_httpd_misc_handlers:handle_restart_req/1},
+    {<<"_stats">>, fun couch_httpd_metrics:handle_req/1},
+    {<<"_log">>, fun couch_httpd_misc_handlers:handle_log_req/1},
+    {<<"_session">>, fun couch_httpd_auth:handle_session_req/1},
+    {<<"_oauth">>, fun couch_httpd_oauth:handle_oauth_req/1},
+    {<<"_db_updates">>, fun couch_dbupdates_httpd:handle_req/1}
+  ],
 
-  DesignUrlHandlersList = lists:map(
-    fun({UrlKey, SpecStr}) ->
-      {list_to_binary(UrlKey), couch_httpd:make_arity_3_fun(SpecStr)}
-    end, barrel_config:get("httpd_design_handlers")),
+  DbUrlHandlersList = [
+    {<<"_all_docs">>, fun couch_httpd_all_docs:handle_req/2},
+    {<<"_changes">>, fun couch_httpd_changes:handle_changes_req/2},
+    {<<"_compact">>, fun couch_httpd_db:handle_compact_req/2},
+    {<<"_design">>, fun couch_httpd_db:handle_design_req/2},
+    {<<"_temp_view">>, fun couch_mrview_http:handle_temp_view_req/2},
+    {<<"_view_cleanup">>, fun couch_mrview_http:handle_cleanup_req/2},
+    {<<"_random_doc">>, fun couch_randomdoc_httpd:handle_req/2},
+    {<<"_bulk_get">>, fun couch_httpd_bulk_get:handle_req/2}
+  ],
+
+  DesignUrlHandlersList = [
+    {<<"_compact">>, fun couch_mrview_http:handle_compact_req/3},
+    {<<"_info">>, fun couch_mrview_http:handle_info_req/3},
+    {<<"_list">>, fun couch_mrview_show:handle_view_list_req/3},
+    {<<"_show">>, fun couch_mrview_show:handle_doc_show_req/3},
+    {<<"_update">>, fun couch_mrview_show:handle_doc_update_req/3},
+    {<<"_view">>, fun couch_mrview_http:handle_view_req/3},
+    {<<"_reindex">>, fun couch_mrview_http:handle_reindex_req/3}
+  ],
 
   UrlHandlers = dict:from_list(UrlHandlersList),
   DbUrlHandlers = dict:from_list(DbUrlHandlersList),
   DesignUrlHandlers = dict:from_list(DesignUrlHandlersList),
-
-  set_auth_handlers(),
 
   % add barrel log event handler
   lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
@@ -95,14 +112,6 @@ options() ->
   [{url_handlers, UrlHandlers}, {db_url_handlers, DbUrlHandlers},
     {design_url_handlers, DesignUrlHandlers}, {default_fun, DefaultFun},
     {loop, {?MODULE, loop}}].
-
-
-set_auth_handlers() ->
-  AuthenticationSrcs = couch_httpd:make_fun_spec_strs(
-    barrel_config:get("httpd", "authentication_handlers", "")),
-  AuthHandlers = lists:map(
-    fun(A) -> {couch_httpd:make_arity_1_fun(A), list_to_binary(A)} end, AuthenticationSrcs),
-  ok = application:set_env(couch_httpd, auth_handlers, AuthHandlers).
 
 apply_cors_headers(#httpd{mochi_req=MochiReq}, Headers) ->
   apply_cors_headers(MochiReq, Headers);
