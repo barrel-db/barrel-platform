@@ -22,7 +22,7 @@ start(_StartType, _StartArgs) ->
   Args = init:get_arguments(),
   ok = init_config(Args),
   ok = maybe_set_pidfile(Args),
-  ok = init_node(),
+  _ = barrel_log:init(),
   'barrel_sup':start_link().
 
 -spec stop(atom()) -> ok.
@@ -34,14 +34,6 @@ stop(_State) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-init_node() ->
-  case application:get_env(barrel, start_mode) of
-    standalone -> ok;
-    _ ->
-      barrel_log:init(),
-      ok
-  end.
 
 
 init_config(Args) ->
