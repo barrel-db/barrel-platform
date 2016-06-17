@@ -28,13 +28,15 @@
 
 
 get_compression_method() ->
-    MethodStr = barrel_config:get("barrel", "file_compression", ?DEFAULT_COMPRESSION),
-
-    case string:tokens(MethodStr, "_") of
-        [Method] ->
-            list_to_existing_atom(Method);
-        [Method, Level] ->
-            {list_to_existing_atom(Method), list_to_integer(Level)}
+    case barrel_config:get("barrel", "file_compression") of
+        undefined -> ?DEFAULT_COMPRESSION;
+        MethodStr ->
+            case string:tokens(MethodStr, "_") of
+                [Method] ->
+                    list_to_existing_atom(Method);
+                [Method, Level] ->
+                    {list_to_existing_atom(Method), list_to_integer(Level)}
+            end
     end.
 
 
