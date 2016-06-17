@@ -45,6 +45,10 @@ init([]) ->
            {barrel_uuids, start_link, []},
            permanent, brutal_kill, worker, [barrel_uuids]},
 
+  TaskStatus = {barrel_task_status,
+    {barrel_task_status, start_link, []},
+    permanent,brutal_kill,	worker,[barrel_task_status]},
+
   %% safe supervisor, like kernel_safe_sup but for barrel, allows to register
   %% external applications to it like stores if needed.
   ExtSup = {barrel_ext_sup,
@@ -76,7 +80,7 @@ init([]) ->
          permanent, infinity, supervisor, [barrel_ui_sup]},
 
 
-  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, ExtSup, Metrics, Server, Daemons,
+  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, ExtSup, Metrics, Server, Daemons,
                                 UI, Index, Replicator] } }.
 
 %%====================================================================
