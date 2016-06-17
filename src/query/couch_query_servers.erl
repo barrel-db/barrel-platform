@@ -297,6 +297,14 @@ with_ddoc_proc(#doc{id=DDocId,revs={Start, [DiskRev|_]}}=DDoc, Fun) ->
         ok = ret_os_process(Proc)
     end.
 
+get_query_servers() ->
+    Default = maps:from_list(application:get_env(barrel, "query_servers", [])),
+    lists:foldl(fun({Lang, SpecStr}, QS) ->
+            {ok, {Mod, Fun, SpecArg}} = barrel_lib:parse_term(SpecStr),
+            QS#{ list_to_binary(Lang) => {Mod, Fun, SpecArg}}
+        end, Default, barrel_config:get("query_servers")).
+
+
 init([]) ->
     % register async to avoid deadlock on restart_child
     self() ! init,
@@ -307,19 +315,16 @@ init([]) ->
     PidProcs = ets:new(couch_query_server_pid_langs, [set, private]),
     LangProcs = ets:new(couch_query_server_procs, [set, private]),
 
-    ProcTimeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
+    ProcTimeout = barrel_config:get_integer("barrel", "os_process_timeout", 5000),
     ReduceLimit = barrel_config:get_boolean("query_server_config", "reduce_limit", true),
     OsProcLimit = barrel_config:get_integer("query_server_config", "os_process_limit", 10),
 
-
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
-    lists:foreach(fun({Lang, SpecStr}) ->
-        {ok, {Mod, Fun, SpecArg}} = barrel_lib:parse_term(SpecStr),
-        true = ets:insert(LangLimits, {list_to_binary(Lang), OsProcLimit, 0}), % 0 means no limit
-        true = ets:insert(Langs, {list_to_binary(Lang),
-                          Mod, Fun, SpecArg})
-    end, barrel_config:get("query_servers")),
-
+    maps:fold(fun(Lang, {Mod, Fun, SpecArg}, Acc) ->
+        true = ets:insert(LangLimits, {Lang, OsProcLimit, 0}), % 0 means no limit
+        true = ets:insert(Langs, {Lang, Mod, Fun, SpecArg}),
+        ok
+    end, ok, get_query_servers()),
 
     process_flag(trap_exit, true),
     {ok, #qserver{

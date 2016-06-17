@@ -29,6 +29,12 @@
         econfig,
         exometer_core
       ]},
-    {env, []},
+    {env, [
+      {query_servers, [
+        {<<"javascript">>, {couch_couchjs, start_link, [javascript]}},
+        {<<"erlang">>, {couch_native_process, start_link, []}}
+      ]}
+
+    ]},
     {modules, []}
   ]}.

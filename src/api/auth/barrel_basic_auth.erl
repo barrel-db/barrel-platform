@@ -61,7 +61,7 @@ check_password(Pass, UserProps) ->
                                       {couch_passwords:simple(Pass, UserSalt),
                                         maps:get(<<"password_sha">>, UserProps, nil)};
                                     <<"pbkdf2">> ->
-                                      Iterations = maps:get(<<"iterations">>, UserProps, 10000),
+                                      Iterations = maps:get(<<"iterations">>, UserProps, 1000),
                                       {couch_passwords:pbkdf2(Pass, UserSalt, Iterations),
                                         maps:get(<<"derived_key">>, UserProps, nil)}
                                   end,

@@ -37,16 +37,14 @@ stop(_State) ->
 
 
 init_config(Args) ->
-  Default = filename:join([barrel_lib:priv_dir(), "default.ini"]),
   IniFiles = case proplists:get_value(inifiles, Args) of
                undefined -> application:get_env(barrel, config_files, []);
                [IniFilesStr] -> re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
              end,
 
-
   IniFiles1 = [filename:absname(Ini) || Ini <- maybe_create_default(IniFiles)],
   ok = check_inifiles(IniFiles1),
-  barrel_config:init([Default | IniFiles1]).
+  barrel_config:init(IniFiles1).
 
 
 maybe_set_pidfile(Args) ->

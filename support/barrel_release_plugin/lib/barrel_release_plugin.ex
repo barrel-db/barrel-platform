@@ -10,6 +10,7 @@ defmodule ReleaseManager.Plugin.BarrelRelease do
     {result, _errcode} = System.cmd("make", ["-C", "c_src/barrel_js", "clean"])
     info result
     System.cmd("escript", ["support/build_js.escript"])
+    BarrelRelease.SetupConfig.update_config("config/sys.ini", "rel/#{app}/releases/#{version}/sys.ini")
     BarrelRelease.SetupConfig.update_config("config/sys.config", "rel/#{app}/releases/#{version}/sys.config")
     BarrelRelease.SetupConfig.update_config("config/vm.args", "rel/#{app}/releases/#{version}/vm.args")
   end
