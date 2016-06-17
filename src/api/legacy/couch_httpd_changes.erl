@@ -38,9 +38,8 @@ handle_changes_req(#httpd{path_parts=[_,<<"_changes">>]}=Req, _Db) ->
     couch_httpd:send_method_not_allowed(Req, "GET,HEAD,POST").
 
 handle_changes_req1(Req, #db{name=DbName}=Db) ->
-    AuthDbName = barrel_config:get_binary("auth", "authentication_db", <<"_users">>),
-    case AuthDbName of
-    DbName ->
+    case DbName of
+    <<"_users">> ->
         % in the authentication database, _changes is admin-only.
         ok = couch_db:check_is_admin(Db);
     _Else ->

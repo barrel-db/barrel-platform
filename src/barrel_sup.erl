@@ -55,9 +55,6 @@ init([]) ->
             {barrel_server, start_link, []},
             permanent,brutal_kill,	worker,[barrel_server]},
 
-
-
-
   Daemons = {barrel_daemons_sup,
              {barrel_daemons_sup, start_link, []},
              permanent, infinity, supervisor, [barrel_daemons_sup]},

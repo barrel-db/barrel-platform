@@ -299,26 +299,21 @@ config_change(_, _, _) ->
 
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
   maybe_add_sys_db_callbacks(binary_to_list(DbName), Options);
-maybe_add_sys_db_callbacks(DbName, Options) ->
-  case barrel_config:get("replicator", "db", "_replicator") of
-    DbName ->
-      [
-       {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
-       {after_doc_read, fun couch_replicator_manager:after_doc_read/2},
-       sys_db | Options
-      ];
-    _ ->
-      case barrel_config:get("auth", "authentication_db", "_users") of
-        DbName ->
-          [
-           {before_doc_update, fun couch_users_db:before_doc_update/2},
-           {after_doc_read, fun couch_users_db:after_doc_read/2},
-           sys_db | Options
-          ];
-        _ ->
-          Options
-      end
-  end.
+
+maybe_add_sys_db_callbacks("_replicator", Options) ->
+  [
+    {before_doc_update, fun couch_replicator_manager:before_doc_update/2},
+    {after_doc_read, fun couch_replicator_manager:after_doc_read/2},
+    sys_db | Options
+  ];
+maybe_add_sys_db_callbacks("_users", Options) ->
+  [
+    {before_doc_update, fun couch_users_db:before_doc_update/2},
+    {after_doc_read, fun couch_users_db:after_doc_read/2},
+    sys_db | Options
+  ];
+maybe_add_sys_db_callbacks(_, Options) ->
+  Options.
 
 check_dbname(#state{dbname_regexp=RegExp}, DbName) ->
   case re:run(DbName, RegExp, [{capture, none}]) of

@@ -184,8 +184,8 @@ handle_cast(Msg, State) ->
     {stop, {error, {unexpected_cast, Msg}}, State}.
 
 handle_info({'$barrel_event', DbName, created}, State) ->
-    case barrel_config:get_binary("replicator", "db", <<"_replicator">>) of
-        DbName ->
+    case DbName of
+        <<"_replicator">> ->
             {noreply, restart(State)};
         _ ->
             {noreply, State}
@@ -204,15 +204,6 @@ handle_info({'EXIT', From, normal}, #state{rep_start_pids = Pids} = State) ->
 handle_info({'DOWN', _Ref, _, _, _}, State) ->
     % From a db monitor created by a replication process. Ignore.
     {noreply, State};
-
-handle_info({config_updated, barrel, {_, {"replicator", "db"}}}, State) ->
-    DbName = barrel_config:get_binary("replicator", "db", <<"_replicator">>),
-    if
-        State#state.rep_db_name /= DbName ->
-            {noreply, restart(State)};
-        true ->
-            {noreply, State}
-    end;
 handle_info({config_updated, barrel, {_, {"replicator", "max_replication_retry_count"}}}, State) ->
     Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
     {noreply, State#state{max_retries = Retries}};
@@ -585,14 +576,13 @@ zone(Hr, Min) ->
 
 
 ensure_rep_db_exists() ->
-    DbName = barrel_config:get_binary("replicator", "db", <<"_replicator">>),
     Roles = [<<"_admin">>, <<"_replicator">>],
     UserCtx = barrel_lib:userctx([{roles, Roles}]),
-    case couch_db:open_int(DbName, [sys_db, {user_ctx, UserCtx}, nologifmissing]) of
+    case couch_db:open_int( <<"_replicator">>, [sys_db, {user_ctx, UserCtx}, nologifmissing]) of
     {ok, Db} ->
         Db;
     _Error ->
-        {ok, Db} = couch_db:create(DbName, [sys_db, {user_ctx, UserCtx}])
+        {ok, Db} = couch_db:create( <<"_replicator">>, [sys_db, {user_ctx, UserCtx}])
     end,
     ensure_rep_ddoc_exists(Db, <<"_design/_replicator">>),
     {ok, Db}.

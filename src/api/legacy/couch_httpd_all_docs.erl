@@ -147,21 +147,20 @@ all_docs_req(Req, Db, Keys) ->
         ok ->
             do_all_docs_req(Req, Db, Keys);
         _ ->
-            DbName = binary_to_list(Db#db.name),
-            case barrel_config:get("auth", "authentication_db", "_users") of
-            DbName ->
-                UsersDbPublic = barrel_config:get("auth", "users_db_public", "false"),
-                PublicFields = barrel_config:get("auth", "public_fields"),
-                case {UsersDbPublic, PublicFields} of
-                {"true", PublicFields} when PublicFields =/= undefined ->
-                    do_all_docs_req(Req, Db, Keys);
-                {_, _} ->
+            case Db#db.name of
+                <<"_users">> ->
+                    UsersDbPublic = barrel_config:get("auth", "users_db_public", "false"),
+                    PublicFields = barrel_config:get("auth", "public_fields"),
+                    case {UsersDbPublic, PublicFields} of
+                        {"true", PublicFields} when PublicFields =/= undefined ->
+                            do_all_docs_req(Req, Db, Keys);
+                        {_, _} ->
+                            throw({forbidden, <<"Only admins can access _all_docs",
+                                " of system databases.">>})
+                    end;
+                _ ->
                     throw({forbidden, <<"Only admins can access _all_docs",
-                                        " of system databases.">>})
-                end;
-            _ ->
-                throw({forbidden, <<"Only admins can access _all_docs",
-                                    " of system databases.">>})
+                        " of system databases.">>})
             end
         end;
     false ->
@@ -181,9 +180,8 @@ do_all_docs_req(Req, Db, Keys) ->
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
         VAcc0 = #vacc{db=Db, req=Req},
         DbName = binary_to_list(Db#db.name),
-        UsersDbName = barrel_config:get("auth", "authentication_db", "_users"),
         IsAdmin = is_admin(Db),
-        Callback = get_view_callback(DbName, UsersDbName, IsAdmin),
+        Callback = get_view_callback(DbName, IsAdmin),
         query_all_docs(Db, Args, Callback, VAcc0)
     end),
     case is_record(Resp, vacc) of
@@ -265,16 +263,15 @@ finish_fold(#fold_acc{user_acc=UAcc}, _ExtraMeta) ->
     {ok, UAcc}.
 
 % admin users always get all fields
-get_view_callback(_, _, true) ->
+get_view_callback(_, true) ->
     fun view_cb/2;
 % if we are operating on the users db and we aren't
 % admin, filter the view
-get_view_callback(_DbName, _DbName, false) ->
+get_view_callback(DbName, false) when DbName =:= "_users" ->
     fun filtered_view_cb/2;
 % non _users databases get all fields
-get_view_callback(_, _, _) ->
+get_view_callback(_, _) ->
     fun view_cb/2.
-
 
 filtered_view_cb({row, Row0}, Acc) ->
   Row1 = lists:map(fun({doc, null}) ->

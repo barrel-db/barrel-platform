@@ -352,9 +352,8 @@ use_auth_db() ->
 
 
 open_auth_db() ->
-    DbName = barrel_config:get_binary("auth", "authentication_db", <<"_users">>),
     DbOptions = [{user_ctx, barrel_lib:adminctx()}],
-    {ok, AuthDb} = couch_db:open_int(DbName, DbOptions),
+    {ok, AuthDb} = couch_db:open_int( <<"_users">>, DbOptions),
     AuthDb.
 
 

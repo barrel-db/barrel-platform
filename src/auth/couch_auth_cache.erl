@@ -128,8 +128,6 @@ unregister_hooks() ->
 handle_config_change("auth", "auth_cache_size", _Type) ->
     Size = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
     ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
-handle_config_change("auth", "authentication_db", _Type) ->
-    ok = gen_server:call(?MODULE, reinit_cache);
 handle_config_change(_Section, _Key, _Type) ->
     ok.
 
@@ -144,8 +142,7 @@ init(_) ->
     process_flag(trap_exit, true),
     init_hooks(),
     CacheSize = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
-    AuthDbName = barrel_config:get_binary("auth", "authentication_db", ?DEFAULT_USERDB),
-    _ = barrel_event:reg(AuthDbName),
+    _ = barrel_event:reg(<<"_users">>),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
 
@@ -221,7 +218,6 @@ handle_info(_Info, State) ->
 
 terminate(_Reason, _State) ->
     unregister_hooks(),
-    [{auth_db_name, DbName}] = ets:lookup(?STATE, auth_db_name),
     catch barrel_event:unreg(),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete(?BY_USER),
@@ -243,9 +239,6 @@ clear_cache(State) ->
 
 reinit_cache(State) ->
     NewState = clear_cache(State),
-    AuthDbName = barrel_config:get_binary("auth", "authentication_db", ?DEFAULT_USERDB),
-    catch _ = barrel_event:change_db(AuthDbName),
-    true = ets:insert(?STATE, {auth_db_name, AuthDbName}),
     AuthDb = open_auth_db(),
     true = ets:insert(?STATE, {auth_db, AuthDb}),
     NewState#state{db_mon_ref = couch_db:monitor(AuthDb)}.
@@ -380,8 +373,7 @@ exec_if_auth_db(Fun, DefRes) ->
 
 
 open_auth_db() ->
-    [{auth_db_name, DbName}] = ets:lookup(?STATE, auth_db_name),
-    {ok, AuthDb} = ensure_users_db_exists(DbName, [sys_db]),
+    {ok, AuthDb} = ensure_users_db_exists([sys_db]),
     AuthDb.
 
 
@@ -402,14 +394,14 @@ get_user_props_from_db(UserName) ->
         nil
     ).
 
-ensure_users_db_exists(DbName, Options) ->
+ensure_users_db_exists(Options) ->
     Options1 = [{user_ctx, barrel_lib:adminctx()}, nologifmissing | Options],
-    case couch_db:open(DbName, Options1) of
+    case couch_db:open(<<"_users">>, Options1) of
     {ok, Db} ->
         ensure_auth_ddoc_exists(Db, <<"_design/_auth">>),
         {ok, Db};
     _Error ->
-        {ok, Db} = couch_db:create(DbName, Options1),
+        {ok, Db} = couch_db:create(<<"_users">>, Options1),
         ok = ensure_auth_ddoc_exists(Db, <<"_design/_auth">>),
         {ok, Db}
     end.
