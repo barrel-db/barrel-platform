@@ -101,8 +101,8 @@ boot_status() ->
   io:format("node id: ~s~n", [barrel_server:node_id()]),
   display_uris(URIs),
   case barrel_http_console:is_enabled() of
-    true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()])
-
+    true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()]);
+    false -> ok
   end,
   write_uri_file(Config, URIs).
 
