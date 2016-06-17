@@ -9,7 +9,9 @@ before_install:
 - sudo apt-get -y install libtool automake autoconf autoconf-archive
 install:
 - "./support/bootstrap_travis.sh"
-script: DEBUG=1 ./rebar3 ct
+script:
+- ./rebar3 eunit
+- ./rebar3 ct
 notifications:
   email:
   - bchesneau@gmail.com
