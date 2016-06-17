@@ -74,18 +74,13 @@ init([]) ->
              {barrel_metrics_sup, start_link, []},
              permanent, infinity, supervisor, [barrel_metrics_sup]},
 
-  Api = {barrel_api_sup,
-         {barrel_api_sup, start_link, []},
-         permanent, infinity, supervisor, [barrel_api_sup]},
+  UI = {barrel_ui_sup,
+         {barrel_ui_sup, start_link, []},
+         permanent, infinity, supervisor, [barrel_ui_sup]},
 
-  Console = case barrel_http_console:is_enabled() of
-              true ->
-                [barrel_http_console:childspec(barrel_http_console:config())];
-              false -> []
-            end,
 
   {ok, { {one_for_all, 0, 10}, [Event, UUIDs, ExtSup, Metrics, Server, Daemons,
-                                Api, Index, Replicator] ++ Console} }.
+                                UI, Index, Replicator] } }.
 
 %%====================================================================
 %% Internal functions
