@@ -20,3 +20,6 @@ priv/barreljs
 /deps
 *.ez
 rel/barrel
+log
+Barrel-*
+barrel.ini
