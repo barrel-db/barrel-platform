@@ -48,6 +48,8 @@ barrel_task_status_test_() ->
         fun should_update_time_changes_on_task_progress/1,
         %% fun should_control_update_frequency/1,
         fun should_reset_control_update_frequency/1,
+        fun should_return_value/1,
+        fun should_return_multiple_value/1,
         fun should_track_multiple_tasks/1,
         fun should_finish_task/1
 
@@ -118,6 +120,23 @@ should_finish_task(Pid) ->
   ok = call(Pid, done),
   ?_assertEqual(0, length(barrel_task_status:all())).
 
+should_return_value(_) ->
+  Self = self(),
+  spawn(fun() ->
+          barrel_task_status:add_task([{val, 1}]),
+          Self ! {val, barrel_task_status:get(val)}
+        end),
+  Val = receive {val, V} -> V end,
+  ?_assertEqual(1, Val).
+
+should_return_multiple_value(_) ->
+  Self = self(),
+  spawn(fun() ->
+    barrel_task_status:add_task([{vala, 1}, {valb, 2}]),
+    Self ! {val, barrel_task_status:get([vala, valb])}
+        end),
+  Val = receive {val, V} -> V end,
+  ?_assertEqual([1, 2], Val).
 
 run_multiple_tasks() ->
   Pid1 = spawn(fun() -> loop() end),

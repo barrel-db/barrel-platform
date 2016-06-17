@@ -75,10 +75,10 @@ update(Props) ->
   maybe_persist(TaskProps).
 
 get(Props) when is_list(Props) ->
-  [{_Pid, TaskProps}] = ets:lookup(?MODULE, self()),
-  [proplists:get_value(K, TaskProps) || K <- Props];
+  [{_Pid, TaskProps}] = ets:lookup(?MODULE, {t, self()}),
+  [proplists:get_value(K, TaskProps) || K <- Props];
 get(Prop) ->
-  [{_Pid, TaskProps}] = ets:lookup(?MODULE, self()),
+  [{_Pid, TaskProps}] = ets:lookup(?MODULE, {t, self()}),
   proplists:get_value(Prop, TaskProps).
 
 
