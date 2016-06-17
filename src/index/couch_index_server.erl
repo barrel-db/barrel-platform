@@ -226,7 +226,5 @@ rem_from_ets(DbName, Sig, DDocId, Pid) ->
     ets:delete_object(?BY_DB, {DbName, {DDocId, Sig}}).
 
 
-config_change("couchdb", "view_index_dir", _) ->
-    exit(whereis(?MODULE), config_change);
-config_change("couchdb", "index_dir", _) ->
+config_change("barrel", "view_index_dir", _) ->
     exit(whereis(?MODULE), config_change).

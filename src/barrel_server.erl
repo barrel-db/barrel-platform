@@ -28,6 +28,7 @@
          vendors_info/0]).
 
 -export([all_databases/0, all_databases/2]).
+-export([database_dir/0]).
 -export([is_admin/2,
          has_admins/0,
          get_stats/0]).
@@ -177,13 +178,25 @@ all_databases(Fun, Acc0) ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
+database_dir() ->
+  case barrel_config:get_env(database_dir) of
+    undefined ->
+      Dir = filename:absname(lists:concat(["Barrel-", node()])),
+      filelib:ensure_dir(filename:join(Dir, "dummy")),
+      barrel_config:set("barrel", "database_dir", Dir),
+      Dir;
+    Dir ->
+      Dir
+  end.
+
+
 init([]) ->
   % read config and register for configuration changes
 
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
-  RootDir = barrel_config:get("barrel", "database_dir", "."),
+  RootDir = database_dir(),
   hooks:reg(config_key_update, ?MODULE, config_change, 3),
   ok = couch_file:init_delete_dir(RootDir),
   hash_admin_passwords(),
@@ -278,7 +291,7 @@ ddoc_updated(DbName, Event) ->
   barrel_event:notify(DbName, Event).
 
 %% CONFIG hooks
-config_change("couchdb", "database_dir", _) ->
+config_change("barrel", "database_dir", _) ->
   gen_server:cast(barrel_server, config_change);
 config_change(_, _, _) ->
   ok.
@@ -324,7 +337,7 @@ get_full_filename(State, DbName) ->
   filename:join([State#state.root_dir, "./" ++ DbName ++ ".couch"]).
 
 
-request([{Req, From} | Rest], State) ->
+request([{Req, From} | Rest], State) ->
   Res = case Req of
           {create, Db, Options} ->
             handle_create(State, Req, From, Db, Options);

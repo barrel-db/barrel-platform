@@ -40,23 +40,28 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  init_config(),
-  Config = barrel_config:section_to_opts("api"),
+  Config = init_config(),
   WebProcesses = web_processes(barrel_api_http:get_listeners(Config), Config),
    {ok, {{one_for_one, 10, 10}, WebProcesses}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-web_processes([], _Config) -> [];
+
 web_processes(Listeners, Config) ->
-  lists:flatten([ web_listeners(barrel_lib:propmerge1(Opts, Config), Scheme, Binding) ||
-    {Scheme, Binding, Opts} <- Listeners ]).
+  maps:fold(fun(Scheme, {Binding, Opts}, Specs) ->
+        [web_listeners(barrel_lib:propmerge1(Opts, Config), Scheme, Binding) | Specs]
+      end, [], Listeners).
 
 web_listeners(Config, Scheme, Binding) -> barrel_api_http:binding_spec(Config, Scheme, Binding).
 
+%% TODO: move the CORS config initialisation to a config hook
 init_config() ->
   barrel_cors_middleware:init_config(),
-  ok.
+
+  %% environment config is always superseded by the ini config.
+  EnvConfig = application:get_env(barrel, api, []),
+  IniConfig = barrel_config:section_to_opts("api"),
+  barrel_lib:propmerge1(IniConfig, EnvConfig).
 
 

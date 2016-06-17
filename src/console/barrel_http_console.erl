@@ -21,6 +21,7 @@
 
 %% API
 -export([childspec/1]).
+-export([config/0]).
 -export([is_enabled/0]).
 -export([binding/1]).
 -export([admin_uri/0]).
@@ -42,7 +43,18 @@ childspec(Config) ->
     cowboy_protocol, ProtoOpts).
 
 
-is_enabled() -> barrel_config:get_boolean("console", "enabled", false) =:= true.
+config() ->
+  EnvCfg = application:get_env(barrel, console, []),
+  IniCfg = barrel_config:section_to_opts("console"),
+  barrel_lib:propmerge1(IniCfg, EnvCfg).
+
+is_enabled() ->
+  case barrel_config:get_env("start_console", false) of
+    Val when is_atom(Val) -> Val;
+    "true" -> true;
+    "1" -> true;
+    _ -> false
+  end.
 
 binding(Config) ->
   Port = barrel_config:pget_int(port, Config, ?DEFAULT_PORT),

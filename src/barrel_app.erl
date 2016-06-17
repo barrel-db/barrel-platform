@@ -11,7 +11,7 @@
 -export([start/2
         ,stop/1]).
 
--define(CONF_FILES, ["barrel.ini", "local.ini"]).
+-define(DEFAULT_INI, "barrel.ini").
 
 %%====================================================================
 %% API
@@ -45,17 +45,16 @@ init_node() ->
 
 
 init_config(Args) ->
+  Default = filename:join([barrel_lib:priv_dir(), "default.ini"]),
   IniFiles = case proplists:get_value(inifiles, Args) of
-               undefined ->
-                 ConfDir =  filename:join([code:root_dir(), "etc"]),
-                 ConfigFiles = application:get_env(barrel, config_files, ?CONF_FILES),
-                 lists:map(fun(FName) ->
-                   filename:join(ConfDir, FName)
-                           end, ConfigFiles);
-               [IniFilesStr] ->
-                 re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
+               undefined -> application:get_env(barrel, config_files, []);
+               [IniFilesStr] -> re:split(IniFilesStr, "\\s*,||s*", [{return, list}])
              end,
-  barrel_config:init(IniFiles).
+
+
+  IniFiles1 = [filename:absname(Ini) || Ini <- maybe_create_default(IniFiles)],
+  ok = check_inifiles(IniFiles1),
+  barrel_config:init([Default | IniFiles1]).
 
 
 maybe_set_pidfile(Args) ->
@@ -69,4 +68,21 @@ maybe_set_pidfile(Args) ->
           error_logger:error_msg("Failed to write PID file ~s: ~s", [PidFile, Reason]),
           ok
       end
+  end.
+
+maybe_create_default([]) ->
+  Filename = filename:absname(?DEFAULT_INI),
+  case filelib:is_file(Filename) of
+    true -> [Filename];
+    false ->
+      file:copy(filename:join(barrel_lib:priv_dir(), "local.ini"), Filename),
+      [Filename]
+  end;
+maybe_create_default(IniFiles) -> IniFiles.
+
+check_inifiles([]) -> ok;
+check_inifiles([File | Rest]) ->
+  case filelib:is_file(File) of
+    false -> throw({invalid_config, File});
+    true -> check_inifiles(Rest)
   end.

@@ -34,6 +34,7 @@
 -export([get_list/2, get_list/3]).
 -export([get_binary/2, get_binary/3]).
 -export([subscribe/0, unsubscribe/0]).
+-export([get_env/1, get_env/2]).
 
 -export([pget_boolean/2, pget_boolean/3, pget_int/2, pget_int/3,
   pget_float/2, pget_float/3, pget_list/2, pget_list/3,
@@ -89,6 +90,16 @@ subscribe() -> econfig:subscribe(?CFGNAME).
 
 unsubscribe() -> econfig:unsubscribe(?CFGNAME).
 
+
+get_env(Key) -> get_env(Key, undefined).
+
+get_env(Key, Default) ->
+  case barrel_config:get("barrel", Key) of
+    undefined ->
+      application:get_env(barrel, Key, Default);
+    Val ->
+      Val
+  end.
 
 section_to_opts(Name) -> [{barrel_lib:to_atom(K), V} || {K, V} <- barrel_config:get(Name)].
 

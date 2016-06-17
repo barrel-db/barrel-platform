@@ -80,8 +80,7 @@ init([]) ->
 
   Console = case barrel_http_console:is_enabled() of
               true ->
-                ConsoleCfg = barrel_config:section_to_opts("console"),
-                [barrel_http_console:childspec(ConsoleCfg)];
+                [barrel_http_console:childspec(barrel_http_console:config())];
               false -> []
             end,
 

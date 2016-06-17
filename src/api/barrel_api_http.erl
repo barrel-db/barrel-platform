@@ -42,10 +42,10 @@
 
 -spec get_listeners(list()) -> list().
 get_listeners(Config) ->
-  get_listeners(Config, http) ++ get_listeners(Config, https).
+  maps:merge(get_listeners(Config, http), get_listeners(Config, https)).
 
 get_listeners(_Config, Scheme) ->
-  Listeners = barrel_config:prefix(lists:flatten(atom_to_list(Scheme) ++ " ")),
+  ConfigListeners = barrel_config:prefix(lists:flatten(atom_to_list(Scheme) ++ " ")),
   lists:foldl(fun(Name, Acc) ->
       Opts = barrel_config:section_to_opts(Name),
       case catch barrel_config:pget_int(port, Opts) of
@@ -54,10 +54,26 @@ get_listeners(_Config, Scheme) ->
           Acc;
         Port ->
           Addr = proplists:get_value(address, Opts, "127.0.0.1"),
-          [{Scheme, {Addr, Port}, Opts} | Acc]
+          Acc#{Scheme => {{Addr, Port}, Opts} }
       end
-    end, [], Listeners).
+    end, get_env_listeners(Scheme), ConfigListeners).
 
+get_env_listeners(Scheme) ->
+  AllListeners = application:get_env(barrel, listeners, []),
+  case proplists:get_value(Scheme, AllListeners) of
+    undefined -> #{};
+    Listeners ->
+      lists:foldl(fun({Name, Opts}, Acc) ->
+        case catch barrel_config:pget_int(port, Opts) of
+          {'EXIT', {badarg, _}} ->
+            lager:warning("~s env configuration for ~s ignored. Invalid port", [Scheme, Name]),
+            Acc;
+          Port ->
+            Addr = proplists:get_value(address, Opts, "127.0.0.1"),
+            Acc#{Scheme => {{Addr, Port}, Opts} }
+        end
+        end, #{}, Listeners)
+  end.
 
 -spec binding_spec(list(), atom(), list()) -> tuple().
 binding_spec(Config, Scheme, Binding) ->
@@ -70,9 +86,8 @@ binding_spec(Config, Scheme, Binding) ->
   ProtoOpts = protocol_opts(),
   ranch:child_spec(Ref, NbAcceptors, Transport, TransportOpts, cowboy_protocol, ProtoOpts).
 
-web_uris([]) -> [];
 web_uris(Listeners) ->
-  Acc = lists:foldl(fun({Scheme, {Addr, Port}, _Opt}, Acc1) ->
+  Acc = maps:fold(fun(Scheme, {{Addr, Port}, _Opt}, Acc1) ->
                       URI = lists:flatten([atom_to_list(Scheme), "://", Addr, ":", integer_to_list(Port)]),
                       [URI | Acc1]
                     end, [], Listeners),
