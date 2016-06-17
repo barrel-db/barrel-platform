@@ -10,7 +10,7 @@ before_install:
 install:
 - "./support/bootstrap_travis.sh"
 script:
-- ./rebar3 eunit
+- ./rebar3 eunit --dir="test"
 - ./rebar3 ct
 notifications:
   email:
