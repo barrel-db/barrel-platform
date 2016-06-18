@@ -49,7 +49,7 @@ defmodule Barrel.Mixfile do
 
   defp deps do
     [
-      {:barrel_ex_logger, git: "https://github.com/sivsushruth/barrel_ex_logger.git"},
+      {:barrel_ex_logger, git: "https://github.com/barrel-db/barrel_ex_logger.git"},
       {:exrm, "~> 0.18.1"},
       {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:hooks,  "~> 1.1.1"},
