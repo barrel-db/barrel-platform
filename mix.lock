@@ -1,4 +1,4 @@
-%{"barrel_ex_logger": {:git, "https://github.com/sivsushruth/barrel_ex_logger.git", "19475de73a73f79d23ce2ef27017f44ccb8cd6f5", []},
+%{"barrel_ex_logger": {:git, "https://github.com/barrel-db/barrel_ex_logger.git", "c15a64618f791f6c0f7376962a1b32cc90a37a84", []},
   "bbmustache": {:hex, :bbmustache, "1.0.1", "6f8504fa069e6e3595593260384c6c372065dd4ead557bf5b61a2b2bbb4d80f9", [:rebar], []},
   "bear": {:hex, :bear, "0.8.3", "866002127a97932720a0d475d8582c98ec5fb78db3a18dfe7eaf91594d9024b8", [:rebar3], []},
   "certifi": {:hex, :certifi, "0.4.0", "a7966efb868b179023618d29a407548f70c52466bf1849b9e8ebd0e34b7ea11f", [:rebar3], []},
