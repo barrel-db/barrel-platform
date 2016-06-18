@@ -20,14 +20,13 @@ defmodule Barrel.Mixfile do
       mod: {:barrel_app, []},
       applications:
       [
-        :lager,
+        :ssl,
+        :barrel_ex_logger,
         :kernel,
         :stdlib,
         :crypto,
-        :sasl,
         :asn1,
         :public_key,
-        :ssl,
         :os_mon,
         :inets,
         :gproc,
@@ -50,7 +49,7 @@ defmodule Barrel.Mixfile do
 
   defp deps do
     [
-      {:lager, "3.0.2"},
+      {:barrel_ex_logger, git: "https://github.com/sivsushruth/barrel_ex_logger.git"},
       {:exrm, "~> 0.18.1"},
       {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:hooks,  "~> 1.1.1"},
