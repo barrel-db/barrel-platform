@@ -15,6 +15,11 @@
 
 -module(barrel_lib).
 
+-export([val/1, val/2]).
+-export([set/2]).
+-export([unset/1]).
+
+
 -export([to_binary/1]).
 -export([to_error/1]).
 -export([to_atom/1]).
@@ -53,9 +58,27 @@
 -include_lib("syntax_tools/include/merl.hrl").
 -include_lib("couch_db.hrl").
 
+-include("barrel.hrl").
+
 -define(FLUSH_MAX_MEM, 10000000).
 
 -type userctx() :: map().
+
+
+val(Key) ->
+  val(Key, undefined).
+
+val(Key, Default) ->
+  try ets:lookup_element(barrel_gvar, Key, 2)
+  catch error:_ -> Default
+  end.
+
+set(Key, Val) ->
+  ets:insert(barrel_gvar, {Key, Val}).
+
+unset(Key) ->
+  ets:delete(barrel_gvar, Key).
+
 
 -spec to_binary(binary()|list()|integer()|atom()) -> binary().
 to_binary(V) when is_binary(V) -> V;

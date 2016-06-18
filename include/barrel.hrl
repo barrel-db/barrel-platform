@@ -15,3 +15,7 @@
 
 -define(to_binary(V), barrel_lib:to_binary(V)).
 -define(to_error(V), barrel_lib:to_error(V)).
+
+
+-define(catch_val(Var), (try ets:lookup_element(mnesia_gvar, Var, 2)
+                         catch error:_ -> {'EXIT', {badarg, []}} end)).

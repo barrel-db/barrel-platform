@@ -20,12 +20,7 @@
 
 -include_lib("couch_db.hrl").
 
-root_dir() ->
-    case barrel_config:get("barrel", "view_index_dir") of
-        undefined -> barrel_server:database_dir();
-        Val -> Val
-    end.
-
+root_dir() -> barrel_server:get_env(view_dir).
 
 index_dir(Module, DbName) when is_binary(DbName) ->
     DbDir = "." ++ binary_to_list(DbName) ++ "_design",

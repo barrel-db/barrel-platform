@@ -16,6 +16,8 @@
 -module(barrel_server).
 -behaviour(gen_server).
 
+
+
 %% public api
 -export([open/2,
          create/2,
@@ -24,8 +26,11 @@
 -export([node_info/0,
          node_id/0,
          version/0,
-         node_name/0,
-         vendors_info/0]).
+         node_name/0]).
+
+-export([env/0]).
+-export([set_env/2, get_env/1]).
+
 
 -export([all_databases/0, all_databases/2]).
 -export([database_dir/0]).
@@ -43,7 +48,7 @@
 -export([db_updated/2, ddoc_updated/2]).
 -export([config_change/3]).
 
-
+-include("barrel.hrl").
 -include_lib("couch_db.hrl").
 
 -record(state, {root_dir = [],
@@ -65,29 +70,45 @@ node_info() ->
   #{ <<"name">> => <<"barrel">>,
      <<"cluster_name">> => node_name(),
      <<"uuid">> => node_id(),
-     <<"version">> => #{ <<"number">> => list_to_binary(version())},
-     <<"vendor">> => vendors_info()
+     <<"version">> => #{ <<"number">> => list_to_binary(version())}
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.
 
-node_id() ->
-  case barrel_config:get("barrel", "uuid", nil) of
-    nil ->
-      Uuid = barrel_uuids:random(),
-      barrel_config:set("barrel", "uuid", Uuid),
-      Uuid;
-    Uuid ->
-      barrel_lib:to_binary(Uuid)
-  end.
+node_id() -> barrel_lib:val(nodeid).
 
 version() -> {ok, Vsn} = application:get_key(barrel, vsn), Vsn.
 
-vendors_info() ->
-  case barrel_config:get("vendor") of
-    [] -> #{};
-    Properties -> maps:from_list([{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties])
+
+process_config([]) -> ok;
+process_config([E | Rest]) ->
+  V = get_env(E),
+  barrel_lib:set(E, V),
+  process_config(Rest).
+
+
+env() ->
+  [
+    database_dir,
+    view_dir
+  ].
+
+
+default_env(database_dir) ->
+  Name = lists:concat(["Barrel.", node()]),
+  filename:absname(Name);
+default_env(view_dir) ->
+  get_env(database_dir).
+
+
+set_env(E, Val) -> barrel_lib:set(E, Val).
+
+get_env(E) ->
+  case ?catch_val(E) of
+    {'EXIT', _} -> application:get_env(barrel, E, default_env(E));
+    Val -> Val
   end.
+
 
 get_stats() ->
   {ok, #state{start_time=Time,dbs_open=Open}} =
@@ -95,6 +116,7 @@ get_stats() ->
   [{start_time, list_to_binary(Time)}, {dbs_open, Open}].
 
 start_link() ->
+  _ = init_tabs(),
   gen_server:start_link({local, barrel_server}, barrel_server, [], []).
 
 open(DbName, Options0) ->
@@ -178,16 +200,11 @@ all_databases(Fun, Acc0) ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-database_dir() ->
-  case barrel_config:get_env(database_dir) of
-    undefined ->
-      Dir = filename:absname(lists:concat(["Barrel-", node()])),
-      filelib:ensure_dir(filename:join(Dir, "dummy")),
-      barrel_config:set("barrel", "database_dir", Dir),
-      Dir;
-    Dir ->
-      Dir
-  end.
+database_dir() -> get_env(database_dir).
+
+init_tabs() ->
+  _ = ets:new(barrel_gvar, [set, named_table, public]),
+  ok.
 
 
 init([]) ->
@@ -196,7 +213,12 @@ init([]) ->
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
+  process_config(env()),
   RootDir = database_dir(),
+  filelib:ensure_dir(filename:join(RootDir, "dummy")),
+  init_nodeid(),
+
+
   hooks:reg(config_key_update, ?MODULE, config_change, 3),
   ok = couch_file:init_delete_dir(RootDir),
   hash_admin_passwords(),
@@ -493,3 +515,34 @@ normparts(["." | RestParts], Acc) ->
   normparts(RestParts, Acc);
 normparts([Part | RestParts], Acc) ->
   normparts(RestParts, [Part | Acc]).
+
+
+init_nodeid() ->
+  case init:get_argument(setnodeid) of
+    {ok, [[NodeId0]]} ->
+      NodeId = list_to_binary(NodeId0),
+      barrel_lib:set(nodeid, NodeId);
+    _ ->
+      case read_nodeid() of
+        {error, Error} ->
+          error_logger:error_msg(Error, []),
+          erlang:error(Error);
+        {ok, NodeId} ->
+          barrel_lib:set(nodeid, NodeId)
+      end
+  end.
+
+
+read_nodeid() ->
+  Name = filename:join(database_dir(), "NODEID"),
+  case file:read_file(Name) of
+    {ok, NodeId} -> {ok, NodeId};
+    {error, enoent} ->
+      NodeId = barrel_uuids:random(),
+      case file:write_file(Name, NodeId) of
+        ok -> {ok, NodeId};
+        Error -> Error
+      end
+  end.
+
+
