@@ -16,7 +16,7 @@ before_install:
 install:
   - "./support/bootstrap_travis.sh"
 script:
-  - ./support/run_tests.sh
+  - "./support/run_tests.sh"
 notifications:
   email:
   - bchesneau@gmail.com
