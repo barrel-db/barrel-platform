@@ -41,7 +41,7 @@ childspec(Config) ->
   Transport = barrel_api_http:scheme_to_transport(Scheme),
   ProtoOpts = protocol_opts(),
   TransportOpts = barrel_api_http:transport_opts(Scheme, Ip, Port, Config),
-  ranch:child_spec(spec_name(Scheme), NbAcceptors, Transport, TransportOpts,
+  ranch:child_spec(barrel_console, NbAcceptors, Transport, TransportOpts,
     cowboy_protocol, ProtoOpts).
 
 
@@ -54,7 +54,6 @@ config() ->
     Config ->
       Config
   end.
-
 
 is_enabled() -> barrel_server:get_env(start_console).
 
@@ -73,15 +72,12 @@ binding(Config) ->
            end,
   {Scheme, Addr, Port}.
 
-spec_name(Scheme) ->
-  lists:flatten(io_lib:format("~s://console", [Scheme])).
-
 admin_uri() ->
   Config = config(),
   Scheme = proplists:get_value(scheme, Config, ?DEFAULT_SCHEME),
-  {Addr, Port} = ranch:get_addr(spec_name(Scheme)),
-
-  lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(Addr), ":", integer_to_list(Port)]).
+  {Addr, Port} = ranch:get_addr(barrel_console),
+  URI = lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(Addr), ":", integer_to_list(Port)]),
+  list_to_binary(URI).
 
 protocol_opts() ->
   Dispatch = cowboy_router:compile([

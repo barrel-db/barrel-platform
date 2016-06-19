@@ -28,6 +28,7 @@
 -export([parse_address/1]).
 -export([transport_opts/4]).
 -export([scheme_to_transport/1]).
+-export([cleanup_listener_opts/1]).
 
 
 %% NOTE: until the old mochiweb interface is enabled start on the port 5985.
@@ -46,10 +47,7 @@ get_listeners() -> lists:usort(barrel_server:get_env(listeners)).
 
 -spec binding_spec(atom(), list()) -> tuple().
 binding_spec(Scheme, Opts) ->
-  Port = proplists:get_value(port, Opts, 0),
-  Addr = proplists:get_value(address, Opts, ?DEFAULT_ADDRESS),
-  Ip = parse_address(Addr),
-  Ref = spec_name(Scheme, Ip, Port),
+  {Ip, Port, Ref} = binding(Scheme, Opts),
   NbAcceptors = proplists:get_value(nb_acceptors, Opts, ?DEFAULT_NB_ACCEPTORS),
   TransportOpts = transport_opts(Scheme, Ip, Port, Opts),
   Transport = scheme_to_transport(Scheme),
@@ -58,13 +56,11 @@ binding_spec(Scheme, Opts) ->
 
 web_uris() ->
   Acc = lists:foldl(fun({Scheme, Opts}, Acc1) ->
-      Port = proplists:get_value(port, Opts, 0),
-      Ip = parse_address(proplists:get_value(address, Opts, ?DEFAULT_ADDRESS)),
-      Ref = spec_name(Scheme, Ip, Port),
+      {_Ip, _Port, Ref} = binding(Scheme, Opts),
       {LAddr, LPort} = ranch:get_addr(Ref),
       URI = lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(LAddr), ":", integer_to_list(LPort)]),
-      [URI | Acc1]
-    end, [], get_listeners()),
+      [list_to_binary(URI) | Acc1]
+    end, [], barrel_lib:val(listeners, [])),
   lists:usort(Acc).
 
 %% @doc convenient function to parse an address
@@ -108,6 +104,15 @@ protocol_opts() ->
   [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware, barrel_auth_middleware,
     cowboy_router, cowboy_handler]}].
 
+binding(Scheme, Opts) ->
+  Port = proplists:get_value(port, Opts, 0),
+  Addr = proplists:get_value(address, Opts, ?DEFAULT_ADDRESS),
+  Ip = parse_address(Addr),
+  Ref = case proplists:get_value(name, Opts) of
+          undefined -> spec_name(Scheme, Ip, Port);
+          Name -> Name
+        end,
+  {Ip, Port, Ref}.
 
 routes() ->
   [
@@ -126,4 +131,16 @@ host(Req) ->
         {Host, _} -> Host
       end;
     {Host, _} -> Host
+  end.
+
+cleanup_listener_opts(Ref) ->
+  cleanup_listener_opts(barrel_lib:val(listeners, []), [], Ref).
+
+cleanup_listener_opts([], Listeners, Ref) ->
+  barrel_lib:set(listeners, lists:reverse(Listeners)),
+  ranch_server:cleanup_listener_opts(Ref);
+cleanup_listener_opts([{Scheme, Opts}=Listener | Rest], Listeners, Ref) ->
+  case binding(Scheme, Opts) of
+    {_Ip, _Port, Ref} -> cleanup_listener_opts(Rest, Listeners, Ref);
+    _ -> cleanup_listener_opts(Rest, [Listener | Listeners], Ref)
   end.

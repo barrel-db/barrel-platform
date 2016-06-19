@@ -67,11 +67,11 @@
 
 
 node_info() ->
-
   #{ <<"name">> => <<"barrel">>,
      <<"cluster_name">> => node_name(),
      <<"uuid">> => node_id(),
-     <<"version">> => #{ <<"number">> => list_to_binary(version())}
+     <<"version">> => #{ <<"number">> => list_to_binary(version())},
+     <<"status">> => barrel_sup:status()
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.

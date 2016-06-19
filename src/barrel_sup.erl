@@ -9,6 +9,8 @@
 
 %% API
 -export([start_link/0]).
+-export([status/0]).
+-export([boot_status/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -23,12 +25,19 @@ start_link() ->
   case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
     {ok, Pid} ->
       boot_status(),
+      write_uri_file(),
       {ok, Pid};
     Else ->
       Else
   end.
 
-
+status() ->
+  #{ api => barrel_api_http:web_uris(),
+     console => case barrel_server:get_env(start_console) of
+                  false -> not_started;
+                  true -> barrel_http_console:admin_uri()
+                end
+  }.
 
 %%====================================================================
 %% Supervisor callbacks
@@ -96,25 +105,21 @@ init_tabs() ->
   ok.
 
 boot_status() ->
-  URIs = barrel_api_http:web_uris(),
   io:format("~n~n==> Barrel node started~n", []),
   io:format("version: ~s~n", [barrel_server:version()]),
   io:format("node id: ~s~n", [barrel_server:node_id()]),
-  display_uris(URIs),
-  case barrel_http_console:is_enabled() of
-    true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()]);
-    false -> ok
-  end,
-  write_uri_file(URIs).
+  Status = status(),
+  display_uris(maps:get(api, Status)),
+  io:format("CONSOLE: ~s~n", [maps:get(console, Status)]).
 
 display_uris(URIs) ->
   [io:format("HTPP API: ~s~n", [URI]) || URI <- URIs].
 
-write_uri_file(URIs) ->
+write_uri_file() ->
   case barrel_server:get_env(uri_file) of
     undefined -> ok;
     Filepath ->
-      Lines = [io_lib:format("~s~n", [URI]) || URI <- URIs],
+      Lines = [io_lib:format("~s~n", [URI]) || URI <- barrel_api_http:web_uris()],
       case file:write_file(Filepath, Lines) of
         ok -> ok;
         {error, eacces} ->
