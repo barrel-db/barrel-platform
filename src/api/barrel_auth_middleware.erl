@@ -23,13 +23,13 @@
 
 %% TODO: convert to hook system
 execute(Req, Env) ->
-  Handlers = [list_to_atom(M) || M <- barrel_config:get_list("auth", "handlers", [])],
+  Handlers = barrel_server:get_env(auth_handlers),
   case run_handlers(Handlers, Req, Env) of
     nil ->
       case barrel_server:has_admins() of
         true ->  {ok, Req, Env};
         false ->
-          case barrel_config:get_boolean("auth", "require_valid_user", false) of
+          case barrel_server:get_env(require_valid_user) of
             true ->
               {ok, Req2} = cowboy_req:reply(411, Req),
               {halt, Req2};

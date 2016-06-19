@@ -17,37 +17,57 @@
 -export([options/1]).
 -include_lib("public_key/include/public_key.hrl").
 
-options(Config) ->
-	CaCertFile = proplists:get_value(cacertfile, Config),
-  CertFile = proplists:get_value(certfile, Config),
-  KeyFile = proplists:get_value(keyfile, Config),
-  Versions = barrel_config:pget_list(tls_protocols, Config, ['tlsv1.2']),
-  HonorCipherOrder = barrel_config:pget_boolean(honor_cipher_order, Config, false),
-  Ciphers = ciphersuite_transform(barrel_config:pget_boolean(support_elliptic_curve, Config, true),
-    barrel_config:pget_list(ciphers, Config, [])),
-  CheckCRL = barrel_config:pget_boolean(check_clr, Config, false),
+options(Opts) ->
+  CertFile = proplists:get_value(certfile, Opts),
+  KeyFile = proplists:get_value(keyfile, Opts),
 
-  CACerts = load_certs(CaCertFile),
+  if
+    CertFile /= undefined, KeyFile /= undefined -> ok;
+    true ->
+      lager:error("SSL enabled but PEM certificates are missing.", []),
+      erlang:error({error, missing_certs})
+  end,
 
-  [{certfile, CertFile},
-   {keyfile, KeyFile},
-   {cacerts, CACerts},
-   {ciphers, Ciphers},
-   {versions, Versions},
-   %% force peer validation, even though
-   %% we don't care if the peer doesn't
-   %% send a certificate
-   {verify, verify_peer},
-   {reuse_sessions, false} %% required!
-  ] ++
-  %% conditionally include the honor cipher order, don't pass it if it
-  %% disabled because it will crash any
-  %% OTP installs that lack the patch to
-  %% implement honor_cipher_order
-  [{honor_cipher_order, true} || HonorCipherOrder ] ++
-  %% if we're validating CRLs, define a
-  %% verify_fun for them.
-  [{verify_fun, {fun verify_fun/3, {CACerts, []}}} || CheckCRL ].
+  Password = case proplists:get_value(password, Opts) of
+               undefined -> [];
+               P -> [{password, P}]
+             end,
+
+  case proplists:get_value("verify_ssl_certificates", Opts, false) of
+    true ->
+      CaCertFile = proplists:get_value(cacertfile, Opts),
+      CertFile = proplists:get_value(certfile, Opts),
+      KeyFile = proplists:get_value(keyfile, Opts),
+      Versions = proplists:get_value(tls_protocols, Opts, ['tlsv1.2']),
+      HonorCipherOrder = proplists:get_value(honor_cipher_order, Opts, false),
+      Ciphers = ciphersuite_transform(proplists:get_value(support_elliptic_curve, Opts, true),
+        proplists:get_value(ciphers, Opts, [])),
+      CheckCRL = proplists:get_value(check_clr, Opts, false),
+
+      CACerts = load_certs(CaCertFile),
+
+      [{certfile, CertFile},
+        {keyfile, KeyFile},
+        {cacerts, CACerts},
+        {ciphers, Ciphers},
+        {versions, Versions},
+        %% force peer validation, even though
+        %% we don't care if the peer doesn't
+        %% send a certificate
+        {verify, verify_peer},
+        {reuse_sessions, false} %% required!
+      ] ++ Password ++
+      %% conditionally include the honor cipher order, don't pass it if it
+      %% disabled because it will crash any
+      %% OTP installs that lack the patch to
+      %% implement honor_cipher_order
+        [{honor_cipher_order, true} || HonorCipherOrder ] ++
+        %% if we're validating CRLs, define a
+        %% verify_fun for them.
+        [{verify_fun, {fun verify_fun/3, {CACerts, []}}} || CheckCRL ];
+    false ->
+      [{certfile, CertFile}, {keyfile, KeyFile}] ++ Password
+  end.
 
 
 %% internal functions

@@ -28,6 +28,7 @@
          version/0,
          node_name/0]).
 
+-export([process_config/1]).
 -export([env/0]).
 -export([set_env/2, get_env/1]).
 
@@ -90,7 +91,18 @@ process_config([E | Rest]) ->
 env() ->
   [
     database_dir,
-    view_dir
+    view_dir,
+    uri_file,
+    listeners,
+    start_console,
+    x_forwarded_host,
+    enable_cors,
+    cors,
+    require_valid_user,
+    auth_handlers,
+    auth_timeout,
+    allows_persistent_cookie,
+    cookie_secret
   ].
 
 
@@ -98,7 +110,30 @@ default_env(database_dir) ->
   Name = lists:concat(["Barrel.", node()]),
   filename:absname(Name);
 default_env(view_dir) ->
-  get_env(database_dir).
+  get_env(database_dir);
+default_env(uri_file) ->
+  undefined;
+default_env(listeners) ->
+  [];
+default_env(start_console) ->
+  false;
+default_env(x_forwarded_host) ->
+  <<"x-forwarded-host">>;
+default_env(enable_cors) ->
+  false;
+default_env(cors) ->
+  [];
+default_env(require_valid_user) ->
+  false;
+default_env(auth_handlers) ->
+  [barrel_basic_auth, barrel_cookie_auth];
+default_env(cookie_secret) ->
+  600;
+default_env(allows_persistent_cookie) ->
+  false;
+default_env(auth_timeout) ->
+  600.
+
 
 
 set_env(E, Val) -> barrel_lib:set(E, Val).
@@ -116,7 +151,6 @@ get_stats() ->
   [{start_time, list_to_binary(Time)}, {dbs_open, Open}].
 
 start_link() ->
-  _ = init_tabs(),
   gen_server:start_link({local, barrel_server}, barrel_server, [], []).
 
 open(DbName, Options0) ->
@@ -202,18 +236,12 @@ all_databases(Fun, Acc0) ->
 
 database_dir() -> get_env(database_dir).
 
-init_tabs() ->
-  _ = ets:new(barrel_gvar, [set, named_table, public]),
-  ok.
-
-
 init([]) ->
   % read config and register for configuration changes
 
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
-  process_config(env()),
   RootDir = database_dir(),
   filelib:ensure_dir(filename:join(RootDir, "dummy")),
   init_nodeid(),

@@ -37,7 +37,7 @@ authenticate(Req, Env) ->
                                      {error, {bad_request, Reason}}
                                  end,
       Current = cookie_time(),
-      case barrel_config:get_binary("auth", "cookie_secret") of
+      case barrel_server:get_env(cookie_secret) of
         nil ->
           lager:debug("cookie auth secret is not set.~n", []),
           nil;
@@ -48,7 +48,7 @@ authenticate(Req, Env) ->
               UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
               FullSecret = <<Secret/binary, UserSalt/binary>>,
               ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeBin),
-              Timeout = barrel_config:get_integer("auth", "timeout", 600),
+              Timeout = timeout(),
               case (catch binary_to_integer(TimeBin, 16)) of
                 Timestamp when Current < Timestamp + Timeout ->
                   case couch_passwords:verify(ExpectedHash, Hash) of
@@ -86,10 +86,12 @@ secure(Req) ->
   end.
 
 max_age() ->
-  case barrel_config:get_boolean("auth", "allow_persistent_cookies", false) of
+  case barrel_server:get_env(allows_persistent_cookie) of
     false -> [];
-    true -> [{max_age, barrel_config:get_integer("auth", "timeout", 600)}]
+    true -> [{max_age, timeout()}]
   end.
+
+timeout() -> barrel_server:get_env(auth_timeout).
 
 cookie_time() -> {NowMS, NowS, _} = erlang:timestamp(), NowMS * 1000000 + NowS.
 

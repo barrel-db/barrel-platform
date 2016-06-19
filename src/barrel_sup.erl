@@ -36,6 +36,9 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
+  _ = init_tabs(),
+
+  barrel_server:process_config(barrel_server:env()),
 
   Event = {barrel_event,
     {barrel_event, start_link, []},
@@ -88,10 +91,12 @@ init([]) ->
 %%====================================================================
 
 
+init_tabs() ->
+  _ = ets:new(barrel_gvar, [set, named_table, public, {read_concurrency, true}]),
+  ok.
+
 boot_status() ->
-  Config = barrel_config:section_to_opts("api"),
-  Listeners = barrel_api_http:get_listeners(Config),
-  URIs = barrel_api_http:web_uris(Listeners),
+  URIs = barrel_api_http:web_uris(),
   io:format("~n~n==> Barrel node started~n", []),
   io:format("version: ~s~n", [barrel_server:version()]),
   io:format("node id: ~s~n", [barrel_server:node_id()]),
@@ -100,13 +105,13 @@ boot_status() ->
     true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()]);
     false -> ok
   end,
-  write_uri_file(Config, URIs).
+  write_uri_file(URIs).
 
 display_uris(URIs) ->
   [io:format("HTPP API: ~s~n", [URI]) || URI <- URIs].
 
-write_uri_file(Config, URIs) ->
-  case proplists:get_value(uri_file, Config) of
+write_uri_file(URIs) ->
+  case barrel_server:get_env(uri_file) of
     undefined -> ok;
     Filepath ->
       Lines = [io_lib:format("~s~n", [URI]) || URI <- URIs],
