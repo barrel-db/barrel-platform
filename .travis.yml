@@ -1,4 +1,6 @@
 language: erlang
+python:
+- 2.7
 otp_release:
 - 18.0
 - 18.1
@@ -7,11 +9,19 @@ before_install:
 - sudo apt-get -y update
 - sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
 - sudo apt-get -y install libtool automake autoconf autoconf-archive
+- sudo apt-get -y install python-setuptools
 install:
 - "./support/bootstrap_travis.sh"
+before_script:
+- sudo easy_install -f http://funkload.nuxeo.org/snapshots/ -U funkload
+- git clone https://github.com/barrel-db/specs.git /home/travis/swagger
+- sudo pip install -r /home/travis/swagger/requirements.txt
 script:
 - ./rebar3 eunit --dir="test"
 - ./rebar3 ct
+- /home/travis/build/barrel-db/barrel-platform/_build/prod/rel/barrel/bin/barrel start
+- cd /home/travis/swagger && python -m test.test_swagger
+- /home/travis/build/barrel-db/barrel-platform/_build/prod/rel/barrel/bin/barrel stop
 notifications:
   email:
   - bchesneau@gmail.com
