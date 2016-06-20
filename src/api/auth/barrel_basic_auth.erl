@@ -28,7 +28,7 @@ authenticate(Req, Env) ->
   case get_credentials(Req) of
     nil -> nil;
     {User, Pass} ->
-      case couch_auth_cache:get_user_creds(User) of
+      case barrel_auth_cache:get_user_creds(User) of
         nil -> {error, unauthorized};
         UserProps ->
           case check_password(Pass, UserProps) of

@@ -12,7 +12,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_auth_cache).
+-module(barrel_auth_cache).
 -behaviour(gen_server).
 
 % public API

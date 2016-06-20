@@ -38,7 +38,7 @@ authenticate(Req, Env) ->
                                  end,
       Current = cookie_time(),
       Secret = barrel_auth:secret(),
-      case couch_auth_cache:get_user_creds(User) of
+      case barrel_auth_cache:get_user_creds(User) of
         nil -> nil;
         UserProps ->
           UserSalt = maps:get(<<"salt">>, UserProps, <<>>),

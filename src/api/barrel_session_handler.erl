@@ -85,7 +85,7 @@ from_json(Req, State) ->
 create_session(Form, Req, State) ->
   UserName = proplists:get_value(<<"name">>, Form, <<>>),
   Password = proplists:get_value(<<"password">>, Form, <<>>),
-  User = case couch_auth_cache:get_user_creds(UserName) of
+  User = case barrel_auth_cache:get_user_creds(UserName) of
            nil -> #{};
            Res -> Res
          end,

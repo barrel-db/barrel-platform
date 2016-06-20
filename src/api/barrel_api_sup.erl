@@ -41,8 +41,16 @@ start_link() ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
   init_config(),
+
   WebProcesses = web_processes(barrel_api_http:get_listeners()),
-   {ok, {{one_for_one, 10, 10}, WebProcesses}}.
+
+  Console = case barrel_http_console:is_enabled() of
+              true ->
+                [barrel_http_console:childspec(barrel_http_console:config())];
+              false -> []
+            end,
+
+  {ok, {{one_for_one, 10, 10}, WebProcesses ++ Console}}.
 
 %%%===================================================================
 %%% Internal functions

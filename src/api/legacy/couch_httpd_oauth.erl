@@ -83,7 +83,7 @@ oauth_auth_callback(#httpd{mochi_req = MochiReq} = Req, CbParams) ->
 set_user_ctx(_Req, undefined) ->
     throw({bad_request, unknown_oauth_token});
 set_user_ctx(Req, Name) ->
-    case couch_auth_cache:get_user_creds(Name) of
+    case barrel_auth_cache:get_user_creds(Name) of
         nil ->
             lager:debug("OAuth handler: user `~p` credentials not found", [Name]),
             Req;
