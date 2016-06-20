@@ -16,7 +16,7 @@
  {<<"lager">>,{pkg,<<"lager">>,<<"3.0.1">>},0},
  {<<"metrics">>,{pkg,<<"metrics">>,<<"1.0.1">>},1},
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.2">>},1},
- {<<"mochicow">>,{pkg,<<"mochicow">>,<<"0.6.3">>},0},
+ {<<"mochicow">>,{pkg,<<"mochicow">>,<<"0.6.4">>},0},
  {<<"mochiweb">>,{pkg,<<"mochiweb">>,<<"2.15.0">>},1},
  {<<"oauth">>,{pkg,<<"barrel_oauth">>,<<"1.6.0">>},0},
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"2.9.0">>},1},
