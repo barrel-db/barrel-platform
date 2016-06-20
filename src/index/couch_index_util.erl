@@ -20,7 +20,7 @@
 
 -include_lib("couch_db.hrl").
 
-root_dir() -> barrel_server:get_env(view_dir).
+root_dir() -> barrel_server:get_env(dir).
 
 index_dir(Module, DbName) when is_binary(DbName) ->
     DbDir = "." ++ binary_to_list(DbName) ++ "_design",

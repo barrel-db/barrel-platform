@@ -29,7 +29,7 @@ init({MainPid, DbName, Filepath, Fd, Options}) ->
         Header =  #db_header{},
         ok = couch_file:write_header(Fd, Header),
         % delete any old compaction files that might be hanging around
-        RootDir = barrel_server:database_dir(),
+        RootDir = barrel_server:get_env(dir),
         couch_file:delete(RootDir, Filepath ++ ".compact");
     false ->
         case couch_file:read_header(Fd) of
@@ -169,7 +169,7 @@ handle_call(cancel_compact, _From, #db{compactor_pid = nil} = Db) ->
 handle_call(cancel_compact, _From, #db{compactor_pid = Pid} = Db) ->
     unlink(Pid),
     exit(Pid, kill),
-    RootDir = barrel_server:database_dir(),
+    RootDir = barrel_server:get_env(dir),
     ok = couch_file:delete(RootDir, Db#db.filepath ++ ".compact"),
     {reply, ok, Db#db{compactor_pid = nil}};
 
@@ -198,7 +198,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
 
         lager:debug("CouchDB swapping files ~s and ~s.",
                 [Filepath, CompactFilepath]),
-        RootDir = barrel_server:database_dir(),
+        RootDir = barrel_server:get_env(dir),
         couch_file:delete(RootDir, Filepath),
         ok = file:rename(CompactFilepath, Filepath),
         close_db(Db),

@@ -34,7 +34,6 @@
 
 
 -export([all_databases/0, all_databases/2]).
--export([database_dir/0]).
 -export([is_admin/2,
          has_admins/0,
          get_stats/0]).
@@ -90,8 +89,7 @@ process_config([E | Rest]) ->
 
 env() ->
   [
-    database_dir,
-    view_dir,
+    dir,
     uri_file,
     listeners,
     start_console,
@@ -106,11 +104,9 @@ env() ->
   ].
 
 
-default_env(database_dir) ->
+default_env(dir) ->
   Name = lists:concat(["Barrel.", node()]),
   filename:absname(Name);
-default_env(view_dir) ->
-  get_env(database_dir);
 default_env(uri_file) ->
   undefined;
 default_env(listeners) ->
@@ -234,15 +230,13 @@ all_databases(Fun, Acc0) ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-database_dir() -> get_env(database_dir).
-
 init([]) ->
   % read config and register for configuration changes
 
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
-  RootDir = database_dir(),
+  RootDir = get_env(dir),
   filelib:ensure_dir(filename:join(RootDir, "dummy")),
   init_nodeid(),
 
@@ -562,7 +556,7 @@ init_nodeid() ->
 
 
 read_nodeid() ->
-  Name = filename:join(database_dir(), "NODEID"),
+  Name = filename:join(get_env(dir), "NODEID"),
   case file:read_file(Name) of
     {ok, NodeId} -> {ok, NodeId};
     {error, enoent} ->
