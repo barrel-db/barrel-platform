@@ -49,6 +49,10 @@ init([]) ->
 
   barrel_server:process_config(barrel_server:env()),
 
+  Auth = {barrel_auth,
+    {barrel_auth, start_link, []},
+    permanent, brutal_kill, worker, [barrel_auth]},
+
   Event = {barrel_event,
     {barrel_event, start_link, []},
     permanent,brutal_kill,	worker,[barrel_event]},
@@ -92,7 +96,7 @@ init([]) ->
          permanent, infinity, supervisor, [barrel_ui_sup]},
 
 
-  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, ExtSup, Metrics, Server, Daemons,
+  {ok, { {one_for_all, 0, 10}, [Auth, Event, UUIDs, TaskStatus, ExtSup, Metrics, Server, Daemons,
                                 UI, Index, Replicator] } }.
 
 %%====================================================================

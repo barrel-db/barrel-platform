@@ -25,7 +25,7 @@
 %% legacy scheme, not used for new passwords.
 -spec simple(binary(), binary()) -> binary().
 simple(Password, Salt) ->
-    list_to_binary(barrel_lib:to_hex(crypto:hash(sha, <<Password/binary, Salt/binary>>))).
+    barrel_lib:to_hex(crypto:hash(sha, <<Password/binary, Salt/binary>>)).
 
 %% CouchDB utility functions
 -spec hash_admin_password(binary()) -> binary().
@@ -63,7 +63,7 @@ pbkdf2(Password, Salt, Iterations, DerivedLength) ->
     L = ceiling(DerivedLength / ?SHA1_OUTPUT_LENGTH),
     <<Bin:DerivedLength/binary,_/binary>> =
         iolist_to_binary(pbkdf2(Password, Salt, Iterations, L, 1, [])),
-    {ok, list_to_binary(barrel_lib:to_hex(Bin))}.
+    {ok, barrel_lib:to_hex(Bin)}.
 
 -spec pbkdf2(binary(), binary(), integer(), integer(), integer(), iolist())
     -> iolist().

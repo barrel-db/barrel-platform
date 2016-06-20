@@ -76,7 +76,7 @@ parse_rep_doc(Props, UserCtx) ->
 
 replication_id(#rep{options = Options} = Rep) ->
   BaseId = replication_id(Rep, ?REP_ID_VERSION),
-  {BaseId, maybe_append_options([continuous, create_target], Options)}.
+  {BaseId, list_to_binary(maybe_append_options([continuous, create_target], Options))}.
 
 
 % Versioned clauses for generating replication IDs.

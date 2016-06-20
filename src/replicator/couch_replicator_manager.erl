@@ -605,7 +605,7 @@ ensure_rep_ddoc_exists(RepDb, DDocID) ->
 pp_rep_id(#rep{id = RepId}) ->
     pp_rep_id(RepId);
 pp_rep_id({Base, Extension}) ->
-    Base ++ Extension.
+    << Base/binary, Extension/binary>>.
 
 
 rep_state(RepId) ->

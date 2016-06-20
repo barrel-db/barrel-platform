@@ -62,7 +62,7 @@ to_json_revisions(Options, Start, RevIds, Body) ->
             Body#{<<"_revisions">> => Revisions}
     end.
 
-revid_to_str(RevId) when size(RevId) =:= 16 -> list_to_binary(barrel_lib:to_hex(RevId));
+revid_to_str(RevId) when size(RevId) =:= 16 -> barrel_lib:to_hex(RevId);
 revid_to_str(RevId) -> RevId.
 
 rev_to_str({Pos, RevId}) ->

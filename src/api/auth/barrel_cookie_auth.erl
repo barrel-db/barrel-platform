@@ -37,35 +37,30 @@ authenticate(Req, Env) ->
                                      {error, {bad_request, Reason}}
                                  end,
       Current = cookie_time(),
-      case barrel_server:get_env(cookie_secret) of
-        nil ->
-          lager:debug("cookie auth secret is not set.~n", []),
-          nil;
-        Secret ->
-          case couch_auth_cache:get_user_creds(User) of
-            nil -> nil;
-            UserProps ->
-              UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
-              FullSecret = <<Secret/binary, UserSalt/binary>>,
-              ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeBin),
-              Timeout = timeout(),
-              case (catch binary_to_integer(TimeBin, 16)) of
-                Timestamp when Current < Timestamp + Timeout ->
-                  case couch_passwords:verify(ExpectedHash, Hash) of
-                    true ->
-                      TimeLeft = Timestamp + Timeout - Current,
-                      ResetCookie = TimeLeft < Timeout*0.9,
-                      UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
-                        {roles, maps:get(<<"roles">>, UserProps, [])},
-                        {auth, {FullSecret, ResetCookie}}]),
-                      Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
-                      {ok, UserCtx, Req3, Env};
-                    false ->
-                      nil
-                  end;
-                _ ->
+      Secret = barrel_auth:secret(),
+      case couch_auth_cache:get_user_creds(User) of
+        nil -> nil;
+        UserProps ->
+          UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
+          FullSecret = <<Secret/binary, UserSalt/binary>>,
+          ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeBin),
+          Timeout = timeout(),
+          case (catch binary_to_integer(TimeBin, 16)) of
+            Timestamp when Current < Timestamp + Timeout ->
+              case couch_passwords:verify(ExpectedHash, Hash) of
+                true ->
+                  TimeLeft = Timestamp + Timeout - Current,
+                  ResetCookie = TimeLeft < Timeout*0.9,
+                  UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
+                    {roles, maps:get(<<"roles">>, UserProps, [])},
+                    {auth, {FullSecret, ResetCookie}}]),
+                  Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
+                  {ok, UserCtx, Req3, Env};
+                false ->
                   nil
-              end
+              end;
+            _ ->
+              nil
           end
       end
   end.

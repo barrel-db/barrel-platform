@@ -92,7 +92,7 @@ create_session(Form, Req, State) ->
   UserSalt = maps:get(<<"salt">>, User, <<>>),
   case barrel_basic_auth:check_password(Password, User) of
     true ->
-      Secret = ensure_cookie_secret(),
+      Secret = barrel_auth:secret(),
       FullSecret = <<Secret/binary, UserSalt/binary>>,
       Req2 = barrel_cookie_auth:set_cookie_header(Req, User, FullSecret, true),
       Resp = jsx:encode(#{ok => true, name => maps:get(<<"name">>, User, null),
@@ -133,14 +133,3 @@ delete_resource(Req, State) ->
   {true, Req, State}.
 
 delete_completed(Req, State) -> {true, Req, State}.
-
-
-ensure_cookie_secret() ->
-  case barrel_config:get_binary("auth", "secret", nil) of
-    nil ->
-      NewSecret = barrel_uuids:random(),
-      barrel_config:set("auth", "secret", NewSecret),
-      NewSecret;
-    Secret ->
-      Secret
-  end.

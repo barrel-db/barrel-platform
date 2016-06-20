@@ -28,7 +28,7 @@ new() ->
   gen_server:call(?MODULE, create).
 
 random() ->
-    list_to_binary(barrel_lib:to_hex(crypto:rand_bytes(16))).
+    barrel_lib:to_hex(crypto:rand_bytes(16)).
 
 utc_random() ->
     utc_suffix(barrel_lib:to_hex(crypto:rand_bytes(9))).
@@ -38,8 +38,8 @@ utc_suffix(Suffix) ->
     Nowish = calendar:now_to_universal_time(Now),
     Nowsecs = calendar:datetime_to_gregorian_seconds(Nowish),
     Then = calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}}),
-    Prefix = io_lib:format("~14.16.0b", [(Nowsecs - Then) * 1000000 + Micro]),
-    list_to_binary(Prefix ++ Suffix).
+    [Prefix] = io_lib:format("~14.16.0b", [(Nowsecs - Then) * 1000000 + Micro]),
+    << (list_to_binary(Prefix))/binary, Suffix/binary >>.
 
 config_change("uuids", _, _) ->
     gen_server:cast(?MODULE, change);
@@ -60,7 +60,8 @@ handle_call(create, _From, utc_random) ->
 handle_call(create, _From, {utc_id, UtcIdSuffix}) ->
     {reply, utc_suffix(UtcIdSuffix), {utc_id, UtcIdSuffix}};
 handle_call(create, _From, {sequential, Pref, Seq}) ->
-    Result = list_to_binary(Pref ++ io_lib:format("~6.16.0b", [Seq])),
+    [F] = io_lib:format("~6.16.0b", [Seq]),
+    Result = << Pref/binary, (list_to_binary(F))/binary >>,
     case Seq >= 16#fff000 of
         true ->
             {reply, Result, {sequential, new_prefix(), inc()}};
