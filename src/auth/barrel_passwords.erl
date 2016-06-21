@@ -12,7 +12,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_passwords).
+-module(barrel_passwords).
 
 -export([pbkdf2/3, pbkdf2/4, verify/2]).
 

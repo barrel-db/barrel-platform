@@ -335,7 +335,7 @@ parse_password(ClearPassword) ->
   put(passwd_updated, true),
   Iterations = barrel_server:get_env(auth_pbkdf2_iterations),
   Salt = barrel_uuids:random(),
-  DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
+  DerivedKey = barrel_passwords:pbkdf2(ClearPassword, Salt, Iterations),
   [DerivedKey, Salt, Iterations].
 
 parse_roles(RolesBin) ->
@@ -459,7 +459,7 @@ do_set_user(User, Password, Roles, Meta, State) ->
 
   Iterations = barrel_server:get_env(auth_pbkdf2_iterations),
   Salt = barrel_uuids:random(),
-  DerivedKey = couch_passwords:pbkdf2(Password, Salt, Iterations),
+  DerivedKey = barrel_passwords:pbkdf2(Password, Salt, Iterations),
 
   insert_user(User, [DerivedKey, Salt, Iterations], Roles, Meta),
   case update_file(State#state.name) of

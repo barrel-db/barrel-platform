@@ -69,7 +69,7 @@ save_doc(#doc{body=Body} = Doc) ->
     ClearPassword ->
         Iterations = barrel_config:get_integer("auth", "iterations", 1000),
         Salt = barrel_uuids:random(),
-        DerivedKey = couch_passwords:pbkdf2(ClearPassword, Salt, Iterations),
+        DerivedKey = barrel_passwords:pbkdf2(ClearPassword, Salt, Iterations),
         Body0 = [{?PASSWORD_SCHEME, ?PBKDF2}, {?ITERATIONS, Iterations}|Body],
         Body1 = maps:put(?DERIVED_KEY, DerivedKey, Body0),
         Body2 = maps:put(?SALT, Salt, Body1),

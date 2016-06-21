@@ -216,7 +216,7 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section0, Key0]}=
         % Pre-process the value as necessary.
         case Section0 of
         <<"admins">> ->
-            couch_passwords:hash_admin_password(RawValue);
+            barrel_passwords:hash_admin_password(RawValue);
         _ ->
             RawValue
         end

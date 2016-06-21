@@ -59,9 +59,9 @@ check_password(Pass, UserProps) ->
   case maps:get(<<"password_scheme">>, UserProps, <<"pbkdf2">>) of
     <<"pbkdf2">> ->
       Iterations = maps:get(<<"iterations">>, UserProps, 1000),
-      PasswordHash = couch_passwords:pbkdf2(Pass, UserSalt, Iterations),
+      PasswordHash = barrel_passwords:pbkdf2(Pass, UserSalt, Iterations),
       ExpectedHash = maps:get(<<"derived_key">>, UserProps, nil),
-      couch_passwords:verify(PasswordHash, ExpectedHash);
+      barrel_passwords:verify(PasswordHash, ExpectedHash);
     _ ->
       false
   end.

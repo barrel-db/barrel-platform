@@ -47,7 +47,7 @@ authenticate(Req, Env) ->
           Timeout = timeout(),
           case (catch binary_to_integer(TimeBin, 16)) of
             Timestamp when Current < Timestamp + Timeout ->
-              case couch_passwords:verify(ExpectedHash, Hash) of
+              case barrel_passwords:verify(ExpectedHash, Hash) of
                 true ->
                   TimeLeft = Timestamp + Timeout - Current,
                   ResetCookie = TimeLeft < Timeout*0.9,
