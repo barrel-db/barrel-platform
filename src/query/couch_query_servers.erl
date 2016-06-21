@@ -263,7 +263,7 @@ filter_docs(Req, Db, DDoc, FName, Docs) ->
     {json_req, JsonObj} ->
         JsonObj;
     #httpd{} = HttpReq ->
-        couch_httpd_external:json_req_obj(HttpReq, Db)
+        couch_httpd_request:json_req_obj(HttpReq, Db)
     end,
     JsonDocs = [barrel_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
     [true, Passes] = ddoc_prompt(DDoc, [<<"filters">>, FName],
@@ -275,7 +275,7 @@ run_script(Req, Db, DDoc, Src) ->
                     {json_req, JsonObj} ->
                         JsonObj;
                     #httpd{} = HttpReq ->
-                        couch_httpd_external:json_req_obj(HttpReq, Db)
+                        couch_httpd_request:json_req_obj(HttpReq, Db)
               end,
 
     ddoc_prompt(DDoc, [<<"run">>, Src], [JsonReq]).

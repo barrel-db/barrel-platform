@@ -108,12 +108,8 @@ init(safe) ->
       {couch_compaction_daemon, start_link, []},
       permanent, brutal_kill, worker, [couch_compaction_daemon]},
 
-  ExternalManager =
-    {couch_external_manager,
-      {couch_external_manager, start_link, []},
-      permanent, brutal_kill, worker, [couch_external_manager]},
 
-  {ok, {SupFlags, [Index, ReplicationDaemon, ExternalManager]}}.
+  {ok, {SupFlags, [Index, ReplicationDaemon]}}.
 
 %%====================================================================
 %% Internal functions

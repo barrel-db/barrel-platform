@@ -88,13 +88,13 @@ handle_doc_show(Req, Db, DDoc, ShowName, Doc, DocId) ->
     % get responder for ddoc/showname
     CurrentEtag = show_etag(Req, Doc, DDoc, []),
     couch_httpd:etag_respond(Req, CurrentEtag, fun() ->
-        JsonReq = couch_httpd_external:json_req_obj(Req, Db, DocId),
+        JsonReq = couch_httpd_request:json_req_obj(Req, Db, DocId),
         JsonDoc = couch_query_servers:json_doc(Doc),
         [<<"resp">>, ExternalResp] =
             couch_query_servers:ddoc_prompt(DDoc, [<<"shows">>, ShowName],
                 [JsonDoc, JsonReq]),
         JsonResp = apply_etag(ExternalResp, CurrentEtag),
-        couch_httpd_external:send_external_response(Req, JsonResp)
+        couch_httpd_request:send_external_response(Req, JsonResp)
     end).
 
 
@@ -133,7 +133,7 @@ handle_doc_update_req(Req, _Db, _DDoc) ->
     couch_httpd:send_error(Req, 404, <<"update_error">>, <<"Invalid path.">>).
 
 send_doc_update_response(Req, Db, DDoc, UpdateName, Doc, DocId) ->
-    JsonReq = couch_httpd_external:json_req_obj(Req, Db, DocId),
+    JsonReq = couch_httpd_request:json_req_obj(Req, Db, DocId),
     JsonDoc = couch_query_servers:json_doc(Doc),
     Cmd = [<<"updates">>, UpdateName],
     UpdateResp = couch_query_servers:ddoc_prompt(DDoc, Cmd, [JsonDoc, JsonReq]),
@@ -156,7 +156,7 @@ send_doc_update_response(Req, Db, DDoc, UpdateName, Doc, DocId) ->
             JsonResp0#{<<"code">> => 200}
     end,
     % todo set location field
-    couch_httpd_external:send_external_response(Req, JsonResp).
+    couch_httpd_request:send_external_response(Req, JsonResp).
 
 
 handle_view_list_req(#httpd{method=Method}=Req, Db, DDoc)
@@ -268,7 +268,7 @@ list_cb(complete, Acc) ->
 
 start_list_resp(Head, Acc) ->
     #lacc{db=Db, req=Req, qserver=QServer, lname=LName} = Acc,
-    JsonReq = couch_httpd_external:json_req_obj(Req, Db),
+    JsonReq = couch_httpd_request:json_req_obj(Req, Db),
 
     [<<"start">>,Chunk,JsonResp] = couch_query_servers:ddoc_proc_prompt(QServer,
         [<<"lists">>, LName], [Head, JsonReq]),

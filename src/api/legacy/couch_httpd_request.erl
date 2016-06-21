@@ -37,6 +37,9 @@
 -export([body_length/1]).
 -export([body/1]).
 
+-export([json_req_obj/2, json_req_obj/3]).
+-export([send_external_response/2]).
+
 
 -type req() :: #httpd{}.
 -export_type([req/0]).
@@ -123,3 +126,117 @@ body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
+
+json_req_obj(Req, Db) -> json_req_obj(Req, Db, null).
+json_req_obj(#httpd{mochi_req=Req,
+    method=Method,
+    requested_path_parts=RequestedPath,
+    path_parts=Path,
+    req_body=ReqBody
+}, Db, DocId) ->
+    Body = case ReqBody of
+               undefined ->
+                   MaxSize = barrel_server:get_env(max_document_size),
+                   Req:recv_body(MaxSize);
+               Else -> Else
+           end,
+    ParsedForm = case Req:get_primary_header_value("content-type") of
+                     "application/x-www-form-urlencoded" ++ _ ->
+                         case Body of
+                             undefined -> [];
+                             _ -> mochiweb_util:parse_qs(Body)
+                         end;
+                     _ ->
+                         []
+                 end,
+    Headers = Req:get(headers),
+    Hlist = mochiweb_headers:to_list(Headers),
+    {ok, Info} = couch_db:get_db_info(Db),
+
+% add headers...
+    #{<<"info">> => Info,
+        <<"id">> => DocId,
+        <<"uuid">> => barrel_uuids:new(),
+        <<"method">> => Method,
+        <<"requested_path">> => RequestedPath,
+        <<"path">> => Path,
+        <<"raw_path">> => list_to_binary(Req:get(raw_path)),
+        <<"query">> => json_query_keys(to_json_terms(Req:parse_qs())),
+        <<"headers">> => to_json_terms(Hlist),
+        <<"body">> => Body,
+        <<"peer">> => list_to_binary(Req:get(peer)),
+        <<"form">> => to_json_terms(ParsedForm),
+        <<"cookie">> => to_json_terms(Req:parse_cookie()),
+        <<"userCtx">> => barrel_lib:json_user_ctx(Db),
+        <<"secObj">> => couch_db:get_security(Db)}.
+
+to_json_terms(Data) ->
+    to_json_terms(Data, #{}).
+
+to_json_terms([], O) -> O;
+to_json_terms([{K, V} | R], O) ->
+    to_json_terms(R, O#{ barrel_lib:to_binary(K) => list_to_binary(V)}).
+
+json_query_keys(Json) ->
+    maps:map(fun
+                 (<<"startkey">>, V) -> ?JSON_DECODE(V);
+                 (<<"endkey">>, V) -> ?JSON_DECODE(V);
+                 (<<"key">>, V) -> ?JSON_DECODE(V);
+                 (_, V) -> V
+             end, Json).
+
+send_external_response(Req, Response) ->
+    #extern_resp_args{
+        code = Code,
+        data = Data,
+        ctype = CType,
+        headers = Headers,
+        json = Json
+    } = parse_external_response(Response),
+    Headers1 = default_or_content_type(CType, Headers),
+    case Json of
+        nil ->
+            couch_httpd:send_response(Req, Code, Headers1, Data);
+        Json ->
+            couch_httpd:send_json(Req, Code, Headers1, Json)
+    end.
+
+parse_external_response({Response}) ->
+    lists:foldl(fun({Key,Value}, Args) ->
+        case {Key, Value} of
+            {"", _} ->
+                Args;
+            {<<"code">>, Value} ->
+                Args#extern_resp_args{code=Value};
+            {<<"stop">>, true} ->
+                Args#extern_resp_args{stop=true};
+            {<<"json">>, Value} ->
+                Args#extern_resp_args{
+                    json=Value,
+                    ctype="application/json"};
+            {<<"body">>, Value} ->
+                Args#extern_resp_args{data=Value, ctype="text/html; charset=utf-8"};
+            {<<"base64">>, Value} ->
+                Args#extern_resp_args{
+                    data=base64:decode(Value),
+                    ctype="application/binary"
+                };
+            {<<"headers">>, {Headers}} ->
+                NewHeaders = lists:map(fun({Header, HVal}) ->
+                    {binary_to_list(Header), binary_to_list(HVal)}
+                                       end, Headers),
+                Args#extern_resp_args{headers=NewHeaders};
+            _ -> % unknown key
+                Msg = lists:flatten(io_lib:format("Invalid data from external server: ~p", [{Key, Value}])),
+                throw({external_response_error, Msg})
+        end
+                end, #extern_resp_args{}, Response).
+
+default_or_content_type(DefaultContentType, Headers) ->
+    IsContentType = fun({X, _}) -> string:to_lower(X) == "content-type" end,
+    case lists:any(IsContentType, Headers) of
+        false ->
+            [{"Content-Type", DefaultContentType} | Headers];
+        true ->
+            Headers
+    end.
