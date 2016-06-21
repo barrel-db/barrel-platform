@@ -43,7 +43,7 @@ authenticate(Req, Env) ->
         UserProps ->
           UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
           FullSecret = <<Secret/binary, UserSalt/binary>>,
-          ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeBin),
+          ExpectedHash = crypto:hmac(sha, FullSecret, <<User/binary, ":", TimeBin/binary>>),
           Timeout = timeout(),
           case (catch binary_to_integer(TimeBin, 16)) of
             Timestamp when Current < Timestamp + Timeout ->
@@ -51,7 +51,7 @@ authenticate(Req, Env) ->
                 true ->
                   TimeLeft = Timestamp + Timeout - Current,
                   ResetCookie = TimeLeft < Timeout*0.9,
-                  UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
+                  UserCtx = barrel_lib:userctx([{name, User},
                     {roles, maps:get(<<"roles">>, UserProps, [])},
                     {auth, {FullSecret, ResetCookie}}]),
                   Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),

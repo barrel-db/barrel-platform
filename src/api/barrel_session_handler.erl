@@ -48,8 +48,8 @@ content_types_provided(Req, State) ->
   {CTypes, Req, State}.
 
 content_types_accepted(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, []}, from_json},
-            {{<<"application">>, <<"x-www-form-urlencoded">>, []}, from_form}],
+  CTypes = [{{<<"application">>, <<"json">>, '*'}, from_json},
+            {{<<"application">>, <<"x-www-form-urlencoded">>, '*'}, from_form}],
   {CTypes, Req, State}.
 
 
@@ -94,12 +94,12 @@ create_session(Form, Req, State) ->
     true ->
       Secret = barrel_auth:secret(),
       FullSecret = <<Secret/binary, UserSalt/binary>>,
-      Req2 = barrel_cookie_auth:set_cookie_header(Req, User, FullSecret, true),
+      Req2 = barrel_cookie_auth:set_cookie_header(Req, UserName, FullSecret, true),
       Resp = jsx:encode(#{ok => true, name => maps:get(<<"name">>, User, null),
         roles => maps:get(<<"roles">>, User, [])}),
 
       Req3 = cowboy_req:set_resp_body(Resp, Req2),
-      Next = cowboy_req:qs_val(<<"next">>, Req3),
+      {Next, _} = cowboy_req:qs_val(<<"next">>, Req3),
       case Next of
         undefined ->
           {ok, _Req4} = cowboy_req:reply(200, Req3);
