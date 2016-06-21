@@ -64,7 +64,7 @@ json_req_obj(#httpd{mochi_req=Req,
             }, Db, DocId) ->
     Body = case ReqBody of
         undefined ->
-            MaxSize = barrel_config:get_integer("couchdb", "max_document_size", 4294967296),
+            MaxSize = barrel_server:get_env(max_document_size),
             Req:recv_body(MaxSize);
         Else -> Else
     end,

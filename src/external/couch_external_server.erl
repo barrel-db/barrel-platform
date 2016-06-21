@@ -40,8 +40,7 @@ init([Name, Command]) ->
     lager:info("EXTERNAL: Starting process for: ~s", [Name]),
     lager:info("COMMAND: ~s", [Command]),
     process_flag(trap_exit, true),
-    Timeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
-    barrel_config:subscribe(),
+    Timeout = barrel_server:get_env(os_process_timeout),
     {ok, Pid} = couch_os_process:start_link(Command, [{timeout, Timeout}]),
     {ok, {Name, Command, Pid}}.
 
@@ -52,11 +51,6 @@ terminate(_Reason, {_Name, _Command, Pid}) ->
 handle_call({execute, JsonReq}, _From, {Name, Command, Pid}) ->
     {reply, couch_os_process:prompt(Pid, JsonReq), {Name, Command, Pid}}.
 
-
-handle_info({config_updated, barrel, {_, {"couchdb", "os_process_timeout"}}}, {_, _, Pid}=State) ->
-    Timeout = barrel_config:get_integer("couchdb", "os_process_timeout", 5000),
-    couch_os_process:set_timeout(Pid, Timeout),
-    {noreply, State};
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State};
 handle_info({'EXIT', Pid, Reason}, {Name, Command, Pid}) ->

@@ -19,87 +19,77 @@
 
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2, handle_info/2]).
 
--export([config_change/3]).
-
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 new() ->
   gen_server:call(?MODULE, create).
 
 random() ->
-    barrel_lib:to_hex(crypto:rand_bytes(16)).
+  barrel_lib:to_hex(crypto:rand_bytes(16)).
 
 utc_random() ->
-    utc_suffix(barrel_lib:to_hex(crypto:rand_bytes(9))).
+  utc_suffix(barrel_lib:to_hex(crypto:rand_bytes(9))).
 
 utc_suffix(Suffix) ->
-    Now = {_, _, Micro} = os:timestamp(),
-    Nowish = calendar:now_to_universal_time(Now),
-    Nowsecs = calendar:datetime_to_gregorian_seconds(Nowish),
-    Then = calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}}),
-    [Prefix] = io_lib:format("~14.16.0b", [(Nowsecs - Then) * 1000000 + Micro]),
-    << (list_to_binary(Prefix))/binary, Suffix/binary >>.
-
-config_change("uuids", _, _) ->
-    gen_server:cast(?MODULE, change);
-config_change(_, _, _) ->
-    ok.
+  Now = {_, _, Micro} = os:timestamp(),
+  Nowish = calendar:now_to_universal_time(Now),
+  Nowsecs = calendar:datetime_to_gregorian_seconds(Nowish),
+  Then = calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}}),
+  [Prefix] = io_lib:format("~14.16.0b", [(Nowsecs - Then) * 1000000 + Micro]),
+  << (list_to_binary(Prefix))/binary, Suffix/binary >>.
 
 init([]) ->
-    hooks:reg(config_key_update, ?MODULE, config_change, 3),
-    {ok, state()}.
+  {ok, init_uuid()}.
 
 terminate(_Reason, _State) ->
-    ok.
+  ok.
 
 handle_call(create, _From, random) ->
-    {reply, random(), random};
+  {reply, random(), random};
 handle_call(create, _From, utc_random) ->
-    {reply, utc_random(), utc_random};
+  {reply, utc_random(), utc_random};
 handle_call(create, _From, {utc_id, UtcIdSuffix}) ->
-    {reply, utc_suffix(UtcIdSuffix), {utc_id, UtcIdSuffix}};
+  {reply, utc_suffix(UtcIdSuffix), {utc_id, UtcIdSuffix}};
 handle_call(create, _From, {sequential, Pref, Seq}) ->
-    [F] = io_lib:format("~6.16.0b", [Seq]),
-    Result = << Pref/binary, (list_to_binary(F))/binary >>,
-    case Seq >= 16#fff000 of
-        true ->
-            {reply, Result, {sequential, new_prefix(), inc()}};
-        _ ->
-            {reply, Result, {sequential, Pref, Seq + inc()}}
-    end.
+  [F] = io_lib:format("~6.16.0b", [Seq]),
+  Result = << Pref/binary, (list_to_binary(F))/binary >>,
+  case Seq >= 16#fff000 of
+    true ->
+      {reply, Result, {sequential, new_prefix(), inc()}};
+    _ ->
+      {reply, Result, {sequential, Pref, Seq + inc()}}
+  end.
 
-handle_cast(change, _State) ->
-    {noreply, state()};
 handle_cast(stop, State) ->
-    {stop, normal, State};
+  {stop, normal, State};
 handle_cast(_Msg, State) ->
-    {noreply, State}.
+  {noreply, State}.
 
 handle_info(_Info, State) ->
-    {noreply, State}.
+  {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
 
 new_prefix() ->
-    barrel_lib:to_hex((crypto:rand_bytes(13))).
+  barrel_lib:to_hex((crypto:rand_bytes(13))).
 
 inc() ->
-    crypto:rand_uniform(1, 16#ffe).
+  crypto:rand_uniform(1, 16#ffe).
 
-state() ->
-    AlgoStr = barrel_config:get("uuids", "algorithm", "random"),
-    case barrel_lib:to_existing_atom(AlgoStr) of
-        random ->
-            random;
-        utc_random ->
-            utc_random;
-        utc_id ->
-            UtcIdSuffix = barrel_config:get("uuids", "utc_id_suffix", ""),
-            {utc_id, UtcIdSuffix};
-        sequential ->
-            {sequential, new_prefix(), inc()};
-        Unknown ->
-            throw({unknown_uuid_algorithm, Unknown})
-    end.
+init_uuid() ->
+  Alg = barrel_server:get_env(uuid_algorithm),
+  case Alg of
+    random ->
+      random;
+    utc_random ->
+      utc_random;
+    utc_id ->
+      UtcIdSuffix = barrel_server:get_env(utc_id_suffix),
+      {utc_id, UtcIdSuffix};
+    sequential ->
+      {sequential, new_prefix(), inc()};
+    Unknown ->
+      throw({unknown_uuid_algorithm, Unknown})
+  end.

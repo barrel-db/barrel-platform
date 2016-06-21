@@ -44,7 +44,6 @@
 
 %% hooks
 -export([db_updated/2, ddoc_updated/2]).
--export([config_change/3]).
 
 -include("barrel.hrl").
 -include_lib("couch_db.hrl").
@@ -89,16 +88,58 @@ env() ->
   [
     dir,
     uri_file,
+    delayed_commits,
+    fsync_options,
+    max_document_size,
+    attachment_stream_buffer_size,
+    attachment_compressible_types,
+    attachment_compression_level,
+    doc_buffer_size,
+    checkpoint_after,
+    stem_interactive_updates,
     listeners,
     start_console,
     x_forwarded_host,
+    x_forwarded_ssl,
+    x_forwarded_proto,
+    allow_jsonp,
+    'WWW-Authenticate',
+    changes_timeout,
+    authentication_redirect,
     enable_cors,
     cors,
     require_valid_user,
     auth_handlers,
     auth_timeout,
     allows_persistent_cookie,
-    cookie_secret
+    auth_pbkdf2_iterations,
+    auth_cache_size,
+    auth_public_fields,
+    users_db_public,
+    os_process_timeout,
+    reduce_limit,
+    os_process_limit,
+    query_servers,
+    uuid_algorithm,
+    utc_id_suffix,
+    index_commit_freq,
+    index_threshold,
+    index_refresh_interval,
+    keyvalue_buffer_size,
+    min_writer_items,
+    min_writer_size,
+    request_timeout,
+    max_replication_retry_count,
+    worker_processes,
+    worker_batch_size,
+    http_connections,
+    connection_timeout,
+    retries_per_request,
+    use_checkpoints,
+    checkpoint_interval,
+    socket_options,
+    replicator_sslopts,
+    replicator_cafile
   ].
 
 
@@ -107,30 +148,116 @@ default_env(dir) ->
   filename:absname(Name);
 default_env(uri_file) ->
   undefined;
+default_env(delayed_commits) ->
+  false;
+default_env(fsync_options) ->
+  [before_header, after_header, on_file_open];
+default_env(max_document_size) ->
+  4294967296;
+default_env(attachment_stream_buffer_size) ->
+  4096;
+default_env(attachment_compressible_types) ->
+  [];
+default_env(attachment_compression_level) ->
+  0;
+default_env(doc_buffer_size) ->
+  524288;
+default_env(checkpoint_after) ->
+  524288 * 10;
+default_env(stem_interactive_updates) ->
+  true;
 default_env(listeners) ->
   [];
 default_env(start_console) ->
   false;
 default_env(x_forwarded_host) ->
   <<"x-forwarded-host">>;
-default_env(enable_cors) ->
+default_env(x_forwarded_ssl) ->
+  "X-Forwarded-Ssl";
+default_env(x_forwarded_proto) ->
+  "X-Forwarded-Proto";
+default_env(allow_jsonp) ->
   false;
+%%TODO: deprecate this option
+default_env('WWW-Authenticate') ->
+  nil;
+%%TODO: deprecate this option
+default_env(authentication_redirect) ->
+  nil;
+%%TODO: deprecate this option
+default_env(changes_timeout) ->
+  60000;
 default_env(cors) ->
   [];
+default_env(enable_cors) ->
+  false;
 default_env(require_valid_user) ->
   false;
 default_env(auth_handlers) ->
   [barrel_basic_auth, barrel_cookie_auth];
-default_env(cookie_secret) ->
-  600;
 default_env(allows_persistent_cookie) ->
   false;
 default_env(auth_pbkdf2_iterations) ->
   10000;
 default_env(auth_timeout) ->
-  600.
-
-
+  600;
+default_env(auth_cache_size) ->
+  50;
+default_env(auth_public_fields) ->
+  [];
+default_env(users_db_public) ->
+  false;
+default_env(os_process_timeout) ->
+  5000;
+default_env(reduce_limit) ->
+  true;
+default_env(os_process_limit) ->
+  25;
+default_env(query_servers) ->
+  [
+    {<<"javascript">>, {couch_couchjs, start_link, [javascript]}},
+    {<<"erlang">>, {couch_native_process, start_link, []}}
+  ];
+default_env(uuid_algorithm) ->
+  sequential;
+default_env(utc_id_suffix) ->
+  "";
+default_env(index_commit_freq) ->
+  5;
+default_env(index_threshold) ->
+  200;
+default_env(index_refresh_interval) ->
+  1000;
+default_env(keyvalue_buffer_size) ->
+  2097152;
+default_env(min_writer_items) ->
+  100;
+default_env(min_writer_size) ->
+  16777216;
+default_env(request_timeout) ->
+  infinity;
+default_env(max_replication_retry_count) ->
+  10;
+default_env(worker_processes) ->
+  4;
+default_env(worker_batch_size) ->
+  500;
+default_env(http_connections) ->
+  20;
+default_env(connection_timeout) ->
+  30000;
+default_env(retries_per_request) ->
+  10;
+default_env(use_checkpoints) ->
+  true;
+default_env(checkpoint_interval) ->
+  5000;
+default_env(socket_options) ->
+  [{keepalive, true}, {nodelay, false}];
+default_env(replicator_sslopts) ->
+  [];
+default_env(replicator_cafile) ->
+  "".
 
 set_env(E, Val) -> barrel_lib:set(E, Val).
 
@@ -216,8 +343,6 @@ init([]) ->
   filelib:ensure_dir(filename:join(RootDir, "dummy")),
   init_nodeid(),
 
-
-  hooks:reg(config_key_update, ?MODULE, config_change, 3),
   ok = couch_file:init_delete_dir(RootDir),
   {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
   ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
@@ -245,9 +370,6 @@ handle_call({delete, _DbName, _Options}=Req, From, State) ->
   request([{Req, From}], State);
 handle_call(_, _From, State) ->
   {reply, bad_call, State}.
-
-handle_cast(config_change, State) ->
-  {stop, config_change, State};
 
 handle_cast(Msg, _State) ->
   exit({unknown_cast_message, Msg}).
@@ -308,13 +430,6 @@ db_updated(DbName, Event) ->
 
 ddoc_updated(DbName, Event) ->
   barrel_event:notify(DbName, Event).
-
-%% CONFIG hooks
-config_change("barrel", "database_dir", _) ->
-  gen_server:cast(barrel_server, config_change);
-config_change(_, _, _) ->
-  ok.
-
 
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
   maybe_add_sys_db_callbacks(binary_to_list(DbName), Options);

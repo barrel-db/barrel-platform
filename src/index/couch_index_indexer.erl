@@ -39,8 +39,6 @@ init({Index, DbName}) ->
     process_flag(trap_exit, true),
     %% subscribe to config events
 
-    barrel_config:subscribe(),
-
     %% get defaults
     Threshold = get_db_threshold(),
     Refresh = get_refresh_interval(),
@@ -105,9 +103,6 @@ handle_cast(updated, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({config_updated, _Name, Event}, State) ->
-    NewState = config_change(Event, State),
-    {noreply, NewState};
 handle_info(start_indexing, #state{index=Index,
                                    dbname=DbName,
                                    refresh_interval=R}=State) ->
@@ -181,23 +176,6 @@ terminate(_Reason, #state{refresh_pid=RPid, tref=TRef}) ->
     end,
     ok.
 
-config_change({_Type, {"couch_index", "threshold"}}, State) ->
-    Threshold = get_db_threshold(),
-    State#state{threshold=Threshold};
-config_change({_Type, {"couch_index", "refresh_interval"}}, #state{tref=TRef}=State) ->
-    R = get_refresh_interval(),
-    %% stop the old timee
-    if TRef /= nil ->
-            timer:cancel(TRef);
-        true -> ok
-    end,
-    %% start the new timer
-    {ok, NTRef}  = timer:send_interval(R, self(), refresh_index),
-    State#state{refresh_interval=R, tref=NTRef};
-config_change(_, State) ->
-    State.
-
-
 
 
 %% refresh the index to trigger updates.
@@ -223,13 +201,11 @@ should_close() ->
 %% update the index on each db update. Instead we are waiting for a
 %% minimum. If the minimum is not acchieved, the update will happen
 %% in the next interval.
-get_db_threshold() ->
-    barrel_config:get_integer("couch_index", "threshold", 200).
+get_db_threshold() -> barrel_server:get_env(index_threshold).
 
 %% refresh interval in ms, the interval in which the index will be
 %% updated
-get_refresh_interval() ->
-    barrel_config:get_integer("couch_index", "refresh_interval", 1000).
+get_refresh_interval() -> barrel_server:get_env(index_refresh_interval).
 
 
 do_update(#state{index=Index, dbname=DbName,

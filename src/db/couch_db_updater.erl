@@ -428,9 +428,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
     _ -> throw({database_disk_version_error, "Incorrect disk header version"})
     end,
 
-    {ok, FsyncOptions} = barrel_lib:parse_term(
-            barrel_config:get("barrel", "fsync_options", "[before_header, after_header, on_file_open]")
-    ),
+    FsyncOptions = barrel_server:get_env(fsync_options),
 
     case lists:member(on_file_open, FsyncOptions) of
     true -> ok = couch_file:sync(Fd);
@@ -915,8 +913,8 @@ copy_compact(Db, NewDb0, Retry) ->
     Compression = couch_compress:get_compression_method(),
     NewDb = NewDb0#db{fsync_options=FsyncOptions, compression=Compression},
     TotalChanges = couch_db:count_changes_since(Db, NewDb#db.update_seq),
-    BufferSize = barrel_config:get_integer("database_compaction", "doc_buffer_size", 524288),
-    CheckpointAfter = barrel_config:get_integer("database_compaction", "checkpoint_after", BufferSize * 10),
+    BufferSize = barrel_server:get_env(doc_buffer_size),
+    CheckpointAfter = barrel_server:get_env(checkpoint_after),
 
     EnumBySeqFun =
     fun(#doc_info{high_seq=Seq}=DocInfo, _Offset,

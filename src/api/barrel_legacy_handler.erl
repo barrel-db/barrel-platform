@@ -147,7 +147,7 @@ do_apply_cors_headers(Origin, Host, Headers0) ->
 
 
 host(Req) ->
-  XHost = barrel_config:get("api", "x_forwarded_host", "X-Forwarded-Host"),
+  XHost = barrrel_server:get_env(x_forwarded_host),
   case Req:get_header_value(XHost) of
     undefined ->
       case Req:get_header_value("Host") of

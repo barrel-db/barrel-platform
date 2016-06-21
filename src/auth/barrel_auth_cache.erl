@@ -18,7 +18,6 @@
 % public API
 -export([get_user_creds/1]).
 -export([start_link/0]).
--export([handle_config_change/3]).
 
 % gen_server API
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2, code_change/3, terminate/2]).
@@ -87,19 +86,6 @@ validate_user_creds(UserCreds) ->
     UserCreds.
 
 
-init_hooks() ->
-    hooks:reg(config_key_update, ?MODULE, handle_config_change, 3).
-
-unregister_hooks() ->
-    hooks:unreg(config_key_update, ?MODULE, handle_config_change, 3).
-
-
-handle_config_change("auth", "auth_cache_size", _Type) ->
-    Size = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
-    ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
-handle_config_change(_Section, _Key, _Type) ->
-    ok.
-
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -109,8 +95,7 @@ init(_) ->
     ?BY_USER = ets:new(?BY_USER, [set, protected, named_table]),
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
-    init_hooks(),
-    CacheSize = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    CacheSize = barrel_server:get_env(auth_cache_size),
     _ = barrel_event:reg(<<"_users">>),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
@@ -186,7 +171,6 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
-    unregister_hooks(),
     catch barrel_event:unreg(),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete(?BY_USER),

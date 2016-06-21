@@ -149,10 +149,10 @@ all_docs_req(Req, Db, Keys) ->
         _ ->
             case Db#db.name of
                 <<"_users">> ->
-                    UsersDbPublic = barrel_config:get("auth", "users_db_public", "false"),
-                    PublicFields = barrel_config:get("auth", "public_fields"),
+                    UsersDbPublic = barrel_server:get_env(users_db_public),
+                    PublicFields = barrel_server:get_env(auth_public_fields),
                     case {UsersDbPublic, PublicFields} of
-                        {"true", PublicFields} when PublicFields =/= undefined ->
+                        {"true", PublicFields} when PublicFields =/= undefined, PublicFields =/= [] ->
                             do_all_docs_req(Req, Db, Keys);
                         {_, _} ->
                             throw({forbidden, <<"Only admins can access _all_docs",

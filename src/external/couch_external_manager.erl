@@ -16,7 +16,7 @@
 -module(couch_external_manager).
 -behaviour(gen_server).
 
--export([start_link/0, execute/2, config_change/3]).
+-export([start_link/0, execute/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2, handle_info/2]).
 
 -include_lib("couch_db.hrl").
@@ -35,15 +35,11 @@ execute(UrlName, JsonReq) ->
         couch_external_server:execute(Pid, JsonReq)
     end.
 
-config_change("external", UrlName, _) ->
-    gen_server:call(couch_external_manager, {config, UrlName}).
-
 % gen_server API
 
 init([]) ->
     process_flag(trap_exit, true),
     Handlers = ets:new(couch_external_manager_handlers, [set, private]),
-    hooks:reg(config_key_update, ?MODULE, config_change, 2),
     {ok, Handlers}.
 
 terminate(_Reason, Handlers) ->
