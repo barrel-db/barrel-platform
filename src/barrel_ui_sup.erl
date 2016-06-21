@@ -53,12 +53,17 @@ init([]) ->
       {barrel_auth_cache, start_link, []},
       permanent, brutal_kill, worker, [barrel_aut_cache]},
 
+  UserLocal =
+    {barrel_users_local,
+      {barrel_users_local, start_link, []},
+      permanent, brutal_kill, worker, [barrel_users_local]},
+
   Api = {barrel_api_sup,
     {barrel_api_sup, start_link, []},
     permanent, infinity, supervisor, [barrel_api_sup]},
 
 
-  {ok, {SupFlags, [Auth, AuthCache, Api]}}.
+  {ok, {SupFlags, [Auth, AuthCache, UserLocal, Api]}}.
 
 %%%===================================================================
 %%% Internal functions

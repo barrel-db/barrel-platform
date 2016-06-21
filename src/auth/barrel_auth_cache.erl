@@ -49,42 +49,11 @@ get_user_creds(UserName) when is_list(UserName) ->
     get_user_creds(list_to_binary(UserName));
 
 get_user_creds(UserName) ->
-    UserCreds = case barrel_config:get("admins", binary_to_list(UserName)) of
-    "-hashed-" ++ HashedPwdAndSalt ->
-        % the name is an admin, now check to see if there is a user doc
-        % which has a matching name, salt, and password_sha
-        [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
-        case get_from_cache(UserName) of
-        nil ->
-            make_admin_doc(HashedPwd, Salt, []);
-        UserProps when is_map(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, maps:get(<<"roles">>, UserProps, []))
-        end;
-    "-pbkdf2-" ++ HashedPwdSaltAndIterations ->
-        [HashedPwd, Salt, Iterations] = string:tokens(HashedPwdSaltAndIterations, ","),
-        case get_from_cache(UserName) of
-        nil ->
-            make_admin_doc(HashedPwd, Salt, Iterations, []);
-        UserProps when is_map(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, Iterations, maps:get(<<"roles">>, []))
-    end;
-    _Else ->
-        get_from_cache(UserName)
-    end,
+    UserCreds = case barrel_users_local:get_user(UserName) of
+                    {ok, Doc} -> Doc;
+                    {error, not_found} -> get_from_cache(UserName)
+                end,
     validate_user_creds(UserCreds).
-
-make_admin_doc(HashedPwd, Salt, ExtraRoles) ->
-    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
-      <<"salt">> => list_to_binary(Salt),
-      <<"password_scheme">> => <<"simple">>,
-      <<"password_sha">> => list_to_binary(HashedPwd)}.
-
-make_admin_doc(DerivedKey, Salt, Iterations, ExtraRoles) ->
-    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
-      <<"salt">> => list_to_binary(Salt),
-      <<"iterations">> => list_to_integer(Iterations),
-      <<"password_scheme">> => <<"pbkdf2">>,
-      <<"derived_key">> => list_to_binary(DerivedKey)}.
 
 get_from_cache(UserName) ->
     exec_if_auth_db(

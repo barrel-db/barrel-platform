@@ -56,6 +56,8 @@
 
 -export([encodeb64url/1, decodeb64url/1]).
 
+-export([delete_file/1, delete_file/2]).
+
 
 -include_lib("syntax_tools/include/merl.hrl").
 -include_lib("couch_db.hrl").
@@ -432,3 +434,26 @@ urlencode_digit(D)  -> D.
 urldecode_digit($_) -> $/;
 urldecode_digit($-) -> $+;
 urldecode_digit(D)  -> D.
+
+
+delete_file(Name) ->
+  delete_file(Name, true).
+
+
+delete_file(Name, Async) ->
+  Dir = filename:dirname(Name),
+  Base = filename:basename(Name),
+  DelFile = filename:join([Dir, lists:flatten([".", Base, ".del",
+    binary_to_list(barrel_uuids:random())])]),
+
+  case file:rename(Name, DelFile) of
+    ok ->
+      case Async of
+        true ->
+          spawn(file, delete, [DelFile]),
+          ok;
+        false -> file:delete(DelFile)
+      end;
+    Error ->
+      Error
+  end.

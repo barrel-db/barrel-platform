@@ -26,7 +26,7 @@ execute(Req, Env) ->
   Handlers = barrel_server:get_env(auth_handlers),
   case run_handlers(Handlers, Req, Env) of
     nil ->
-      case barrel_server:has_admins() of
+      case barrel_users_local:has_admins() of
         true ->  {ok, Req, Env};
         false ->
           case barrel_server:get_env(require_valid_user) of

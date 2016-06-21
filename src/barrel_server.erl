@@ -34,9 +34,7 @@
 
 
 -export([all_databases/0, all_databases/2]).
--export([is_admin/2,
-         has_admins/0,
-         get_stats/0]).
+-export([get_stats/0]).
 
 -export([start_link/0]).
 
@@ -127,6 +125,8 @@ default_env(cookie_secret) ->
   600;
 default_env(allows_persistent_cookie) ->
   false;
+default_env(auth_pbkdf2_iterations) ->
+  10000;
 default_env(auth_timeout) ->
   600.
 
@@ -175,30 +175,6 @@ delete(DbName, Options) ->
   gen_server:call(barrel_server, {delete, DbName, Options}, infinity).
 
 
-is_admin(User, ClearPwd) ->
-  case barrel_config:get("admins", User) of
-    "-hashed-" ++ HashedPwdAndSalt ->
-      [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
-      barrel_lib:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
-    _Else ->
-      false
-  end.
-
-has_admins() ->
-  barrel_config:get("admins") /= [].
-
-
-hash_admin_passwords() ->
-  hash_admin_passwords(true).
-
-hash_admin_passwords(Persist) ->
-  lists:foreach(
-    fun({User, ClearPassword}) ->
-        HashedPassword = couch_passwords:hash_admin_password(ClearPassword),
-        barrel_config:set("admins", User, HashedPassword, Persist)
-    end, couch_passwords:get_unhashed_admins()).
-
-
 all_databases() ->
   {ok, DbList} = all_databases(
                    fun(DbName, Acc) -> {ok, [DbName | Acc]} end, []),
@@ -243,7 +219,6 @@ init([]) ->
 
   hooks:reg(config_key_update, ?MODULE, config_change, 3),
   ok = couch_file:init_delete_dir(RootDir),
-  hash_admin_passwords(),
   {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
   ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
   ets:new(couch_dbs_by_pid, [set, private, named_table]),
