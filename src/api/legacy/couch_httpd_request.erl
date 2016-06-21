@@ -119,7 +119,7 @@ body_length(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(body_length).
 
 body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
-    MaxSize = barrel_config:get_integer("couchdb", "max_document_size", 4294967296),
+    MaxSize = barrel_server:get_env(max_document_size),
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.

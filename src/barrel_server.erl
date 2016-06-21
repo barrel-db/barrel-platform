@@ -90,6 +90,7 @@ env() ->
     uri_file,
     delayed_commits,
     fsync_options,
+    file_compression,
     max_document_size,
     attachment_stream_buffer_size,
     attachment_compressible_types,
@@ -139,7 +140,10 @@ env() ->
     checkpoint_interval,
     socket_options,
     replicator_sslopts,
-    replicator_cafile
+    replicator_cafile,
+    compactions,
+    compaction_check_interval,
+    compaction_min_file_size
   ].
 
 
@@ -152,6 +156,8 @@ default_env(delayed_commits) ->
   false;
 default_env(fsync_options) ->
   [before_header, after_header, on_file_open];
+default_env(file_compression) ->
+  snappy;
 default_env(max_document_size) ->
   4294967296;
 default_env(attachment_stream_buffer_size) ->
@@ -257,7 +263,13 @@ default_env(socket_options) ->
 default_env(replicator_sslopts) ->
   [];
 default_env(replicator_cafile) ->
-  "".
+  "";
+default_env(compactions) ->
+  [];
+default_env(compaction_check_interval) ->
+  300;
+default_env(compaction_min_file_size) ->
+  131072.
 
 set_env(E, Val) -> barrel_lib:set(E, Val).
 

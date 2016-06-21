@@ -27,20 +27,20 @@
 -define(CONFIG_ETS, couch_compaction_daemon_config).
 
 -record(state, {
-    loop_pid
+  loop_pid
 }).
 
 -record(config, {
-    db_frag = nil,
-    view_frag = nil,
-    period = nil,
-    cancel = false,
-    parallel_view_compact = false
+  db_frag = nil,
+  view_frag = nil,
+  period = nil,
+  cancel = false,
+  parallel_view_compact = false
 }).
 
 -record(period, {
-    from = nil,
-    to = nil
+  from = nil,
+  to = nil
 }).
 
 -define(DEFAULT_CHECK_INTERVAL, 300).
@@ -48,439 +48,413 @@
 
 
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    process_flag(trap_exit, true),
-    ?CONFIG_ETS = ets:new(?CONFIG_ETS, [named_table, set, protected]),
-    self() ! init,
-    {ok, #state{}}.
+  process_flag(trap_exit, true),
+  ?CONFIG_ETS = ets:new(?CONFIG_ETS, [named_table, set, protected]),
+  self() ! init,
+  {ok, #state{}}.
 
 
 handle_cast(_Msg, State) ->
-    {noreply, State}.
+  {noreply, State}.
 
 handle_call(Msg, _From, State) ->
-    {stop, {unexpected_call, Msg}, State}.
+  {stop, {unexpected_call, Msg}, State}.
 
 handle_info(init, State) ->
-    load_config(),
-    Server = self(),
-    Pid = spawn_link(fun() -> compact_loop(Server) end),
-    {noreply, State#state{loop_pid=Pid}};
+  load_config(),
+  Server = self(),
+  Pid = spawn_link(fun() -> compact_loop(Server) end),
+  {noreply, State#state{loop_pid=Pid}};
 
 handle_info({'EXIT', Pid, Reason}, #state{loop_pid = Pid} = State) ->
-    {stop, {compaction_loop_died, Reason}, State}.
+  {stop, {compaction_loop_died, Reason}, State}.
 
 
 terminate(_Reason, _State) ->
-    true = ets:delete(?CONFIG_ETS).
+  true = ets:delete(?CONFIG_ETS).
 
 
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
 
 
 compact_loop(Parent) ->
-    {ok, _} = barrel_server:all_databases(
-        fun(DbName, Acc) ->
-            case ets:info(?CONFIG_ETS, size) =:= 0 of
-                true ->
-                    {stop, Acc};
-                false ->
-                    case get_db_config(DbName) of
-                        nil ->
-                            ok;
-                        {ok, Config} ->
-                            case check_period(Config) of
-                                true ->
-                                    maybe_compact_db(DbName, Config);
-                                false ->
-                                    ok
-                            end
-                    end,
-                    {ok, Acc}
-            end
-        end, ok),
-    case ets:info(?CONFIG_ETS, size) =:= 0 of
+  {ok, _} = barrel_server:all_databases(
+    fun(DbName, Acc) ->
+      case ets:info(?CONFIG_ETS, size) =:= 0 of
         true ->
-            receive {Parent, have_config} -> ok end;
+          {stop, Acc};
         false ->
-            PausePeriod = barrel_config:get_integer("compaction_daemon", "check_interval", ?DEFAULT_CHECK_INTERVAL),
-            ok = timer:sleep(PausePeriod * 1000)
-    end,
-    compact_loop(Parent).
+          case get_db_config(DbName) of
+            nil ->
+              ok;
+            {ok, Config} ->
+              case check_period(Config) of
+                true ->
+                  maybe_compact_db(DbName, Config);
+                false ->
+                  ok
+              end
+          end,
+          {ok, Acc}
+      end
+    end, ok),
+  case ets:info(?CONFIG_ETS, size) =:= 0 of
+    true ->
+      receive {Parent, have_config} -> ok end;
+    false ->
+      PausePeriod = barrel_server:get_env(compaction_check_interval),
+      ok = timer:sleep(PausePeriod * 1000)
+  end,
+  compact_loop(Parent).
 
 
 maybe_compact_db(DbName, Config) ->
-    case (catch couch_db:open_int(DbName, [{user_ctx, barrel_lib:adminctx()}])) of
-        {ok, Db} ->
-            DDocNames = db_ddoc_names(Db),
-            case can_db_compact(Config, Db) of
+  case (catch couch_db:open_int(DbName, [{user_ctx, barrel_lib:adminctx()}])) of
+    {ok, Db} ->
+      DDocNames = db_ddoc_names(Db),
+      case can_db_compact(Config, Db) of
+        true ->
+          {ok, DbCompactPid} = couch_db:start_compact(Db),
+          TimeLeft = compact_time_left(Config),
+          {ViewsCompactPid, ViewsMonRef} = case Config#config.parallel_view_compact of
+                                             true ->
+                                               Pid = spawn_link(fun() ->
+                                                 maybe_compact_views(DbName, DDocNames, Config)
+                                                                end),
+                                               MRef = erlang:monitor(process, Pid),
+                                               {Pid, MRef};
+                                             false ->
+                                               {nil, nil}
+                                           end,
+          DbMonRef = erlang:monitor(process, DbCompactPid),
+          receive
+            {'DOWN', DbMonRef, process, _, normal} ->
+              couch_db:close(Db),
+              case Config#config.parallel_view_compact of
                 true ->
-                    {ok, DbCompactPid} = couch_db:start_compact(Db),
-                    TimeLeft = compact_time_left(Config),
-                    {ViewsCompactPid, ViewsMonRef} = case Config#config.parallel_view_compact of
-                                                         true ->
-                                                             Pid = spawn_link(fun() ->
-                                                                 maybe_compact_views(DbName, DDocNames, Config)
-                                                                              end),
-                                                             MRef = erlang:monitor(process, Pid),
-                                                             {Pid, MRef};
-                                                         false ->
-                                                             {nil, nil}
-                                                     end,
-                    DbMonRef = erlang:monitor(process, DbCompactPid),
-                    receive
-                        {'DOWN', DbMonRef, process, _, normal} ->
-                            couch_db:close(Db),
-                            case Config#config.parallel_view_compact of
-                                true ->
-                                    ok;
-                                false ->
-                                    maybe_compact_views(DbName, DDocNames, Config)
-                            end;
-                        {'DOWN', DbMonRef, process, _, Reason} ->
-                            couch_db:close(Db),
-                            lager:error("Compaction daemon - an error ocurred while"
-                            " compacting the database `~s`: ~p", [DbName, Reason])
-                    after TimeLeft ->
-                        lager:info("Compaction daemon - canceling compaction for database"
-                        " `~s` because it's exceeding the allowed period.",
-                            [DbName]),
-                        erlang:demonitor(DbMonRef, [flush]),
-                        ok = couch_db:cancel_compact(Db),
-                        couch_db:close(Db)
-                    end,
-                    case ViewsMonRef of
-                        nil ->
-                            ok;
-                        _ ->
-                            receive
-                                {'DOWN', ViewsMonRef, process, _, _Reason} ->
-                                    ok
-                            after TimeLeft + 1000 ->
-                                % Under normal circunstances, the view compaction process
-                                % should have finished already.
-                                erlang:demonitor(ViewsMonRef, [flush]),
-                                unlink(ViewsCompactPid),
-                                exit(ViewsCompactPid, kill)
-                            end
-                    end;
+                  ok;
                 false ->
-                    couch_db:close(Db),
-                    maybe_compact_views(DbName, DDocNames, Config)
-            end;
-        _ ->
-            ok
-    end.
+                  maybe_compact_views(DbName, DDocNames, Config)
+              end;
+            {'DOWN', DbMonRef, process, _, Reason} ->
+              couch_db:close(Db),
+              lager:error("Compaction daemon - an error ocurred while"
+              " compacting the database `~s`: ~p", [DbName, Reason])
+          after TimeLeft ->
+            lager:info("Compaction daemon - canceling compaction for database"
+            " `~s` because it's exceeding the allowed period.",
+              [DbName]),
+            erlang:demonitor(DbMonRef, [flush]),
+            ok = couch_db:cancel_compact(Db),
+            couch_db:close(Db)
+          end,
+          case ViewsMonRef of
+            nil ->
+              ok;
+            _ ->
+              receive
+                {'DOWN', ViewsMonRef, process, _, _Reason} ->
+                  ok
+              after TimeLeft + 1000 ->
+                % Under normal circunstances, the view compaction process
+                % should have finished already.
+                erlang:demonitor(ViewsMonRef, [flush]),
+                unlink(ViewsCompactPid),
+                exit(ViewsCompactPid, kill)
+              end
+          end;
+        false ->
+          couch_db:close(Db),
+          maybe_compact_views(DbName, DDocNames, Config)
+      end;
+    _ ->
+      ok
+  end.
 
 
 maybe_compact_views(_DbName, [], _Config) ->
-    ok;
+  ok;
 maybe_compact_views(DbName, [DDocName | Rest], Config) ->
-    case check_period(Config) of
-        true ->
-            case maybe_compact_view(DbName, DDocName, Config) of
-                ok ->
-                    maybe_compact_views(DbName, Rest, Config);
-                timeout ->
-                    ok
-            end;
-        false ->
-            ok
-    end.
+  case check_period(Config) of
+    true ->
+      case maybe_compact_view(DbName, DDocName, Config) of
+        ok ->
+          maybe_compact_views(DbName, Rest, Config);
+        timeout ->
+          ok
+      end;
+    false ->
+      ok
+  end.
 
 
 db_ddoc_names(Db) ->
-    {ok, _, DDocNames} = couch_db:enum_docs(
-        Db,
-        fun(#full_doc_info{id = <<"_design/", _/binary>>, deleted = true}, _, Acc) ->
-            {ok, Acc};
-            (#full_doc_info{id = <<"_design/", Id/binary>>}, _, Acc) ->
-                {ok, [Id | Acc]};
-            (_, _, Acc) ->
-                {stop, Acc}
-        end, [], [{start_key, <<"_design/">>}, {end_key_gt, <<"_design0">>}]),
-    DDocNames.
+  {ok, _, DDocNames} = couch_db:enum_docs(
+    Db,
+    fun(#full_doc_info{id = <<"_design/", _/binary>>, deleted = true}, _, Acc) ->
+      {ok, Acc};
+      (#full_doc_info{id = <<"_design/", Id/binary>>}, _, Acc) ->
+        {ok, [Id | Acc]};
+      (_, _, Acc) ->
+        {stop, Acc}
+    end, [], [{start_key, <<"_design/">>}, {end_key_gt, <<"_design0">>}]),
+  DDocNames.
 
 
 maybe_compact_view(DbName, GroupId, Config) ->
-    DDocId = <<"_design/", GroupId/binary>>,
-    case (catch couch_mrview:get_info(DbName, DDocId)) of
-        {ok, GroupInfo} ->
-            case can_view_compact(Config, DbName, GroupId, GroupInfo) of
-                true ->
-                    {ok, MonRef} = couch_mrview:compact(DbName, DDocId, [monitor]),
-                    TimeLeft = compact_time_left(Config),
-                    receive
-                        {'DOWN', MonRef, process, _, normal} ->
-                            ok;
-                        {'DOWN', MonRef, process, _, Reason} ->
-                            lager:error("Compaction daemon - an error ocurred while compacting"
-                            " the view group `~s` from database `~s`: ~p",
-                                [GroupId, DbName, Reason]),
-                            ok
-                    after TimeLeft ->
-                        lager:info("Compaction daemon - canceling the compaction for the "
-                        "view group `~s` of the database `~s` because it's exceeding"
-                        " the allowed period.", [GroupId, DbName]),
-                        erlang:demonitor(MonRef, [flush]),
-                        ok = couch_mrview:cancel_compaction(DbName, DDocId),
-                        timeout
-                    end;
-                false ->
-                    ok
-            end;
-        Error ->
-            lager:error("Error opening view group `~s` from database `~s`: ~p",
-                [GroupId, DbName, Error]),
-            ok
-    end.
+  DDocId = <<"_design/", GroupId/binary>>,
+  case (catch couch_mrview:get_info(DbName, DDocId)) of
+    {ok, GroupInfo} ->
+      case can_view_compact(Config, DbName, GroupId, GroupInfo) of
+        true ->
+          {ok, MonRef} = couch_mrview:compact(DbName, DDocId, [monitor]),
+          TimeLeft = compact_time_left(Config),
+          receive
+            {'DOWN', MonRef, process, _, normal} ->
+              ok;
+            {'DOWN', MonRef, process, _, Reason} ->
+              lager:error("Compaction daemon - an error ocurred while compacting"
+              " the view group `~s` from database `~s`: ~p",
+                [GroupId, DbName, Reason]),
+              ok
+          after TimeLeft ->
+            lager:info("Compaction daemon - canceling the compaction for the "
+            "view group `~s` of the database `~s` because it's exceeding"
+            " the allowed period.", [GroupId, DbName]),
+            erlang:demonitor(MonRef, [flush]),
+            ok = couch_mrview:cancel_compaction(DbName, DDocId),
+            timeout
+          end;
+        false ->
+          ok
+      end;
+    Error ->
+      lager:error("Error opening view group `~s` from database `~s`: ~p",
+        [GroupId, DbName, Error]),
+      ok
+  end.
 
 
 compact_time_left(#config{cancel = false}) ->
-    infinity;
+  infinity;
 compact_time_left(#config{period = nil}) ->
-    infinity;
+  infinity;
 compact_time_left(#config{period = #period{to = {ToH, ToM} = To}}) ->
-    {H, M, _} = time(),
-    case To > {H, M} of
-        true ->
-            ((ToH - H) * 60 * 60 * 1000) + (abs(ToM - M) * 60 * 1000);
-        false ->
-            ((24 - H + ToH) * 60 * 60 * 1000) + (abs(ToM - M) * 60 * 1000)
-    end.
+  {H, M, _} = time(),
+  case To > {H, M} of
+    true ->
+      ((ToH - H) * 60 * 60 * 1000) + (abs(ToM - M) * 60 * 1000);
+    false ->
+      ((24 - H + ToH) * 60 * 60 * 1000) + (abs(ToM - M) * 60 * 1000)
+  end.
 
 
 get_db_config(DbName) ->
-    case ets:lookup(?CONFIG_ETS, DbName) of
+  case ets:lookup(?CONFIG_ETS, DbName) of
+    [] ->
+      case ets:lookup(?CONFIG_ETS, <<"_default">>) of
         [] ->
-            case ets:lookup(?CONFIG_ETS, <<"_default">>) of
-                [] ->
-                    nil;
-                [{<<"_default">>, Config}] ->
-                    {ok, Config}
-            end;
-        [{DbName, Config}] ->
-            {ok, Config}
-    end.
+          nil;
+        [{<<"_default">>, Config}] ->
+          {ok, Config}
+      end;
+    [{DbName, Config}] ->
+      {ok, Config}
+  end.
 
 
 can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
-    case check_period(Config) of
+  case check_period(Config) of
+    false ->
+      false;
+    true ->
+      {ok, DbInfo} = couch_db:get_db_info(Db),
+      {Frag, SpaceRequired} = frag(DbInfo),
+      lager:debug("Fragmentation for database `~s` is ~p%, estimated space for"
+      " compaction is ~p bytes.", [Db#db.name, Frag, SpaceRequired]),
+      case check_frag(Threshold, Frag) of
         false ->
-            false;
+          false;
         true ->
-            {ok, DbInfo} = couch_db:get_db_info(Db),
-            {Frag, SpaceRequired} = frag(DbInfo),
-            lager:debug("Fragmentation for database `~s` is ~p%, estimated space for"
-            " compaction is ~p bytes.", [Db#db.name, Frag, SpaceRequired]),
-            case check_frag(Threshold, Frag) of
-                false ->
-                    false;
-                true ->
-                    Free = free_space(barrel_server:get_env(dir)),
-                    case Free >= SpaceRequired of
-                        true ->
-                            true;
-                        false ->
-                            lager:warning("Compaction daemon - skipping database `~s` "
-                            "compaction: the estimated necessary disk space is about ~p"
-                            " bytes but the currently available disk space is ~p bytes.",
-                                [Db#db.name, SpaceRequired, Free]),
-                            false
-                    end
-            end
-    end.
+          Free = free_space(barrel_server:get_env(dir)),
+          case Free >= SpaceRequired of
+            true ->
+              true;
+            false ->
+              lager:warning("Compaction daemon - skipping database `~s` "
+              "compaction: the estimated necessary disk space is about ~p"
+              " bytes but the currently available disk space is ~p bytes.",
+                [Db#db.name, SpaceRequired, Free]),
+              false
+          end
+      end
+  end.
 
 can_view_compact(Config, DbName, GroupId, GroupInfo) ->
-    case check_period(Config) of
-        false ->
-            false;
+  case check_period(Config) of
+    false ->
+      false;
+    true ->
+      case proplists:get_value(updater_running, GroupInfo) of
         true ->
-            case proplists:get_value(updater_running, GroupInfo) of
+          false;
+        false ->
+          {Frag, SpaceRequired} = frag(GroupInfo),
+          lager:debug("Fragmentation for view group `~s` (database `~s`) is "
+          "~p%, estimated space for compaction is ~p bytes.",
+            [GroupId, DbName, Frag, SpaceRequired]),
+          case check_frag(Config#config.view_frag, Frag) of
+            false ->
+              false;
+            true ->
+              Free = free_space(couch_index_util:root_dir()),
+              case Free >= SpaceRequired of
                 true ->
-                    false;
+                  true;
                 false ->
-                    {Frag, SpaceRequired} = frag(GroupInfo),
-                    lager:debug("Fragmentation for view group `~s` (database `~s`) is "
-                    "~p%, estimated space for compaction is ~p bytes.",
-                        [GroupId, DbName, Frag, SpaceRequired]),
-                    case check_frag(Config#config.view_frag, Frag) of
-                        false ->
-                            false;
-                        true ->
-                            Free = free_space(couch_index_util:root_dir()),
-                            case Free >= SpaceRequired of
-                                true ->
-                                    true;
-                                false ->
-                                    lager:warning("Compaction daemon - skipping view group `~s` "
-                                    "compaction (database `~s`): the estimated necessary "
-                                    "disk space is about ~p bytes but the currently available"
-                                    " disk space is ~p bytes.",
-                                        [GroupId, DbName, SpaceRequired, Free]),
-                                    false
-                            end
-                    end
-            end
-    end.
+                  lager:warning("Compaction daemon - skipping view group `~s` "
+                  "compaction (database `~s`): the estimated necessary "
+                  "disk space is about ~p bytes but the currently available"
+                  " disk space is ~p bytes.",
+                    [GroupId, DbName, SpaceRequired, Free]),
+                  false
+              end
+          end
+      end
+  end.
 
 
 check_period(#config{period = nil}) ->
-    true;
+  true;
 check_period(#config{period = #period{from = From, to = To}}) ->
-    {HH, MM, _} = erlang:time(),
-    case From < To of
-        true ->
-            ({HH, MM} >= From) andalso ({HH, MM} < To);
-        false ->
-            ({HH, MM} >= From) orelse ({HH, MM} < To)
-    end.
+  {HH, MM, _} = erlang:time(),
+  case From < To of
+    true ->
+      ({HH, MM} >= From) andalso ({HH, MM} < To);
+    false ->
+      ({HH, MM} >= From) orelse ({HH, MM} < To)
+  end.
 
 
 check_frag(nil, _) ->
-    true;
+  true;
 check_frag(Threshold, Frag) ->
-    Frag >= Threshold.
+  Frag >= Threshold.
 
 
 frag(Info) ->
-    FileSize = maps:get(disk_size, Info),
-    MinFileSize = barrel_config:get_integer("compaction_daemon", "min_file_size", ?DEFAULT_MIN_FILESIZE),
-    case FileSize < MinFileSize of
-        true ->
-            {0, FileSize};
-        false ->
-            case maps:get(data_size, Info) of
-                null ->
-                    {100, FileSize};
-                0 ->
-                    {0, FileSize};
-                DataSize ->
-                    Frag = round(((FileSize - DataSize) / FileSize * 100)),
-                    {Frag, space_required(DataSize)}
-            end
-    end.
+  FileSize = maps:get(disk_size, Info),
+  MinFileSize = barrel_server:get_env(compaction_min_file_size),
+  case FileSize < MinFileSize of
+    true ->
+      {0, FileSize};
+    false ->
+      case maps:get(data_size, Info) of
+        null ->
+          {100, FileSize};
+        0 ->
+          {0, FileSize};
+        DataSize ->
+          Frag = round(((FileSize - DataSize) / FileSize * 100)),
+          {Frag, space_required(DataSize)}
+      end
+  end.
 
 % Rough, and pessimistic, estimation of necessary disk space to compact a
 % database or view index.
 space_required(DataSize) ->
-    round(DataSize * 2.0).
+  round(DataSize * 2.0).
 
 
 load_config() ->
-    lists:foreach(
-        fun({DbName, ConfigString}) ->
-            case parse_config(DbName, ConfigString) of
-                {ok, Config} ->
-                    true = ets:insert(?CONFIG_ETS, {list_to_binary(DbName), Config});
-                error ->
-                    ok
-            end
-        end,
-        barrel_config:get("compactions")).
+  Compactions = barrel_server:get_env(compactions),
+  lists:foreach(fun({DbName, Options}) ->
+                  case validate_config(Options, #config{}) of
+                    {ok, Config}->
+                      true = ets:insert(?CONFIG_ETS, {barrel_lib:to_binary(DbName), Config});
+                    error ->
+                      lager:error("compaction tasks for ~p ignored.~n", [DbName])
+                  end
+                end, Compactions).
 
-parse_config(DbName, ConfigString) ->
-    case (catch do_parse_config(ConfigString)) of
-        {ok, Conf} ->
-            {ok, Conf};
-        incomplete_period ->
-            lager:error("Incomplete period ('to' or 'from' missing) in the compaction"
-            " configuration for database `~s`", [DbName]),
-            error;
-        _ ->
-            lager:error("Invalid compaction configuration for database "
-            "`~s`: `~s`", [DbName, ConfigString]),
-            error
-    end.
-
-do_parse_config(ConfigString) ->
-    {ok, ConfProps} = barrel_lib:parse_term(ConfigString),
-    {ok, #config{period = Period} = Conf} = config_record(ConfProps, #config{}),
-    case Period of
-        nil ->
-            {ok, Conf};
-        #period{from = From, to = To} when From =/= nil, To =/= nil ->
-            {ok, Conf};
-        #period{} ->
-            incomplete_period
-    end.
-
-config_record([], Config) ->
-    {ok, Config};
-
-config_record([{db_fragmentation, V} | Rest], Config) ->
-    [Frag] = string:tokens(V, "%"),
-    config_record(Rest, Config#config{db_frag = list_to_integer(Frag)});
-
-config_record([{view_fragmentation, V} | Rest], Config) ->
-    [Frag] = string:tokens(V, "%"),
-    config_record(Rest, Config#config{view_frag = list_to_integer(Frag)});
-
-config_record([{from, V} | Rest], #config{period = Period0} = Config) ->
-    Time = parse_time(V),
-    Period = case Period0 of
-                 nil ->
-                     #period{from = Time};
-                 #period{} ->
-                     Period0#period{from = Time}
-             end,
-    config_record(Rest, Config#config{period = Period});
-
-config_record([{to, V} | Rest], #config{period = Period0} = Config) ->
-    Time = parse_time(V),
-    Period = case Period0 of
-                 nil ->
-                     #period{to = Time};
-                 #period{} ->
-                     Period0#period{to = Time}
-             end,
-    config_record(Rest, Config#config{period = Period});
-
-config_record([{strict_window, true} | Rest], Config) ->
-    config_record(Rest, Config#config{cancel = true});
-
-config_record([{strict_window, false} | Rest], Config) ->
-    config_record(Rest, Config#config{cancel = false});
-
-config_record([{parallel_view_compaction, true} | Rest], Config) ->
-    config_record(Rest, Config#config{parallel_view_compact = true});
-
-config_record([{parallel_view_compaction, false} | Rest], Config) ->
-    config_record(Rest, Config#config{parallel_view_compact = false}).
-
-
+parse_time({HH, MM}) -> {HH, MM};
 parse_time(String) ->
-    [HH, MM] = string:tokens(String, ":"),
-    {list_to_integer(HH), list_to_integer(MM)}.
+  [HH, MM] = string:tokens(String, ":"),
+  {list_to_integer(HH), list_to_integer(MM)}.
 
+parse_percent(V) when is_integer(V) -> V;
+parse_percent(V) when is_list(V) ->
+  case string:tokens(V, "%") of
+    [Frag] -> {ok, list_to_integer(Frag)};
+    _ -> error
+  end;
+parse_percent(_) -> error.
+
+validate_config([], #config{period=P} = Config) ->
+  if
+    P#period.from =:= nil orelse P#period.to =:= nil -> error;
+    true -> {ok, Config}
+  end;
+validate_config([{db_fragmentation, V} | Rest], Config) ->
+  {ok, Frag} = parse_percent(V),
+  validate_config(Rest, Config#config{db_frag=Frag});
+validate_config([{view_fragmentation, V} | Rest], Config) ->
+  {ok, Frag} = parse_percent(V),
+  validate_config(Rest, Config#config{view_frag=Frag});
+validate_config([{from, V} | Rest], Config) ->
+  #config{period = P} = Config,
+  P2 = case P of
+         nil -> #period{from = parse_time(V)};
+         _ -> P#period{from = parse_time(V)}
+       end,
+  validate_config(Rest, Config#config{period=P2});
+validate_config([{to, V} | Rest], Config) ->
+  #config{period = P} = Config,
+  P2 = case P of
+         nil -> #period{to = parse_time(V)};
+         _ -> P#period{to = parse_time(V)}
+       end,
+  validate_config(Rest, Config#config{period=P2});
+validate_config([{strict_window, true} | Rest], Config) ->
+  validate_config(Rest, Config#config{cancel = true});
+
+validate_config([{strict_window, false} | Rest], Config) ->
+  validate_config(Rest, Config#config{cancel = false});
+
+validate_config([{parallel_view_compaction, true} | Rest], Config) ->
+  validate_config(Rest, Config#config{parallel_view_compact = true});
+
+validate_config([{parallel_view_compaction, false} | Rest], Config) ->
+  validate_config(Rest, Config#config{parallel_view_compact = false}).
 
 free_space(Path) ->
-    DiskData = lists:sort(
-        fun({PathA, _, _}, {PathB, _, _}) ->
-            length(filename:split(PathA)) > length(filename:split(PathB))
-        end,
-        disksup:get_disk_data()),
-    free_space_rec(abs_path(Path), DiskData).
+  DiskData = lists:sort(
+    fun({PathA, _, _}, {PathB, _, _}) ->
+      length(filename:split(PathA)) > length(filename:split(PathB))
+    end,
+    disksup:get_disk_data()),
+  free_space_rec(abs_path(Path), DiskData).
 
 free_space_rec(_Path, []) ->
-    undefined;
+  undefined;
 free_space_rec(Path, [{MountPoint0, Total, Usage} | Rest]) ->
-    MountPoint = abs_path(MountPoint0),
-    case MountPoint =:= string:substr(Path, 1, length(MountPoint)) of
-        false ->
-            free_space_rec(Path, Rest);
-        true ->
-            trunc(Total - (Total * (Usage / 100))) * 1024
-    end.
+  MountPoint = abs_path(MountPoint0),
+  case MountPoint =:= string:substr(Path, 1, length(MountPoint)) of
+    false ->
+      free_space_rec(Path, Rest);
+    true ->
+      trunc(Total - (Total * (Usage / 100))) * 1024
+  end.
 
 abs_path(Path0) ->
-    Path = filename:absname(Path0),
-    case lists:last(Path) of
-        $/ ->
-            Path;
-        _ ->
-            Path ++ "/"
-    end.
+  Path = filename:absname(Path0),
+  case lists:last(Path) of
+    $/ ->
+      Path;
+    _ ->
+      Path ++ "/"
+  end.

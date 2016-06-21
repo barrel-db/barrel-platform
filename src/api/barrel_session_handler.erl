@@ -86,7 +86,7 @@ from_json(Req, State) ->
   Form = jsx:decode(Bin),
   create_session(Form, Req2, State).
 
-create_session(Form, Req, State) ->
+create_session(Form, Req, _State) ->
   UserName = proplists:get_value(<<"name">>, Form, <<>>),
   Password = proplists:get_value(<<"password">>, Form, <<>>),
   User = case barrel_auth_cache:get_user_creds(UserName) of
@@ -94,7 +94,7 @@ create_session(Form, Req, State) ->
            Res -> Res
          end,
   UserSalt = maps:get(<<"salt">>, User, <<>>),
-  case barrel_basic_auth:check_password(Password, User) of
+  {ok, Req4} = case barrel_basic_auth:check_password(Password, User) of
     true ->
       Secret = barrel_auth:secret(),
       FullSecret = <<Secret/binary, UserSalt/binary>>,
@@ -106,9 +106,9 @@ create_session(Form, Req, State) ->
       {Next, _} = cowboy_req:qs_val(<<"next">>, Req3),
       case Next of
         undefined ->
-          {ok, _Req4} = cowboy_req:reply(200, Req3);
+          cowboy_req:reply(200, Req3);
         _ ->
-          {ok, _Req4} = cowboy_req:reply(302, [{<<"Location">>, Next}])
+          cowboy_req:reply(302, [{<<"Location">>, Next}])
       end;
     false ->
       {ok, Req2} = cowboy_req:set_resp_cookie(<<"AuthSession">>, "",
@@ -116,12 +116,12 @@ create_session(Form, Req, State) ->
       Fail = cowboy_req:qs_val(<<"fail">>, Req2),
       case Fail of
         undefined ->
-          {ok, _Req3} = cowboy_req:reply(401, Req2);
+          cowboy_req:reply(401, Req2);
         _ ->
-          {ok, _Req3} = cowboy_req:reply(302, [{<<"Location">>, Fail}])
+          cowboy_req:reply(302, [{<<"Location">>, Fail}])
       end
   end,
-  {halt, State}.
+  {halt, Req4}.
 
 delete_resource(Req, State) ->
   {ok, Req2} = cowboy_req:set_resp_cookie(<<"AuthSession">>, "",
