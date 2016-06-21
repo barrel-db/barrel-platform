@@ -85,8 +85,8 @@ check_password({_Dir, _Pid}) ->
   #{<<"salt">> := Salt,
     <<"iterations">> := Iterations,
     <<"derived_key">> := ExpectedHash} = Doc,
-  Hash = couch_passwords:pbkdf2(<<"pass">>, Salt, Iterations),
-  ?_assertEqual(true, couch_passwords:verify(ExpectedHash, Hash)).
+  Hash = barrel_passwords:pbkdf2(<<"pass">>, Salt, Iterations),
+  ?_assertEqual(true, barrel_passwords:verify(ExpectedHash, Hash)).
 
 reload_password_file({Dir, _Pid}) ->
   {ok, File} = file:open(filename:join(Dir, "PASSWD.0"), [raw, write]),
@@ -96,6 +96,6 @@ reload_password_file({Dir, _Pid}) ->
   #{<<"salt">> := Salt,
     <<"iterations">> := Iterations,
     <<"derived_key">> := ExpectedHash} = Doc,
-  Hash = couch_passwords:pbkdf2(<<"test">>, Salt, Iterations),
-  ?_assertEqual(true, couch_passwords:verify(ExpectedHash, Hash)).
+  Hash = barrel_passwords:pbkdf2(<<"test">>, Salt, Iterations),
+  ?_assertEqual(true, barrel_passwords:verify(ExpectedHash, Hash)).
 
