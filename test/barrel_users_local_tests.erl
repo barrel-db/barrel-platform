@@ -63,7 +63,7 @@ barrel_user_local_test_() ->
 
 
 password_file_exists({Dir, _Pid}) ->
-  ?_assert(filelib:is_regular(filename:join(Dir, "PASSWD.0"))).
+  ?_assert(filelib:is_regular(filename:join([Dir, ".barrel", "PASSWD.0"]))).
 
 
 null_user_created({_Dir, _Pid}) ->
@@ -89,7 +89,7 @@ check_password({_Dir, _Pid}) ->
   ?_assertEqual(true, barrel_passwords:verify(ExpectedHash, Hash)).
 
 reload_password_file({Dir, _Pid}) ->
-  {ok, File} = file:open(filename:join(Dir, "PASSWD.0"), [raw, write]),
+  {ok, File} = file:open(filename:join([Dir, ".barrel", "PASSWD.0"]), [raw, write]),
   ok = file:write(File, ["barrel:test\n"]),
   ok = barrel_users_local:reload(),
   {ok, Doc} = barrel_users_local:get_user(<<"barrel">>),
