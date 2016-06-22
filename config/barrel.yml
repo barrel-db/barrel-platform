@@ -85,8 +85,23 @@ enable_cors: false
 cors:
   # Lists of methods allowed
   allows_methods: ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "COPY"]
+
   # List of headers accepted
-  allows_headers: ["Accept", "Accept-Language", "Content-Type", "Expires", "Last-Modified", "Pragma", "Origin", "Content-Length","If-Match", "Destination", "X-Requested-With", "X-Http-Method-Override", "Content-Range" ]
+  allows_headers:
+    - "Accept"
+    - "Accept-Language"
+    - "Content-Type"
+    - "Expires"
+    - "Last-Modified"
+    - "Pragma"
+    - "Origin"
+    - "Content-Length"
+    - "If-Match"
+    - "Destination"
+    - "X-Requested-With"
+    - "X-Http-Method-Override"
+    - "Content-Range"
+
   # Browsers send a "preflight" OPTIONS-request to determine CORS settings.
   # Max-age defines how long the result should be cached for. Defaults to
   # 1728000 (20 days)
