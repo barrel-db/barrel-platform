@@ -1,0 +1,22 @@
+# Path to store all barrel data
+dir: "{{platform_data_dir}}"
+
+#### Database configuration
+
+# Maximum size of the document that can be accepted in bytes.
+max_document_size: 4294967296
+# Whether if the commit of the documents should be delayed or not.
+delayed_commits: true
+
+# If true the console is started
+start_console: true
+
+# console config
+console:
+ port: 5985
+
+# interface to listen
+listen:
+ default:
+  port: 5984
+  address: "127.0.0.1"

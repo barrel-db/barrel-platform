@@ -46,7 +46,11 @@ status() ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
   _ = init_tabs(),
+
+  barrel_config:init_config(),
   barrel_server:process_config(barrel_server:env()),
+
+
 
   Event = {barrel_event,
     {barrel_event, start_link, []},

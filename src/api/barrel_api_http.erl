@@ -69,6 +69,8 @@ web_uris() ->
       AddrOut :: inet:ip_address().
 parse_address({_, _, _, _}=Addr) -> Addr;
 parse_address({_, _, _, _, _, _, _, _}= Addr) -> Addr;
+parse_address(S) when is_binary(S) ->
+  parse_address(binary_to_list(S));
 parse_address(S) ->
     {ok, Addr} = inet:parse_address(S),
     Addr.

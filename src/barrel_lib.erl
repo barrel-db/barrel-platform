@@ -108,7 +108,7 @@ to_existing_atom(V) when is_binary(V) -> try list_to_existing_atom(binary_to_lis
 to_existing_atom(V) when is_atom(V) -> V.
 
 to_list(V) when is_list(V) -> V;
-to_list(V) when is_binary(V) -> V;
+to_list(V) when is_binary(V) -> binary_to_list(V);
 to_list(V) when is_atom(V) -> atom_to_list(V);
 to_list(V) when is_integer(V) -> integer_to_list(V).
 
