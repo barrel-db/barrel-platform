@@ -157,6 +157,3 @@ match_origin([Pattern | Rest], Origin) ->
 
 allow_credentials(<<"*">>, _) -> false;
 allow_credentials(H, H) -> barrel_cors_config:allow_credentials().
-
-items_to_binary(L) -> [barrel_lib:to_binary(V) || V <- L].
-

@@ -20,3 +20,22 @@ listen:
  default:
   port: 5984
   address: "127.0.0.1"
+
+# Whether to enable CORS or not.
+enable_cors: false
+
+cors:
+  # Lists of methods allowed
+  allows_methods: ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "COPY"]
+  # List of headers accepted
+  allows_headers: ["Accept", "Accept-Language", "Content-Type", "Expires", "Last-Modified", "Pragma", "Origin", "Content-Length","If-Match", "Destination", "X-Requested-With", "X-Http-Method-Override", "Content-Range" ]
+  # Browsers send a "preflight" OPTIONS-request to determine CORS settings.
+  # Max-age defines how long the result should be cached for. Defaults to
+  # 1728000 (20 days)
+  max_age: 1728000
+  # If a CORS session is accepted on HTTPS. Whether the
+  # Access-Control-Allow-Credentials header should be returned.
+  allow_credentials: false
+  # Which origins to allow. Defaults to no origins allowed, Default to None.
+  # ”*” is a valid value but is considered a security risk.
+  allow_origins: []
