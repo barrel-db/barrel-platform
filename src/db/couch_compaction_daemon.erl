@@ -18,6 +18,8 @@
 
 % public API
 -export([reg/2, unreg/1]).
+-export([pause/1, resume/1]).
+-export([tasks/0]).
 
 -export([start_link/0]).
 
@@ -73,6 +75,44 @@ reg(DbName, Opts) ->
 unreg(DbName) ->
   gen_server:call(?MODULE, {unreg, DbName}).
 
+%% @doc pause a compaction task
+-spec pause(binary()) -> ok | {error, not_found}.
+pause(DbName) ->
+  gen_server:call(?MODULE, {pause, DbName}).
+
+%% @doc resume a compaction task previously canceled using `couch_compaction_daemon:pause/1`
+-spec resume(binary()) -> ok | {error, not_found}.
+resume(DbName) ->
+  gen_server:call(?MODULE, {resume, DbName}).
+
+-spec tasks() -> [{DbName::binary(), compaction_options()}].
+tasks() ->
+  All = ets:foldl(fun({DbName, Config}, Acc) ->
+              [{DbName, config2list(Config)} | Acc]
+            end, [], ?CONFIG_ETS),
+  lists:usort(All).
+
+
+
+config2list(Config) ->
+  #config{
+    db_frag = DbFrag,
+    view_frag = ViewFrag,
+    period = Period,
+    cancel = Cancel,
+    parallel_view_compact = ParralelViewCompact} = Config,
+
+  Opts0 = [{db_frag, DbFrag}, {view_frag, ViewFrag}, {period, Period}, {cancel, Cancel},
+    {parallel_view_compact, ParralelViewCompact}],
+
+  Opts1 = lists:filter(fun({_K, nil}) -> false end, Opts0),
+  case proplists:get_value(period, Opts1) of
+    undefined -> Opts1;
+    #period{from=From, to=To} ->
+      [{from, From}, {to, To} | proplists:delete(period, Opts1)]
+  end.
+
+
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -93,6 +133,22 @@ handle_call({reg, DbName, Config}, _From, State) ->
 handle_call({unreg, DbName}, _From, State) ->
   ets:delete(?CONFIG_ETS, barrel_lib:to_binary(DbName)),
   {reply, ok, State};
+
+handle_call({pause, DbName}, _From, State) ->
+  case ets:lookup(?CONFIG_ETS, DbName) of
+    [] -> {reply, {error, not_found}};
+    [{DbName, Config}] ->
+      ets:insert(?CONFIG_ETS, {barrel_lib:to_binary(DbName), Config#config{cancel=true}}),
+      {reply, ok, State}
+  end;
+
+handle_call({resume, DbName}, _From, State) ->
+  case ets:lookup(?CONFIG_ETS, DbName) of
+    [] -> {reply, {error, not_found}};
+    [{DbName, Config}] ->
+      ets:insert(?CONFIG_ETS, {barrel_lib:to_binary(DbName), Config#config{cancel=false}}),
+      {reply, ok, State}
+  end;
 
 handle_call(Msg, _From, State) ->
   {stop, {unexpected_call, Msg}, State}.
