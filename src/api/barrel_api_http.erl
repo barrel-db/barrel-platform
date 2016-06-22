@@ -60,7 +60,7 @@ web_uris() ->
       {LAddr, LPort} = ranch:get_addr(Ref),
       URI = lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(LAddr), ":", integer_to_list(LPort)]),
       [list_to_binary(URI) | Acc1]
-    end, [], barrel_lib:val(listeners, [])),
+    end, [], barrel_lib:val(listen, [])),
   lists:usort(Acc).
 
 %% @doc convenient function to parse an address
