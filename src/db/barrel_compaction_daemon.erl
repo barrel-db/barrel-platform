@@ -13,7 +13,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_compaction_daemon).
+-module(barrel_compaction_daemon).
 -behaviour(gen_server).
 
 % public API
@@ -80,7 +80,7 @@ unreg(DbName) ->
 pause(DbName) ->
   gen_server:call(?MODULE, {pause, DbName}).
 
-%% @doc resume a compaction task previously canceled using `couch_compaction_daemon:pause/1`
+%% @doc resume a compaction task previously canceled using `barrel_compaction_daemon:pause/1`
 -spec resume(binary()) -> ok | {error, not_found}.
 resume(DbName) ->
   gen_server:call(?MODULE, {resume, DbName}).

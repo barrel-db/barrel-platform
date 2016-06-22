@@ -104,9 +104,9 @@ init(safe) ->
     permanent, infinity, supervisor, [couch_index_sup]},
 
   ReplicationDaemon =
-    {couch_compaction_daemon,
-      {couch_compaction_daemon, start_link, []},
-      permanent, brutal_kill, worker, [couch_compaction_daemon]},
+    {barrel_compaction_daemon,
+      {barrel_compaction_daemon, start_link, []},
+      permanent, brutal_kill, worker, [barrel_compaction_daemon]},
 
 
   {ok, {SupFlags, [Index, ReplicationDaemon]}}.
