@@ -16,6 +16,8 @@
 -behaviour(gen_server).
 
 % public API
+-export([reg/2, unreg/1]).
+
 -export([start_link/0]).
 
 % gen_server callbacks
@@ -47,6 +49,29 @@
 -define(DEFAULT_MIN_FILESIZE, 131072).
 
 
+-type compaction_options() :: [{db_fragmentation, integer()} |
+                                {view_fragmentation, integer()} |
+                                {from, integer() | string()} |
+                                {to, integer() | string()} |
+                                {strict_window, boolean()} |
+                                {parallel_view_compaction, boolean()}
+                                ].
+
+-export_types([compaction_options/0]).
+
+%% @doc register a database to be handled by the compaction daemon
+-spec reg(binary(), compaction_options()) -> ok.
+reg(DbName, Opts) ->
+  case validate_config(Opts, #config{}) of
+    {ok, Config}-> gen_server:call(?MODULE, {reg, DbName, Config});
+    _ -> erlang:error(badarg)
+  end.
+
+%% @doc unregister a database from the compaction daemon.
+-spec unreg(binary()) -> ok.
+unreg(DbName) ->
+  gen_server:call(?MODULE, {unreg, DbName}).
+
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -59,6 +84,14 @@ init(_) ->
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
+
+handle_call({reg, DbName, Config}, _From, State) ->
+  true = ets:insert(?CONFIG_ETS, {barrel_lib:to_binary(DbName), Config}),
+  {reply, ok, State};
+
+handle_call({unreg, DbName}, _From, State) ->
+  ets:delete(?CONFIG_ETS, barrel_lib:to_binary(DbName)),
+  {reply, ok, State};
 
 handle_call(Msg, _From, State) ->
   {stop, {unexpected_call, Msg}, State}.
