@@ -22,6 +22,8 @@
 -export([init_config/0]).
 -export([read_file/1]).
 
+-include("barrel.hrl").
+
 -define(DEFAULT_CONFIG, "barrel.yml").
 
 config_file() ->
@@ -37,7 +39,8 @@ config_file() ->
 init_config() ->
   case read_file(config_file()) of
     {ok, Config} ->
-      process_config(Config);
+      process_config(Config),
+      init_logs();
     {error, Error} ->
       error_logger:error_msg(Error, []),
       erlang:error(Error)
@@ -50,6 +53,45 @@ read_file(Name) ->
     {error, enoent} -> {ok, []};
     Error -> Error
   end.
+
+init_logs() ->
+  case ?catch_val(log_backend) of
+    {'EXIT', _} -> ok;
+    lager ->
+      case application:get_application(lager) of
+        undefined ->
+          error_logger:info_msg("lager not started: ~n"),
+          ok;
+        _ ->
+          init_lager_config(?catch_val(lager))
+      end;
+    _Else ->
+      error_logger:info_msg("unsupported logging backend: ~s~n", [_Else]),
+      ok
+  end.
+
+init_lager_config({'EXIT', _}) -> ok;
+init_lager_config([{lager_console_backend, Level} | Rest]) ->
+  lager:set_loglevel(lager_console_backend, Level),
+  init_lager_config(Rest);
+init_lager_config([{lager_file_backend, Opts} | Rest]) ->
+  case proplists:get_value(file, Opts) of
+    undefined -> ok;
+    File ->
+      Opts2 = lists:foldl(fun
+                            ({Key, Val}, Acc) when is_binary(Val) ->
+                              [{Key, binary_to_list(Val)} | Acc];
+                            ({Key, Val}, Acc) ->
+                              [{Key, Val} | Acc]
+                          end, [], Opts),
+      HandlerId = {lager_file_backend, File},
+      {ok, _} = supervisor:start_child(lager_handler_watcher_sup, [lager_event, HandlerId, Opts2])
+  end,
+  init_lager_config(Rest);
+init_lager_config([]) ->
+  ok.
+
+
 
 %% TODO: add validation
 process_config([{dir, Val} | Rest]) ->
