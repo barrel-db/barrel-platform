@@ -9,6 +9,8 @@
 
 %% API
 -export([start_link/0]).
+-export([status/0]).
+-export([boot_status/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -23,12 +25,19 @@ start_link() ->
   case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
     {ok, Pid} ->
       boot_status(),
+      write_uri_file(),
       {ok, Pid};
     Else ->
       Else
   end.
 
-
+status() ->
+  #{ api => barrel_api_http:web_uris(),
+     console => case barrel_server:get_env(start_console) of
+                  false -> not_started;
+                  true -> barrel_http_console:admin_uri()
+                end
+  }.
 
 %%====================================================================
 %% Supervisor callbacks
@@ -36,6 +45,12 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
+  _ = init_tabs(),
+
+  barrel_config:init_config(),
+  barrel_server:process_config(barrel_server:env()),
+
+
 
   Event = {barrel_event,
     {barrel_event, start_link, []},
@@ -49,67 +64,82 @@ init([]) ->
     {barrel_task_status, start_link, []},
     permanent,brutal_kill,	worker,[barrel_task_status]},
 
-  %% safe supervisor, like kernel_safe_sup but for barrel, allows to register
-  %% external applications to it like stores if needed.
   ExtSup = {barrel_ext_sup,
             {barrel_ext_sup, start_link, []},
             permanent, infinity, supervisor, [barrel_ext_sup]},
+
+  SafeSup =
+    {barrel_safe_sup,
+      {supervisor, start_link, [{local, baffel_safe_sup}, ?MODULE, safe]},
+      permanent, infinity, supervisor, [?MODULE]},
+
+  Replicator = {couch_replicator_sup,
+    {couch_replicator_sup, start_link, []},
+    permanent, infinity, supervisor, [couch_replicator_sup]},
+
 
   Server = {barrel_server,
             {barrel_server, start_link, []},
             permanent,brutal_kill,	worker,[barrel_server]},
 
-  Daemons = {barrel_daemons_sup,
-             {barrel_daemons_sup, start_link, []},
-             permanent, infinity, supervisor, [barrel_daemons_sup]},
-
-  Index = {couch_index_sup,
-           {couch_index_sup, start_link, []},
-           permanent, infinity, supervisor, [couch_index_sup]},
-
-  Replicator = {couch_replicator_sup,
-                {couch_replicator_sup, start_link, []},
-                permanent, infinity, supervisor, [couch_replicator_sup]},
-
   Metrics = {barrel_metrics_sup,
-             {barrel_metrics_sup, start_link, []},
-             permanent, infinity, supervisor, [barrel_metrics_sup]},
+    {barrel_metrics_sup, start_link, []},
+    permanent, infinity, supervisor, [barrel_metrics_sup]},
 
   UI = {barrel_ui_sup,
-         {barrel_ui_sup, start_link, []},
-         permanent, infinity, supervisor, [barrel_ui_sup]},
+    {barrel_ui_sup, start_link, []},
+    permanent, infinity, supervisor, [barrel_ui_sup]},
+
+  QS =
+    {couch_query_servers,
+      {couch_query_servers, start_link, []},
+      permanent, brutal_kill, worker, [couch_query_servers]},
 
 
-  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, ExtSup, Metrics, Server, Daemons,
-                                UI, Index, Replicator] } }.
+  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, Server, QS, Replicator, Metrics, UI,
+    SafeSup, ExtSup] } };
+
+init(safe) ->
+  SupFlags = {one_for_one, 4, 3600},
+
+
+  Index = {couch_index_sup,
+    {couch_index_sup, start_link, []},
+    permanent, infinity, supervisor, [couch_index_sup]},
+
+  ReplicationDaemon =
+    {barrel_compaction_daemon,
+      {barrel_compaction_daemon, start_link, []},
+      permanent, brutal_kill, worker, [barrel_compaction_daemon]},
+
+
+  {ok, {SupFlags, [Index, ReplicationDaemon]}}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
 
+init_tabs() ->
+  _ = ets:new(barrel_gvar, [set, named_table, public, {read_concurrency, true}]),
+  ok.
+
 boot_status() ->
-  Config = barrel_config:section_to_opts("api"),
-  Listeners = barrel_api_http:get_listeners(Config),
-  URIs = barrel_api_http:web_uris(Listeners),
   io:format("~n~n==> Barrel node started~n", []),
   io:format("version: ~s~n", [barrel_server:version()]),
   io:format("node id: ~s~n", [barrel_server:node_id()]),
-  display_uris(URIs),
-  case barrel_http_console:is_enabled() of
-    true -> io:format("ADMIN: ~s~n", [barrel_http_console:admin_uri()]);
-    false -> ok
-  end,
-  write_uri_file(Config, URIs).
+  Status = status(),
+  display_uris(maps:get(api, Status)),
+  io:format("CONSOLE: ~s~n", [maps:get(console, Status)]).
 
 display_uris(URIs) ->
   [io:format("HTPP API: ~s~n", [URI]) || URI <- URIs].
 
-write_uri_file(Config, URIs) ->
-  case proplists:get_value(uri_file, Config) of
+write_uri_file() ->
+  case barrel_server:get_env(uri_file) of
     undefined -> ok;
     Filepath ->
-      Lines = [io_lib:format("~s~n", [URI]) || URI <- URIs],
+      Lines = [io_lib:format("~s~n", [URI]) || URI <- barrel_api_http:web_uris()],
       case file:write_file(Filepath, Lines) of
         ok -> ok;
         {error, eacces} ->

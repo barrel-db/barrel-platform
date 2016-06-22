@@ -588,8 +588,8 @@ function $$(node) {
 
       $.couch.info({
         success: function(info, status) {
-          var vendor = info.vendor;
-          $("#version").text(vendor.version);
+          var version = info.version;
+          $("#version").text(version.number);
         }
       });
     });

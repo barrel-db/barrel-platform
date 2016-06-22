@@ -29,7 +29,7 @@ init({MainPid, DbName, Filepath, Fd, Options}) ->
         Header =  #db_header{},
         ok = couch_file:write_header(Fd, Header),
         % delete any old compaction files that might be hanging around
-        RootDir = barrel_server:database_dir(),
+        RootDir = barrel_server:get_env(dir),
         couch_file:delete(RootDir, Filepath ++ ".compact");
     false ->
         case couch_file:read_header(Fd) of
@@ -169,7 +169,7 @@ handle_call(cancel_compact, _From, #db{compactor_pid = nil} = Db) ->
 handle_call(cancel_compact, _From, #db{compactor_pid = Pid} = Db) ->
     unlink(Pid),
     exit(Pid, kill),
-    RootDir = barrel_server:database_dir(),
+    RootDir = barrel_server:get_env(dir),
     ok = couch_file:delete(RootDir, Db#db.filepath ++ ".compact"),
     {reply, ok, Db#db{compactor_pid = nil}};
 
@@ -198,7 +198,7 @@ handle_call({compact_done, CompactFilepath}, _From, #db{filepath=Filepath}=Db) -
 
         lager:debug("CouchDB swapping files ~s and ~s.",
                 [Filepath, CompactFilepath]),
-        RootDir = barrel_server:database_dir(),
+        RootDir = barrel_server:get_env(dir),
         couch_file:delete(RootDir, Filepath),
         ok = file:rename(CompactFilepath, Filepath),
         close_db(Db),
@@ -428,9 +428,7 @@ init_db(DbName, Filepath, Fd, ReaderFd, Header0, Options) ->
     _ -> throw({database_disk_version_error, "Incorrect disk header version"})
     end,
 
-    {ok, FsyncOptions} = barrel_lib:parse_term(
-            barrel_config:get("barrel", "fsync_options", "[before_header, after_header, on_file_open]")
-    ),
+    FsyncOptions = barrel_server:get_env(fsync_options),
 
     case lists:member(on_file_open, FsyncOptions) of
     true -> ok = couch_file:sync(Fd);
@@ -915,8 +913,8 @@ copy_compact(Db, NewDb0, Retry) ->
     Compression = couch_compress:get_compression_method(),
     NewDb = NewDb0#db{fsync_options=FsyncOptions, compression=Compression},
     TotalChanges = couch_db:count_changes_since(Db, NewDb#db.update_seq),
-    BufferSize = barrel_config:get_integer("database_compaction", "doc_buffer_size", 524288),
-    CheckpointAfter = barrel_config:get_integer("database_compaction", "checkpoint_after", BufferSize * 10),
+    BufferSize = barrel_server:get_env(doc_buffer_size),
+    CheckpointAfter = barrel_server:get_env(checkpoint_after),
 
     EnumBySeqFun =
     fun(#doc_info{high_seq=Seq}=DocInfo, _Offset,

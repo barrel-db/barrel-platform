@@ -16,6 +16,8 @@
 -module(barrel_server).
 -behaviour(gen_server).
 
+
+
 %% public api
 -export([open/2,
          create/2,
@@ -24,14 +26,15 @@
 -export([node_info/0,
          node_id/0,
          version/0,
-         node_name/0,
-         vendors_info/0]).
+         node_name/0]).
+
+-export([process_config/1]).
+-export([env/0]).
+-export([set_env/2, get_env/1]).
+
 
 -export([all_databases/0, all_databases/2]).
--export([database_dir/0]).
--export([is_admin/2,
-         has_admins/0,
-         get_stats/0]).
+-export([get_stats/0]).
 
 -export([start_link/0]).
 
@@ -41,9 +44,8 @@
 
 %% hooks
 -export([db_updated/2, ddoc_updated/2]).
--export([config_change/3]).
 
-
+-include("barrel.hrl").
 -include_lib("couch_db.hrl").
 
 -record(state, {root_dir = [],
@@ -61,32 +63,244 @@
 
 
 node_info() ->
-
   #{ <<"name">> => <<"barrel">>,
      <<"cluster_name">> => node_name(),
      <<"uuid">> => node_id(),
      <<"version">> => #{ <<"number">> => list_to_binary(version())},
-     <<"vendor">> => vendors_info()
+     <<"status">> => barrel_sup:status()
    }.
 
 node_name() -> [Name|_] = re:split(atom_to_list(node()), "@"), Name.
 
-node_id() ->
-  case barrel_config:get("barrel", "uuid", nil) of
-    nil ->
-      Uuid = barrel_uuids:random(),
-      barrel_config:set("barrel", "uuid", Uuid),
-      Uuid;
-    Uuid ->
-      barrel_lib:to_binary(Uuid)
-  end.
+node_id() -> barrel_lib:val(nodeid).
 
 version() -> {ok, Vsn} = application:get_key(barrel, vsn), Vsn.
 
-vendors_info() ->
-  case barrel_config:get("vendor") of
-    [] -> #{};
-    Properties -> maps:from_list([{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties])
+
+process_config([]) -> ok;
+process_config([E | Rest]) ->
+  V = get_env(E),
+  barrel_lib:set(E, V),
+  process_config(Rest).
+
+
+env() ->
+  [
+    dir,
+    config_dir,
+    uri_file,
+    delayed_commits,
+    fsync_options,
+    file_compression,
+    max_document_size,
+    attachment_stream_buffer_size,
+    attachment_compressible_types,
+    attachment_compression_level,
+    doc_buffer_size,
+    checkpoint_after,
+    stem_interactive_updates,
+    listen,
+    start_console,
+    x_forwarded_host,
+    x_forwarded_ssl,
+    x_forwarded_proto,
+    allow_jsonp,
+    'WWW-Authenticate',
+    changes_timeout,
+    authentication_redirect,
+    enable_cors,
+    cors,
+    require_valid_user,
+    auth_handlers,
+    auth_timeout,
+    allows_persistent_cookie,
+    auth_pbkdf2_iterations,
+    auth_cache_size,
+    auth_public_fields,
+    users_db_public,
+    os_process_timeout,
+    reduce_limit,
+    os_process_limit,
+    query_servers,
+    uuid_algorithm,
+    utc_id_suffix,
+    index_commit_freq,
+    index_threshold,
+    index_refresh_interval,
+    keyvalue_buffer_size,
+    min_writer_items,
+    min_writer_size,
+    request_timeout,
+    max_replication_retry_count,
+    worker_processes,
+    worker_batch_size,
+    http_connections,
+    connection_timeout,
+    retries_per_request,
+    use_checkpoints,
+    checkpoint_interval,
+    socket_options,
+    replicator_sslopts,
+    replicator_cafile,
+    compactions,
+    compaction_check_interval,
+    compaction_min_file_size
+  ].
+
+
+default_env(dir) ->
+  case init:get_argument(barrel_dir) of
+    {ok, [[D]]} -> D;
+    _ ->
+      Name = lists:concat(["data.", node()]),
+      filename:absname(Name)
+  end;
+default_env(config_dir) ->
+  case init:get_argument(config_dir) of
+    {ok, [[D]]} -> D;
+    _ -> undefined
+  end;
+default_env(uri_file) ->
+  undefined;
+default_env(delayed_commits) ->
+  false;
+default_env(fsync_options) ->
+  [before_header, after_header, on_file_open];
+default_env(file_compression) ->
+  snappy;
+default_env(max_document_size) ->
+  4294967296;
+default_env(attachment_stream_buffer_size) ->
+  4096;
+default_env(attachment_compressible_types) ->
+  [];
+default_env(attachment_compression_level) ->
+  0;
+default_env(doc_buffer_size) ->
+  524288;
+default_env(checkpoint_after) ->
+  524288 * 10;
+default_env(stem_interactive_updates) ->
+  true;
+default_env(listen) ->
+  [];
+default_env(start_console) ->
+  false;
+default_env(x_forwarded_host) ->
+  <<"x-forwarded-host">>;
+default_env(x_forwarded_ssl) ->
+  "X-Forwarded-Ssl";
+default_env(x_forwarded_proto) ->
+  "X-Forwarded-Proto";
+default_env(allow_jsonp) ->
+  false;
+%%TODO: deprecate this option
+default_env('WWW-Authenticate') ->
+  nil;
+%%TODO: deprecate this option
+default_env(authentication_redirect) ->
+  nil;
+%%TODO: deprecate this option
+default_env(changes_timeout) ->
+  60000;
+default_env(cors) ->
+  [];
+default_env(enable_cors) ->
+  false;
+default_env(require_valid_user) ->
+  false;
+default_env(auth_handlers) ->
+  [barrel_basic_auth, barrel_cookie_auth];
+default_env(allows_persistent_cookie) ->
+  false;
+default_env(auth_pbkdf2_iterations) ->
+  10000;
+default_env(auth_timeout) ->
+  600;
+default_env(auth_cache_size) ->
+  50;
+default_env(auth_public_fields) ->
+  [];
+default_env(users_db_public) ->
+  false;
+default_env(os_process_timeout) ->
+  5000;
+default_env(reduce_limit) ->
+  true;
+default_env(os_process_limit) ->
+  25;
+default_env(query_servers) ->
+  [
+    {<<"javascript">>, {couch_couchjs, start_link, [javascript]}},
+    {<<"erlang">>, {couch_native_process, start_link, []}}
+  ];
+default_env(uuid_algorithm) ->
+  sequential;
+default_env(utc_id_suffix) ->
+  "";
+default_env(index_commit_freq) ->
+  5;
+default_env(index_threshold) ->
+  200;
+default_env(index_refresh_interval) ->
+  1000;
+default_env(keyvalue_buffer_size) ->
+  2097152;
+default_env(min_writer_items) ->
+  100;
+default_env(min_writer_size) ->
+  16777216;
+default_env(request_timeout) ->
+  infinity;
+default_env(max_replication_retry_count) ->
+  10;
+default_env(worker_processes) ->
+  4;
+default_env(worker_batch_size) ->
+  500;
+default_env(http_connections) ->
+  20;
+default_env(connection_timeout) ->
+  30000;
+default_env(retries_per_request) ->
+  10;
+default_env(use_checkpoints) ->
+  true;
+default_env(checkpoint_interval) ->
+  5000;
+default_env(socket_options) ->
+  [{keepalive, true}, {nodelay, false}];
+default_env(replicator_sslopts) ->
+  [];
+default_env(replicator_cafile) ->
+  "";
+default_env(compactions) ->
+  [];
+default_env(compaction_check_interval) ->
+  300;
+default_env(compaction_min_file_size) ->
+  131072.
+
+set_env(E, Val) -> barrel_lib:set(E, Val).
+
+get_env(config_dir) ->
+  case ?catch_val(config_dir) of
+    {'EXIT', _} ->
+      case application:get_env(barrel, config_dir, default_env(config_dir)) of
+        undefined ->
+          Dir = filename:join(get_env(dir), ".barrel"),
+          filelib:ensure_dir(filename:join(Dir, "dummy")),
+          set_env(config_dir, Dir),
+          Dir;
+        Val ->
+          Val
+      end;
+    Val -> Val
+  end;
+get_env(E) ->
+  case ?catch_val(E) of
+    {'EXIT', _} -> application:get_env(barrel, E, default_env(E));
+    Val -> Val
   end.
 
 get_stats() ->
@@ -123,30 +337,6 @@ delete(DbName, Options) ->
   gen_server:call(barrel_server, {delete, DbName, Options}, infinity).
 
 
-is_admin(User, ClearPwd) ->
-  case barrel_config:get("admins", User) of
-    "-hashed-" ++ HashedPwdAndSalt ->
-      [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
-      barrel_lib:to_hex(crypto:hash(sha, ClearPwd ++ Salt)) == HashedPwd;
-    _Else ->
-      false
-  end.
-
-has_admins() ->
-  barrel_config:get("admins") /= [].
-
-
-hash_admin_passwords() ->
-  hash_admin_passwords(true).
-
-hash_admin_passwords(Persist) ->
-  lists:foreach(
-    fun({User, ClearPassword}) ->
-        HashedPassword = couch_passwords:hash_admin_password(ClearPassword),
-        barrel_config:set("admins", User, HashedPassword, Persist)
-    end, couch_passwords:get_unhashed_admins()).
-
-
 all_databases() ->
   {ok, DbList} = all_databases(
                    fun(DbName, Acc) -> {ok, [DbName | Acc]} end, []),
@@ -178,28 +368,17 @@ all_databases(Fun, Acc0) ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-database_dir() ->
-  case barrel_config:get_env(database_dir) of
-    undefined ->
-      Dir = filename:absname(lists:concat(["Barrel-", node()])),
-      filelib:ensure_dir(filename:join(Dir, "dummy")),
-      barrel_config:set("barrel", "database_dir", Dir),
-      Dir;
-    Dir ->
-      Dir
-  end.
-
-
 init([]) ->
   % read config and register for configuration changes
 
   % just stop if one of the config settings change. couch_sup
   % will restart us and then we will pick up the new settings.
 
-  RootDir = database_dir(),
-  hooks:reg(config_key_update, ?MODULE, config_change, 3),
+  RootDir = get_env(dir),
+  filelib:ensure_dir(filename:join(RootDir, "dummy")),
+  init_nodeid(),
+
   ok = couch_file:init_delete_dir(RootDir),
-  hash_admin_passwords(),
   {ok, RegExp} = re:compile("^[a-z][a-z0-9\\_\\$()\\+\\-\\/]*$"),
   ets:new(couch_dbs_by_name, [ordered_set, protected, named_table]),
   ets:new(couch_dbs_by_pid, [set, private, named_table]),
@@ -226,9 +405,6 @@ handle_call({delete, _DbName, _Options}=Req, From, State) ->
   request([{Req, From}], State);
 handle_call(_, _From, State) ->
   {reply, bad_call, State}.
-
-handle_cast(config_change, State) ->
-  {stop, config_change, State};
 
 handle_cast(Msg, _State) ->
   exit({unknown_cast_message, Msg}).
@@ -289,13 +465,6 @@ db_updated(DbName, Event) ->
 
 ddoc_updated(DbName, Event) ->
   barrel_event:notify(DbName, Event).
-
-%% CONFIG hooks
-config_change("barrel", "database_dir", _) ->
-  gen_server:cast(barrel_server, config_change);
-config_change(_, _, _) ->
-  ok.
-
 
 maybe_add_sys_db_callbacks(DbName, Options) when is_binary(DbName) ->
   maybe_add_sys_db_callbacks(binary_to_list(DbName), Options);
@@ -493,3 +662,34 @@ normparts(["." | RestParts], Acc) ->
   normparts(RestParts, Acc);
 normparts([Part | RestParts], Acc) ->
   normparts(RestParts, [Part | Acc]).
+
+
+init_nodeid() ->
+  case init:get_argument(setnodeid) of
+    {ok, [[NodeId0]]} ->
+      NodeId = list_to_binary(NodeId0),
+      barrel_lib:set(nodeid, NodeId);
+    _ ->
+      case read_nodeid() of
+        {error, Error} ->
+          error_logger:error_msg(Error, []),
+          erlang:error(Error);
+        {ok, NodeId} ->
+          barrel_lib:set(nodeid, NodeId)
+      end
+  end.
+
+
+read_nodeid() ->
+  Name = filename:join(get_env(dir), "NODEID"),
+  case file:read_file(Name) of
+    {ok, NodeId} -> {ok, NodeId};
+    {error, enoent} ->
+      NodeId = barrel_uuids:random(),
+      case file:write_file(Name, NodeId) of
+        ok -> {ok, NodeId};
+        Error -> Error
+      end
+  end.
+
+

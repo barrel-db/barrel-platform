@@ -12,13 +12,12 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_auth_cache).
+-module(barrel_auth_cache).
 -behaviour(gen_server).
 
 % public API
 -export([get_user_creds/1]).
 -export([start_link/0]).
--export([handle_config_change/3]).
 
 % gen_server API
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2, code_change/3, terminate/2]).
@@ -49,42 +48,11 @@ get_user_creds(UserName) when is_list(UserName) ->
     get_user_creds(list_to_binary(UserName));
 
 get_user_creds(UserName) ->
-    UserCreds = case barrel_config:get("admins", binary_to_list(UserName)) of
-    "-hashed-" ++ HashedPwdAndSalt ->
-        % the name is an admin, now check to see if there is a user doc
-        % which has a matching name, salt, and password_sha
-        [HashedPwd, Salt] = string:tokens(HashedPwdAndSalt, ","),
-        case get_from_cache(UserName) of
-        nil ->
-            make_admin_doc(HashedPwd, Salt, []);
-        UserProps when is_map(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, maps:get(<<"roles">>, UserProps, []))
-        end;
-    "-pbkdf2-" ++ HashedPwdSaltAndIterations ->
-        [HashedPwd, Salt, Iterations] = string:tokens(HashedPwdSaltAndIterations, ","),
-        case get_from_cache(UserName) of
-        nil ->
-            make_admin_doc(HashedPwd, Salt, Iterations, []);
-        UserProps when is_map(UserProps) ->
-            make_admin_doc(HashedPwd, Salt, Iterations, maps:get(<<"roles">>, []))
-    end;
-    _Else ->
-        get_from_cache(UserName)
-    end,
+    UserCreds = case barrel_users_local:get_user(UserName) of
+                    {ok, Doc} -> Doc;
+                    {error, not_found} -> get_from_cache(UserName)
+                end,
     validate_user_creds(UserCreds).
-
-make_admin_doc(HashedPwd, Salt, ExtraRoles) ->
-    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
-      <<"salt">> => list_to_binary(Salt),
-      <<"password_scheme">> => <<"simple">>,
-      <<"password_sha">> => list_to_binary(HashedPwd)}.
-
-make_admin_doc(DerivedKey, Salt, Iterations, ExtraRoles) ->
-    #{<<"roles">> => [<<"_admin">>|ExtraRoles],
-      <<"salt">> => list_to_binary(Salt),
-      <<"iterations">> => list_to_integer(Iterations),
-      <<"password_scheme">> => <<"pbkdf2">>,
-      <<"derived_key">> => list_to_binary(DerivedKey)}.
 
 get_from_cache(UserName) ->
     exec_if_auth_db(
@@ -118,19 +86,6 @@ validate_user_creds(UserCreds) ->
     UserCreds.
 
 
-init_hooks() ->
-    hooks:reg(config_key_update, ?MODULE, handle_config_change, 3).
-
-unregister_hooks() ->
-    hooks:unreg(config_key_update, ?MODULE, handle_config_change, 3).
-
-
-handle_config_change("auth", "auth_cache_size", _Type) ->
-    Size = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
-    ok = gen_server:call(?MODULE, {new_max_cache_size, Size});
-handle_config_change(_Section, _Key, _Type) ->
-    ok.
-
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -140,8 +95,7 @@ init(_) ->
     ?BY_USER = ets:new(?BY_USER, [set, protected, named_table]),
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
-    init_hooks(),
-    CacheSize = barrel_config:get_integer("auth", "auth_cache_size", ?DEFAULT_CACHE_SIZE),
+    CacheSize = barrel_server:get_env(auth_cache_size),
     _ = barrel_event:reg(<<"_users">>),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 
@@ -217,7 +171,6 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
-    unregister_hooks(),
     catch barrel_event:unreg(),
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete(?BY_USER),

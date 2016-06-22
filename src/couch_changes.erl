@@ -270,7 +270,7 @@ get_changes_timeout(Args, Callback) ->
         timeout = Timeout,
         feed = ResponseType
     } = Args,
-    DefaultTimeout = barrel_config:get_integer("httpd", "changes_timeout", 60000),
+    DefaultTimeout = barrel_server:get_env(changes_timeout),
     case Heartbeat of
     undefined ->
         case Timeout of

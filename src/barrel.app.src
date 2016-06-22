@@ -13,7 +13,8 @@
         os_mon,
         inets,
         lager,
-        gproc,
+        fast_yaml,
+        p1_utils,
         ibrowse,
         snappy,
         ucol,
@@ -25,7 +26,6 @@
         ranch,
         cowboy,
         hooks,
-        econfig,
         exometer_core
       ]},
     {env, [

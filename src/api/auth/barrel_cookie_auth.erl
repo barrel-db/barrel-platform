@@ -29,6 +29,7 @@
 authenticate(Req, Env) ->
   case cowboy_req:cookie(<<"AuthSession">>, Req) of
     {undefined, _} -> nil;
+    {<<>>, _} -> nil;
     {Cookie, Req2} ->
       [User, TimeBin, Hash] = try decode_auth_cookie(Cookie)
                                  catch
@@ -37,35 +38,30 @@ authenticate(Req, Env) ->
                                      {error, {bad_request, Reason}}
                                  end,
       Current = cookie_time(),
-      case barrel_config:get_binary("auth", "cookie_secret") of
-        nil ->
-          lager:debug("cookie auth secret is not set.~n", []),
-          nil;
-        Secret ->
-          case couch_auth_cache:get_user_creds(User) of
-            nil -> nil;
-            UserProps ->
-              UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
-              FullSecret = <<Secret/binary, UserSalt/binary>>,
-              ExpectedHash = crypto:hmac(sha, FullSecret, User ++ ":" ++ TimeBin),
-              Timeout = barrel_config:get_integer("auth", "timeout", 600),
-              case (catch binary_to_integer(TimeBin, 16)) of
-                Timestamp when Current < Timestamp + Timeout ->
-                  case couch_passwords:verify(ExpectedHash, Hash) of
-                    true ->
-                      TimeLeft = Timestamp + Timeout - Current,
-                      ResetCookie = TimeLeft < Timeout*0.9,
-                      UserCtx = barrel_lib:userctx([{name, list_to_binary(User)},
-                        {roles, maps:get(<<"roles">>, UserProps, [])},
-                        {auth, {FullSecret, ResetCookie}}]),
-                      Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
-                      {ok, UserCtx, Req3, Env};
-                    false ->
-                      nil
-                  end;
-                _ ->
-                  nil
-              end
+      Secret = barrel_auth:secret(),
+      case barrel_auth_cache:get_user_creds(User) of
+        nil -> nil;
+        UserProps ->
+          UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
+          FullSecret = <<Secret/binary, UserSalt/binary>>,
+          ExpectedHash = crypto:hmac(sha, FullSecret, <<User/binary, ":", TimeBin/binary>>),
+          Timeout = timeout(),
+          case (catch binary_to_integer(TimeBin, 16)) of
+            Timestamp when Current < Timestamp + Timeout ->
+              case barrel_passwords:verify(ExpectedHash, Hash) of
+                true ->
+                  TimeLeft = Timestamp + Timeout - Current,
+                  ResetCookie = TimeLeft < Timeout*0.9,
+                  UserCtx = barrel_lib:userctx([{name, User},
+                    {roles, maps:get(<<"roles">>, UserProps, [])},
+                    {auth, {FullSecret, ResetCookie}}]),
+                  Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
+                  {ok, UserCtx, Req3, Env};
+                false ->
+                  {error, unauthorized}
+              end;
+            _ ->
+              nil
           end
       end
   end.
@@ -75,7 +71,8 @@ set_cookie_header(Req, User, Secret, true) ->
   Timestamp = cookie_time(),
   SessionData = << User/binary, ":", (integer_to_binary(Timestamp,16))/binary >>,
   Hash = crypto:hmac(sha, Secret, SessionData),
-  cowboy_req:set_resp_cookie(<<"AuthSession">>,   barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>),
+  cowboy_req:set_resp_cookie(<<"AuthSession">>,
+    barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>),
     [{path, <<"/">>}, {http_only, true}] ++ secure(Req) ++ max_age(), Req).
 
 
@@ -86,10 +83,12 @@ secure(Req) ->
   end.
 
 max_age() ->
-  case barrel_config:get_boolean("auth", "allow_persistent_cookies", false) of
+  case barrel_server:get_env(allows_persistent_cookie) of
     false -> [];
-    true -> [{max_age, barrel_config:get_integer("auth", "timeout", 600)}]
+    true -> [{max_age, timeout()}]
   end.
+
+timeout() -> barrel_server:get_env(auth_timeout).
 
 cookie_time() -> {NowMS, NowS, _} = erlang:timestamp(), NowMS * 1000000 + NowS.
 

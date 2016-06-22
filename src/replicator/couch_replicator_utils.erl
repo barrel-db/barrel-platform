@@ -76,7 +76,7 @@ parse_rep_doc(Props, UserCtx) ->
 
 replication_id(#rep{options = Options} = Rep) ->
   BaseId = replication_id(Rep, ?REP_ID_VERSION),
-  {BaseId, maybe_append_options([continuous, create_target], Options)}.
+  {BaseId, list_to_binary(maybe_append_options([continuous, create_target], Options))}.
 
 
 % Versioned clauses for generating replication IDs.
@@ -226,16 +226,14 @@ maybe_add_trailing_slash(Url) ->
 
 make_options(Props) ->
     Options = lists:ukeysort(1, convert_options(maps:to_list(Props))),
-    DefWorkers = barrel_config:get_integer("replicator", "worker_processes", 4),
-    DefBatchSize = barrel_config:get_integer("replicator", "worker_batch_size", 500),
-    DefConns = barrel_config:get_integer("replicator", "http_connections", 20),
-    DefTimeout = barrel_config:get_integer("replicator", "connection_timeout", 30000),
-    DefRetries = barrel_config:get_integer("replicator", "retries_per_request", 10),
-    UseCheckpoints =  barrel_config:get_boolean("replicator", "use_checkpoints", true),
-    DefCheckpointInterval = barrel_config:get_integer("replicator", "checkpoint_interval", 5000),
-    {ok, DefSocketOptions} = barrel_lib:parse_term(
-            barrel_config:get("replicator", "socket_options", "[{keepalive, true}, {nodelay, false}]")
-    ),
+    DefWorkers = barrel_server:get_env(worker_processes),
+    DefBatchSize = barrel_server:get_env(worker_batch_size),
+    DefConns = barrel_server:get_env(http_connections),
+    DefTimeout = barrel_server:get_env(connection_timeout),
+    DefRetries = barrel_server:get_env(retries_per_request),
+    UseCheckpoints =  barrel_server:get_env(use_checkpoints),
+    DefCheckpointInterval = barrel_server:get_env(checkpoint_interval),
+    DefSocketOptions = barrel_server:get_env(socket_options),
     lists:ukeymerge(1, Options, lists:keysort(1, [
         {connection_timeout, DefTimeout},
         {retries, DefRetries},
@@ -317,11 +315,12 @@ parse_proxy_params(ProxyUrl) ->
 ssl_params(Url) ->
     case ibrowse_lib:parse_url(Url) of
     #url{protocol = https} ->
-        Depth = barrel_config:get_integer("replicator", "ssl_certificate_max_depth", 3),
-        VerifyCerts = barrel_config:get("replicator", "verify_ssl_certificates"),
-        CertFile = barrel_config:get("replicator", "cert_file", nil),
-        KeyFile = barrel_config:get("replicator", "key_file", nil),
-        Password = barrel_config:get("replicator", "password", nil),
+        ClientOptions = barrel_server:get_env(replicator_sslopts),
+        Depth = proplists:get_value(ssl_certificate_max_depth, ClientOptions, 3),
+        VerifyCerts = proplists:get_value(verify_ssl_certificates, ClientOptions, false),
+        CertFile = proplists:get_value(cert_file, ClientOptions, nil),
+        KeyFile = proplists:get_value(key_file, ClientOptions, nil),
+        Password = proplists:get_value(password, ClientOptions, nil),
         SslOpts = [{depth, Depth} | ssl_verify_options(VerifyCerts =:= "true")],
         SslOpts1 = case CertFile /= nil andalso KeyFile /= nil of
             true ->
@@ -343,12 +342,12 @@ ssl_verify_options(Value) ->
     ssl_verify_options(Value, erlang:system_info(otp_release)).
 
 ssl_verify_options(true, OTPVersion) when OTPVersion >= "R14" ->
-    CAFile = barrel_config:get("replicator", "ssl_trusted_certificates_file"),
+    CAFile = barrel_server:get_env(replicator_cafile),
     [{verify, verify_peer}, {cacertfile, CAFile}];
 ssl_verify_options(false, OTPVersion) when OTPVersion >= "R14" ->
     [{verify, verify_none}];
 ssl_verify_options(true, _OTPVersion) ->
-    CAFile = barrel_config:get("replicator", "ssl_trusted_certificates_file"),
+    CAFile = barrel_server:get_env(replicator_cafile),
     [{verify, 2}, {cacertfile, CAFile}];
 ssl_verify_options(false, _OTPVersion) ->
     [{verify, 0}].

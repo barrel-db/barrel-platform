@@ -110,13 +110,12 @@ init(_) ->
     process_flag(trap_exit, true),
     ?DOC_TO_REP = ets:new(?DOC_TO_REP, [named_table, set, protected]),
     ?REP_TO_STATE = ets:new(?REP_TO_STATE, [named_table, set, protected]),
-    barrel_config:subscribe(),
 
     {Loop, RepDbName} = changes_feed_loop(),
 
     Listener = start_listener(self()),
 
-    Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
+    Retries = retries_value(barrel_server:get_env(max_replication_retry_count)),
     {ok, #state{changes_feed_loop = Loop,
                 rep_db_name = RepDbName,
                 max_retries = Retries,
@@ -203,11 +202,6 @@ handle_info({'EXIT', From, normal}, #state{rep_start_pids = Pids} = State) ->
 
 handle_info({'DOWN', _Ref, _, _, _}, State) ->
     % From a db monitor created by a replication process. Ignore.
-    {noreply, State};
-handle_info({config_updated, barrel, {_, {"replicator", "max_replication_retry_count"}}}, State) ->
-    Retries = retries_value(barrel_config:get("replicator", "max_replication_retry_count", "10")),
-    {noreply, State#state{max_retries = Retries}};
-handle_info({config_updated, _, _}, State) ->
     {noreply, State};
 handle_info(Msg, State) ->
     lager:error("Replication manager received unexpected message ~p", [Msg]),
@@ -605,7 +599,7 @@ ensure_rep_ddoc_exists(RepDb, DDocID) ->
 pp_rep_id(#rep{id = RepId}) ->
     pp_rep_id(RepId);
 pp_rep_id({Base, Extension}) ->
-    Base ++ Extension.
+    << Base/binary, Extension/binary>>.
 
 
 rep_state(RepId) ->
@@ -626,10 +620,8 @@ error_reason(Reason) ->
     Reason.
 
 
-retries_value("infinity") ->
-    infinity;
-retries_value(Value) ->
-    list_to_integer(Value).
+retries_value("infinity") ->  infinity;
+retries_value(Value) -> Value.
 
 
 state_after_error(#rep_state{retries_left = Left, wait = Wait} = State) ->

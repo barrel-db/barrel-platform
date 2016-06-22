@@ -27,6 +27,8 @@
 -export([match_origin/2]).
 -export([allow_credentials/2]).
 
+-include("barrel.hrl").
+
 -define(MAX_AGE, 1728000). %% 20 days
 -define(HEADERS_ALLOWED,  [<<"Accept">>, <<"Accept-Language">>, <<"Content-Type">>,
   <<"Expires">>, <<"Last-Modified">>, <<"Pragma">>, <<"Origin">>, <<"Content-Length">>,
@@ -51,13 +53,15 @@ execute(Req, Env) ->
   end.
 
 init_config() ->
-  Enabled = barrel_config:get_boolean("cors", "enabled", false) =:= true,
-  AllowMethods = items_to_binary(barrel_config:get_list("cors", "allow_methods", ?METHODS_ALLOWED)),
-  AllowHeaders = items_to_binary(barrel_config:get_list("cors", "allow_headers", ?HEADERS_ALLOWED)),
+  Enabled = barrel_server:get_env(enable_cors) =:= true,
+  Config = barrel_server:get_env(cors),
+
+  AllowMethods = proplists:get_value(allow_methods, Config, ?METHODS_ALLOWED),
+  AllowHeaders = proplists:get_value(allow_headers, Config, ?HEADERS_ALLOWED),
   AllowHeadersLowercase = [cowboy_bstr:to_lower(H) || H <- AllowHeaders] ,
-  MaxAge = barrel_config:get_integer("cors", "max_age", ?MAX_AGE),
-  AllowCredentials = barrel_config:get_boolean("cors", "allow_credentials", false),
-  AllowOrigins = items_to_binary(barrel_config:get_list("cors", "allow_origins", [])),
+  MaxAge = proplists:get_value(max_age, Config, ?MAX_AGE),
+  AllowCredentials = proplists:get_value(allow_credentials, Config, false),
+  AllowOrigins = proplists:get_value(allow_origins, Config, []),
   AllowAll = lists:member(<<"*">>, AllowOrigins),
   Cfg = [{enabled, Enabled}, {allow_methods, AllowMethods}, {allow_headers, AllowHeaders},
     {allow_headers_lowercase, AllowHeadersLowercase}, {max_age, MaxAge},
@@ -153,6 +157,3 @@ match_origin([Pattern | Rest], Origin) ->
 
 allow_credentials(<<"*">>, _) -> false;
 allow_credentials(H, H) -> barrel_cors_config:allow_credentials().
-
-items_to_binary(L) -> [barrel_lib:to_binary(V) || V <- L].
-

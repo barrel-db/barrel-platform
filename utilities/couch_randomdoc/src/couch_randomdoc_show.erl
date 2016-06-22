@@ -39,12 +39,12 @@ handle_randomdoc_show_req(#httpd{
 
     CurrentEtag = barrel_uuids:new(),
     couch_httpd:etag_respond(Req, CurrentEtag, fun() ->
-        JsonReq = couch_httpd_external:json_req_obj(Req, Db, DocId),
+        JsonReq = couch_httpd_request:json_req_obj(Req, Db, DocId),
         [<<"resp">>, ExternalResp] =
             couch_query_servers:ddoc_prompt(DDoc, [<<"shows">>, ShowName],
                 [JsonDoc, JsonReq]),
         JsonResp = apply_etag(ExternalResp, CurrentEtag),
-        couch_httpd_external:send_external_response(Req, JsonResp)
+        couch_httpd_request:send_external_response(Req, JsonResp)
     end);
 
 handle_randomdoc_show_req(Req, _Db, _DDoc) ->

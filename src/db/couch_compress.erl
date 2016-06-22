@@ -27,18 +27,7 @@
 -define(COMPRESSED_TERM_PREFIX, 131, 80).
 
 
-get_compression_method() ->
-    case barrel_config:get("barrel", "file_compression") of
-        undefined -> ?DEFAULT_COMPRESSION;
-        MethodStr ->
-            case string:tokens(MethodStr, "_") of
-                [Method] ->
-                    list_to_existing_atom(Method);
-                [Method, Level] ->
-                    {list_to_existing_atom(Method), list_to_integer(Level)}
-            end
-    end.
-
+get_compression_method() -> barrel_server:get_env(file_compression).
 
 compress(<<?SNAPPY_PREFIX, _/binary>> = Bin, snappy) ->
     Bin;

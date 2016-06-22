@@ -44,18 +44,26 @@ start_link() ->
 init([]) ->
   SupFlags = {one_for_one, 10, 3600},
 
+  Auth = {barrel_auth,
+    {barrel_auth, start_link, []},
+    permanent, brutal_kill, worker, [barrel_auth]},
+
+  AuthCache =
+    {barrel_aut_cache,
+      {barrel_auth_cache, start_link, []},
+      permanent, brutal_kill, worker, [barrel_aut_cache]},
+
+  UserLocal =
+    {barrel_users_local,
+      {barrel_users_local, start_link, []},
+      permanent, brutal_kill, worker, [barrel_users_local]},
+
   Api = {barrel_api_sup,
     {barrel_api_sup, start_link, []},
     permanent, infinity, supervisor, [barrel_api_sup]},
 
-  Console = case barrel_http_console:is_enabled() of
-              true ->
-                [barrel_http_console:childspec(barrel_http_console:config())];
-              false -> []
-            end,
 
-
-  {ok, {SupFlags, [Api] ++ Console}}.
+  {ok, {SupFlags, [Auth, AuthCache, UserLocal, Api]}}.
 
 %%%===================================================================
 %%% Internal functions

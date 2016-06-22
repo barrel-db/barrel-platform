@@ -22,7 +22,6 @@
 -export([compact/1, compact/2, get_compactor_pid/1]).
 -export([acquire_indexer/1, release_indexer/1]).
 -export([trigger_update/2]).
--export([config_change/3]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2, code_change/3]).
@@ -89,16 +88,7 @@ release_indexer(Pid) ->
     gen_server:call(IPid, {release, self()}).
 
 
-config_change("query_server_config", "commit_freq", _) ->
-    NewValue = barrel_config:get_integer("query_server_config", "commit_freq", 5),
-    gen_server:cast(?MODULE, {config_update, NewValue});
-config_change(_, _, _) ->
-    ok.
-
-
 init({Mod, IdxState}) ->
-    hooks:reg(config_key_update, ?MODULE, config_change, 3),
-
     DbName = Mod:get(db_name, IdxState),
     Resp = barrel_lib:with_db(DbName, fun(Db) ->
         case Mod:open(Db, IdxState) of
@@ -114,7 +104,7 @@ init({Mod, IdxState}) ->
             {ok, UPid} = couch_index_updater:start_link(self(), Mod),
             {ok, CPid} = couch_index_compactor:start_link(self(), Mod),
 
-            Delay = barrel_config:get_integer("query_server_config", "commit_freq", 5),
+            Delay = barrel_server:get_env(index_commit_freq),
             MsDelay = 1000 * Delay,
             State = #st{
                 mod=Mod,

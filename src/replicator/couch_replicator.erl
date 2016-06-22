@@ -94,7 +94,7 @@ do_replication_loop(#rep{id = {BaseId, Ext} = Id, options = Options} = Rep) ->
     {ok, _Pid} ->
         case proplists:get_value(continuous, Options, false) of
         true ->
-            {ok, {continuous, list_to_binary(BaseId ++ Ext)}};
+            {ok, {continuous, << BaseId/binary, Ext/binary >>}};
         false ->
             wait_for_result(Id)
         end;
@@ -104,7 +104,7 @@ do_replication_loop(#rep{id = {BaseId, Ext} = Id, options = Options} = Rep) ->
 
 
 async_replicate(#rep{id = {BaseId, Ext}, source = Src, target = Tgt} = Rep) ->
-    RepChildId = BaseId ++ Ext,
+    RepChildId = << BaseId/binary, Ext/binary >>,
     Source = couch_replicator_api_wrap:db_uri(Src),
     Target = couch_replicator_api_wrap:db_uri(Tgt),
     Timeout = proplists:get_value(connection_timeout, Rep#rep.options),
@@ -281,7 +281,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
 
     barrel_task_status:add_task([
         {type, replication},
-        {replication_id, list_to_binary(BaseId ++ Ext)},
+        {replication_id, << BaseId/binary, Ext/binary >>},
         {doc_id, Rep#rep.doc_id},
         {source, list_to_binary(SourceName)},
         {target, list_to_binary(TargetName)},
@@ -315,7 +315,7 @@ do_init(#rep{options = Options, id = {BaseId, Ext}} = Rep) ->
         "~ca connection timeout of ~p milliseconds~n"
         "~c~p retries per request~n"
         "~csocket options are: ~s~s",
-        [BaseId ++ Ext, $\t, NumWorkers, $\t, BatchSize, $\t,
+        [<< BaseId/binary, Ext/binary >>, $\t, NumWorkers, $\t, BatchSize, $\t,
             MaxConns, $\t, proplists:get_value(connection_timeout, Options),
             $\t, proplists:get_value(retries, Options),
             $\t, io_lib:format("~p", [proplists:get_value(socket_options, Options)]),

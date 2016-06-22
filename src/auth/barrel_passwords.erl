@@ -12,41 +12,15 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_passwords).
+-module(barrel_passwords).
 
--export([simple/2, pbkdf2/3, pbkdf2/4, verify/2]).
--export([hash_admin_password/1, get_unhashed_admins/0]).
+-export([pbkdf2/3, pbkdf2/4, verify/2]).
 
 -include("couch_db.hrl").
 
 -define(MAX_DERIVED_KEY_LENGTH, (1 bsl 32 - 1)).
 -define(SHA1_OUTPUT_LENGTH, 20).
 
-%% legacy scheme, not used for new passwords.
--spec simple(binary(), binary()) -> binary().
-simple(Password, Salt) ->
-    list_to_binary(barrel_lib:to_hex(crypto:hash(sha, <<Password/binary, Salt/binary>>))).
-
-%% CouchDB utility functions
--spec hash_admin_password(binary()) -> binary().
-hash_admin_password(ClearPassword) ->
-    Iterations = barrel_config:get_integerr("auth", "iterations", 1000),
-    Salt = barrel_uuids:random(),
-    DerivedKey = couch_passwords:pbkdf2(barrel_lib:to_binary(ClearPassword), Salt, Iterations),
-    list_to_binary("-pbkdf2-" ++ binary_to_list(DerivedKey) ++ ","
-        ++ binary_to_list(Salt) ++ ","
-        ++ Iterations).
-
--spec get_unhashed_admins() -> list().
-get_unhashed_admins() ->
-    lists:filter(
-        fun({_User, "-hashed-" ++ _}) ->
-            false; % already hashed
-        ({_User, "-pbkdf2-" ++ _}) ->
-            false; % already hashed
-        ({_User, _ClearPassword}) ->
-            true
-        end, barrel_config:get("admins")).
 
 %% Current scheme, much stronger.
 -spec pbkdf2(binary(), binary(), integer()) -> binary().
@@ -63,7 +37,7 @@ pbkdf2(Password, Salt, Iterations, DerivedLength) ->
     L = ceiling(DerivedLength / ?SHA1_OUTPUT_LENGTH),
     <<Bin:DerivedLength/binary,_/binary>> =
         iolist_to_binary(pbkdf2(Password, Salt, Iterations, L, 1, [])),
-    {ok, list_to_binary(barrel_lib:to_hex(Bin))}.
+    {ok, barrel_lib:to_hex(Bin)}.
 
 -spec pbkdf2(binary(), binary(), integer(), integer(), integer(), iolist())
     -> iolist().

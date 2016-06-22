@@ -15,7 +15,7 @@
 -module(couch_query_servers).
 -behaviour(gen_server).
 
--export([start_link/0, config_change/3]).
+-export([start_link/0]).
 
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2,code_change/3]).
 -export([start_doc_map/3, map_docs/2, map_doc_raw/2, stop_doc_map/1, raw_to_ejson/1]).
@@ -263,7 +263,7 @@ filter_docs(Req, Db, DDoc, FName, Docs) ->
     {json_req, JsonObj} ->
         JsonObj;
     #httpd{} = HttpReq ->
-        couch_httpd_external:json_req_obj(HttpReq, Db)
+        couch_httpd_request:json_req_obj(HttpReq, Db)
     end,
     JsonDocs = [barrel_doc:to_json_obj(Doc, [revs]) || Doc <- Docs],
     [true, Passes] = ddoc_prompt(DDoc, [<<"filters">>, FName],
@@ -275,7 +275,7 @@ run_script(Req, Db, DDoc, Src) ->
                     {json_req, JsonObj} ->
                         JsonObj;
                     #httpd{} = HttpReq ->
-                        couch_httpd_external:json_req_obj(HttpReq, Db)
+                        couch_httpd_request:json_req_obj(HttpReq, Db)
               end,
 
     ddoc_prompt(DDoc, [<<"run">>, Src], [JsonReq]).
@@ -297,34 +297,27 @@ with_ddoc_proc(#doc{id=DDocId,revs={Start, [DiskRev|_]}}=DDoc, Fun) ->
         ok = ret_os_process(Proc)
     end.
 
-get_query_servers() ->
-    Default = maps:from_list(application:get_env(barrel, "query_servers", [])),
-    lists:foldl(fun({Lang, SpecStr}, QS) ->
-            {ok, {Mod, Fun, SpecArg}} = barrel_lib:parse_term(SpecStr),
-            QS#{ list_to_binary(Lang) => {Mod, Fun, SpecArg}}
-        end, Default, barrel_config:get("query_servers")).
+get_query_servers() -> barrel_server:get_env(query_servers).
 
 
 init([]) ->
     % register async to avoid deadlock on restart_child
     self() ! init,
-
-
     Langs = ets:new(couch_query_server_langs, [set, private]),
     LangLimits = ets:new(couch_query_server_lang_limits, [set, private]),
     PidProcs = ets:new(couch_query_server_pid_langs, [set, private]),
     LangProcs = ets:new(couch_query_server_procs, [set, private]),
 
-    ProcTimeout = barrel_config:get_integer("barrel", "os_process_timeout", 5000),
-    ReduceLimit = barrel_config:get_boolean("query_server_config", "reduce_limit", true),
-    OsProcLimit = barrel_config:get_integer("query_server_config", "os_process_limit", 10),
+    ProcTimeout = barrel_server:get_env(os_process_timeout),
+    ReduceLimit = barrel_server:get_env(reduce_limit),
+    OsProcLimit = barrel_server:get_env(os_process_limit),
 
-    % 'native_query_servers' specifies a {Module, Func, Arg} tuple.
-    maps:fold(fun(Lang, {Mod, Fun, SpecArg}, Acc) ->
+    % 'native_query_servers' specifies a {Module, Func, Arg} tuple
+    lists:foreach(fun({Lang, {Mod, Fun, SpecArg}}) ->
         true = ets:insert(LangLimits, {Lang, OsProcLimit, 0}), % 0 means no limit
         true = ets:insert(Langs, {Lang, Mod, Fun, SpecArg}),
         ok
-    end, ok, get_query_servers()),
+    end, get_query_servers()),
 
     process_flag(trap_exit, true),
     {ok, #qserver{
@@ -387,7 +380,6 @@ handle_cast(_Whatever, Server) ->
     {noreply, Server}.
 
 handle_info(init, Server) ->
-    hooks:reg(config_key_update, ?MODULE, config_change, 3),
     {noreply, Server};
 
 handle_info({'EXIT', _, _}, Server) ->
@@ -418,15 +410,6 @@ handle_info({'DOWN', _, process, Pid, Status}, #qserver{
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-config_change("query_servers", _, _) ->
-    supervisor:terminate_child(barrel_daemons_sup, query_servers),
-    supervisor:restart_child(barrel_daemons_sup, query_servers);
-config_change("query_server_config", _, _) ->
-    supervisor:terminate_child(barrel_daemons_sup, query_servers),
-    supervisor:restart_child(barrel_daemons_sup, query_servers);
-config_change(_, _, _) ->
-    ok.
 
 % Private API
 
@@ -500,7 +483,7 @@ new_process(Langs, LangLimits, Lang) ->
     if (Lim == 0) or (Current < Lim) -> % Lim == 0 means no limit
         % we are below the limit for our language, make a new one
         case ets:lookup(Langs, Lang) of
-        [{Lang, Mod, Func, Arg}] ->
+        [{Lang, Mod, Func, Arg}]=L ->
             {ok, Pid} = apply(Mod, Func, Arg),
             erlang:monitor(process, Pid),
             true = ets:insert(LangLimits, {Lang, Lim, Current+1}),

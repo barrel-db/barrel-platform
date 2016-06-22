@@ -28,7 +28,7 @@ authenticate(Req, Env) ->
   case get_credentials(Req) of
     nil -> nil;
     {User, Pass} ->
-      case couch_auth_cache:get_user_creds(User) of
+      case barrel_auth_cache:get_user_creds(User) of
         nil -> {error, unauthorized};
         UserProps ->
           case check_password(Pass, UserProps) of
@@ -56,13 +56,12 @@ get_credentials(Req) ->
 
 check_password(Pass, UserProps) ->
   UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
-  {PasswordHash, ExpectedHash} =  case maps:get(<<"password_scheme">>, UserProps, <<"simple">>) of
-                                    <<"simple">> ->
-                                      {couch_passwords:simple(Pass, UserSalt),
-                                        maps:get(<<"password_sha">>, UserProps, nil)};
-                                    <<"pbkdf2">> ->
-                                      Iterations = maps:get(<<"iterations">>, UserProps, 1000),
-                                      {couch_passwords:pbkdf2(Pass, UserSalt, Iterations),
-                                        maps:get(<<"derived_key">>, UserProps, nil)}
-                                  end,
-  couch_passwords:verify(PasswordHash, ExpectedHash).
+  case maps:get(<<"password_scheme">>, UserProps, <<"pbkdf2">>) of
+    <<"pbkdf2">> ->
+      Iterations = maps:get(<<"iterations">>, UserProps, 1000),
+      PasswordHash = barrel_passwords:pbkdf2(Pass, UserSalt, Iterations),
+      ExpectedHash = maps:get(<<"derived_key">>, UserProps, nil),
+      barrel_passwords:verify(PasswordHash, ExpectedHash);
+    _ ->
+      false
+  end.

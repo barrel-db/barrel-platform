@@ -46,13 +46,6 @@
 -export([send_json2/2,send_json2/3,send_json2/4]).
 -export([accepted_encodings/1, validate_referer/1, validate_ctype/2]).
 -export([http_1_0_keep_alive/2]).
--export([set_auth_handlers/0]).
-
-set_auth_handlers() ->
-    AuthenticationSrcs = make_fun_spec_strs(barrel_config:get("httpd", "authentication_handlers", "")),
-    AuthHandlers = lists:map(
-        fun(A) -> {make_arity_1_fun(A), list_to_binary(A)} end, AuthenticationSrcs),
-    ok = application:set_env(couch_httpd, auth_handlers, AuthHandlers).
 
 % SpecStr is a string like "{my_module, my_fun}"
 %  or "{my_module, my_fun, <<"my_arg">>}"
@@ -303,7 +296,7 @@ path(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(path).
 
 host_for_request(#httpd{mochi_req=MochiReq}) ->
-    XHost = barrel_config:get("httpd", "x_forwarded_host", "X-Forwarded-Host"),
+    XHost = barrel_server:get_env(x_forwarded_host),
     case MochiReq:get_header_value(XHost) of
         undefined ->
             case MochiReq:get_header_value("Host") of
@@ -321,11 +314,11 @@ host_for_request(#httpd{mochi_req=MochiReq}) ->
 
 absolute_uri(#httpd{mochi_req=MochiReq}=Req, Path) ->
     Host = host_for_request(Req),
-    XSsl = barrel_config:get("httpd", "x_forwarded_ssl", "X-Forwarded-Ssl"),
+    XSsl = barrel_server:get_env(x_forwarded_ssl),
     Scheme = case MochiReq:get_header_value(XSsl) of
                  "on" -> "https";
                  _ ->
-                     XProto = barrel_config:get("httpd", "x_forwarded_proto", "X-Forwarded-Proto"),
+                     XProto = barrel_server:get_env(x_forwarded_proto),
                      case MochiReq:get_header_value(XProto) of
                          %% Restrict to "https" and "http" schemes only
                          "https" -> "https";
@@ -359,7 +352,7 @@ body_length(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(body_length).
 
 body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
-    MaxSize = barrel_config:get_integer("couchdb", "max_document_size", 4294967296),
+    MaxSize = barrel_server:get_env(max_document_size),
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
@@ -582,10 +575,10 @@ initialize_jsonp(Req) ->
         CallBack ->
             try
                 % make sure jsonp is configured on (default off)
-                case barrel_config:get("httpd", "allow_jsonp", "false") of
-                "true" ->
+                case barrel_server:get_env(allow_jsonp) of
+                true ->
                     validate_callback(CallBack);
-                _Else ->
+                false ->
                     put(jsonp, no_jsonp)
                 end
             catch
@@ -677,16 +670,16 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
         % this is where the basic auth popup is triggered
         case MochiReq:get_header_value("X-CouchDB-WWW-Authenticate") of
         undefined ->
-            case barrel_config:get("httpd", "WWW-Authenticate", nil) of
+            case barrel_server:get_env('WWW-Authenticate') of
             nil ->
                 % If the client is a browser and the basic auth popup isn't turned on
                 % redirect to the session page.
                 case ErrorStr of
                 <<"unauthorized">> ->
-                    case barrel_config:get("couch_httpd_auth", "authentication_redirect", nil) of
+                    case barrel_server:get_env(authentication_redirect) of
                     nil -> {Code, []};
                     AuthRedirect ->
-                        case barrel_config:get("auth", "require_valid_user", "false") of
+                        case barrel_server:get_env(require_valid_user) of
                         "true" ->
                             % send the browser popup header no matter what if we are require_valid_user
                             {Code, [{"WWW-Authenticate", "Basic realm=\"server\""}]};
@@ -968,7 +961,7 @@ cookie_auth_cookie(Req, User, Secret) ->
   SessionData = << User/binary, ":", (integer_to_binary(Timestamp,16))/binary >>,
   Hash = crypto:hmac(sha, Secret, SessionData),
   mochiweb_cookies:cookie("AuthSession",
-    binary_to_list(barrel_lib:encodeb64ur(<< SessionData/binary, ":", Hash/binary>>)),
+    binary_to_list(barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>)),
     [{path, "/"}, {http_only, true}] ++ cookie_scheme(Req) ++ barrel_cookie_auth:max_age()).
 
 cookie_scheme(#httpd{mochi_req=MochiReq}) ->

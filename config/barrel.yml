@@ -1,0 +1,99 @@
+# Path to store all barrel data
+dir: "{{platform_data_dir}}"
+
+##
+#### Database configuration
+##
+
+# Maximum size of the document that can be accepted in bytes.
+max_document_size: 4294967296
+# Whether if the commit of the documents should be delayed or not.
+delayed_commits: true
+
+##
+#### Index configuration
+##
+
+# Frequence to commit the index in seconds
+index_commit_freq: 5
+# number of max updates before refreshing the index. We don't
+# update the index on each db update. Instead we are waiting for a
+# minimum. If the minimum is not achieved, the update will happen
+# in the next interval.
+index_threshold: 200
+# refresh interval in ms, the interval in which the index will be updated
+# when a changes feed is listening on it.
+index_refresh_interval: 1000
+
+##
+#### Replicator configuration
+##
+
+# Time before a remote HTTP request will timeout
+request_timeout: infinity
+
+# Maximum replicaton retry count can be a non-negative integer or 'infinity'
+max_replication_retry_count: 10
+
+# More worker processes can give higher network throughput but can also
+# imply more disk and network IO.
+worker_processes: 4
+
+# With lower batch sizes checkpoints are done more frequently. Lower batch sizes
+# also reduce the total amount of used RAM memory.
+worker_batch_size: 500
+
+# Maximum number of HTTP connections per replication.
+http_connections: 20
+
+# HTTP connection timeout per replication.
+# Even for very fast/reliable networks it might need to be increased if a remote
+# database is too busy.
+connection_timeout: 30000
+
+# If a request fails, the replicator will retry it up to N times.
+retries_per_request: 10
+
+# if not set no checkpoint will be stored.
+use_checkpoints: true
+
+# Delay between storing checkpoints
+checkpoint_interval: 5000
+
+
+
+##
+#### API configuration
+##
+
+# If true the console is started
+start_console: true
+
+# console config
+console:
+ port: 5985
+
+# interface to listen
+listen:
+ default:
+  port: 5984
+  address: "127.0.0.1"
+
+# Whether to enable CORS or not.
+enable_cors: false
+
+cors:
+  # Lists of methods allowed
+  allows_methods: ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "COPY"]
+  # List of headers accepted
+  allows_headers: ["Accept", "Accept-Language", "Content-Type", "Expires", "Last-Modified", "Pragma", "Origin", "Content-Length","If-Match", "Destination", "X-Requested-With", "X-Http-Method-Override", "Content-Range" ]
+  # Browsers send a "preflight" OPTIONS-request to determine CORS settings.
+  # Max-age defines how long the result should be cached for. Defaults to
+  # 1728000 (20 days)
+  max_age: 1728000
+  # If a CORS session is accepted on HTTPS. Whether the
+  # Access-Control-Allow-Credentials header should be returned.
+  allow_credentials: false
+  # Which origins to allow. Defaults to no origins allowed, Default to None.
+  # ”*” is a valid value but is considered a security risk.
+  allow_origins: []

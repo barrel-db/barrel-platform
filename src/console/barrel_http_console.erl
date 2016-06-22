@@ -26,6 +26,8 @@
 -export([binding/1]).
 -export([admin_uri/0]).
 
+-include("barrel.hrl").
+
 -define(DEFAULT_ADDRESS, "127.0.0.1").
 -define(DEFAULT_PORT, 5985).
 -define(DEFAULT_NB_ACCEPTORS, 10).
@@ -35,7 +37,7 @@
 childspec(Config) ->
   {Scheme, Addr, Port} = binding(Config),
   Ip = barrel_api_http:parse_address(Addr),
-  NbAcceptors = barrel_config:pget_int(nb_acceptors, Config, ?DEFAULT_NB_ACCEPTORS),
+  NbAcceptors = proplists:get_value(nb_acceptors, Config, ?DEFAULT_NB_ACCEPTORS),
   Transport = barrel_api_http:scheme_to_transport(Scheme),
   ProtoOpts = protocol_opts(),
   TransportOpts = barrel_api_http:transport_opts(Scheme, Ip, Port, Config),
@@ -44,35 +46,38 @@ childspec(Config) ->
 
 
 config() ->
-  EnvCfg = application:get_env(barrel, console, []),
-  IniCfg = barrel_config:section_to_opts("console"),
-  barrel_lib:propmerge1(IniCfg, EnvCfg).
-
-is_enabled() ->
-  case barrel_config:get_env("start_console", false) of
-    Val when is_atom(Val) -> Val;
-    "true" -> true;
-    "1" -> true;
-    _ -> false
+  case ?catch_val(console) of
+    {'EXIT', _} ->
+      Config = [{scheme, http}, {port, ?DEFAULT_PORT}, {address, ?DEFAULT_ADDRESS}],
+      barrel_lib:set(console, Config),
+      Config;
+    Config ->
+      Config
   end.
 
-binding(Config) ->
-  Port = barrel_config:pget_int(port, Config, ?DEFAULT_PORT),
-  Addr =  proplists:get_value(address, Config, ?DEFAULT_ADDRESS),
+is_enabled() -> barrel_server:get_env(start_console).
 
+binding(Config) ->
+  Port = proplists:get_value(port, Config, ?DEFAULT_PORT),
+  if
+    is_integer(Port) -> ok;
+    true -> erlang:error({console, bad_port})
+  end,
+
+  Addr =  proplists:get_value(address, Config, ?DEFAULT_ADDRESS),
   Scheme = case proplists:get_value(scheme, Config, ?DEFAULT_SCHEME) of
-             "http" -> http;
-             "https" -> https;
              http -> http;
              https -> https;
-             _ -> erlang:error(bad_scheme)
+             _ -> erlang:error({console, bad_scheme})
            end,
   {Scheme, Addr, Port}.
 
 admin_uri() ->
-  ConsoleCfg = barrel_config:section_to_opts("console"),
-  {Scheme, Addr, Port} = binding(ConsoleCfg),
-  lists:flatten([atom_to_list(Scheme), "://", Addr, ":", integer_to_list(Port)]).
+  Config = config(),
+  Scheme = proplists:get_value(scheme, Config, ?DEFAULT_SCHEME),
+  {Addr, Port} = ranch:get_addr(barrel_console),
+  URI = lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(Addr), ":", integer_to_list(Port)]),
+  list_to_binary(URI).
 
 protocol_opts() ->
   Dispatch = cowboy_router:compile([

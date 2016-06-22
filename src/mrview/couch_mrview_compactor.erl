@@ -78,7 +78,7 @@ compact(State) ->
         {progress, 0}
     ]),
 
-    BufferSize = barrel_config:get_integer( "view_compaction", "keyvalue_buffer_size", 2097152),
+    BufferSize = barrel_server:get_env(keyvalue_buffer_size),
 
     FoldFun = fun({DocId, _} = KV, Acc) ->
         #acc{btree = Bt, kvs = Kvs, kvs_size = KvsSize, last_id = LastId} = Acc,

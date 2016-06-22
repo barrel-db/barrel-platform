@@ -15,6 +15,11 @@
 
 -module(barrel_lib).
 
+-export([val/1, val/2]).
+-export([set/2]).
+-export([unset/1]).
+
+
 -export([to_binary/1]).
 -export([to_error/1]).
 -export([to_atom/1]).
@@ -22,6 +27,8 @@
 -export([to_list/1]).
 -export([to_integer/1]).
 -export([to_hex/1]).
+-export([hex_to_binary/1]).
+
 -export([join/2]).
 -export([hexsig/1]).
 -export([parse_term/1]).
@@ -49,13 +56,33 @@
 
 -export([encodeb64url/1, decodeb64url/1]).
 
+-export([delete_file/1, delete_file/2]).
+
 
 -include_lib("syntax_tools/include/merl.hrl").
 -include_lib("couch_db.hrl").
 
+-include("barrel.hrl").
+
 -define(FLUSH_MAX_MEM, 10000000).
 
 -type userctx() :: map().
+
+
+val(Key) ->
+  val(Key, undefined).
+
+val(Key, Default) ->
+  try ets:lookup_element(barrel_gvar, Key, 2)
+  catch error:_ -> Default
+  end.
+
+set(Key, Val) ->
+  ets:insert(barrel_gvar, {Key, Val}).
+
+unset(Key) ->
+  ets:delete(barrel_gvar, Key).
+
 
 -spec to_binary(binary()|list()|integer()|atom()) -> binary().
 to_binary(V) when is_binary(V) -> V;
@@ -81,7 +108,7 @@ to_existing_atom(V) when is_binary(V) -> try list_to_existing_atom(binary_to_lis
 to_existing_atom(V) when is_atom(V) -> V.
 
 to_list(V) when is_list(V) -> V;
-to_list(V) when is_binary(V) -> V;
+to_list(V) when is_binary(V) -> binary_to_list(V);
 to_list(V) when is_atom(V) -> atom_to_list(V);
 to_list(V) when is_integer(V) -> integer_to_list(V).
 
@@ -90,16 +117,20 @@ to_integer(V) when is_binary(V) -> binary_to_integer(V);
 to_integer(V) when is_list(V) -> list_to_integer(V).
 
 to_hex([]) -> [];
-to_hex(Bin) when is_binary(Bin) -> to_hex(binary_to_list(Bin));
-to_hex([H|T]) ->  [to_digit(H div 16), to_digit(H rem 16) | to_hex(T)].
+to_hex(Bin) when is_binary(Bin) ->
+  << <<(to_digit(H)),(to_digit(L))>> || <<H:4,L:4>> <= Bin >>;
+to_hex([H|T]) ->
+  [to_digit(H div 16), to_digit(H rem 16) | to_hex(T)].
 
 to_digit(N) when N < 10 -> $0 + N;
 to_digit(N)             -> $a + N-10.
 
+hex_to_binary(Bin) when is_binary(Bin) ->
+  << <<(binary_to_integer( <<H, L>>, 16))>> || << H, L >> <= Bin >>.
+
+
 parse_term(Bin) when is_binary(Bin) ->  parse_term(binary_to_list(Bin));
 parse_term(List) -> {ok, Tokens, _} = erl_scan:string(List ++ "."), erl_parse:parse_term(Tokens).
-
-
 
 
 join([], _Separator) ->
@@ -403,3 +434,26 @@ urlencode_digit(D)  -> D.
 urldecode_digit($_) -> $/;
 urldecode_digit($-) -> $+;
 urldecode_digit(D)  -> D.
+
+
+delete_file(Name) ->
+  delete_file(Name, true).
+
+
+delete_file(Name, Async) ->
+  Dir = filename:dirname(Name),
+  Base = filename:basename(Name),
+  DelFile = filename:join([Dir, lists:flatten([".", Base, ".del",
+    binary_to_list(barrel_uuids:random())])]),
+
+  case file:rename(Name, DelFile) of
+    ok ->
+      case Async of
+        true ->
+          spawn(file, delete, [DelFile]),
+          ok;
+        false -> file:delete(DelFile)
+      end;
+    Error ->
+      Error
+  end.

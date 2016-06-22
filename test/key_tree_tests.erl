@@ -20,12 +20,9 @@
 -include_lib("eunit/include/eunit.hrl").
 -define(DEPTH, 10).
 
-setup() ->
-  {ok, _} = application:ensure_all_started(econfig),
-  ok.
+setup() -> ok.
 
-stop(_) ->
-  application:stop(econfig).
+stop(_) -> ok.
 
 key_tree_merge_test_()->
   {
