@@ -27,8 +27,7 @@
          content_types_provided/2,
          is_authorized/2,
          to_json/2,
-         from_form/2,
-         from_json/2,
+         create_session/2,
          delete_resource/2,
          delete_completed/2]).
 
@@ -37,7 +36,7 @@ init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 
 rest_init(Req, _Env) ->
   {UserCtx, _} = cowboy_req:meta(user_ctx, Req, barrel_lib:userctx()),
-  {ok, Req, #{user_ctx => UserCtx}}.
+  {ok, Req, {UserCtx, nil}}.
 
 allowed_methods(Req, State) ->
   Methods = [<<"HEAD">>, <<"OPTIONS">>, <<"GET">>, <<"DELETE">>, <<"POST">>],
@@ -48,27 +47,58 @@ content_types_provided(Req, State) ->
   {CTypes, Req, State}.
 
 content_types_accepted(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, '*'}, from_json},
-            {{<<"application">>, <<"x-www-form-urlencoded">>, '*'}, from_form}],
+  CTypes = [{{<<"application">>, <<"json">>, '*'}, create_session},
+            {{<<"application">>, <<"x-www-form-urlencoded">>, '*'}, create_session}],
   {CTypes, Req, State}.
 
 
-is_authorized(Req, State) ->
+is_authorized(Req, {UserCtx, _} = State) ->
   {Method, Req2} = cowboy_req:method(Req),
   case Method of
     <<"GET">> ->
-      #{ user_ctx := UserCtx } = State,
       ForceLogin = cowboy_req:qs_val(<<"basic">>, Req) =:= <<"true">>,
       case barrel_lib:userctx_get(name, UserCtx) of
         null when ForceLogin =:= true -> {false, Req2, State};
         _ -> {true, Req2, State}
       end;
+    <<"POST">> ->
+      case cowboy_req:parse_header(<<"content-type">>, Req2) of
+        {ok,{<<"application">>,<<"x-www-form-urlencoded">>, _}, Req3} ->
+          {ok, Form, Req4} = cowboy_req:body_qs(Req3),
+          case check_session(Form, State) of
+            {true, NewState} -> {true, Req4, NewState};
+            {false, _} -> {false, Req4, State}
+          end;
+        {ok, {<<"application">>, <<"json">>, _}, Req3} ->
+          {ok, Bin, Req4} = cowboy_req:body(Req3),
+          Form = jsx:decode(Bin),
+          case check_session(Form, State) of
+            {true, NewState} -> {true, Req4, NewState};
+            {false, _} -> {false, Req4, State}
+          end;
+        _Else ->
+          io:format("got else ~p~n", [_Else]),
+          {true, Req2, State}
+       end;
     _ ->
       {true, Req2, State}
   end.
 
-to_json(Req, State) ->
-  #{ user_ctx := UserCtx } = State,
+check_session(Form, {UserCtx, _}) ->
+  UserName = proplists:get_value(<<"name">>, Form, <<>>),
+  Password = proplists:get_value(<<"password">>, Form, <<>>),
+  User = case barrel_auth_cache:get_user_creds(UserName) of
+           nil -> #{};
+           Res -> Res
+         end,
+  case barrel_basic_auth:check_password(Password, User) of
+    true -> {true, {UserCtx, User#{<<"name">> => UserName}}};
+    false -> {false, {UserCtx, nil}}
+  end.
+
+
+
+to_json(Req, {UserCtx, _} = State) ->
   [Name, Roles] = barrel_lib:userctx_get([name, roles], UserCtx),
   Reply = #{
     ok => true,
@@ -77,63 +107,36 @@ to_json(Req, State) ->
   },
   {jsx:encode(Reply), Req, State}.
 
-from_form(Req, State) ->
-  {ok, Form, Req2} = cowboy_req:body_qs(Req),
-  create_session(Form, Req2, State).
 
-from_json(Req, State) ->
-  {ok, Bin, Req2} = cowboy_req:body(Req),
-  Form = jsx:decode(Bin),
-  create_session(Form, Req2, State).
-
-create_session(Form, Req, _State) ->
-  UserName = proplists:get_value(<<"name">>, Form, <<>>),
-  Password = proplists:get_value(<<"password">>, Form, <<>>),
-  User = case barrel_auth_cache:get_user_creds(UserName) of
-           nil -> #{};
-           Res -> Res
-         end,
+create_session(Req, {_, User}=State) ->
   UserSalt = maps:get(<<"salt">>, User, <<>>),
-  {ok, Req4} = case barrel_basic_auth:check_password(Password, User) of
-    true ->
-      Secret = barrel_auth:secret(),
-      FullSecret = <<Secret/binary, UserSalt/binary>>,
-      Req2 = barrel_cookie_auth:set_cookie_header(Req, UserName, FullSecret, true),
-      Resp = jsx:encode(#{ok => true, name => maps:get(<<"name">>, User, null),
-        roles => maps:get(<<"roles">>, User, [])}),
+  UserName = maps:get(<<"name">>, User),
+  Secret = barrel_auth:secret(),
+  FullSecret = <<Secret/binary, UserSalt/binary>>,
+  Req2 = barrel_cookie_auth:set_cookie_header(Req, UserName, FullSecret, true),
+  Resp = jsx:encode(#{ok => true, name => maps:get(<<"name">>, User, null),
+    roles => maps:get(<<"roles">>, User, [])}),
 
-      Req3 = cowboy_req:set_resp_body(Resp, Req2),
-      {Next, _} = cowboy_req:qs_val(<<"next">>, Req3),
-      case Next of
-        undefined ->
-          cowboy_req:reply(200, Req3);
-        _ ->
-          cowboy_req:reply(302, [{<<"Location">>, Next}])
-      end;
-    false ->
-      {ok, Req2} = cowboy_req:set_resp_cookie(<<"AuthSession">>, "",
-        [{path, "/"}, {http_only, true}] + barrel_cookie_auth:secure(Req), Req),
-      Fail = cowboy_req:qs_val(<<"fail">>, Req2),
-      case Fail of
-        undefined ->
-          cowboy_req:reply(401, Req2);
-        _ ->
-          cowboy_req:reply(302, [{<<"Location">>, Fail}])
-      end
-  end,
-  {halt, Req4}.
-
-delete_resource(Req, State) ->
-  {ok, Req2} = cowboy_req:set_resp_cookie(<<"AuthSession">>, "",
-    [{path, "/"}, {http_only, true}] + barrel_cookie_auth:secure(Req), Req),
-  Req3 = cowboy_req:set_resp_body(jsx:encode(#{ok => true}), Req2),
-  Next = cowboy_req:qs_val(<<"next">>, Req3),
+  Req3 = cowboy_req:set_resp_body(Resp, Req2),
+  {Next, _} = cowboy_req:qs_val(<<"next">>, Req3),
   case Next of
     undefined ->
-      {ok, _Req4} = cowboy_req:reply(200, Req3);
+      {true, Req3, State};
     _ ->
-      {ok, _Req4} = cowboy_req:reply(302, [{<<"Location">>, Next}])
-  end,
-  {true, Req, State}.
+      {true, Next, Req3, State}
+  end.
+
+delete_resource(Req, State) ->
+  Req2 = cowboy_req:set_resp_cookie(<<"AuthSession">>, <<"">>,
+    [{path, "/"}, {http_only, true}, {max_age, 0}] ++ barrel_cookie_auth:secure(Req), Req),
+  Req3 = cowboy_req:set_resp_body(jsx:encode(#{ok => true}), Req2),
+  {Next, Req4} = cowboy_req:qs_val(<<"next">>, Req3),
+  case Next of
+    undefined ->
+      {true, Req4, State};
+    _ ->
+      {ok, Req5} = cowboy_req:reply(302, [{<<"Location">>, Next}], Req4),
+      {halt, Req5, State}
+  end.
 
 delete_completed(Req, State) -> {true, Req, State}.

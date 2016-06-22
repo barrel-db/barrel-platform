@@ -29,6 +29,7 @@
 authenticate(Req, Env) ->
   case cowboy_req:cookie(<<"AuthSession">>, Req) of
     {undefined, _} -> nil;
+    {<<>>, _} -> nil;
     {Cookie, Req2} ->
       [User, TimeBin, Hash] = try decode_auth_cookie(Cookie)
                                  catch
@@ -57,7 +58,7 @@ authenticate(Req, Env) ->
                   Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
                   {ok, UserCtx, Req3, Env};
                 false ->
-                  nil
+                  {error, unauthorized}
               end;
             _ ->
               nil
@@ -70,7 +71,8 @@ set_cookie_header(Req, User, Secret, true) ->
   Timestamp = cookie_time(),
   SessionData = << User/binary, ":", (integer_to_binary(Timestamp,16))/binary >>,
   Hash = crypto:hmac(sha, Secret, SessionData),
-  cowboy_req:set_resp_cookie(<<"AuthSession">>,   barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>),
+  cowboy_req:set_resp_cookie(<<"AuthSession">>,
+    barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>),
     [{path, <<"/">>}, {http_only, true}] ++ secure(Req) ++ max_age(), Req).
 
 

@@ -31,7 +31,7 @@ execute(Req, Env) ->
         false ->
           case barrel_server:get_env(require_valid_user) of
             true ->
-              {ok, Req2} = cowboy_req:reply(411, Req),
+              {ok, Req2} = cowboy_req:reply(401, Req),
               {halt, Req2};
             false ->
               Req2 = cowboy_req:set_meta(user_ctx, barrel_lib:adminctx(), Req),
@@ -39,7 +39,7 @@ execute(Req, Env) ->
           end
       end;
     {error, unauthorized} ->
-      {ok, Req2} = cowboy_req:reply(411, Req),
+      {ok, Req2} = cowboy_req:reply(401, Req),
       {halt, Req2};
     {ok, UserCtx, Req2, Env} ->
       Req3 = cowboy_req:set_meta(user_ctx, UserCtx, Req2),
