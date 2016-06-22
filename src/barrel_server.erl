@@ -87,6 +87,7 @@ process_config([E | Rest]) ->
 env() ->
   [
     dir,
+    config_dir,
     uri_file,
     delayed_commits,
     fsync_options,
@@ -148,8 +149,17 @@ env() ->
 
 
 default_env(dir) ->
-  Name = lists:concat(["Barrel.", node()]),
-  filename:absname(Name);
+  case init:get_argument(barrel_dir) of
+    {ok, [[D]]} -> D;
+    _ ->
+      Name = lists:concat(["data.", node()]),
+      filename:absname(Name)
+  end;
+default_env(config_dir) ->
+  case init:get_argument(config_dir) of
+    {ok, [[D]]} -> D;
+    _ -> undefined
+  end;
 default_env(uri_file) ->
   undefined;
 default_env(delayed_commits) ->
@@ -273,12 +283,25 @@ default_env(compaction_min_file_size) ->
 
 set_env(E, Val) -> barrel_lib:set(E, Val).
 
+get_env(config_dir) ->
+  case ?catch_val(config_dir) of
+    {'EXIT', _} ->
+      case application:get_env(barrel, config_dir, default_env(config_dir)) of
+        undefined ->
+          Dir = filename:join(get_env(dir), ".barrel"),
+          filelib:ensure_dir(filename:join(Dir, "dummy")),
+          set_env(config_dif, Dir),
+          Dir;
+        Val ->
+          Val
+      end;
+    Val -> Val
+  end;
 get_env(E) ->
   case ?catch_val(E) of
     {'EXIT', _} -> application:get_env(barrel, E, default_env(E));
     Val -> Val
   end.
-
 
 get_stats() ->
   {ok, #state{start_time=Time,dbs_open=Open}} =

@@ -169,9 +169,9 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 passwd_file() ->
-  DataDir = barrel_server:get_env(dir),
-  case filelib:wildcard(filename:join(DataDir, "PASSWD.*")) of
-    [] -> filename:join(DataDir, "PASSWD.0");
+  ConfigDir = barrel_server:get_env(config_dir),
+  case filelib:wildcard(filename:join(ConfigDir, "PASSWD.*")) of
+    [] -> filename:join(ConfigDir, "PASSWD.0");
     Files ->
       [Last |_] = lists:reverse(lists:sort(Files)),
       Last
@@ -196,8 +196,8 @@ init_local_users() ->
   end.
 
 reload(State) ->
-  DataDir = barrel_server:get_env(dir),
-  Backup = filename:join(DataDir, ".PASSWD.dbswp"),
+  ConfigDir = barrel_server:get_env(config_dir),
+  Backup = filename:join(ConfigDir, ".PASSWD.dbswp"),
   case filelib:is_file(Backup) of
     true -> file:delete(Backup);
     _ -> ok
