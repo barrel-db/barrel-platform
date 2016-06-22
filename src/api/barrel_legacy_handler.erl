@@ -70,12 +70,9 @@ options() ->
     {<<"/">>,  fun couch_httpd_misc_handlers:handle_welcome_req/1},
     {<<"_all_dbs">>, fun couch_httpd_misc_handlers:handle_all_dbs_req/1},
     {<<"_active_tasks">>, fun couch_httpd_misc_handlers:handle_task_status_req/1},
-    {<<"_config">>, fun couch_httpd_misc_handlers:handle_config_req/1},
     {<<"_replicate">>, fun couch_replicator_httpd:handle_req/1},
     {<<"_uuids">>, fun couch_httpd_misc_handlers:handle_uuids_req/1},
-    {<<"_restart">>, fun couch_httpd_misc_handlers:handle_restart_req/1},
     {<<"_stats">>, fun couch_httpd_metrics:handle_req/1},
-    {<<"_log">>, fun couch_httpd_misc_handlers:handle_log_req/1},
     {<<"_session">>, fun couch_httpd_auth:handle_session_req/1},
     {<<"_oauth">>, fun couch_httpd_oauth:handle_oauth_req/1},
     {<<"_db_updates">>, fun couch_dbupdates_httpd:handle_req/1}
@@ -105,9 +102,6 @@ options() ->
   UrlHandlers = dict:from_list(UrlHandlersList),
   DbUrlHandlers = dict:from_list(DbUrlHandlersList),
   DesignUrlHandlers = dict:from_list(DesignUrlHandlersList),
-
-  % add barrel log event handler
-  lager_handler_watcher:start(lager_event, barrel_log_event_handler, []),
 
   [{url_handlers, UrlHandlers}, {db_url_handlers, DbUrlHandlers},
     {design_url_handlers, DesignUrlHandlers}, {default_fun, DefaultFun},
