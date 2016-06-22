@@ -33,7 +33,7 @@
 
 %% NOTE: until the old mochiweb interface is enabled start on the port 5985.
 -define(DEFAULT_ADDRESS, "127.0.0.1").
-
+-define(DEFAULT_SCHEME, http).
 
 -define(DEFAULT_MAX_CONNECTIONS, 10000).
 -define(DEFAULT_NB_ACCEPTORS, 10).
@@ -42,12 +42,12 @@
 
 
 -spec get_listeners() -> list().
-get_listeners() -> lists:usort(barrel_server:get_env(listeners)).
+get_listeners() -> lists:usort(barrel_server:get_env(listen)).
 
 
 -spec binding_spec(atom(), list()) -> tuple().
-binding_spec(Scheme, Opts) ->
-  {Ip, Port, Ref} = binding(Scheme, Opts),
+binding_spec(Ref, Opts) ->
+  {Scheme, Ip, Port} = binding(Opts),
   NbAcceptors = proplists:get_value(nb_acceptors, Opts, ?DEFAULT_NB_ACCEPTORS),
   TransportOpts = transport_opts(Scheme, Ip, Port, Opts),
   Transport = scheme_to_transport(Scheme),
@@ -55,8 +55,8 @@ binding_spec(Scheme, Opts) ->
   ranch:child_spec(Ref, NbAcceptors, Transport, TransportOpts, cowboy_protocol, ProtoOpts).
 
 web_uris() ->
-  Acc = lists:foldl(fun({Scheme, Opts}, Acc1) ->
-      {_Ip, _Port, Ref} = binding(Scheme, Opts),
+  Acc = lists:foldl(fun({Ref, Opts}, Acc1) ->
+      {Scheme, _Ip, _Port} = binding(Opts),
       {LAddr, LPort} = ranch:get_addr(Ref),
       URI = lists:flatten([atom_to_list(Scheme), "://", inet:ntoa(LAddr), ":", integer_to_list(LPort)]),
       [list_to_binary(URI) | Acc1]
@@ -72,16 +72,6 @@ parse_address({_, _, _, _, _, _, _, _}= Addr) -> Addr;
 parse_address(S) ->
     {ok, Addr} = inet:parse_address(S),
     Addr.
-
-spec_name(Scheme, Ip, Port) ->
-  FormattedIP = if is_tuple(Ip); tuple_size(Ip) == 4 ->
-                     inet_parse:ntoa(Ip);
-                   is_tuple(Ip); tuple_size(Ip) == 8 ->
-                     [$[, inet_parse:ntoa(Ip), $]];
-                   true -> Ip
-                end,
-  list_to_atom(lists:flatten(io_lib:format("~s://~s:~p", [Scheme, FormattedIP, Port]))).
-
 
 transport_opts(http, Ip, Port, Opts) ->
   common_opts(Ip, Port, Opts);
@@ -104,15 +94,12 @@ protocol_opts() ->
   [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware, barrel_auth_middleware,
     cowboy_router, cowboy_handler]}].
 
-binding(Scheme, Opts) ->
+binding(Opts) ->
   Port = proplists:get_value(port, Opts, 0),
   Addr = proplists:get_value(address, Opts, ?DEFAULT_ADDRESS),
   Ip = parse_address(Addr),
-  Ref = case proplists:get_value(name, Opts) of
-          undefined -> spec_name(Scheme, Ip, Port);
-          Name -> Name
-        end,
-  {Ip, Port, Ref}.
+  Scheme = proplists:get_value(scheme, Opts, ?DEFAULT_SCHEME),
+  {Scheme, Ip, Port}.
 
 routes() ->
   [
@@ -134,13 +121,5 @@ host(Req) ->
   end.
 
 cleanup_listener_opts(Ref) ->
-  cleanup_listener_opts(barrel_lib:val(listeners, []), [], Ref).
-
-cleanup_listener_opts([], Listeners, Ref) ->
-  barrel_lib:set(listeners, lists:reverse(Listeners)),
-  ranch_server:cleanup_listener_opts(Ref);
-cleanup_listener_opts([{Scheme, Opts}=Listener | Rest], Listeners, Ref) ->
-  case binding(Scheme, Opts) of
-    {_Ip, _Port, Ref} -> cleanup_listener_opts(Rest, Listeners, Ref);
-    _ -> cleanup_listener_opts(Rest, [Listener | Listeners], Ref)
-  end.
+  Listeners = proplists:delete(Ref, barrel_lib:val(listeners, [])),
+  barrel_lib:set(listeners, Listeners).

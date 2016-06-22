@@ -99,7 +99,7 @@ env() ->
     doc_buffer_size,
     checkpoint_after,
     stem_interactive_updates,
-    listeners,
+    listen,
     start_console,
     x_forwarded_host,
     x_forwarded_ssl,
@@ -182,7 +182,7 @@ default_env(checkpoint_after) ->
   524288 * 10;
 default_env(stem_interactive_updates) ->
   true;
-default_env(listeners) ->
+default_env(listen) ->
   [];
 default_env(start_console) ->
   false;

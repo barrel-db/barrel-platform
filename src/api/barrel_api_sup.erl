@@ -57,7 +57,7 @@ init([]) ->
 %%%===================================================================
 
 web_processes(Listeners) ->
-  [barrel_api_http:binding_spec(Scheme, Opts) || {Scheme, Opts} <- Listeners].
+  [barrel_api_http:binding_spec(Ref, Opts) || {Ref, Opts} <- Listeners].
 
 %% TODO: move the CORS config initialisation to a config hook
 init_config() ->

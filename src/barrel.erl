@@ -20,22 +20,19 @@
 
 %% API
 -export([
-  start_listener/3,
+  start_listener/2,
   stop_listener/1,
   start_console/1,
   stop_console/0,
   info/0
 ]).
 
--type scheme() :: http | https.
-
--spec start_listener(atom(), scheme(), list()) -> ok | {error, term()}.
-start_listener(Ref, Scheme, Opts0) when is_atom(Ref) ->
-  Opts = [{name, Ref} | Opts0],
-  Res = supervisor:start_child(barrel_api_sup, barrel_api_http:binding_spec(Scheme, Opts)),
+-spec start_listener(atom(), list()) -> ok | {error, term()}.
+start_listener(Ref, Opts) when is_atom(Ref) ->
+  Res = supervisor:start_child(barrel_api_sup, barrel_api_http:binding_spec(Ref, Opts)),
   case Res of
     {ok, _Pid} ->
-      Listeners = [{Scheme, Opts} | barrel_lib:val(listeners, [])],
+      Listeners = [{Ref, Opts} | barrel_lib:val(listen, [])],
       barrel_lib:set(listeners, Listeners),
       ok;
     Error ->
