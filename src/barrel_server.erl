@@ -290,7 +290,7 @@ get_env(config_dir) ->
         undefined ->
           Dir = filename:join(get_env(dir), ".barrel"),
           filelib:ensure_dir(filename:join(Dir, "dummy")),
-          set_env(config_dif, Dir),
+          set_env(config_dir, Dir),
           Dir;
         Val ->
           Val

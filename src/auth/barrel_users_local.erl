@@ -39,7 +39,6 @@
 
 -define(SERVER, ?MODULE).
 
-
 -define(LOCAL_USERS, barrel_local_users).
 -define(LOCAL_USERS_ROLES, barrel_local_roles).
 
@@ -170,8 +169,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 passwd_file() ->
   ConfigDir = barrel_server:get_env(config_dir),
-  case filelib:wildcard(filename:join(ConfigDir, "PASSWD.*")) of
-    [] -> filename:join(ConfigDir, "PASSWD.0");
+  case filelib:wildcard(filename:join(ConfigDir, "users.*")) of
+    [] -> filename:join(ConfigDir, "users.0");
     Files ->
       [Last |_] = lists:reverse(lists:sort(Files)),
       Last
@@ -197,7 +196,7 @@ init_local_users() ->
 
 reload(State) ->
   ConfigDir = barrel_server:get_env(config_dir),
-  Backup = filename:join(ConfigDir, ".PASSWD.dbswp"),
+  Backup = filename:join(ConfigDir, ".users.swp"),
   case filelib:is_file(Backup) of
     true -> file:delete(Backup);
     _ -> ok
@@ -259,7 +258,7 @@ read_file(Name) ->
         Error -> Error
       end;
     {error, Reason} ->
-      {error, "failed to read the password file: " ++ atom_to_list(Reason)}
+      {error, "failed to read the users file: " ++ atom_to_list(Reason)}
   end.
 
 read_file1(Name, Size) ->
@@ -300,8 +299,8 @@ process_line(<<";", _/binary>>) -> ok; %% comment line
 process_line(<<"#", _/binary>>) -> ok; %% comment line
 process_line(Line) ->
   case catch binary:split(Line, <<":">>, [global]) of
-    [] -> {error, "error when reading the password file"};
-    [Line] -> {error, "Failed to process the password file"};
+    [] -> {error, "error when reading the users file"};
+    [Line] -> {error, "Failed to process the users file"};
     [Name, <<>>] ->
       ets:insert(?LOCAL_USERS, {Name, null_doc()}),
       ok;
@@ -330,7 +329,7 @@ parse_password(<<"{pbkdf2}", Bin/binary>>) ->
       [DerivedKey, Salt, binary_to_integer(Iterations)];
     _ -> throw({error, "Failed to process file. Invalid password."})
   end;
-parse_password( <<"{", _/binary>>) -> throw({error, "Failed to process the password file. Invalid password."}) ;
+parse_password( <<"{", _/binary>>) -> throw({error, "Failed to process the users file. Invalid password."}) ;
 parse_password(ClearPassword) ->
   put(passwd_updated, true),
   Iterations = barrel_server:get_env(auth_pbkdf2_iterations),
@@ -348,7 +347,7 @@ parse_meta([<<>>], Acc) -> Acc;
 parse_meta([KV | Rest], Acc) ->
   case binary:split(KV, <<"=">>) of
     [K, V] -> parse_meta(Rest, Acc#{K => V});
-    _ -> throw({error, "Failed to process the password file. Invalid meta"})
+    _ -> throw({error, "Failed to process the users file. Invalid meta"})
   end;
 parse_meta([], Acc) ->
   Acc.
@@ -365,14 +364,14 @@ create_file(Name) ->
         {{error,Reason}, _} ->
           {error,
             lists:flatten(
-              io_lib:format("Failed to write to password file '~ts': ~p", [Name, Reason]))};
+              io_lib:format("Failed to write to users file '~ts': ~p", [Name, Reason]))};
         {ok, {error, Reason}} ->
           {error, "Failed to change mode: " ++ atom_to_list(Reason)}
       end;
     {error,Reason} ->
       {error,
         lists:flatten(
-          io_lib:format("Failed to create password file '~ts': ~p", [Name, Reason]))}
+          io_lib:format("Failed to create users file '~ts': ~p", [Name, Reason]))}
   end.
 
 update_file(Name) ->
@@ -411,7 +410,7 @@ update_file(Name) ->
           barrel_lib:delete_file(NewName, true),
           {error,
             lists:flatten(
-              io_lib:format("Failed to update the password file '~ts': ~p", [NewName, Reason]))};
+              io_lib:format("Failed to update the users file '~ts': ~p", [NewName, Reason]))};
         {ok, {error, Reason}} ->
           barrel_lib:delete_file(NewName, true),
           {error, "Failed to change mode: " ++ atom_to_list(Reason)}
@@ -425,8 +424,8 @@ update_file(Name) ->
 inc_file(Name) ->
   [S] = string:tokens(filename:extension(Name), "."),
   I = list_to_integer(S) +1,
-  Root = barrel_server:get_env(dir),
-  filename:join(Root, lists:flatten(["PASSWD", ".", integer_to_list(I)])).
+  Root = barrel_server:get_env(config_dir),
+  filename:join(Root, lists:flatten(["users", ".", integer_to_list(I)])).
 
 
 make_info(Name) ->
