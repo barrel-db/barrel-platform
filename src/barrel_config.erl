@@ -37,7 +37,6 @@ config_file() ->
 init_config() ->
   case read_file(config_file()) of
     {ok, Config} ->
-      io:format("got config:~n~p~n", [Config]),
       process_config(Config);
     {error, Error} ->
       error_logger:error_msg(Error, []),
@@ -46,15 +45,10 @@ init_config() ->
 
 read_file(Name) ->
   case fast_yaml:decode_from_file(Name, [plain_as_atom]) of
-    {ok, []} ->
-      {ok, []};
-    {ok, [Document|_]} ->
-      {ok, parserl(Document)};
-    {error, enoent} ->
-      lager:info("no config file found", []),
-      {ok, []};
-    Error ->
-      Error
+    {ok, []} -> {ok, []};
+    {ok, [Document|_]} ->{ok, parserl(Document)};
+    {error, enoent} -> {ok, []};
+    Error -> Error
   end.
 
 %% TODO: add validation
