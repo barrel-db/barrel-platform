@@ -1,17 +1,22 @@
-language: erlang
+language: elixir
+elixir:
+  - 1.2.4
 otp_release:
-- 18.0
-- 18.1
+  - 18.0
+  - 18.1
 sudo: true
+env:
+  matrix:
+    - BUILD='elixir'
+    - BUILD='erlang'
 before_install:
-- sudo apt-get -y update
-- sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
-- sudo apt-get -y install libtool automake autoconf autoconf-archive
+  - sudo apt-get -y update
+  - sudo apt-get -y install libicu-dev libmozjs185-dev pkg-config help2man libcurl4-openssl-dev
+  - sudo apt-get -y install libtool automake autoconf autoconf-archive
 install:
-- "./support/bootstrap_travis.sh"
+  - "./support/bootstrap_travis.sh"
 script:
-- ./rebar3 eunit --dir="test"
-- ./rebar3 ct
+  - "./support/run_tests.sh"
 notifications:
   email:
   - bchesneau@gmail.com

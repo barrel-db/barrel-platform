@@ -4,6 +4,7 @@ defmodule Mix.Tasks.Rel do
   @shortdoc "Barrel release manager"
 
   def run(_args) do
+    File.touch("config/relx.config")
     case Mix.env do
         :prod -> config(:rel)
         _ -> config(:devrel)
