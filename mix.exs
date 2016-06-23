@@ -30,20 +30,22 @@ defmodule Barrel.Mixfile do
         :ssl,
         :os_mon,
         :inets,
+        :p1_utils,
         :gproc,
         :ibrowse,
-        :snappy,
         :jsx,
         :ucol,
         :oauth,
-        :mochiweb,
-        :mochicow,
+        :fast_yaml,
         :ranch,
         :cowboy,
+        :mochiweb,
+        :mochicow,
         :hooks,
         :econfig,
         :hackney,
-        :exometer_core
+        :exometer_core,
+        :snappy
       ]
     ]
   end
@@ -54,17 +56,18 @@ defmodule Barrel.Mixfile do
       {:exrm, "~> 0.18.1"},
       {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:hooks,  "~> 1.1.1"},
-      {:mochicow, git: "https://github.com/benoitc/mochicow.git", tag: "0.6.0"},
+      {:mochicow, "~> 0.6.4"},
       {:snappy, "~> 1.1"},
       {:ucol, "~> 2.0"},
       {:gproc, "~> 0.5.0"},
       {:oauth, "~> 1.6", hex: :barrel_oauth},
-      {:ibrowse, "~> 4.2", hex: :barrel_ibrowse},
+      {:ibrowse, "~> 4.3.1", hex: :barrel_ibrowse},
       {:hackney, "~> 1.6"},
       {:jsx, "~> 2.8.0"},
       {:stache, "~> 0.2.1"},
       {:econfig, "~> 0.7.3"},
-      {:exometer_core, "~> 1.0"}
+      {:exometer_core, "~> 1.4.0"},
+      {:fast_yaml, "~> 1.0.3"}
     ]
   end
 
