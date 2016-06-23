@@ -24,45 +24,58 @@
 -export([cookie_time/0]).
 -export([max_age/0]).
 -export([set_cookie_header/4]).
+-export([delete_cookie/1]).
 -export([secure/1]).
+
+-define(MALFORMED_COOKIE, <<"Malformed AuthSession cookie. Please clear your cookies.">>).
 
 authenticate(Req, Env) ->
   case cowboy_req:cookie(<<"AuthSession">>, Req) of
     {undefined, _} -> nil;
     {<<>>, _} -> nil;
     {Cookie, Req2} ->
-      [User, TimeBin, Hash] = try decode_auth_cookie(Cookie)
-                                 catch
-                                   _:_ ->
-                                     Reason = <<"Malformed AuthSession cookie. Please clear your cookies.">>,
-                                     {error, {bad_request, Reason}}
-                                 end,
-      Current = cookie_time(),
-      Secret = barrel_auth:secret(),
-      case barrel_auth_cache:get_user_creds(User) of
-        nil -> nil;
-        UserProps ->
-          UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
-          FullSecret = <<Secret/binary, UserSalt/binary>>,
-          ExpectedHash = crypto:hmac(sha, FullSecret, <<User/binary, ":", TimeBin/binary>>),
-          Timeout = timeout(),
-          case (catch binary_to_integer(TimeBin, 16)) of
-            Timestamp when Current < Timestamp + Timeout ->
-              case barrel_passwords:verify(ExpectedHash, Hash) of
-                true ->
-                  TimeLeft = Timestamp + Timeout - Current,
-                  ResetCookie = TimeLeft < Timeout*0.9,
-                  UserCtx = barrel_lib:userctx([{name, User},
-                    {roles, maps:get(<<"roles">>, UserProps, [])},
-                    {auth, {FullSecret, ResetCookie}}]),
-                  Req3 = set_cookie_header(Req2, User, FullSecret, ResetCookie),
-                  {ok, UserCtx, Req3, Env};
-                false ->
-                  {error, unauthorized}
-              end;
-            _ ->
-              nil
-          end
+      Res = try decode_auth_cookie(Cookie)
+            catch
+              _:_ ->
+                {bad_request, ?MALFORMED_COOKIE}
+            end,
+
+      case Res of
+        [User, TimeBin, Hash] ->
+          authenticate1(User, TimeBin, Hash, Req2, Env);
+        _ when is_list(Res) ->
+          {bad_request, ?MALFORMED_COOKIE};
+        _ ->
+          Res
+      end
+  end.
+
+authenticate1(User, TimeBin, Hash, Req, Env) ->
+  Current = cookie_time(),
+  Secret = barrel_auth:secret(),
+  case barrel_auth_cache:get_user_creds(User) of
+    nil -> nil;
+    UserProps ->
+      UserSalt = maps:get(<<"salt">>, UserProps, <<>>),
+      FullSecret = <<Secret/binary, UserSalt/binary>>,
+      ExpectedHash = crypto:hmac(sha, FullSecret, <<User/binary, ":", TimeBin/binary>>),
+      Timeout = timeout(),
+      case (catch binary_to_integer(TimeBin, 16)) of
+        Timestamp when Current < Timestamp + Timeout ->
+          case barrel_passwords:verify(ExpectedHash, Hash) of
+            true ->
+              TimeLeft = Timestamp + Timeout - Current,
+              ResetCookie = TimeLeft < Timeout*0.9,
+              UserCtx = barrel_lib:userctx([{name, User},
+                {roles, maps:get(<<"roles">>, UserProps, [])},
+                {auth, {FullSecret, ResetCookie}}]),
+              Req2 = set_cookie_header(Req, User, FullSecret, ResetCookie),
+              {ok, UserCtx, Req2, Env};
+            false ->
+              {error, unauthorized}
+          end;
+        _ ->
+          nil
       end
   end.
 
@@ -74,6 +87,10 @@ set_cookie_header(Req, User, Secret, true) ->
   cowboy_req:set_resp_cookie(<<"AuthSession">>,
     barrel_lib:encodeb64url(<< SessionData/binary, ":", Hash/binary>>),
     [{path, <<"/">>}, {http_only, true}] ++ secure(Req) ++ max_age(), Req).
+
+delete_cookie(Req) ->
+  cowboy_req:set_resp_cookie(<<"AuthSession">>, <<"">>,
+    [{path, "/"}, {http_only, true}, {max_age, 0}] ++ secure(Req), Req).
 
 
 secure(Req) ->

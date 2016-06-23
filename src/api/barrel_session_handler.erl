@@ -127,8 +127,7 @@ create_session(Req, {_, User}=State) ->
   end.
 
 delete_resource(Req, State) ->
-  Req2 = cowboy_req:set_resp_cookie(<<"AuthSession">>, <<"">>,
-    [{path, "/"}, {http_only, true}, {max_age, 0}] ++ barrel_cookie_auth:secure(Req), Req),
+  Req2 = barrel_cookie_auth:delete_cookie(Req),
   Req3 = cowboy_req:set_resp_body(jsx:encode(#{ok => true}), Req2),
   {Next, Req4} = cowboy_req:qs_val(<<"next">>, Req3),
   case Next of

@@ -41,6 +41,10 @@ execute(Req, Env) ->
     {error, unauthorized} ->
       {ok, Req2} = cowboy_req:reply(401, Req),
       {halt, Req2};
+    {bad_request, Reason} ->
+      lager:error("authentication error: ~p~n",[Reason]),
+      {ok, Req2} = cowboy_req:reply(400, Req),
+      {halt, Req2};
     {ok, UserCtx, Req2, Env} ->
       Req3 = cowboy_req:set_meta(user_ctx, UserCtx, Req2),
       {ok, Req3, Env}
