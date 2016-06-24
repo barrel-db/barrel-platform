@@ -412,5 +412,7 @@ admin_doc() ->
   Obj = #{ <<"_id">> => <<"org.barrel.user:barrel">>,
            <<"name">> => <<"barrel">>,
            <<"roles">> => [<<"_admin">>],
-           <<"password">> => <<"admin">> },
+           <<"password">> => <<"admin">>,
+           <<"type">> => <<"user">>
+         },
   barrel_doc:from_json_obj(Obj).

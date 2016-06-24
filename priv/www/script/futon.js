@@ -83,25 +83,19 @@ function $$(node) {
       $.showDialog("dialog/_create_admin.html", {
         submit: function(data, callback) {
           if (!validateUsernameAndPassword(data, callback)) return;
-          $.couch.config({
-            success : function() {
-              setTimeout(function() {
-                doLogin(data.name, data.password, function(errors) {
-                  if(!$.isEmptyObject(errors)) {
-                    callback(errors);
-                    return;
-                  }
-                  doSignup(data.name, null, function(errors) {
-                    if (errors && errors.name && errors.name.indexOf && errors.name.indexOf("taken") == -1) {
-                      callback(errors);
-                    } else {
-                      callback();
-                    }
-                    }, false);
-                  });
-              }, 200);
+          // check whether we have a config entry
+          var db = $.couch.db("_users");
+          var docId = "org.barrel.user:" + data.name;
+
+          doc = {_id: docId, roles: ["_admin"], password: data.password, name: data.name, type: "user"};
+          db.saveDoc(doc, {
+            success: function() {
+              location.reload();
+            },
+            error:  function(status, error, reason) {
+              alert("Error: " + error + "\n\n" + reason);
             }
-          }, "admins", data.name, data.password);
+          });
         }
       });
       return false;
