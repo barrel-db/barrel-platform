@@ -8,7 +8,7 @@ defmodule Barrel.Mixfile do
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      compilers: Mix.compilers,
-     erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
+     erlc_options: [:debug_info, 'DHUT_LAGER', parse_transform: :lager_transform, parse_transform: :mochicow],
      deps: deps,
      package: package,
      description: description
@@ -21,6 +21,7 @@ defmodule Barrel.Mixfile do
       applications:
       [
         :barrel_ex_logger,
+        #:lager,
         :kernel,
         :stdlib,
         :crypto,
