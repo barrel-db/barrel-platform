@@ -39,9 +39,9 @@
             throw({forbidden: 'doc.roles must be an array'});
         }
 
-        if (newDoc._id !== ('org.couchdb.user:' + newDoc.name)) {
+        if (newDoc._id !== ('org.barrel.user:' + newDoc.name)) {
             throw({
-                forbidden: 'Doc ID must be of the form org.couchdb.user:name'
+                forbidden: 'Doc ID must be of the form org.barrel.user:name'
             });
         }
 
@@ -52,10 +52,7 @@
         }
 
         if (newDoc.password_sha && !newDoc.salt) {
-            throw({
-                forbidden: 'Users with password_sha must have a salt.' +
-                    'See /_utils/script/couch.js for example code.'
-            });
+            throw({forbidden: 'Users with password_sha must have a salt.'});
         }
 
         if (newDoc.password_scheme === \"pbkdf2\") {
@@ -146,19 +143,12 @@
 ">>).
 
 
--define(OAUTH_MAP_FUN, <<"
-    function(doc) {
-        if (doc.type === 'user' && doc.oauth && doc.oauth.consumer_keys) {
-            for (var consumer_key in doc.oauth.consumer_keys) {
-                for (var token in doc.oauth.tokens) {
-                    var obj = {
-                        'consumer_secret': doc.oauth.consumer_keys[consumer_key],
-                        'token_secret': doc.oauth.tokens[token],
-                        'username': doc.name
-                    };
-                    emit([consumer_key, token], obj);
-                }
-            }
+-define(AUTH_VIEW_BY_ROLES, #{<<"map">> => <<"
+function(doc) {
+    if (doc.roles) {
+        for (var i=0; i < doc.roles.length; i++) {
+            var role = doc.roles[i];
+            emit(role, doc.name);
         }
     }
-">>).
+}">>}).

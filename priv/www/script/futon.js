@@ -141,7 +141,7 @@ function $$(node) {
     function changePassword () {
       var updateUserDoc = function(resp, data) {
         // regular users get their _users doc updated
-        $.couch.db(resp.info.authentication_db).openDoc("org.couchdb.user:"+resp.userCtx.name, {
+        $.couch.db(resp.info.authentication_db).openDoc("org.barrel.user:"+resp.userCtx.name, {
           error: function () {
             // ignore 404
             location.reload();
@@ -182,30 +182,34 @@ function $$(node) {
               // admin users may have a config entry, change the password
               // there first. Update their user doc later, if it exists
               if (resp.userCtx.roles.indexOf("_admin") > -1) { // user is admin
+
+
                 // check whether we have a config entry
-                $.couch.config({
-                  success : function (response) { // er do have a config entry
-                    $.couch.config({
-                      success : function () {
-                        window.setTimeout(function() {
-                          doLogin(resp.userCtx.name, data.password, function(errors) {
-                            if(!$.isEmptyObject(errors)) {
-                              callback(errors);
-                              return;
-                            } else {
-                              location.reload();
-                            }
-                          });
-                        }, 1000);
+                var db = $.couch.db("_users");
+                var docId = "org.barrel.user:" + resp.userCtx.name;
+                function save(doc) {
+                  if (!doc) {
+                    doc = {_id: docId, roles: ["_admin"], password: data.password, name: resp.userCtx.name};
+                    db.saveDoc(doc, {
+                      success: function(resp) {
+                        location.reload();
                       },
-                      error: function(status, e, reason) {
-                        callback('Could not persist the new password: ' + reason);
+                      error:  function(status, error, reason) {
+                        alert("Error: " + error + "\n\n" + reason);
                       }
-                    }, "admins", resp.userCtx.name, data.password);
+                    });
                   }
-                }, "admins", resp.userCtx.name);
-              } else { // non-admin users, update their user doc
-                updateUserDoc(resp, data);
+                }
+
+                db.openDoc(docId, {
+                  error: function(status, error, reason) {
+                    if (status == 404) save(null);
+                    else alert("Error: " + error + "\n\n" + reason);
+                  },
+                  success: function(doc) {
+                    save(doc);
+                  }
+                });
               }
             }
           });

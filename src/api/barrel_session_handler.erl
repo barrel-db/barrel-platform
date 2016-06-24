@@ -58,26 +58,30 @@ is_authorized(Req, {UserCtx, _} = State) ->
     <<"GET">> ->
       ForceLogin = cowboy_req:qs_val(<<"basic">>, Req) =:= <<"true">>,
       case barrel_lib:userctx_get(name, UserCtx) of
-        null when ForceLogin =:= true -> {false, Req2, State};
+        null when ForceLogin =:= true -> {{false, <<"">>}, Req2, State};
         _ -> {true, Req2, State}
       end;
     <<"POST">> ->
+      Error = #{error => <<"unauthorized">>, reason => <<"Name or password is incorrect.">>},
       case cowboy_req:parse_header(<<"content-type">>, Req2) of
         {ok,{<<"application">>,<<"x-www-form-urlencoded">>, _}, Req3} ->
           {ok, Form, Req4} = cowboy_req:body_qs(Req3),
           case check_session(Form, State) of
             {true, NewState} -> {true, Req4, NewState};
-            {false, _} -> {false, Req4, State}
+            {false, _} ->
+              Req5 = cowboy_req:set_resp_body(jsx:encode(Error), Req4),
+              {{false, <<"">>}, Req5, State}
           end;
         {ok, {<<"application">>, <<"json">>, _}, Req3} ->
           {ok, Bin, Req4} = cowboy_req:body(Req3),
           Form = jsx:decode(Bin),
           case check_session(Form, State) of
             {true, NewState} -> {true, Req4, NewState};
-            {false, _} -> {false, Req4, State}
+            {false, _} ->
+              Req5 = cowboy_req:set_resp_body(jsx:encode(Error), Req4),
+              {{false, <<"">>}, Req5, State}
           end;
         _Else ->
-          io:format("got else ~p~n", [_Else]),
           {true, Req2, State}
        end;
     _ ->

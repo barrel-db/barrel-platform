@@ -29,6 +29,7 @@
 -export([init/1,handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include_lib("kernel/include/file.hrl").
+-include("barrel.hrl").
 
 %%%===================================================================
 %%% Types
@@ -40,7 +41,18 @@
 %%% API
 %%%===================================================================
 
-secret() -> gen_server:call(barrel_auth, get_secret).
+secret() ->
+  case ?catch_val(auth_secret) of
+    {'EXIT', _} ->
+      case application:get_env(barrel, auth_secret) of
+        {ok, S} -> S;
+        _ ->
+          S = gen_server:call(barrel_auth, get_secret),
+          barrel_lib:set(auth_secret, S),
+          S
+      end;
+    S -> S
+  end.
 
 secret(Secret) -> get_server:call(barrel_auth, {set_secret, node(), Secret}).
 
@@ -61,6 +73,7 @@ init([]) ->
 handle_call(get_secret, _From, #{secret := S}=State) ->
   {reply, S, State};
 handle_call({set_secret, Node, Secret}, _From, State) when Node =:= node() ->
+  barrel_lib:set(auth_secret, Secret),
   {reply, ok, State#{secret => Secret}}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
@@ -100,10 +113,12 @@ init_secret() ->
   end.
 
 read_secret() ->
-  DataDir = barrel_server:get_env(dir),
-  Name = filename:join(DataDir, ".barrel_secret"),
-  filelib:ensure_dir(Name),
-  read_secret(Name).
+  case init:get_argument(home) of
+    {ok, [[Home]]} ->
+      read_secret(filename:join(Home, ".barrel.cookie"));
+    _ ->
+      {error, "No home for barrel cookie file"}
+  end.
 
 read_secret(Name) ->
   case file:raw_read_file_info(Name) of

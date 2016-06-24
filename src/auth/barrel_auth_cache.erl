@@ -17,6 +17,7 @@
 
 % public API
 -export([get_user_creds/1]).
+-export([has_admins/0]).
 -export([start_link/0]).
 
 % gen_server API
@@ -32,6 +33,7 @@
 
 -define(DEFAULT_USERDB, <<"_users">>).
 -define(DEFAULT_CACHE_SIZE, 50).
+-define(DNAME, <<"_design/_auth" >>).
 
 -record(state, {
     max_cache_size = 0,
@@ -44,15 +46,26 @@
 -spec get_user_creds(UserName::string() | binary()) ->
     Credentials::list() | nil.
 
-get_user_creds(UserName) when is_list(UserName) ->
-    get_user_creds(list_to_binary(UserName));
-
 get_user_creds(UserName) ->
-    UserCreds = case barrel_users_local:get_user(UserName) of
-                    {ok, Doc} -> Doc;
-                    {error, not_found} -> get_from_cache(UserName)
-                end,
+    UserCreds = get_from_cache(barrel_lib:to_binary(UserName)),
     validate_user_creds(UserCreds).
+
+has_admins() ->
+  exec_if_auth_db(
+    fun(Db) ->
+      Args = [{start_key, <<"_admin">>}, {end_key, <<"_admin">>}, {limit,1}],
+      {ok, Acc} = couch_mrview:query_view(Db, ?DNAME,
+        <<"by_roles">>, Args, fun view_cb/2, nil),
+      Acc /= []
+    end).
+
+
+view_cb({row, Row}, _Acc) ->
+  Val = proplists:get_value(value, Row),
+  {ok, Val};
+view_cb(_Other, Acc) ->
+  {ok, Acc}.
+
 
 get_from_cache(UserName) ->
     exec_if_auth_db(
@@ -69,7 +82,6 @@ get_from_cache(UserName) ->
         end,
         nil
     ).
-
 
 validate_user_creds(nil) ->
     nil;
@@ -181,8 +193,6 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-
-
 clear_cache(State) ->
     exec_if_auth_db(fun(AuthDb) -> catch couch_db:close(AuthDb) end),
     true = ets:delete_all_objects(?BY_USER),
@@ -275,7 +285,7 @@ user_creds(#doc{} = Doc) ->
     Creds.
 
 
-is_user_doc(#doc_info{id = <<"org.couchdb.user:", UserName/binary>>}) ->
+is_user_doc(#doc_info{id = <<"org.barrel.user:", UserName/binary>>}) ->
     {true, UserName};
 is_user_doc(_) ->
     false.
@@ -334,10 +344,10 @@ get_user_props_from_db(UserName) ->
     exec_if_auth_db(
         fun(AuthDb) ->
             Db = reopen_auth_db(AuthDb),
-            DocId = <<"org.couchdb.user:", UserName/binary>>,
+            DocId = <<"org.barrel.user:", UserName/binary>>,
             try
                 {ok, Doc} = couch_db:open_doc(Db, DocId, [conflicts]),
-                {DocProps} = barrel_doc:to_json_obj(Doc, []),
+                DocProps = barrel_doc:to_json_obj(Doc, []),
                 DocProps
             catch
             _:_Error ->
@@ -351,33 +361,56 @@ ensure_users_db_exists(Options) ->
     Options1 = [{user_ctx, barrel_lib:adminctx()}, nologifmissing | Options],
     case couch_db:open(<<"_users">>, Options1) of
     {ok, Db} ->
-        ensure_auth_ddoc_exists(Db, <<"_design/_auth">>),
+        setup_db(Db),
         {ok, Db};
     _Error ->
         {ok, Db} = couch_db:create(<<"_users">>, Options1),
-        ok = ensure_auth_ddoc_exists(Db, <<"_design/_auth">>),
+        ok = setup_db(Db),
         {ok, Db}
     end.
 
-ensure_auth_ddoc_exists(Db, DDocId) ->
-    case couch_db:open_doc(Db, DDocId) of
-    {not_found, _Reason} ->
-        {ok, AuthDesign} = auth_design_doc(DDocId),
-        {ok, _Rev} = couch_db:update_doc(Db, AuthDesign, []);
-    {ok, Doc} ->
-        Obj = barrel_doc:to_json_obj(Doc, []),
-        case maps:get(<<"validate_doc_update">>, Obj, #{}) of
-            ?AUTH_DB_DOC_VALIDATE_FUNCTION -> ok;
-            _ ->
-                Obj1 = Obj#{ <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION},
-                couch_db:update_doc(Db, barrel_doc:from_json_obj(Obj1), [])
-        end
-    end,
-    ok.
+setup_db(Db) ->
+  UserDoc = case couch_db:open_doc(Db, <<"_design/_auth">>) of
+              {not_found, _} ->
+                [auth_design_doc()];
+              {ok, D} ->
+                Obj = barrel_doc:to_json_obj(D, []),
+                ValidFun = maps:get(<<"validate_doc_update">>, Obj, undefined),
+                Views = maps:get(<<"views">>, Obj, #{}),
+                ByRolesFun = maps:get(<<"by_roles">>, Views, undefined),
 
-auth_design_doc(DocId) ->
-    Obj = #{<<"_id">> => DocId,
-            <<"language">> => <<"javascript">>,
-            <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION
-            },
-    {ok, barrel_doc:from_json_obj(Obj)}.
+                Reset = ValidFun /= ?AUTH_DB_DOC_VALIDATE_FUNCTION
+                  orelse ByRolesFun /= ?AUTH_VIEW_BY_ROLES,
+
+                case Reset of
+                  false -> [];
+                  true ->
+                    Views1 = Views#{<<"by_roles">> => ?AUTH_VIEW_BY_ROLES},
+                    Obj1 = Obj#{ <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION,
+                                 <<"views">> => Views1},
+                    [barrel_doc:from_json_obj(Obj1)]
+                end
+            end,
+  AdminDoc = case couch_db:open_doc(Db, <<"org.barrel.user:barrel">>) of
+               {not_found, _} ->
+                 [admin_doc()];
+               {ok, _D} ->
+                 []
+             end,
+  {ok, _} = couch_db:update_docs(Db, UserDoc ++ AdminDoc),
+  ok.
+
+auth_design_doc() ->
+    Obj = #{  <<"_id">> => <<"_design/_auth">>,
+              <<"language">> => <<"javascript">>,
+              <<"validate_doc_update">> => ?AUTH_DB_DOC_VALIDATE_FUNCTION,
+              <<"views">> => #{ <<"by_roles">> => ?AUTH_VIEW_BY_ROLES }
+           },
+    barrel_doc:from_json_obj(Obj).
+
+admin_doc() ->
+  Obj = #{ <<"_id">> => <<"org.barrel.user:barrel">>,
+           <<"name">> => <<"barrel">>,
+           <<"roles">> => [<<"_admin">>],
+           <<"password">> => <<"admin">> },
+  barrel_doc:from_json_obj(Obj).

@@ -283,6 +283,7 @@ default_env(compaction_min_file_size) ->
 
 set_env(E, Val) -> barrel_lib:set(E, Val).
 
+get_env(auth_secret) -> barrel_auth:secret();
 get_env(config_dir) ->
   case ?catch_val(config_dir) of
     {'EXIT', _} ->

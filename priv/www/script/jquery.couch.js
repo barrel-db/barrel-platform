@@ -184,7 +184,7 @@
       user_doc.password = password;
       user_doc.roles =  user_doc.roles || [];
       user_doc.type =  user_doc.type = "user" || [];
-      var user_prefix = "org.couchdb.user:";
+      var user_prefix = "org.barrel.user:";
       user_doc._id = user_doc._id || user_prefix + user_doc.name;
 
       $.couch.userDb(function(db) {
@@ -211,6 +211,8 @@
         },
         complete: function(req) {
           var resp = $.parseJSON(req.responseText);
+          console.log(req);
+          console.log(options);
           if (req.status == 200) {
             if (options.success) options.success(resp);
           } else if (options.error) {

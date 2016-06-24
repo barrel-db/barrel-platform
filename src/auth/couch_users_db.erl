@@ -107,7 +107,7 @@ after_doc_read(Doc, #db{user_ctx = UserCtx} = Db) ->
         end
     end.
 
-get_doc_name(#doc{id= <<"org.couchdb.user:", Name/binary>>}) -> Name;
+get_doc_name(#doc{id= <<"org.barrel.user:", Name/binary>>}) -> Name;
 get_doc_name(_) -> undefined.
 
 strip_non_public_fields(#doc{body=Body}=Doc) ->
