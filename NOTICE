@@ -13,26 +13,5 @@ third parties attributions
  * Apache CouchDB http://couchdb.apache.org
    Copyright 2009-2014 The Apache Software Foundation
 
- * rebar https://github.com/rebar/rebar
-
-   Copyright (c) 2009 Dave Smith (dizzyd@dizzyd.com)
-
- * rel/files/app_epath.sh https://github.com/basho/node_package
-
-   Copyright 2014 Basho - Apache License 2
-
- * rel/files/env.sh https://github.com/basho/node_package
-
-   Copyright 2014 Basho - Apache License 2
-
- * rel/files/erl https://github.com/basho/node_package
-
-   Copyright 2014 Basho - Apache License 2
-
- * rel/files/nodetool https://github.com/basho/node_package
-
-   Copyright 2014 Basho - Apache License 2
-
- * rel/files/runner https://github.com/basho/node_package
-
-   Copyright 2014 Basho - Apache License 2
+ * log.hrl - Copyright (c) 2016 Tino Breddin
+   Under the MIT License.
