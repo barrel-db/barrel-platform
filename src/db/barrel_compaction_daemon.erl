@@ -28,6 +28,7 @@
 -export([code_change/3, terminate/2]).
 
 -include("couch_db.hrl").
+-include("log.hrl").
 
 -define(CONFIG_ETS, couch_compaction_daemon_config).
 
@@ -232,10 +233,10 @@ maybe_compact_db(DbName, Config) ->
               end;
             {'DOWN', DbMonRef, process, _, Reason} ->
               couch_db:close(Db),
-              lager:error("Compaction daemon - an error ocurred while"
+              ?log(error, "Compaction daemon - an error ocurred while"
               " compacting the database `~s`: ~p", [DbName, Reason])
           after TimeLeft ->
-            lager:info("Compaction daemon - canceling compaction for database"
+            ?log(info, "Compaction daemon - canceling compaction for database"
             " `~s` because it's exceeding the allowed period.",
               [DbName]),
             erlang:demonitor(DbMonRef, [flush]),
@@ -307,12 +308,12 @@ maybe_compact_view(DbName, GroupId, Config) ->
             {'DOWN', MonRef, process, _, normal} ->
               ok;
             {'DOWN', MonRef, process, _, Reason} ->
-              lager:error("Compaction daemon - an error ocurred while compacting"
+              ?log(error, "Compaction daemon - an error ocurred while compacting"
               " the view group `~s` from database `~s`: ~p",
                 [GroupId, DbName, Reason]),
               ok
           after TimeLeft ->
-            lager:info("Compaction daemon - canceling the compaction for the "
+            ?log(info, "Compaction daemon - canceling the compaction for the "
             "view group `~s` of the database `~s` because it's exceeding"
             " the allowed period.", [GroupId, DbName]),
             erlang:demonitor(MonRef, [flush]),
@@ -323,7 +324,7 @@ maybe_compact_view(DbName, GroupId, Config) ->
           ok
       end;
     Error ->
-      lager:error("Error opening view group `~s` from database `~s`: ~p",
+      ?log(error, "Error opening view group `~s` from database `~s`: ~p",
         [GroupId, DbName, Error]),
       ok
   end.
@@ -364,7 +365,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
     true ->
       {ok, DbInfo} = couch_db:get_db_info(Db),
       {Frag, SpaceRequired} = frag(DbInfo),
-      lager:debug("Fragmentation for database `~s` is ~p%, estimated space for"
+      ?log(debug, "Fragmentation for database `~s` is ~p%, estimated space for"
       " compaction is ~p bytes.", [Db#db.name, Frag, SpaceRequired]),
       case check_frag(Threshold, Frag) of
         false ->
@@ -375,7 +376,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
             true ->
               true;
             false ->
-              lager:warning("Compaction daemon - skipping database `~s` "
+              ?log(warning, "Compaction daemon - skipping database `~s` "
               "compaction: the estimated necessary disk space is about ~p"
               " bytes but the currently available disk space is ~p bytes.",
                 [Db#db.name, SpaceRequired, Free]),
@@ -394,7 +395,7 @@ can_view_compact(Config, DbName, GroupId, GroupInfo) ->
           false;
         false ->
           {Frag, SpaceRequired} = frag(GroupInfo),
-          lager:debug("Fragmentation for view group `~s` (database `~s`) is "
+          ?log(debug, "Fragmentation for view group `~s` (database `~s`) is "
           "~p%, estimated space for compaction is ~p bytes.",
             [GroupId, DbName, Frag, SpaceRequired]),
           case check_frag(Config#config.view_frag, Frag) of
@@ -406,7 +407,7 @@ can_view_compact(Config, DbName, GroupId, GroupInfo) ->
                 true ->
                   true;
                 false ->
-                  lager:warning("Compaction daemon - skipping view group `~s` "
+                  ?log(warning, "Compaction daemon - skipping view group `~s` "
                   "compaction (database `~s`): the estimated necessary "
                   "disk space is about ~p bytes but the currently available"
                   " disk space is ~p bytes.",
@@ -467,7 +468,7 @@ load_config() ->
                     {ok, Config}->
                       true = ets:insert(?CONFIG_ETS, {barrel_lib:to_binary(DbName), Config});
                     error ->
-                      lager:error("compaction tasks for ~p ignored.~n", [DbName])
+                      ?log(error, "compaction tasks for ~p ignored.~n", [DbName])
                   end
                 end, Compactions).
 

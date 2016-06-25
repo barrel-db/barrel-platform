@@ -13,10 +13,10 @@
 
 -define(__maybe_log(__Level, __Fun),
         ((fun() ->
-                   __UseGate = application:get_env(barrel_ex_logger, use_log_level_gate, ?default_use_log_level_gate),
+                   __UseGate = application:get_env(barrel_log, use_log_level_gate, ?default_use_log_level_gate),
                   case __UseGate of
                       true ->
-                          __CurrentLevel = application:get_env(barrel_ex_logger, level, ?default_log_level),
+                          __CurrentLevel = application:get_env(barrel_log, level, ?default_log_level),
                           __AllowedLevels = lists:dropwhile(fun(__Element) -> __Element =/= __CurrentLevel end, ?log_levels),
                           __IsEnabled = lists:member(__Level, __AllowedLevels),
                           case __IsEnabled of

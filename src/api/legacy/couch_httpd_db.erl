@@ -16,6 +16,7 @@
 -module(couch_httpd_db).
 -include_lib("couch_db.hrl").
 -include("couch_httpd.hrl").
+-include("log.hrl").
 
 -export([handle_request/1, handle_compact_req/2, handle_design_req/2,
          db_req/2, couch_doc_open/4,
@@ -631,7 +632,7 @@ update_doc(Req, Db, DocId, #doc{deleted=Deleted}=Doc, Headers, UpdateType) ->
                 case catch(couch_db:update_doc(Db, Doc, Options, UpdateType)) of
                 {ok, _} -> ok;
                 Error ->
-                    lager:info("Batch doc error (~s): ~p",[DocId, Error])
+                    ?log(info, "Batch doc error (~s): ~p",[DocId, Error])
                 end
             end),
         send_json(Req, 202, Headers, #{ok => true, id => DocId});

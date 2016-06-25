@@ -24,6 +24,7 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 -include_lib("couch_db.hrl").
+-include("log.hrl").
 
 -record(st, {
     idx,
@@ -66,12 +67,12 @@ handle_call({update, _IdxState}, _From, #st{pid=Pid}=State) when is_pid(Pid) ->
     {reply, ok, State};
 handle_call({update, IdxState}, _From, #st{idx=Idx, mod=Mod}=State) ->
     Args = [Mod:get(db_name, IdxState), Mod:get(idx_name, IdxState)],
-    lager:info("Starting index update for db: ~s idx: ~s", Args),
+    ?log(info, "Starting index update for db: ~s idx: ~s", Args),
     Pid = spawn_link(fun() -> update(Idx, Mod, IdxState) end),
     {reply, ok, State#st{pid=Pid}};
 handle_call({restart, IdxState}, _From, #st{idx=Idx, mod=Mod}=State) ->
     Args = [Mod:get(db_name, IdxState), Mod:get(idx_name, IdxState)],
-    lager:info("Restarting index update for db: ~s idx: ~s", Args),
+    ?log(info, "Restarting index update for db: ~s idx: ~s", Args),
     case is_pid(State#st.pid) of
         true -> barrel_lib:shutdown_sync(State#st.pid);
         _ -> ok
@@ -91,7 +92,7 @@ handle_cast(_Mesg, State) ->
 handle_info({'EXIT', _, {updated, Pid, IdxState}}, #st{pid=Pid}=State) ->
     Mod = State#st.mod,
     Args = [Mod:get(db_name, IdxState), Mod:get(idx_name, IdxState)],
-    lager:info("Index update finished for db: ~s idx: ~s", Args),
+    ?log(info, "Index update finished for db: ~s idx: ~s", Args),
     ok = gen_server:cast(State#st.idx, {updated, IdxState}),
     {noreply, State#st{pid=undefined}};
 handle_info({'EXIT', _, {reset, Pid}}, #st{idx=Idx, pid=Pid}=State) ->

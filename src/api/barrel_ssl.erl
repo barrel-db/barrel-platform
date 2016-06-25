@@ -16,6 +16,7 @@
 
 -export([options/1]).
 -include_lib("public_key/include/public_key.hrl").
+-include("log.hrl").
 
 options(Opts) ->
   CertFile = proplists:get_value(certfile, Opts),
@@ -24,7 +25,7 @@ options(Opts) ->
   if
     CertFile /= undefined, KeyFile /= undefined -> ok;
     true ->
-      lager:error("SSL enabled but PEM certificates are missing.", []),
+      ?log(error, "SSL enabled but PEM certificates are missing.", []),
       erlang:error({error, missing_certs})
   end,
 
@@ -87,7 +88,7 @@ ciphersuite_transform_([CipherString|Rest], Acc) ->
         {ok, CipherSuite} ->
             ciphersuite_transform_(Rest, [CipherSuite|Acc]);
         {error, Reason} ->
-            lager:error("error parsing ciphersuite ~p, ~p~n",
+            ?log(error, "error parsing ciphersuite ~p, ~p~n",
                         [CipherString, Reason]),
             ciphersuite_transform_(Rest, Acc)
     end;
@@ -184,12 +185,12 @@ unbroken_cipher_suites(CipherSuites) ->
 % @doc Validator function for SSL negotiation.
 %%
 verify_fun(Cert, valid_peer, State) ->
-  lager:debug("validing peer ~p with ~p intermediate certs",
+  ?log(debug, "validing peer ~p with ~p intermediate certs",
               [get_common_name(Cert),
                length(element(2, State))]),
   %% peer certificate validated, now check the CRL
   Res = (catch check_crl(Cert, State)),
-  lager:debug("CRL validate result for ~p: ~p",
+  ?log(debug, "CRL validate result for ~p: ~p",
               [get_common_name(Cert), Res]),
   {Res, State};
 verify_fun(Cert, valid, {TrustedCAs, IntermediateCerts}=State) ->
@@ -201,7 +202,7 @@ verify_fun(Cert, valid, {TrustedCAs, IntermediateCerts}=State) ->
       %% check is valid CA certificate, add to the list of
       %% intermediates
       Res = (catch check_crl(Cert, State)),
-      lager:debug("CRL intermediate CA validate result for ~p: ~p",
+      ?log(debug, "CRL intermediate CA validate result for ~p: ~p",
                   [get_common_name(Cert), Res]),
       {Res, {TrustedCAs, [Cert|IntermediateCerts]}}
   end;
@@ -219,7 +220,7 @@ check_crl(Cert, State) ->
   case pubkey_cert:select_extension(?'id-ce-cRLDistributionPoints',
                                     pubkey_cert:extensions_list(Cert#'OTPCertificate'.tbsCertificate#'OTPTBSCertificate'.extensions)) of
     undefined ->
-      lager:debug("no CRL distribution points for ~p",
+      ?log(debug, "no CRL distribution points for ~p",
                   [get_common_name(Cert)]),
       %% fail; we can't validate if there's no CRL
       no_crl;
@@ -257,7 +258,7 @@ issuer_function(_DP, CRL, _Issuer, {TrustedCAs, IntermediateCerts}) ->
   %% assume certificates are ordered from root to tip
   case find_issuer(Issuer, IntermediateCerts ++ Certs) of
     undefined ->
-      lager:debug("unable to find certificate matching CRL issuer ~p",
+      ?log(debug, "unable to find certificate matching CRL issuer ~p",
                   [Issuer]),
       error;
     IssuerCert ->
@@ -317,10 +318,10 @@ build_chain({DER, Cert}, IntCerts, TrustedCerts, Acc) ->
       case Match of
         undefined when IntCerts /= TrustedCerts ->
           %% continue the chain by using the trusted CAs
-          lager:debug("Ran out of intermediate certs, switching to trusted certs~n"),
+          ?log(debug, "Ran out of intermediate certs, switching to trusted certs~n"),
           build_chain({DER, Cert}, TrustedCerts, TrustedCerts, Acc);
         undefined ->
-          lager:debug("Can't construct chain of trust beyond ~p",
+          ?log(debug, "Can't construct chain of trust beyond ~p",
                       [get_common_name(Cert)]),
           %% can't find the current cert's issuer
           undefined;
@@ -367,10 +368,10 @@ fetch_point(#'DistributionPoint'{distributionPoint={fullName, Names}}) ->
 fetch([]) ->
   not_available;
 fetch([{uniformResourceIdentifier, "file://"++_File}|Rest]) ->
-  lager:debug("fetching CRLs from file URIs is not supported"),
+  ?log(debug, "fetching CRLs from file URIs is not supported"),
   fetch(Rest);
 fetch([{uniformResourceIdentifier, "http"++_=URL}|Rest]) ->
-  lager:debug("getting CRL from ~p~n", [URL]),
+  ?log(debug, "getting CRL from ~p~n", [URL]),
   _ = inets:start(),
   case httpc:request(get, {URL, []}, [], [{body_format, binary}]) of
     {ok, {_Status, _Headers, Body}} ->
@@ -386,12 +387,12 @@ fetch([{uniformResourceIdentifier, "http"++_=URL}|Rest]) ->
           {Body, CertList}
       end;
     {error, _Reason} ->
-      lager:debug("failed to get CRL ~p~n", [_Reason]),
+      ?log(debug, "failed to get CRL ~p~n", [_Reason]),
       fetch(Rest)
   end;
 fetch([Loc|Rest]) ->
   %% unsupported CRL location
-  lager:debug("unable to fetch CRL from unsupported location ~p",
+  ?log(debug, "unable to fetch CRL from unsupported location ~p",
               [Loc]),
   fetch(Rest).
 
@@ -425,14 +426,14 @@ load_certs(CertDirOrFile) ->
   end.
 
 load_certs([], Acc) ->
-  lager:debug("Successfully loaded ~p CA certificates", [length(Acc)]),
+  ?log(debug, "Successfully loaded ~p CA certificates", [length(Acc)]),
   Acc;
 load_certs([Cert|Certs], Acc) ->
   case filelib:is_dir(Cert) of
     true ->
       load_certs(Certs, Acc);
     _ ->
-      lager:debug("Loading certificate ~p", [Cert]),
+      ?log(debug, "Loading certificate ~p", [Cert]),
       load_certs(Certs, load_cert(Cert) ++ Acc)
   end.
 

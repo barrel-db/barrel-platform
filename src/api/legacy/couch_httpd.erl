@@ -26,7 +26,8 @@
 -module(couch_httpd).
 -include_lib("couch_db.hrl").
 -include("couch_httpd.hrl").
--include("hut.hrl").
+
+-include("log.hrl").
 
 -export([handle_request/6]).
 

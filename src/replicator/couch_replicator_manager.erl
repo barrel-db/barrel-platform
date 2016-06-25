@@ -16,6 +16,8 @@
 -module(couch_replicator_manager).
 -behaviour(gen_server).
 
+-include("log.hrl").
+
 % public API
 -export([replication_started/1, replication_completed/2, replication_error/2]).
 
@@ -72,7 +74,7 @@ replication_started(#rep{id = {BaseId, _} = RepId}) ->
                                 <<"_replication_id">> => list_to_binary(BaseId),
                                 <<"_replication_stats">> => undefined}),
         ok = gen_server:call(?MODULE, {rep_started, RepId}, infinity),
-        lager:info("Document `~s` triggered replication `~s`",
+        ?log(info, "Document `~s` triggered replication `~s`",
             [DocId, pp_rep_id(RepId)])
     end.
 
@@ -86,7 +88,7 @@ replication_completed(#rep{id = RepId}, Stats) ->
                               <<"_replication_state_reason">> => undefined,
                               <<"_replication_stats">> => Stats}),
       ok = gen_server:call(?MODULE, {rep_complete, RepId}, infinity),
-      lager:info("Replication `~s` finished (triggered by document `~s`)",
+      ?log(info, "Replication `~s` finished (triggered by document `~s`)",
                  [pp_rep_id(RepId), DocId])
   end.
 
@@ -158,7 +160,7 @@ handle_call({rep_error, RepId, Error}, _From, State) ->
     {reply, ok, replication_error(State, RepId, Error)};
 
 handle_call(Msg, From, State) ->
-    lager:error("Replication manager received unexpected call ~p from ~p",
+    ?log(error, "Replication manager received unexpected call ~p from ~p",
         [Msg, From]),
     {stop, {error, {unexpected_call, Msg}}, State}.
 
@@ -179,7 +181,7 @@ handle_cast({set_max_retries, MaxRetries}, State) ->
     {noreply, State#state{max_retries = MaxRetries}};
 
 handle_cast(Msg, State) ->
-    lager:error("Replication manager received unexpected cast ~p", [Msg]),
+    ?log(error, "Replication manager received unexpected cast ~p", [Msg]),
     {stop, {error, {unexpected_cast, Msg}}, State}.
 
 handle_info({'$barrel_event', DbName, created}, State) ->
@@ -204,7 +206,7 @@ handle_info({'DOWN', _Ref, _, _, _}, State) ->
     % From a db monitor created by a replication process. Ignore.
     {noreply, State};
 handle_info(Msg, State) ->
-    lager:error("Replication manager received unexpected message ~p", [Msg]),
+    ?log(error, "Replication manager received unexpected message ~p", [Msg]),
     {stop, {unexpected_msg, Msg}, State}.
 
 
@@ -340,7 +342,7 @@ rep_db_update_error(Error, DocId) ->
              {bad_rep_doc, R} -> R;
              _ -> barrel_lib:to_error(Error)
            end,
-  lager:error("Replication manager, error processing document `~s`: ~s",
+  ?log(error, "Replication manager, error processing document `~s`: ~s",
               [DocId, Reason]),
   update_rep_doc(DocId, #{<<"_replication_state">> => <<"error">>,
                           <<"_replication_state_reason">> => Reason}).
@@ -368,19 +370,19 @@ maybe_start_replication(State, DocId, RepDoc) ->
         },
         true = ets:insert(?REP_TO_STATE, {RepId, RepState}),
         true = ets:insert(?DOC_TO_REP, {DocId, RepId}),
-        lager:info("Attempting to start replication `~s` (document `~s`).",
+        ?log(info, "Attempting to start replication `~s` (document `~s`).",
             [pp_rep_id(RepId), DocId]),
         Pid = spawn_link(fun() -> start_replication(Rep, 0) end),
         State#state{rep_start_pids = [Pid | State#state.rep_start_pids]};
     #rep_state{rep = #rep{doc_id = DocId}} ->
         State;
     #rep_state{starting = false, rep = #rep{doc_id = OtherDocId}} ->
-        lager:info("The replication specified by the document `~s` was already"
+        ?log(info, "The replication specified by the document `~s` was already"
             " triggered by the document `~s`", [DocId, OtherDocId]),
         maybe_tag_rep_doc(DocId, RepDoc, list_to_binary(BaseId)),
         State;
     #rep_state{starting = true, rep = #rep{doc_id = OtherDocId}} ->
-        lager:info("The replication specified by the document `~s` is already"
+        ?log(info, "The replication specified by the document `~s` is already"
             " being triggered by the document `~s`", [DocId, OtherDocId]),
         maybe_tag_rep_doc(DocId, RepDoc, list_to_binary(BaseId)),
         State
@@ -451,7 +453,7 @@ rep_doc_deleted(DocId) ->
         couch_replicator:cancel_replication(RepId),
         true = ets:delete(?REP_TO_STATE, RepId),
         true = ets:delete(?DOC_TO_REP, DocId),
-        lager:info("Stopped replication `~s` because replication document `~s`"
+        ?log(info, "Stopped replication `~s` because replication document `~s`"
             " was deleted", [pp_rep_id(RepId), DocId]);
     [] ->
         ok
@@ -474,7 +476,7 @@ maybe_retry_replication(#rep_state{retries_left = 0} = RepState, Error, State) -
     couch_replicator:cancel_replication(RepId),
     true = ets:delete(?REP_TO_STATE, RepId),
     true = ets:delete(?DOC_TO_REP, DocId),
-    lager:error("Error in replication `~s` (triggered by document `~s`): ~s"
+    ?log(error, "Error in replication `~s` (triggered by document `~s`): ~s"
         "~nReached maximum retry attempts (~p).",
         [pp_rep_id(RepId), DocId, barrel_lib:to_error(error_reason(Error)), MaxRetries]),
     State;
@@ -485,7 +487,7 @@ maybe_retry_replication(RepState, Error, State) ->
     } = RepState,
     #rep_state{wait = Wait} = NewRepState = state_after_error(RepState),
     true = ets:insert(?REP_TO_STATE, {RepId, NewRepState}),
-    lager:error("Error in replication `~s` (triggered by document `~s`): ~s"
+    ?log(error, "Error in replication `~s` (triggered by document `~s`): ~s"
         "~nRestarting replication in ~p seconds.",
         [pp_rep_id(RepId), DocId, barrel_lib:to_error(error_reason(Error)), Wait]),
     Pid = spawn_link(fun() -> start_replication(Rep, Wait) end),
@@ -493,7 +495,7 @@ maybe_retry_replication(RepState, Error, State) ->
 
 
 stop_all_replications() ->
-    lager:info("Stopping all ongoing replications because the replicator"
+    ?log(info, "Stopping all ongoing replications because the replicator"
         " database was deleted or changed", []),
     ets:foldl(
         fun({_, RepId}, _) ->
@@ -516,7 +518,7 @@ update_rep_doc(RepDocId, KVs) ->
     catch throw:conflict ->
         % Shouldn't happen, as by default only the role _replicator can
         % update replication documents.
-        lager:error("Conflict error when updating replication document `~s`."
+        ?log(error, "Conflict error when updating replication document `~s`."
             " Retrying.", [RepDocId]),
         ok = timer:sleep(5),
         update_rep_doc(RepDocId, KVs)

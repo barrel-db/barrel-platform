@@ -14,6 +14,8 @@
 
 -module(couch_index_indexer).
 
+-include("log.hrl").
+
 -export([start_link/2]).
 
 
@@ -136,7 +138,7 @@ handle_info(refresh_index, #state{index=Index,
 handle_info({'EXIT', Pid, normal}, #state{refresh_pid=Pid}=State) ->
     {noreply, State#state{refresh_pid=nil}};
 handle_info({'EXIT', Pid, Reason}, #state{refresh_pid=Pid}=State) ->
-    lager:info("Unexpected exit while refreshing index: ~p~n", [Reason]),
+    ?log(info, "Unexpected exit while refreshing index: ~p~n", [Reason]),
     {noreply, State#state{refresh_pid=nil}};
 handle_info({'DOWN', MRef, _, Pid, _}, #state{locks=Locks}=State) ->
     NLocks = case dict:find(Pid, Locks) of

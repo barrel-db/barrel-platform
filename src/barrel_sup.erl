@@ -7,6 +7,8 @@
 
 -behaviour(supervisor).
 
+-include("log.hrl").
+
 %% API
 -export([start_link/0]).
 -export([status/0]).
@@ -143,10 +145,10 @@ write_uri_file() ->
       case file:write_file(Filepath, Lines) of
         ok -> ok;
         {error, eacces} ->
-          lager:info("Permission error when writing to URI file ~s", [Filepath]),
+          ?log(info, "Permission error when writing to URI file ~s", [Filepath]),
           throw({file_permission_error, Filepath});
         Error ->
-          lager:info("Failed to write to URI file ~s: ~p~n", [Filepath, Error]),
+          ?log(info, "Failed to write to URI file ~s: ~p~n", [Filepath, Error]),
           throw(Error)
       end
   end.

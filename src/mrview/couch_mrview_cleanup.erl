@@ -19,6 +19,7 @@
 
 -include_lib("couch_db.hrl").
 -include("couch_mrview.hrl").
+-include("log.hrl").
 
 run(Db) ->
     RootDir = couch_index_util:root_dir(),
@@ -41,7 +42,7 @@ run(Db) ->
     ToDelete = DiskFiles -- SigFiles,
 
     lists:foreach(fun(FN) ->
-        lager:debug("Deleting stale view file: ~s", [FN]),
+        ?log(debug, "Deleting stale view file: ~s", [FN]),
         couch_file:delete(RootDir, FN, false)
     end, ToDelete),
 

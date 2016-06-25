@@ -16,6 +16,8 @@
 -module(barrel_metrics).
 -behaviour(gen_server).
 
+-include("log.hrl").
+
 -export([reload/0]).
 -export([list/0]).
 
@@ -167,7 +169,7 @@ maybe_reload_metrics(Apps) ->
               {ok, Specs} ->
                 {Apps#{App => {Specs, LastMod}}, Specs1 ++ Specs};
               error ->
-                lager:error("error reloading metrics conf for ~p~n", [App]),
+                ?log(error, "error reloading metrics conf for ~p~n", [App]),
                 {Apps1#{ App => {AppSpecs, LastMod}}, Specs1 ++ AppSpecs}
             end;
           _ ->
@@ -203,7 +205,7 @@ load_app_metrics(AppName) ->
               LastMod = filelib:last_modified(Path),
               {ok, Specs, LastMod};
             bad_spec ->
-              lager:error("~p: stats_descriptions.cfg is invalid.~n", [AppName]),
+              ?log(error, "~p: stats_descriptions.cfg is invalid.~n", [AppName]),
               error
           end;
         {error, _Error} ->
