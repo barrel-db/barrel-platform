@@ -16,6 +16,7 @@
 -module(couch_changes).
 -include_lib("couch_db.hrl").
 -include_lib("couch_mrview.hrl").
+-include("log.hrl").
 
 -export([handle_changes/3]).
 
@@ -609,7 +610,7 @@ use_seq(_, ViewSeq) -> ViewSeq.
 wait_db_updated(Timeout, TimeoutFun, UserAcc) ->
     receive
         {'$barrel_event', _, updated}=Ev ->
-            lager:info("got db update ~p~n", [Ev]),
+            ?log(info, "got db update ~p~n", [Ev]),
             get_rest_db_updated(UserAcc);
         {'$barrel_event', _, _, updated} ->
             get_rest_db_updated(UserAcc)

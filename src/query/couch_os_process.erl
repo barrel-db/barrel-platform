@@ -21,6 +21,7 @@
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -include("couch_db.hrl").
+-include("log.hrl").
 
 -define(PORT_OPTIONS, [stream, {line, 4096}, binary, exit_status, hide]).
 
@@ -55,7 +56,7 @@ prompt(Pid, Data) ->
         {ok, Result} ->
             Result;
         Error ->
-            lager:error("OS Process Error ~p :: ~p",[Pid,Error]),
+            ?log(error, "OS Process Error ~p :: ~p",[Pid,Error]),
             throw(Error)
     end.
 
@@ -91,12 +92,12 @@ readline(#os_proc{port = Port} = OsProc, Acc) ->
 % Standard JSON functions
 writejson(OsProc, Data) when is_record(OsProc, os_proc) ->
     JsonData = ?JSON_ENCODE(Data),
-    lager:debug("OS Process ~p Input  :: ~s", [OsProc#os_proc.port, JsonData]),
+    ?log(debug, "OS Process ~p Input  :: ~s", [OsProc#os_proc.port, JsonData]),
     true = writeline(OsProc, JsonData).
 
 readjson(OsProc) when is_record(OsProc, os_proc) ->
     Line = iolist_to_binary(readline(OsProc)),
-    lager:debug("OS Process ~p Output :: ~s", [OsProc#os_proc.port, Line]),
+    ?log(debug, "OS Process ~p Output :: ~s", [OsProc#os_proc.port, Line]),
     try
         % Don't actually parse the whole JSON. Just try to see if it's
         % a command or a doc map/reduce/filter/show/list/update output.
@@ -110,12 +111,12 @@ readjson(OsProc) when is_record(OsProc, os_proc) ->
         case ?JSON_DECODE(Line) of
         [<<"log">>, Msg] when is_binary(Msg) ->
             % we got a message to log. Log it and continue
-            lager:info("OS Process ~p Log :: ~s", [OsProc#os_proc.port, Msg]),
+            ?log(info, "OS Process ~p Log :: ~s", [OsProc#os_proc.port, Msg]),
             readjson(OsProc);
         [<<"error">>, Id, Reason] ->
             throw({error, {barrel_lib:to_existing_atom(Id),Reason}});
         [<<"fatal">>, Id, Reason] ->
-            lager:info("OS Process ~p Fatal Error :: ~s ~p",
+            ?log(info, "OS Process ~p Fatal Error :: ~s ~p",
                 [OsProc#os_proc.port, Id, Reason]),
             throw({barrel_lib:to_existing_atom(Id),Reason});
         _Result ->
@@ -153,7 +154,7 @@ init([Command, Options, PortOptions]) ->
     },
     KillCmd = iolist_to_binary(readline(BaseProc)),
     Pid = self(),
-    lager:debug("OS Process Start :: ~p", [BaseProc#os_proc.port]),
+    ?log(debug, "OS Process Start :: ~p", [BaseProc#os_proc.port]),
     spawn(fun() ->
             % this ensure the real os process is killed when this process dies.
             erlang:monitor(process, Pid),
@@ -197,20 +198,20 @@ handle_cast({send, Data}, #os_proc{writer=Writer}=OsProc) ->
         {noreply, OsProc}
     catch
         throw:OsError ->
-            lager:error("Failed sending data: ~p -> ~p", [Data, OsError]),
+            ?log(error, "Failed sending data: ~p -> ~p", [Data, OsError]),
             {stop, normal, OsProc}
     end;
 handle_cast(stop, OsProc) ->
     {stop, normal, OsProc};
 handle_cast(Msg, OsProc) ->
-    lager:debug("OS Proc: Unknown cast: ~p", [Msg]),
+    ?log(debug, "OS Proc: Unknown cast: ~p", [Msg]),
     {noreply, OsProc}.
 
 handle_info({Port, {exit_status, 0}}, #os_proc{port=Port}=OsProc) ->
-    lager:info("OS Process terminated normally", []),
+    ?log(info, "OS Process terminated normally", []),
     {stop, normal, OsProc};
 handle_info({Port, {exit_status, Status}}, #os_proc{port=Port}=OsProc) ->
-    lager:error("OS Process died with status: ~p", [Status]),
+    ?log(error, "OS Process died with status: ~p", [Status]),
     {stop, {exit_status, Status}, OsProc}.
 
 code_change(_OldVsn, State, _Extra) ->

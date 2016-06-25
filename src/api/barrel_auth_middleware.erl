@@ -18,6 +18,8 @@
 -module(barrel_auth_middleware).
 -author("Benoit Chesneau").
 
+-include("log.hrl").
+
 %% API
 -export([execute/2]).
 
@@ -42,7 +44,7 @@ execute(Req, Env) ->
       {ok, Req2} = cowboy_req:reply(401, Req),
       {halt, Req2};
     {bad_request, Reason} ->
-      lager:error("authentication error: ~p~n",[Reason]),
+      ?log(error, "authentication error: ~p~n",[Reason]),
       {ok, Req2} = cowboy_req:reply(400, Req),
       {halt, Req2};
     {ok, UserCtx, Req2, Env} ->

@@ -27,6 +27,8 @@
 -include_lib("couch_db.hrl").
 -include("couch_httpd.hrl").
 
+-include("log.hrl").
+
 -export([handle_request/6]).
 
 -export([header_value/2,header_value/3,qs_value/2,qs_value/3,qs/1,qs_json_value/3]).
@@ -95,7 +97,7 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
     {FirstPart, _, _} ->
         list_to_binary(FirstPart)
     end,
-    lager:debug("~p ~s ~p from ~p~nHeaders: ~p", [
+    ?log(debug, "~p ~s ~p from ~p~nHeaders: ~p", [
         MochiReq:get(method),
         RequestedPath,
         MochiReq:get(version),
@@ -121,7 +123,7 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
                                                  "TRACE", "CONNECT",
                                                  "COPY"]) of
     true ->
-        lager:info("MethodOverride: ~s (real method was ~s)", [MethodOverride, Method1]),
+        ?log(info, "MethodOverride: ~s (real method was ~s)", [MethodOverride, Method1]),
         case Method1 of
         'POST' -> barrel_lib:to_existing_atom(MethodOverride);
         _ ->
@@ -162,43 +164,43 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
         throw:{http_head_abort, Resp0} ->
             {ok, Resp0};
         throw:{invalid_json, S} ->
-            lager:error("attempted upload of invalid JSON (set log_level to debug to log it)", []),
-            lager:debug("Invalid JSON: ~p",[S]),
+            ?log(error, "attempted upload of invalid JSON (set log_level to debug to log it)", []),
+            ?log(debug, "Invalid JSON: ~p",[S]),
             send_error(HttpReq, {bad_request, invalid_json});
         throw:unacceptable_encoding ->
-            lager:error("unsupported encoding method for the response", []),
+            ?log(error, "unsupported encoding method for the response", []),
             send_error(HttpReq, {not_acceptable, "unsupported encoding"});
         throw:bad_accept_encoding_value ->
-            lager:error("received invalid Accept-Encoding header", []),
+            ?log(error, "received invalid Accept-Encoding header", []),
             send_error(HttpReq, bad_request);
         exit:normal ->
             exit(normal);
         exit:snappy_nif_not_loaded ->
             ErrorReason = "To access the database or view index, Apache CouchDB"
                 " must be built with Erlang OTP R13B04 or higher.",
-            lager:error("~s", [ErrorReason]),
+            ?log(error, "~s", [ErrorReason]),
             send_error(HttpReq, {bad_otp_release, ErrorReason});
         exit:{body_too_large, _} ->
             send_error(HttpReq, request_entity_too_large);
         throw:Error ->
             Stack = erlang:get_stacktrace(),
-            lager:debug("Minor error in HTTP request: ~p",[Error]),
-            lager:debug("Stacktrace: ~p",[Stack]),
+            ?log(debug, "Minor error in HTTP request: ~p",[Error]),
+            ?log(debug, "Stacktrace: ~p",[Stack]),
             send_error(HttpReq, Error);
         error:badarg ->
             Stack = erlang:get_stacktrace(),
-            lager:error("Badarg error in HTTP request",[]),
-            lager:info("Stacktrace: ~p",[Stack]),
+            ?log(error, "Badarg error in HTTP request",[]),
+            ?log(info, "Stacktrace: ~p",[Stack]),
             send_error(HttpReq, badarg);
         error:function_clause ->
             Stack = erlang:get_stacktrace(),
-            lager:error("function_clause error in HTTP request",[]),
-            lager:info("Stacktrace: ~p",[Stack]),
+            ?log(error, "function_clause error in HTTP request",[]),
+            ?log(info, "Stacktrace: ~p",[Stack]),
             send_error(HttpReq, function_clause);
         Tag:Error ->
             Stack = erlang:get_stacktrace(),
-            lager:error("Uncaught error in HTTP request: ~p",[{Tag, Error}]),
-            lager:info("Stacktrace: ~p",[Stack]),
+            ?log(error, "Uncaught error in HTTP request: ~p",[{Tag, Error}]),
+            ?log(info, "Stacktrace: ~p",[Stack]),
             send_error(HttpReq, Error)
     end,
     RequestTime = round(timer:now_diff(os:timestamp(), Begin)/1000),
@@ -412,7 +414,7 @@ verify_is_server_admin(UserCtx) ->
     end.
 
 log_request(#httpd{mochi_req=MochiReq,peer=Peer}, Code) ->
-    lager:info("~s - - ~s ~s ~B", [
+    ?log(info, "~s - - ~s ~s ~B", [
         Peer,
         MochiReq:get(method),
         MochiReq:get(raw_path),
@@ -498,9 +500,9 @@ send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     if Code >= 500 ->
-        lager:error("httpd ~p error response:~n ~s", [Code, Body]);
+        ?log(error, "httpd ~p error response:~n ~s", [Code, Body]);
     Code >= 400 ->
-        lager:debug("httpd ~p error response:~n ~s", [Code, Body]);
+        ?log(debug, "httpd ~p error response:~n ~s", [Code, Body]);
     true -> ok
     end,
     Headers2 = Headers1 ++ server_header() ++

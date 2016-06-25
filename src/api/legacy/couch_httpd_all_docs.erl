@@ -31,6 +31,7 @@
 -export([is_keys/1]).
 
 -include_lib("couch_db.hrl").
+-include("log.hrl").
 
 -include("couch_httpd.hrl").
 
@@ -455,7 +456,7 @@ ad_ekey_opts(#all_docs_args{end_key_docid=EKeyDocId}=Args) ->
 is_keys(Props) ->
     case maps:get(<<"keys">>, Props, undefined) of
         undefined ->
-            lager:debug("POST with no keys member.", []),
+            ?log(debug, "POST with no keys member.", []),
             undefined;
         Keys when is_list(Keys) ->
             Keys;

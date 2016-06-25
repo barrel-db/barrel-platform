@@ -16,6 +16,7 @@
 -module(barrel_server).
 -behaviour(gen_server).
 
+-include("log.hrl").
 
 
 %% public api
@@ -423,7 +424,7 @@ handle_info({'EXIT', Pid, Reason}, State) ->
   State2 = case ets:lookup(couch_dbs_by_pid, Pid) of
              [] -> State;
              [{Pid, DbName}] ->
-               lager:info("db ~s died with reason ~p", [DbName, Reason]),
+               ?log(info, "db ~s died with reason ~p", [DbName, Reason]),
 
                true = ets:delete(couch_dbs_by_pid, Pid),
                true = ets:delete(couch_dbs_by_name, DbName),

@@ -17,6 +17,7 @@
 -behaviour(gen_server).
 
 -include("couch_db.hrl").
+-include("log.hrl").
 
 -define(SIZE_BLOCK, 4096).
 
@@ -64,7 +65,7 @@ open(Filepath, Options) ->
             case {lists:member(nologifmissing, Options), Reason} of
             {true, enoent} -> ok;
             _ ->
-            lager:error("Could not open file ~s: ~s",
+            ?log(error, "Could not open file ~s: ~s",
                 [Filepath, file:format_error(Reason)])
             end,
             Error
