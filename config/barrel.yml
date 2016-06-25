@@ -1,3 +1,6 @@
+
+include_dir: "{{include_dir}}"
+
 # Path to store all barrel data
 dir: "{{platform_data_dir}}"
 
@@ -116,22 +119,3 @@ cors:
   # Which origins to allow. Defaults to no origins allowed, Default to None.
   # ”*” is a valid value but is considered a security risk.
   allow_origins: []
-
-
-##
-#### Logging configuration
-##
-
-log_backend: lager
-
-lager:
-
-  lager_console_backend: error
-
-  lager_file_backend:
-    file: "{{log_dir}}/error.log"
-    level: error
-
-  lager_file_backend:
-    file: "{{log_dir}}/console.log"
-    level: info

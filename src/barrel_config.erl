@@ -40,7 +40,7 @@ init_config() ->
   case read_file(config_file()) of
     {ok, Config} ->
       process_config(Config),
-      init_logs();
+      maybe_init_logs();
     {error, Error} ->
       error_logger:error_msg(Error, []),
       erlang:error(Error)
@@ -54,23 +54,20 @@ read_file(Name) ->
     Error -> Error
   end.
 
-init_logs() ->
-  case ?catch_val(log_backend) of
+%% start logs for our own releases
+maybe_init_logs() ->
+  case ?catch_val(lager) of
     {'EXIT', _} -> ok;
-    lager ->
+    LogConfig ->
       case application:get_application(lager) of
         undefined ->
           error_logger:info_msg("lager not started: ~n"),
           ok;
         _ ->
-          init_lager_config(?catch_val(lager))
-      end;
-    _Else ->
-      error_logger:info_msg("unsupported logging backend: ~s~n", [_Else]),
-      ok
+          init_lager_config(LogConfig)
+      end
   end.
 
-init_lager_config({'EXIT', _}) -> ok;
 init_lager_config([{lager_console_backend, Level} | Rest]) ->
   lager:set_loglevel(lager_console_backend, Level),
   init_lager_config(Rest);
@@ -100,11 +97,37 @@ process_config([{dir, Val} | Rest]) ->
 process_config([{config_dir, Val} | Rest]) ->
   barrel_lib:set(config_dir, barrel_lib:to_list(Val)),
   process_config(Rest);
+process_config([{include_dir, Val} | Rest]) ->
+  IncludeDir = filename:absname(barrel_lib:to_list(Val)),
+  barrel_lib:set(include_dir, IncludeDir),
+  case filelib:is_dir(IncludeDir) of
+    true ->
+      ConfFiles = filelib:wildcard("*.yml", IncludeDir),
+      process_files(ConfFiles, IncludeDir);
+    false ->
+      error_logger:info_msg("include dir ~s not found.~n", [IncludeDir]),
+      ok
+  end,
+  process_config(Rest);
 process_config([{Key, Val} | Rest]) ->
   barrel_lib:set(Key, Val),
   process_config(Rest);
 process_config([]) ->
   ok.
+
+
+process_files([File | Rest], IncludeDir) ->
+  case read_file(filename:join(IncludeDir, File)) of
+    {ok, Config} ->
+      process_config(Config),
+      process_files(Rest, IncludeDir);
+    {error, _Error} ->
+      error_logger:info_msg("Error loading the config from ~s.~n", [File]),
+      process_files(Rest, IncludeDir)
+  end;
+process_files([], _IncludeDir) ->
+  ok.
+
 
 parserl(<<"> ", Term/binary>>) ->
   {ok, A2, _} = erl_scan:string(binary_to_list(Term)),

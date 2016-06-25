@@ -1,0 +1,15 @@
+##
+#### lager configuration
+##
+
+lager:
+
+  lager_console_backend: error
+
+  lager_file_backend:
+    file: "{{log_dir}}/error.log"
+    level: error
+
+  lager_file_backend:
+    file: "{{log_dir}}/console.log"
+    level: info
