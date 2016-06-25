@@ -24,10 +24,6 @@
 % the License.
 
 -module(couch_httpd).
--include_lib("couch_db.hrl").
--include("couch_httpd.hrl").
-
--include("log.hrl").
 
 -export([handle_request/6]).
 
@@ -48,6 +44,11 @@
 -export([send_json2/2,send_json2/3,send_json2/4]).
 -export([accepted_encodings/1, validate_referer/1, validate_ctype/2]).
 -export([http_1_0_keep_alive/2]).
+
+
+-include_lib("couch_db.hrl").
+-include("couch_httpd.hrl").
+-include("log.hrl").
 
 % SpecStr is a string like "{my_module, my_fun}"
 %  or "{my_module, my_fun, <<"my_arg">>}"

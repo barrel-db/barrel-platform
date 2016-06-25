@@ -7,8 +7,6 @@
 
 -behaviour(supervisor).
 
--include("log.hrl").
-
 %% API
 -export([start_link/0]).
 -export([status/0]).
@@ -16,6 +14,8 @@
 
 %% Supervisor callbacks
 -export([init/1]).
+
+-include("log.hrl").
 
 -define(SERVER, ?MODULE).
 

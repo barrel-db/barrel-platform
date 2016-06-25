@@ -15,11 +15,12 @@
 
 -module(couch_mrview_compactor).
 
+-export([compact/3, swap_compacted/2]).
+
 -include_lib("couch_db.hrl").
 -include("couch_mrview.hrl").
 -include("log.hrl").
 
--export([compact/3, swap_compacted/2]).
 
 -record(acc, {
    btree = nil,

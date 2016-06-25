@@ -16,8 +16,6 @@
 -module(barrel_metrics).
 -behaviour(gen_server).
 
--include("log.hrl").
-
 -export([reload/0]).
 -export([list/0]).
 
@@ -26,6 +24,8 @@
 %% gen_server call backs
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3,
   terminate/2]).
+
+-include("log.hrl").
 
 -define(DEFAULT_INTERVAL, 5000).  % change with option interval
 -define(MIN_INTERVAL, 100).

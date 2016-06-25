@@ -18,10 +18,10 @@
 -module(barrel_auth_middleware).
 -author("Benoit Chesneau").
 
--include("log.hrl").
-
 %% API
 -export([execute/2]).
+
+-include("log.hrl").
 
 %% TODO: convert to hook system
 execute(Req, Env) ->
