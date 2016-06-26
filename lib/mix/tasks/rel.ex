@@ -19,7 +19,6 @@ defmodule Mix.Tasks.Rel do
   end
 
   def config(:staging) do
-    Mix.env(:prod)
     BarrelRelease.SetupConfig.update_config("config/relx.config", "rel/relx.config", %{dev_mode: "true", include_erts: "true", rel_vsn: "0.1.0"})
   end
 

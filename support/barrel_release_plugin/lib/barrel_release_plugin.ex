@@ -29,7 +29,7 @@ defmodule ReleaseManager.Plugin.BarrelRelease do
     BarrelRelease.SetupConfig.update_config("config/vm.args", "rel/#{app}/releases/#{version}/vm.args", "config/vars.config")
   end
 
-  def setup(app, version, :prod) do
+  def setup(app, version, _env) do
     BarrelRelease.SetupConfig.update_config("config/barrel.yml", "rel/#{app}/etc/barrel.yml", "config/prod.config")
     BarrelRelease.SetupConfig.update_config("config/lager.yml", "rel/#{app}/etc/barrel.d/lager.yml", "config/prod.config")
     BarrelRelease.SetupConfig.update_config("config/sys.config", "rel/#{app}/releases/#{version}/sys.config", "config/prod.config")
