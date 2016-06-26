@@ -19,9 +19,7 @@ before_script:
 script:
 - ./rebar3 eunit --dir="test"
 - ./rebar3 ct
-- /home/travis/build/barrel-db/barrel-platform/_build/prod/rel/barrel/bin/barrel start
 - cd /home/travis/swagger && python -m test.test_swagger
-- /home/travis/build/barrel-db/barrel-platform/_build/prod/rel/barrel/bin/barrel stop
 notifications:
   email:
   - bchesneau@gmail.com
