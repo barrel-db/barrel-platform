@@ -1,12 +1,12 @@
 defmodule BarrelRelease.SetupConfig do
-  def update_config(source, destination) do
-    vars = get_vars("config/vars.config")
+  def update_config(source, destination, config_file) when is_bitstring(config_file) do
+    vars = get_vars(config_file)
     new_config = Stache.eval_file(source, vars)
     file = File.open! destination, [:write]
     IO.binwrite file, new_config
   end
-  
-  def update_config(source, destination, vars) do
+
+  def update_config(source, destination, vars) when is_map(vars) do
     new_config = Stache.eval_file(source, vars)
     file = File.open! destination, [:write]
     IO.binwrite file, new_config

@@ -19,7 +19,7 @@ priv/barreljs
 /cover
 /deps
 *.ez
-rel/barrel
 log
 Barrel-*
 barrel.ini
+rel
