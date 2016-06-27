@@ -116,12 +116,8 @@ handle_changes_req1(Req, #db{name=DbName}=Db) ->
             FeedChangesFun(MakeCallback(Resp))
         end
     end,
-    exometer:update([httpd, clients_requesting_changes], 1),
-    try
-        WrapperFun(ChangesFun)
-    after
-        exometer:update([httpd, clients_requesting_changes], -1)
-    end.
+
+    WrapperFun(ChangesFun).
 
 
 parse_changes_query(Req, _Db) ->

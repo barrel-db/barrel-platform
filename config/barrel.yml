@@ -119,3 +119,7 @@ cors:
   # Which origins to allow. Defaults to no origins allowed, Default to None.
   # ”*” is a valid value but is considered a security risk.
   allow_origins: []
+
+
+extensions:
+  barrel_metrics: {}

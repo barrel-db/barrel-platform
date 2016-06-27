@@ -99,12 +99,13 @@ protocol_opts() ->
   [
     {env, [{dispatch, Dispatch}]},
     {middlewares, [?MODULE, barrel_cors_middleware, barrel_auth_middleware, cowboy_router, cowboy_handler]},
-    {on_response, fun on_response/4}].
+    {on_response, fun on_response/4}
+  ].
 
 execute(Req, Env) ->
   case hooks:find("on_http_request") of
-    error -> {ok, Req, Env};
-    Hooks -> execute(Req, Env, Hooks)
+    {ok, Hooks} -> execute(Req, Env, Hooks);
+    error -> {ok, Req, Env}
   end.
 
 execute(Req, Env, [{M, F} | Tail]) ->
@@ -132,8 +133,8 @@ resume(Req, Env, Tail, Module, Function, Args) ->
 
 on_response(Status, Headers, Body, Req) ->
   case hooks:find("on_http_response") of
-    error -> Req;
-    Hooks -> response(Status, Headers, Body, Req, Hooks)
+    {ok, Hooks} -> response(Status, Headers, Body, Req, Hooks);
+    error -> Req
   end.
 
 response(Status, Headers, Body, Req, [{M, F} | Tail]) ->

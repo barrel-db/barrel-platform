@@ -77,10 +77,6 @@ init([]) ->
             {barrel_server, start_link, []},
             permanent,brutal_kill,	worker,[barrel_server]},
 
-  Metrics = {barrel_metrics_sup,
-    {barrel_metrics_sup, start_link, []},
-    permanent, infinity, supervisor, [barrel_metrics_sup]},
-
   UI = {barrel_ui_sup,
     {barrel_ui_sup, start_link, []},
     permanent, infinity, supervisor, [barrel_ui_sup]},
@@ -91,7 +87,7 @@ init([]) ->
       permanent, brutal_kill, worker, [couch_query_servers]},
 
 
-  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, Server, QS, Replicator, Metrics, UI,
+  {ok, { {one_for_all, 0, 10}, [Event, UUIDs, TaskStatus, Server, QS, Replicator, UI,
     SafeSup, ExtSup] } };
 
 init(safe) ->
