@@ -13,6 +13,8 @@ before_install:
 install:
 - "./support/bootstrap_travis.sh"
 before_script:
+- make spec
+- "/home/travis/build/barrel-db/barrel-platform/_build/default/rel/barrel/bin/barrel start"
 - sudo easy_install -f http://funkload.nuxeo.org/snapshots/ -U funkload
 - git clone https://github.com/barrel-db/specs.git /home/travis/swagger
 - sudo pip install -r /home/travis/swagger/requirements.txt
