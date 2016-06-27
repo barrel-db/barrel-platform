@@ -226,14 +226,14 @@ maybe_add_trailing_slash(Url) ->
 
 make_options(Props) ->
     Options = lists:ukeysort(1, convert_options(maps:to_list(Props))),
-    DefWorkers = barrel_server:get_env(worker_processes),
-    DefBatchSize = barrel_server:get_env(worker_batch_size),
-    DefConns = barrel_server:get_env(http_connections),
-    DefTimeout = barrel_server:get_env(connection_timeout),
-    DefRetries = barrel_server:get_env(retries_per_request),
-    UseCheckpoints =  barrel_server:get_env(use_checkpoints),
-    DefCheckpointInterval = barrel_server:get_env(checkpoint_interval),
-    DefSocketOptions = barrel_server:get_env(socket_options),
+    DefWorkers = barrel_config:get_env(worker_processes),
+    DefBatchSize = barrel_config:get_env(worker_batch_size),
+    DefConns = barrel_config:get_env(http_connections),
+    DefTimeout = barrel_config:get_env(connection_timeout),
+    DefRetries = barrel_config:get_env(retries_per_request),
+    UseCheckpoints =  barrel_config:get_env(use_checkpoints),
+    DefCheckpointInterval = barrel_config:get_env(checkpoint_interval),
+    DefSocketOptions = barrel_config:get_env(socket_options),
     lists:ukeymerge(1, Options, lists:keysort(1, [
         {connection_timeout, DefTimeout},
         {retries, DefRetries},
@@ -315,7 +315,7 @@ parse_proxy_params(ProxyUrl) ->
 ssl_params(Url) ->
     case ibrowse_lib:parse_url(Url) of
     #url{protocol = https} ->
-        ClientOptions = barrel_server:get_env(replicator_sslopts),
+        ClientOptions = barrel_config:get_env(replicator_sslopts),
         Depth = proplists:get_value(ssl_certificate_max_depth, ClientOptions, 3),
         VerifyCerts = proplists:get_value(verify_ssl_certificates, ClientOptions, false),
         CertFile = proplists:get_value(cert_file, ClientOptions, nil),
@@ -342,12 +342,12 @@ ssl_verify_options(Value) ->
     ssl_verify_options(Value, erlang:system_info(otp_release)).
 
 ssl_verify_options(true, OTPVersion) when OTPVersion >= "R14" ->
-    CAFile = barrel_server:get_env(replicator_cafile),
+    CAFile = barrel_config:get_env(replicator_cafile),
     [{verify, verify_peer}, {cacertfile, CAFile}];
 ssl_verify_options(false, OTPVersion) when OTPVersion >= "R14" ->
     [{verify, verify_none}];
 ssl_verify_options(true, _OTPVersion) ->
-    CAFile = barrel_server:get_env(replicator_cafile),
+    CAFile = barrel_config:get_env(replicator_cafile),
     [{verify, 2}, {cacertfile, CAFile}];
 ssl_verify_options(false, _OTPVersion) ->
     [{verify, 0}].

@@ -107,7 +107,7 @@ init(_) ->
     ?BY_USER = ets:new(?BY_USER, [set, protected, named_table]),
     ?BY_ATIME = ets:new(?BY_ATIME, [ordered_set, private, named_table]),
     process_flag(trap_exit, true),
-    CacheSize = barrel_server:get_env(auth_cache_size),
+    CacheSize = barrel_config:get_env(auth_cache_size),
     _ = barrel_event:reg(<<"_users">>),
     {ok, reinit_cache(#state{max_cache_size = CacheSize})}.
 

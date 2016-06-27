@@ -42,7 +42,7 @@
 
 
 -spec get_listeners() -> list().
-get_listeners() -> lists:usort(barrel_server:get_env(listen)).
+get_listeners() -> lists:usort(barrel_config:get_env(listen)).
 
 
 -spec binding_spec(atom(), list()) -> tuple().
@@ -112,7 +112,7 @@ routes() ->
 
 
 host(Req) ->
-  XHost = barrel_server:get_env(x_forwarded_host),
+  XHost = barrel_config:get_env(x_forwarded_host),
   case cowboy_req:header(XHost, Req) of
     {undefined, _Req} ->
       case cowboy_req:header(<<"host">>, Req) of

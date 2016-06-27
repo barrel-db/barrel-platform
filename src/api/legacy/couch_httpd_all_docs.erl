@@ -150,8 +150,8 @@ all_docs_req(Req, Db, Keys) ->
         _ ->
             case Db#db.name of
                 <<"_users">> ->
-                    UsersDbPublic = barrel_server:get_env(users_db_public),
-                    PublicFields = barrel_server:get_env(auth_public_fields),
+                    UsersDbPublic = barrel_config:get_env(users_db_public),
+                    PublicFields = barrel_config:get_env(auth_public_fields),
                     case {UsersDbPublic, PublicFields} of
                         {"true", PublicFields} when PublicFields =/= undefined, PublicFields =/= [] ->
                             do_all_docs_req(Req, Db, Keys);

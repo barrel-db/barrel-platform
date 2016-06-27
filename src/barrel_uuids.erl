@@ -79,14 +79,14 @@ inc() ->
   crypto:rand_uniform(1, 16#ffe).
 
 init_uuid() ->
-  Alg = barrel_server:get_env(uuid_algorithm),
+  Alg = barrel_config:get_env(uuid_algorithm),
   case Alg of
     random ->
       random;
     utc_random ->
       utc_random;
     utc_id ->
-      UtcIdSuffix = barrel_server:get_env(utc_id_suffix),
+      UtcIdSuffix = barrel_config:get_env(utc_id_suffix),
       {utc_id, UtcIdSuffix};
     sequential ->
       {sequential, new_prefix(), inc()};

@@ -43,7 +43,7 @@ stop() ->
   stop_extensions().
 
 start_extensions() ->
-  Extensions = barrel_server:get_env(extensions),
+  Extensions = barrel_config:get_env(extensions),
   start_extensions(Extensions).
 
 start_extensions([{M, O} | Rest]) when is_atom(M), is_list(O) ->
@@ -53,7 +53,7 @@ start_extensions([]) ->
   ok.
 
 stop_extensions() ->
-  Extensions = barrel_server:get_env(extensions),
+  Extensions = barrel_config:get_env(extensions),
   stop_extensions(Extensions).
 
 stop_extensions([{M, O} | Rest]) ->

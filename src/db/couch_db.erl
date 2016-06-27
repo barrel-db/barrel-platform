@@ -803,7 +803,7 @@ make_first_doc_on_disk(Db, Id, Pos, [{_Rev, RevValue} |_]=DocPath) ->
 set_commit_option(Options) ->
     CommitSettings = {
         [true || O <- Options, O==full_commit orelse O==delay_commit],
-        barrel_server:get_env(delayed_commits)
+        barrel_config:get_env(delayed_commits)
     },
     case CommitSettings of
     {[true], _} ->
@@ -925,7 +925,7 @@ flush_att(Fd, #att{data=Data}=Att) when is_binary(Data) ->
     end);
 
 flush_att(Fd, #att{data=Fun,att_len=undefined}=Att) when is_function(Fun) ->
-    MaxChunkSize = barrel_server:get_env(attachment_stream_buffer_size),
+    MaxChunkSize = barrel_config:get_env(attachment_stream_buffer_size),
     with_stream(Fd, Att, fun(OutputStream) ->
         % Fun(MaxChunkSize, WriterFun) must call WriterFun
         % once for each chunk of the attachment,
@@ -952,7 +952,7 @@ flush_att(Fd, #att{data=Fun,att_len=AttLen}=Att) when is_function(Fun) ->
 compressible_att_type(MimeType) when is_binary(MimeType) ->
     compressible_att_type(binary_to_list(MimeType));
 compressible_att_type(MimeType) ->
-    TypeExpList = barrel_server:get_env(attachment_compressible_types),
+    TypeExpList = barrel_config:get_env(attachment_compressible_types),
     lists:any(
         fun(TypeExp) ->
             Regexp = ["^\\s*", re:replace(TypeExp, "\\*", ".*"),
@@ -973,11 +973,11 @@ compressible_att_type(MimeType) ->
 % trailer, we're free to ignore this inconsistency and
 % pretend that no Content-MD5 exists.
 with_stream(Fd, #att{md5=InMd5,type=Type,encoding=Enc}=Att, Fun) ->
-    BufferSize = barrel_server:get_env(attachment_stream_buffer_size),
+    BufferSize = barrel_config:get_env(attachment_stream_buffer_size),
     {ok, OutputStream} = case (Enc =:= identity) andalso
         compressible_att_type(Type) of
     true ->
-        CompLevel = barrel_server:get_env(attachment_compression_level),
+        CompLevel = barrel_config:get_env(attachment_compression_level),
         couch_stream:open(Fd, [{buffer_size, BufferSize},
             {encoding, gzip}, {compression_level, CompLevel}]);
     _ ->

@@ -202,11 +202,11 @@ should_close() ->
 %% update the index on each db update. Instead we are waiting for a
 %% minimum. If the minimum is not acchieved, the update will happen
 %% in the next interval.
-get_db_threshold() -> barrel_server:get_env(index_threshold).
+get_db_threshold() -> barrel_config:get_env(index_threshold).
 
 %% refresh interval in ms, the interval in which the index will be
 %% updated
-get_refresh_interval() -> barrel_server:get_env(index_refresh_interval).
+get_refresh_interval() -> barrel_config:get_env(index_refresh_interval).
 
 
 do_update(#state{index=Index, dbname=DbName,

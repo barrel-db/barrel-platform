@@ -53,8 +53,8 @@ execute(Req, Env) ->
   end.
 
 init_config() ->
-  Enabled = barrel_server:get_env(enable_cors) =:= true,
-  Config = barrel_server:get_env(cors),
+  Enabled = barrel_config:get_env(enable_cors) =:= true,
+  Config = barrel_config:get_env(cors),
 
   AllowMethods = proplists:get_value(allow_methods, Config, ?METHODS_ALLOWED),
   AllowHeaders = proplists:get_value(allow_headers, Config, ?HEADERS_ALLOWED),

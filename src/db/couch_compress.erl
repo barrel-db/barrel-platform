@@ -27,7 +27,7 @@
 -define(COMPRESSED_TERM_PREFIX, 131, 80).
 
 
-get_compression_method() -> barrel_server:get_env(file_compression).
+get_compression_method() -> barrel_config:get_env(file_compression).
 
 compress(<<?SNAPPY_PREFIX, _/binary>> = Bin, snappy) ->
     Bin;

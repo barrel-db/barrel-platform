@@ -100,12 +100,12 @@ secure(Req) ->
   end.
 
 max_age() ->
-  case barrel_server:get_env(allows_persistent_cookie) of
+  case barrel_config:get_env(allows_persistent_cookie) of
     false -> [];
     true -> [{max_age, timeout()}]
   end.
 
-timeout() -> barrel_server:get_env(auth_timeout).
+timeout() -> barrel_config:get_env(auth_timeout).
 
 cookie_time() -> {NowMS, NowS, _} = erlang:timestamp(), NowMS * 1000000 + NowS.
 

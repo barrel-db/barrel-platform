@@ -80,7 +80,7 @@
   {revtree(), new_leaf | new_branch | internal_node}.
 merge(RevTree, Tree, StemDepth) ->
   {Merged, Result} = merge(RevTree, Tree),
-  case barrel_server:get_env(stem_interactive_updates) of
+  case barrel_config:get_env(stem_interactive_updates) of
     true -> {stem(Merged, StemDepth), Result};
     _ -> {Merged, Result}
   end.

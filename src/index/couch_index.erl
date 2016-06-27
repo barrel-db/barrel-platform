@@ -105,7 +105,7 @@ init({Mod, IdxState}) ->
             {ok, UPid} = couch_index_updater:start_link(self(), Mod),
             {ok, CPid} = couch_index_compactor:start_link(self(), Mod),
 
-            Delay = barrel_server:get_env(index_commit_freq),
+            Delay = barrel_config:get_env(index_commit_freq),
             MsDelay = 1000 * Delay,
             State = #st{
                 mod=Mod,

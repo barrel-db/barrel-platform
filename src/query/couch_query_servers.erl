@@ -298,7 +298,7 @@ with_ddoc_proc(#doc{id=DDocId,revs={Start, [DiskRev|_]}}=DDoc, Fun) ->
         ok = ret_os_process(Proc)
     end.
 
-get_query_servers() -> barrel_server:get_env(query_servers).
+get_query_servers() -> barrel_config:get_env(query_servers).
 
 
 init([]) ->
@@ -309,9 +309,9 @@ init([]) ->
     PidProcs = ets:new(couch_query_server_pid_langs, [set, private]),
     LangProcs = ets:new(couch_query_server_procs, [set, private]),
 
-    ProcTimeout = barrel_server:get_env(os_process_timeout),
-    ReduceLimit = barrel_server:get_env(reduce_limit),
-    OsProcLimit = barrel_server:get_env(os_process_limit),
+    ProcTimeout = barrel_config:get_env(os_process_timeout),
+    ReduceLimit = barrel_config:get_env(reduce_limit),
+    OsProcLimit = barrel_config:get_env(os_process_limit),
 
     % 'native_query_servers' specifies a {Module, Func, Arg} tuple
     lists:foreach(fun({Lang, {Mod, Fun, SpecArg}}) ->

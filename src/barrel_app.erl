@@ -21,6 +21,7 @@
 start(_StartType, _StartArgs) ->
   Args = init:get_arguments(),
   ok = maybe_set_pidfile(Args),
+  barrel_config:start(),
   barrel_ext:start(),
   'barrel_sup':start_link().
 

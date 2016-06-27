@@ -235,8 +235,8 @@ accumulate_writes(W, Acc0) ->
 
 accumulate_more(NumDocIds) ->
     % check if we have enough items now
-    MinItems = barrel_server:get_env(min_writer_items),
-    MinSize = barrel_server:get_env(min_writer_size),
+    MinItems = barrel_config:get_env(min_writer_items),
+    MinSize = barrel_config:get_env(min_writer_size),
     {memory, CurrMem} = process_info(self(), memory),
     NumDocIds < MinItems andalso CurrMem < MinSize.
 

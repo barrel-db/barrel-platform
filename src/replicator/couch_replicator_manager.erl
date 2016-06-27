@@ -117,7 +117,7 @@ init(_) ->
 
     Listener = start_listener(self()),
 
-    Retries = retries_value(barrel_server:get_env(max_replication_retry_count)),
+    Retries = retries_value(barrel_config:get_env(max_replication_retry_count)),
     {ok, #state{changes_feed_loop = Loop,
                 rep_db_name = RepDbName,
                 max_retries = Retries,

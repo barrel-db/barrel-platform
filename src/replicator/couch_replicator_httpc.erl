@@ -82,7 +82,7 @@ send_ibrowse_req(#httpdb{headers = BaseHeaders} = HttpDb, Params) ->
     Timeout = case IsChanges of
                 true -> infinity;
                 _ ->
-                  case barrel_server:get_env(request_timeout) of
+                  case barrel_config:get_env(request_timeout) of
                     "infinity" -> infinity;
                     Ms -> list_to_integer(Ms)
                   end

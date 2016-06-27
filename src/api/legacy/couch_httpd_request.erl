@@ -122,7 +122,7 @@ body_length(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(body_length).
 
 body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
-    MaxSize = barrel_server:get_env(max_document_size),
+    MaxSize = barrel_config:get_env(max_document_size),
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
@@ -136,7 +136,7 @@ json_req_obj(#httpd{mochi_req=Req,
 }, Db, DocId) ->
     Body = case ReqBody of
                undefined ->
-                   MaxSize = barrel_server:get_env(max_document_size),
+                   MaxSize = barrel_config:get_env(max_document_size),
                    Req:recv_body(MaxSize);
                Else -> Else
            end,

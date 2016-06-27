@@ -299,7 +299,7 @@ path(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(path).
 
 host_for_request(#httpd{mochi_req=MochiReq}) ->
-    XHost = barrel_server:get_env(x_forwarded_host),
+    XHost = barrel_config:get_env(x_forwarded_host),
     case MochiReq:get_header_value(XHost) of
         undefined ->
             case MochiReq:get_header_value("Host") of
@@ -317,11 +317,11 @@ host_for_request(#httpd{mochi_req=MochiReq}) ->
 
 absolute_uri(#httpd{mochi_req=MochiReq}=Req, Path) ->
     Host = host_for_request(Req),
-    XSsl = barrel_server:get_env(x_forwarded_ssl),
+    XSsl = barrel_config:get_env(x_forwarded_ssl),
     Scheme = case MochiReq:get_header_value(XSsl) of
                  "on" -> "https";
                  _ ->
-                     XProto = barrel_server:get_env(x_forwarded_proto),
+                     XProto = barrel_config:get_env(x_forwarded_proto),
                      case MochiReq:get_header_value(XProto) of
                          %% Restrict to "https" and "http" schemes only
                          "https" -> "https";
@@ -355,7 +355,7 @@ body_length(#httpd{mochi_req=MochiReq}) ->
     MochiReq:get(body_length).
 
 body(#httpd{mochi_req=MochiReq, req_body=undefined}) ->
-    MaxSize = barrel_server:get_env(max_document_size),
+    MaxSize = barrel_config:get_env(max_document_size),
     MochiReq:recv_body(MaxSize);
 body(#httpd{req_body=ReqBody}) ->
     ReqBody.
@@ -578,7 +578,7 @@ initialize_jsonp(Req) ->
         CallBack ->
             try
                 % make sure jsonp is configured on (default off)
-                case barrel_server:get_env(allow_jsonp) of
+                case barrel_config:get_env(allow_jsonp) of
                 true ->
                     validate_callback(CallBack);
                 false ->
@@ -673,16 +673,16 @@ error_headers(#httpd{mochi_req=MochiReq}=Req, Code, ErrorStr, ReasonStr) ->
         % this is where the basic auth popup is triggered
         case MochiReq:get_header_value("X-CouchDB-WWW-Authenticate") of
         undefined ->
-            case barrel_server:get_env('WWW-Authenticate') of
+            case barrel_config:get_env('WWW-Authenticate') of
             nil ->
                 % If the client is a browser and the basic auth popup isn't turned on
                 % redirect to the session page.
                 case ErrorStr of
                 <<"unauthorized">> ->
-                    case barrel_server:get_env(authentication_redirect) of
+                    case barrel_config:get_env(authentication_redirect) of
                     nil -> {Code, []};
                     AuthRedirect ->
-                        case barrel_server:get_env(require_valid_user) of
+                        case barrel_config:get_env(require_valid_user) of
                         "true" ->
                             % send the browser popup header no matter what if we are require_valid_user
                             {Code, [{"WWW-Authenticate", "Basic realm=\"server\""}]};

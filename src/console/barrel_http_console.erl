@@ -55,7 +55,7 @@ config() ->
       Config
   end.
 
-is_enabled() -> barrel_server:get_env(start_console).
+is_enabled() -> barrel_config:get_env(start_console).
 
 binding(Config) ->
   Port = proplists:get_value(port, Config, ?DEFAULT_PORT),

@@ -18,6 +18,10 @@
 -author("Benoit Chesneau").
 
 %% API
+-export([start/0]).
+
+-export([env/0, get_env/1, set_env/2, process_env/1]).
+
 -export([config_file/0]).
 -export([init_config/0]).
 -export([read_file/1]).
@@ -25,6 +29,242 @@
 -include("barrel.hrl").
 
 -define(DEFAULT_CONFIG, "barrel.yml").
+
+start() ->
+  _ = ets:new(barrel_gvar, [set, named_table, public, {read_concurrency, true}]),
+  init_config(),
+  process_env(env()),
+  ok.
+
+process_env([]) -> ok;
+process_env([E | Rest]) ->
+  V = get_env(E),
+  barrel_lib:set(E, V),
+  process_env(Rest).
+
+env() ->
+  [
+    dir,
+    config_dir,
+    extensions,
+    uri_file,
+    delayed_commits,
+    fsync_options,
+    file_compression,
+    max_document_size,
+    attachment_stream_buffer_size,
+    attachment_compressible_types,
+    attachment_compression_level,
+    doc_buffer_size,
+    checkpoint_after,
+    stem_interactive_updates,
+    listen,
+    start_console,
+    x_forwarded_host,
+    x_forwarded_ssl,
+    x_forwarded_proto,
+    allow_jsonp,
+    'WWW-Authenticate',
+    changes_timeout,
+    authentication_redirect,
+    enable_cors,
+    cors,
+    require_valid_user,
+    auth_handlers,
+    auth_timeout,
+    allows_persistent_cookie,
+    auth_pbkdf2_iterations,
+    auth_cache_size,
+    auth_public_fields,
+    users_db_public,
+    os_process_timeout,
+    reduce_limit,
+    os_process_limit,
+    query_servers,
+    uuid_algorithm,
+    utc_id_suffix,
+    index_commit_freq,
+    index_threshold,
+    index_refresh_interval,
+    keyvalue_buffer_size,
+    min_writer_items,
+    min_writer_size,
+    request_timeout,
+    max_replication_retry_count,
+    worker_processes,
+    worker_batch_size,
+    http_connections,
+    connection_timeout,
+    retries_per_request,
+    use_checkpoints,
+    checkpoint_interval,
+    socket_options,
+    replicator_sslopts,
+    replicator_cafile,
+    compactions,
+    compaction_check_interval,
+    compaction_min_file_size
+  ].
+
+
+default_env(dir) ->
+  case init:get_argument(barrel_dir) of
+    {ok, [[D]]} -> D;
+    _ ->
+      Name = lists:concat(["data.", node()]),
+      filename:absname(Name)
+  end;
+default_env(config_dir) ->
+  case init:get_argument(config_dir) of
+    {ok, [[D]]} -> D;
+    _ -> undefined
+  end;
+default_env(extensions) ->
+  [];
+default_env(uri_file) ->
+  undefined;
+default_env(delayed_commits) ->
+  false;
+default_env(fsync_options) ->
+  [before_header, after_header, on_file_open];
+default_env(file_compression) ->
+  snappy;
+default_env(max_document_size) ->
+  4294967296;
+default_env(attachment_stream_buffer_size) ->
+  4096;
+default_env(attachment_compressible_types) ->
+  [];
+default_env(attachment_compression_level) ->
+  0;
+default_env(doc_buffer_size) ->
+  524288;
+default_env(checkpoint_after) ->
+  524288 * 10;
+default_env(stem_interactive_updates) ->
+  true;
+default_env(listen) ->
+  [];
+default_env(start_console) ->
+  false;
+default_env(x_forwarded_host) ->
+  <<"x-forwarded-host">>;
+default_env(x_forwarded_ssl) ->
+  "X-Forwarded-Ssl";
+default_env(x_forwarded_proto) ->
+  "X-Forwarded-Proto";
+default_env(allow_jsonp) ->
+  false;
+%%TODO: deprecate this option
+default_env('WWW-Authenticate') ->
+  nil;
+%%TODO: deprecate this option
+default_env(authentication_redirect) ->
+  nil;
+%%TODO: deprecate this option
+default_env(changes_timeout) ->
+  60000;
+default_env(cors) ->
+  [];
+default_env(enable_cors) ->
+  false;
+default_env(require_valid_user) ->
+  false;
+default_env(auth_handlers) ->
+  [barrel_basic_auth, barrel_cookie_auth];
+default_env(allows_persistent_cookie) ->
+  false;
+default_env(auth_pbkdf2_iterations) ->
+  10000;
+default_env(auth_timeout) ->
+  600;
+default_env(auth_cache_size) ->
+  50;
+default_env(auth_public_fields) ->
+  [];
+default_env(users_db_public) ->
+  false;
+default_env(os_process_timeout) ->
+  5000;
+default_env(reduce_limit) ->
+  true;
+default_env(os_process_limit) ->
+  25;
+default_env(query_servers) ->
+  [
+    {<<"javascript">>, {couch_couchjs, start_link, [javascript]}},
+    {<<"erlang">>, {couch_native_process, start_link, []}}
+  ];
+default_env(uuid_algorithm) ->
+  sequential;
+default_env(utc_id_suffix) ->
+  "";
+default_env(index_commit_freq) ->
+  5;
+default_env(index_threshold) ->
+  200;
+default_env(index_refresh_interval) ->
+  1000;
+default_env(keyvalue_buffer_size) ->
+  2097152;
+default_env(min_writer_items) ->
+  100;
+default_env(min_writer_size) ->
+  16777216;
+default_env(request_timeout) ->
+  infinity;
+default_env(max_replication_retry_count) ->
+  10;
+default_env(worker_processes) ->
+  4;
+default_env(worker_batch_size) ->
+  500;
+default_env(http_connections) ->
+  20;
+default_env(connection_timeout) ->
+  30000;
+default_env(retries_per_request) ->
+  10;
+default_env(use_checkpoints) ->
+  true;
+default_env(checkpoint_interval) ->
+  5000;
+default_env(socket_options) ->
+  [{keepalive, true}, {nodelay, false}];
+default_env(replicator_sslopts) ->
+  [];
+default_env(replicator_cafile) ->
+  "";
+default_env(compactions) ->
+  [];
+default_env(compaction_check_interval) ->
+  300;
+default_env(compaction_min_file_size) ->
+  131072.
+
+set_env(E, Val) -> barrel_lib:set(E, Val).
+
+get_env(auth_secret) -> barrel_auth:secret();
+get_env(config_dir) ->
+  case ?catch_val(config_dir) of
+    {'EXIT', _} ->
+      case application:get_env(barrel, config_dir, default_env(config_dir)) of
+        undefined ->
+          Dir = filename:join(get_env(dir), ".barrel"),
+          filelib:ensure_dir(filename:join(Dir, "dummy")),
+          set_env(config_dir, Dir),
+          Dir;
+        Val ->
+          Val
+      end;
+    Val -> Val
+  end;
+get_env(E) ->
+  case ?catch_val(E) of
+    {'EXIT', _} -> application:get_env(barrel, E, default_env(E));
+    Val -> Val
+  end.
+
 
 config_file() ->
   case init:get_argument(config_file) of

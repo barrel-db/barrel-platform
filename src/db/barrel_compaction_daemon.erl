@@ -197,7 +197,7 @@ compact_loop(Parent) ->
     true ->
       receive {Parent, have_config} -> ok end;
     false ->
-      PausePeriod = barrel_server:get_env(compaction_check_interval),
+      PausePeriod = barrel_config:get_env(compaction_check_interval),
       ok = timer:sleep(PausePeriod * 1000)
   end,
   compact_loop(Parent).
@@ -371,7 +371,7 @@ can_db_compact(#config{db_frag = Threshold} = Config, Db) ->
         false ->
           false;
         true ->
-          Free = free_space(barrel_server:get_env(dir)),
+          Free = free_space(barrel_config:get_env(dir)),
           case Free >= SpaceRequired of
             true ->
               true;
@@ -439,7 +439,7 @@ check_frag(Threshold, Frag) ->
 
 frag(Info) ->
   FileSize = maps:get(disk_size, Info),
-  MinFileSize = barrel_server:get_env(compaction_min_file_size),
+  MinFileSize = barrel_config:get_env(compaction_min_file_size),
   case FileSize < MinFileSize of
     true ->
       {0, FileSize};
@@ -462,7 +462,7 @@ space_required(DataSize) ->
 
 
 load_config() ->
-  Compactions = barrel_server:get_env(compactions),
+  Compactions = barrel_config:get_env(compactions),
   lists:foreach(fun({DbName, Options}) ->
                   case validate_config(Options, #config{}) of
                     {ok, Config}->

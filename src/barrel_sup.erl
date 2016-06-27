@@ -35,7 +35,7 @@ start_link() ->
 
 status() ->
   #{ api => barrel_api_http:web_uris(),
-     console => case barrel_server:get_env(start_console) of
+     console => case barrel_config:get_env(start_console) of
                   false -> not_started;
                   true -> barrel_http_console:admin_uri()
                 end
@@ -47,13 +47,6 @@ status() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  _ = init_tabs(),
-
-  barrel_config:init_config(),
-  barrel_server:process_config(barrel_server:env()),
-
-
-
   Event = {barrel_event,
     {barrel_event, start_link, []},
     permanent,brutal_kill,	worker,[barrel_event]},
@@ -121,11 +114,6 @@ init(safe) ->
 %% Internal functions
 %%====================================================================
 
-
-init_tabs() ->
-  _ = ets:new(barrel_gvar, [set, named_table, public, {read_concurrency, true}]),
-  ok.
-
 boot_status() ->
   io:format("~n~n==> Barrel node started~n", []),
   io:format("version: ~s~n", [barrel_server:version()]),
@@ -138,7 +126,7 @@ display_uris(URIs) ->
   [io:format("HTPP API: ~s~n", [URI]) || URI <- URIs].
 
 write_uri_file() ->
-  case barrel_server:get_env(uri_file) of
+  case barrel_config:get_env(uri_file) of
     undefined -> ok;
     Filepath ->
       Lines = [io_lib:format("~s~n", [URI]) || URI <- barrel_api_http:web_uris()],
