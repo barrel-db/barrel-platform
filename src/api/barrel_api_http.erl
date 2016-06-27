@@ -22,6 +22,9 @@
 %% http helpers
 -export([host/1]).
 
+%% cowboy middleware
+-export([execute/2, resume/6]).
+
 
 %% internal apis
 -export([routes/0]).
@@ -93,8 +96,58 @@ protocol_opts() ->
   Dispatch = cowboy_router:compile([
                                     {'_', routes()}
                                    ]),
-  [{env, [{dispatch, Dispatch}]}, {middlewares, [barrel_cors_middleware, barrel_auth_middleware,
-    cowboy_router, cowboy_handler]}].
+  [
+    {env, [{dispatch, Dispatch}]},
+    {middlewares, [?MODULE, barrel_cors_middleware, barrel_auth_middleware, cowboy_router, cowboy_handler]},
+    {on_response, fun on_response/4}].
+
+execute(Req, Env) ->
+  case hooks:find("on_http_request") of
+    error -> {ok, Req, Env};
+    Hooks -> execute(Req, Env, Hooks)
+  end.
+
+execute(Req, Env, [{M, F} | Tail]) ->
+  case apply(M, F, [Req, Env]) of
+    {ok, Req2, Env2} ->
+      execute(Req2, Env2, Tail);
+    {suspend, Module, Function, Args} ->
+      erlang:hibernate(?MODULE, resume,
+        [Req, Env, Tail, Module, Function, Args]);
+    {halt, Req2} -> {halt, Req2};
+    {error, Code, Req2} -> {error, Code, Req2}
+  end;
+execute(Req, Env, []) ->
+  {ok, Req, Env}.
+
+resume(Req, Env, Tail, Module, Function, Args) ->
+  case apply(Module, Function, Args) of
+    {ok, Req2, Env2} -> execute(Req2, Env2, Tail);
+    {suspend, Module, Function, Args} ->
+      erlang:hibernate(?MODULE, resume,
+        [Req, Env, Tail, Module, Function, Args]);
+    {halt, Req2} -> {halt, Req2};
+    {error, Code, Req2} -> {error, Code, Req2}
+  end.
+
+on_response(Status, Headers, Body, Req) ->
+  case hooks:find("on_http_response") of
+    error -> Req;
+    Hooks -> response(Status, Headers, Body, Req, Hooks)
+  end.
+
+response(Status, Headers, Body, Req, [{M, F} | Tail]) ->
+  case apply(M, F, [Status, Headers, Body, Req]) of
+    {Status2, Headers2, Req2} ->
+      response(Status2, Headers2, Body, Req2, Tail);
+    {halt, {_, _, _}=StHdReq} -> StHdReq;
+    {halt, Req2} -> Req2;
+    Req2 ->
+      response(Status, Headers, Body, Req2, Tail)
+  end;
+response(Status, Headers, _Body, Req, []) ->
+  {Status, Headers, Req}.
+
 
 binding(Opts) ->
   Port = proplists:get_value(port, Opts, 0),
