@@ -140,7 +140,6 @@ open_doc(Db, IdOrDocInfo) ->
     open_doc(Db, IdOrDocInfo, []).
 
 open_doc(Db, Id, Options) ->
-    increment_stat(Db, [barrel, database_reads]),
     case open_doc_int(Db, Id, Options) of
     {ok, #doc{deleted=true}=Doc} ->
         case lists:member(deleted, Options) of
@@ -185,7 +184,6 @@ find_ancestor_rev_pos({RevPos, [RevId|Rest]}, AttsSinceRevs) ->
     end.
 
 open_doc_revs(Db, Id, Revs, Options) ->
-    increment_stat(Db, [barrel, database_reads]),
     [{ok, Results}] = open_doc_revs_int(Db, [{Id, Revs}], Options),
     {ok, [apply_open_options(Result, Options) || Result <- Results]}.
 
@@ -683,7 +681,6 @@ check_dup_atts2(_) ->
 
 
 update_docs(Db, Docs, Options, replicated_changes) ->
-    increment_stat(Db, [barrel, database_writes]),
     % associate reference with each doc in order to track duplicates
     Docs2 = lists:map(fun(Doc) -> {Doc, make_ref()} end, Docs),
     DocBuckets = before_docs_update(Db, group_alike_docs(Docs2)),
@@ -710,7 +707,6 @@ update_docs(Db, Docs, Options, replicated_changes) ->
     {ok, DocErrors};
 
 update_docs(Db, Docs, Options, interactive_edit) ->
-    increment_stat(Db, [barrel, database_writes]),
     AllOrNothing = lists:member(all_or_nothing, Options),
     % go ahead and generate the new revision ids for the documents.
     % separate out the NonRep documents from the rest of the documents
@@ -881,13 +877,16 @@ prepare_doc_summaries(Db, BucketList) ->
         Bucket) || Bucket <- BucketList].
 
 
-before_docs_update(#db{before_doc_update = nil}, BucketList) ->
-    BucketList;
 before_docs_update(#db{before_doc_update = Fun} = Db, BucketList) ->
+    BeforeFun = case Db#db.before_doc_update of
+                    nil -> fun(Doc, _Db) -> Doc end;
+                    Fun -> Fun
+                end,
     [lists:map(
         fun({Doc, Ref}) ->
-            NewDoc = Fun(barrel_doc:with_ejson_body(Doc), Db),
-            {NewDoc, Ref}
+            Doc1 = BeforeFun(barrel_doc:with_ejson_body(Doc), Db),
+            Doc2 = run_db_hooks(before_doc_update, Doc1, Db),
+            {Doc2, Ref}
         end,
         Bucket) || Bucket <- BucketList].
 
@@ -1081,12 +1080,6 @@ init({DbName, Filepath, Fd, Options}) ->
     {ok, UpdaterPid} = gen_server:start_link(couch_db_updater, {self(), DbName, Filepath, Fd, Options}, []),
     {ok, #db{fd_ref_counter=RefCntr}=Db} = gen_server:call(UpdaterPid, get_db),
     couch_ref_counter:add(RefCntr),
-    case lists:member(sys_db, Options) of
-    true ->
-        ok;
-    false ->
-        barrel_metrics_process:track([barrel, open_databases])
-    end,
     process_flag(trap_exit, true),
     {ok, Db}.
 
@@ -1308,6 +1301,7 @@ make_doc(#db{updater_fd = Fd} = Db, Id, Deleted, Bp, RevisionPath) ->
         atts = Atts,
         deleted = Deleted
     },
+
     Doc1 = after_doc_read(Db, Doc),
     ok = validate_doc_read(Db, Doc1),
     Doc1.
@@ -1316,7 +1310,11 @@ make_doc(#db{updater_fd = Fd} = Db, Id, Deleted, Bp, RevisionPath) ->
 after_doc_read(#db{after_doc_read = nil}, Doc) ->
     Doc;
 after_doc_read(#db{after_doc_read = Fun} = Db, Doc) ->
-    Fun(barrel_doc:with_ejson_body(Doc), Db).
+    Doc1 = case Db#db.after_doc_read of
+                   nil -> barrel_doc:with_ejson_body(Doc);
+                   Fun -> Fun(barrel_doc:with_ejson_body(Doc), Db)
+               end,
+    run_db_hooks(after_doc_read, Doc1, Db).
 
 
 validate_doc_read(#db{validate_doc_read_funs=[]}, _Doc) ->
@@ -1347,13 +1345,31 @@ validate_doc_read(Db, Doc) ->
     end.
 
 
-increment_stat(#db{options = Options}, Stat) ->
-    case lists:member(sys_db, Options) of
-    true ->
-        ok;
-    false ->
-        exometer:update(Stat, 1)
+run_db_hooks(Name, Doc, Db) ->
+    case hooks:find(Name) of
+        {ok, Hooks} -> run_db_hooks1(Hooks, Doc, Db);
+        error -> Doc
     end.
+
+run_db_hooks1([{M, F} | Rest], Doc, Db) ->
+    case catch apply(M, F, [Doc, Db]) of
+        {'EXIT', Reason} ->
+            ?log(error, "error while running ~s:~s :~n~p/2", [M, F, Reason]),
+            run_db_hooks1(Rest, Doc, Db);
+        ok ->
+            run_db_hooks1(Rest, Doc, Db);
+        {ok, Doc1} ->
+            run_db_hooks1(Rest, Doc1, Db);
+        halt ->
+            Doc;
+        {halt, Doc1} ->
+            Doc1;
+        _ ->
+            run_db_hooks1(Rest, Doc, Db)
+    end;
+run_db_hooks1([], Doc, _Db) ->
+    Doc.
+
 
 local_btree(#db{local_docs_btree = BTree, fd = ReaderFd}) ->
     BTree#btree{fd = ReaderFd}.

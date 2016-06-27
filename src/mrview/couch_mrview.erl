@@ -57,6 +57,7 @@ query_view(Db, DDoc, VName, Args) ->
 query_view(Db, DDoc, VName, Args, Callback, Acc) when is_list(Args) ->
   query_view(Db, DDoc, VName, to_mrargs(Args), Callback, Acc);
 query_view(Db, DDoc, VName, Args0, Callback, Acc0) ->
+  hooks:run(on_query_view, [Db, DDoc, VName]),
   {ok, VInfo, Sig, Args} = couch_mrview_util:get_view(Db, DDoc, VName, Args0),
   {ok, Acc1} = case Args#mrargs.preflight_fun of
                  PFFun when is_function(PFFun, 2) -> PFFun(Sig, Acc0);
@@ -75,6 +76,7 @@ view_changes_since(Db, DDoc, VName, StartSeq, Fun, Acc) ->
   view_changes_since(Db, DDoc, VName, StartSeq, Fun, [], Acc).
 
 view_changes_since(Db, DDoc, VName, StartSeq, UserFun, Options, Acc) ->
+  hooks:run(on_query_view, [Db, DDoc, VName]),
   IdxType = changes_idx(Options),
   Args0 = make_view_changes_args(Options, IdxType),
   {ok, {_, View}, _, Args} = couch_mrview_util:get_view(Db, DDoc, VName,Args0),

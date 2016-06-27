@@ -69,7 +69,6 @@ handle_view_req(#httpd{method='GET',
   couch_httpd:send_json(Req, 200, FinalInfo);
 handle_view_req(#httpd{method='GET'}=Req, Db, DDoc) ->
   [_, _, _, _, ViewName] = Req#httpd.path_parts,
-  exometer:update([httpd, view_reads], 1),
   design_doc_view(Req, Db, DDoc, ViewName, undefined);
 handle_view_req(#httpd{method='POST'}=Req, Db, DDoc) ->
   [_, _, _, _, ViewName] = Req#httpd.path_parts,
@@ -78,11 +77,8 @@ handle_view_req(#httpd{method='POST'}=Req, Db, DDoc) ->
   Queries = get_view_queries(Props),
   case {Queries, Keys} of
     {Queries, undefined} ->
-      [exometer:update([httpd, view_reads], 1)
-       || _I <- Queries],
       multi_query_view(Req, Db, DDoc, ViewName, Queries);
     {undefined, Keys} ->
-      exometer:update([httpd, view_reads], 1),
       design_doc_view(Req, Db, DDoc, ViewName, Keys);
     {undefined, undefined} ->
       throw({
@@ -102,7 +98,6 @@ handle_temp_view_req(#httpd{method='POST'}=Req, Db) ->
   Body = couch_httpd:json_body_obj(Req),
   DDoc = couch_mrview_util:temp_view_to_ddoc(Body),
   Keys = couch_httpd_all_docs:is_keys(Body),
-  exometer:update([httpd, temporary_view_reads], 1),
   design_doc_view(Req, Db, DDoc, <<"temp">>, Keys);
 handle_temp_view_req(Req, _Db) ->
   couch_httpd:send_method_not_allowed(Req, "POST").

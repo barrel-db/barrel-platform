@@ -23,7 +23,8 @@ start(_StartType, _StartArgs) ->
   ok = maybe_set_pidfile(Args),
   barrel_config:start(),
   barrel_ext:start(),
-  'barrel_sup':start_link().
+  Sup ='barrel_sup':start_link(),
+  Sup.
 
 -spec stop(atom()) -> ok.
 stop(_State) ->

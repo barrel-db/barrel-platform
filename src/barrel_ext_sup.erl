@@ -43,23 +43,23 @@ start_proc(Name, M, F, A) ->
     start_proc(Name, M, F, A, []).
 
 start_proc(Name, M, F, A, Opts) ->
-    [Restart, Shutdown, Type, Modules] =
-	[proplists:get_value(K, Opts, Default)
-	 || {K, Default} <- [{restart, transient},
-			     {shutdown, ?SHUTDOWN},
-			     {type, worker},
-			     {modules, [M]}]],
-    case supervisor:start_child(
-	   ?MODULE, {Name, {M,F,A}, Restart, Shutdown, Type, Modules}) of
-	{error, already_present} ->
-	    supervisor:restart_child(?MODULE, Name);
-	Other ->
-	    Other
-    end.
+	[Restart, Shutdown, Type, Modules] =
+		[proplists:get_value(K, Opts, Default)
+			|| {K, Default} <- [{restart, transient},
+			{shutdown, ?SHUTDOWN},
+			{type, worker},
+			{modules, [M]}]],
+	case supervisor:start_child(
+		?MODULE, {Name, {M,F,A}, Restart, Shutdown, Type, Modules}) of
+		{error, already_present} ->
+			supervisor:restart_child(?MODULE, Name);
+		Other ->
+			Other
+	end.
 
 
 stop_proc(Name) ->
-  supervisor:terminate_child(?MODULE, Name).
+	supervisor:terminate_child(?MODULE, Name).
 
 %%====================================================================
 %% Supervisor callbacks
@@ -67,4 +67,4 @@ stop_proc(Name) ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  {ok, {{one_for_one, 4, 3600}, []}}.
+	{ok, {{one_for_one, 4, 3600}, []}}.

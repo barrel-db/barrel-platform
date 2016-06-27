@@ -83,7 +83,8 @@ make_fun_spec_strs(SpecStr) ->
 handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
     DesignUrlHandlers, UserCtx) ->
 
-    Begin = os:timestamp(),
+    erlang:put(request_start_time, erlang:timestamp()),
+
     % for the path, use the raw path with the query string and fragment
     % removed, but URL quoting left intact
     RequestedPath = MochiReq:get(raw_path),
@@ -115,7 +116,6 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
         % possible (if any module references the atom, then it's existing).
         Meth -> barrel_lib:to_existing_atom(Meth)
     end,
-    increment_method_stats(Method1),
 
     % allow broken HTTP clients to fake a full method vocabulary with an X-HTTP-METHOD-OVERRIDE header
     MethodOverride = MochiReq:get_primary_header_value("X-HTTP-Method-Override"),
@@ -204,13 +204,8 @@ handle_request(MochiReq, DefaultFun, UrlHandlers, DbUrlHandlers,
             ?log(info, "Stacktrace: ~p",[Stack]),
             send_error(HttpReq, Error)
     end,
-    RequestTime = round(timer:now_diff(os:timestamp(), Begin)/1000),
-    exometer:update([barrel, request_time], RequestTime),
-    exometer:update([httpd, requests], 1),
+    hooks:run(on_http_response, [Resp:get(code), Resp:get(headers), <<>>, nil]),
     {ok, Resp}.
-
-increment_method_stats(Method) ->
-    exometer:update([httpd_request_methods, Method], 1).
 
 validate_referer(Req) ->
     Host = host_for_request(Req),
@@ -426,7 +421,6 @@ log_request(#httpd{mochi_req=MochiReq,peer=Peer}, Code) ->
 
 start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
     log_request(Req, Code),
-    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = Headers ++ server_header() ++
                cookie_auth_header(Req, Headers),
     Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
@@ -439,7 +433,6 @@ start_response_length(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Length) ->
 
 start_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     log_request(Req, Code),
-    exometer:update([httpd_status_codes, Code], 1),
     CookieHeader = cookie_auth_header(Req, Headers),
     Headers1 = Headers ++ server_header() ++ CookieHeader,
     Headers2 = barrel_legacy_handler:apply_cors_headers(Req, Headers1),
@@ -473,7 +466,6 @@ http_1_0_keep_alive(Req, Headers) ->
 
 start_chunked_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers) ->
     log_request(Req, Code),
-    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     Headers2 = Headers1 ++ server_header() ++
                cookie_auth_header(Req, Headers1),
@@ -498,7 +490,6 @@ last_chunk(Resp) ->
 
 send_response(#httpd{mochi_req=MochiReq}=Req, Code, Headers, Body) ->
     log_request(Req, Code),
-    exometer:update([httpd_status_codes, Code], 1),
     Headers1 = http_1_0_keep_alive(MochiReq, Headers),
     if Code >= 500 ->
         ?log(error, "httpd ~p error response:~n ~s", [Code, Body]);

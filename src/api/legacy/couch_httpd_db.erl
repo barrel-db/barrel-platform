@@ -184,7 +184,6 @@ db_req(#httpd{path_parts=[_,<<"_ensure_full_commit">>]}=Req, _Db) ->
     send_method_not_allowed(Req, "POST");
 
 db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
-    exometer:update([httpd, bulk_requests], 1),
     couch_httpd:validate_ctype(Req, "application/json"),
     JsonProps = couch_httpd:json_body_obj(Req),
     case maps:get(<<"docs">>, JsonProps, undefined) of

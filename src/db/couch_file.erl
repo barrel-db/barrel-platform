@@ -298,14 +298,12 @@ init({Filepath, Options, ReturnPid, Ref}) ->
                     {ok, 0} = file:position(Fd, 0),
                     ok = file:truncate(Fd),
                     ok = file:sync(Fd),
-                    maybe_track_open_os_files(Options),
                     {ok, #file{fd=Fd}};
                 false ->
                     ok = file:close(Fd),
                     init_status_error(ReturnPid, Ref, {error, eexist})
                 end;
             false ->
-                maybe_track_open_os_files(Options),
                 {ok, #file{fd=Fd}}
             end;
         Error ->
@@ -317,7 +315,6 @@ init({Filepath, Options, ReturnPid, Ref}) ->
         {ok, Fd_Read} ->
             {ok, Fd} = file:open(Filepath, OpenOptions),
             ok = file:close(Fd_Read),
-            maybe_track_open_os_files(Options),
             {ok, Eof} = file:position(Fd, eof),
             {ok, #file{fd=Fd, eof=Eof}};
         Error ->
@@ -331,14 +328,6 @@ file_open_options(Options) ->
         [];
     false ->
         [append]
-    end.
-
-maybe_track_open_os_files(FileOptions) ->
-    case lists:member(sys_db, FileOptions) of
-    true ->
-        ok;
-    false ->
-        barrel_metrics_process:track([barrel, open_os_files])
     end.
 
 terminate(_Reason, #file{fd = Fd}) ->
