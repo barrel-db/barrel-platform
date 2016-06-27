@@ -89,6 +89,7 @@ env() ->
   [
     dir,
     config_dir,
+    extensions,
     uri_file,
     delayed_commits,
     fsync_options,
@@ -161,6 +162,8 @@ default_env(config_dir) ->
     {ok, [[D]]} -> D;
     _ -> undefined
   end;
+default_env(extensions) ->
+  [];
 default_env(uri_file) ->
   undefined;
 default_env(delayed_commits) ->
