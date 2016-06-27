@@ -53,7 +53,7 @@ start_extensions([]) ->
   ok.
 
 stop_extensions() ->
-  Extensions = barrel_config:get_env(extensions),
+  Extensions = ets:tab2list(barrel_ext),
   stop_extensions(Extensions).
 
 stop_extensions([{M, O} | Rest]) ->
