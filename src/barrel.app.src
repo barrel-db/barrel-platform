@@ -12,6 +12,8 @@
         ssl,
         os_mon,
         inets,
+        lager,
+        exometer_core,
         p1_utils,
         fast_yaml,
         jsx,
