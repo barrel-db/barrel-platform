@@ -12,6 +12,8 @@
         ssl,
         os_mon,
         inets,
+        goldrush,
+        lager,
         p1_utils,
         fast_yaml,
         jsx,
