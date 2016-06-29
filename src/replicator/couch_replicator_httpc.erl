@@ -18,7 +18,6 @@
 -include_lib("couch_db.hrl").
 -include("couch_replicator_api_wrap.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
--include("log.hrl").
 
 -define(STREAM_STATUS, ibrowse_stream_status).
 
@@ -228,7 +227,7 @@ maybe_retry(Error, _Worker, #httpdb{retries = Retries, wait = Wait} = HttpDb,
     Params) ->
     Method = string:to_upper(atom_to_list(proplists:get_value(method, Params, get))),
     Url = barrel_lib:url_strip_password(full_url(HttpDb, Params)),
-    ?log(info, "Retrying ~s request to ~s in ~p seconds due to error ~s",
+    lager:info("Retrying ~s request to ~s in ~p seconds due to error ~s",
         [Method, Url, Wait / 1000, error_cause(Error)]),
     ok = timer:sleep(Wait),
     Wait2 = erlang:min(Wait * 2, ?MAX_WAIT),
@@ -243,10 +242,10 @@ report_error(_Worker, HttpDb, Params, Error) ->
 
 
 do_report_error(Url, Method, {code, Code}) ->
-    ?log(error, "Replicator, request ~s to ~p failed. The received HTTP error code is ~p", [Method, Url, Code]);
+    lager:error("Replicator, request ~s to ~p failed. The received HTTP error code is ~p", [Method, Url, Code]);
 
 do_report_error(FullUrl, Method, Error) ->
-    ?log(error, "Replicator, request ~s to ~p failed due to error ~s",
+    lager:error("Replicator, request ~s to ~p failed due to error ~s",
         [Method, FullUrl, error_cause(Error)]).
 
 

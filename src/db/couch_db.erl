@@ -35,7 +35,6 @@
 -export([reopen/1, is_system_db/1, compression/1]).
 
 -include("couch_db.hrl").
--include("log.hrl").
 
 start_link(DbName, Filepath, Options) ->
     case open_db_file(Filepath, Options) of
@@ -56,7 +55,7 @@ open_db_file(Filepath, Options) ->
         % crashed during the file switch.
         case couch_file:open(Filepath ++ ".compact", [nologifmissing]) of
         {ok, Fd} ->
-            ?log(info, "Found ~s~s compaction file, using as primary storage.", [Filepath, ".compact"]),
+            lager:info(, "Found ~s~s compaction file, using as primary storage.", [Filepath, ".compact"]),
             ok = file:rename(Filepath ++ ".compact", Filepath),
             ok = couch_file:sync(Fd),
             {ok, Fd};
@@ -351,7 +350,7 @@ check_is_member(#db{user_ctx=UserCtx}=Db) ->
             WithAdminRoles -> % same list, not an reader role
                 case ReaderNames -- [Name] of
                 ReaderNames -> % same names, not a reader
-                    ?log(debug, "Not a reader: UserCtx ~p vs Names ~p Roles ~p",[UserCtx, ReaderNames, WithAdminRoles]),
+                    lager:debug("Not a reader: UserCtx ~p vs Names ~p Roles ~p",[UserCtx, ReaderNames, WithAdminRoles]),
                     throw({unauthorized, <<"You are not authorized to access this db.">>});
                 _ ->
                     ok
@@ -813,7 +812,7 @@ set_commit_option(Options) ->
     {_, false} ->
         [full_commit|Options];
     {_, Else} ->
-        ?log(error, "[couchdb] delayed_commits setting must be true/false, not ~p",
+        lager:error(, "[couchdb] delayed_commits setting must be true/false, not ~p",
             [Else]),
         [full_commit|Options]
     end.
@@ -1107,7 +1106,7 @@ handle_call(get_db, _From, Db) ->
 
 
 handle_cast(Msg, Db) ->
-    ?log(error, "Bad cast message received for db ~s: ~p", [Db#db.name, Msg]),
+    lager:error(, "Bad cast message received for db ~s: ~p", [Db#db.name, Msg]),
     exit({error, Msg}).
 
 code_change(_OldVsn, State, _Extra) ->
@@ -1129,7 +1128,7 @@ handle_info({'EXIT', _Pid, normal}, Db) ->
 handle_info({'EXIT', _Pid, Reason}, Server) ->
     {stop, Reason, Server};
 handle_info(Msg, Db) ->
-    ?log(error, "Bad message received for db ~s: ~p", [Db#db.name, Msg]),
+    lager:error(, "Bad message received for db ~s: ~p", [Db#db.name, Msg]),
     exit({error, Msg}).
 
 
@@ -1341,7 +1340,7 @@ validate_doc_read(Db, Doc) ->
                 throw:{unauthorized, _}=Error ->
                     throw(Error);
                 throw:Error ->
-                    ?log(error, "Error while validating read: ~p~n", [Error]),
+                    lager:error(, "Error while validating read: ~p~n", [Error]),
                     ok
             end
     end.

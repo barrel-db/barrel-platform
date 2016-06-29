@@ -24,7 +24,6 @@
 -export([code_change/3, terminate/2]).
 
 -include_lib("couch_db.hrl").
--include("log.hrl").
 
 -record(state, {
     url,
@@ -135,7 +134,7 @@ handle_info({'DOWN', Ref, process, _, _}, #state{callers = Callers} = State) ->
             {noreply, State}
     end;
 handle_info(Info, State) ->
-    ?log(info, "got unexpected message: ~p~n", [Info]),
+    lager:info("got unexpected message: ~p~n", [Info]),
     {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->

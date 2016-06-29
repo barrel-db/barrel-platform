@@ -31,7 +31,6 @@
 -export([run_script/4]).
 
 -include("couch_db.hrl").
--include("log.hrl").
 
 -record(proc, {
     pid,
@@ -393,7 +392,7 @@ handle_info({'DOWN', _, process, Pid, Status}, #qserver{
     [{Pid, Proc}] ->
         case Status of
         normal -> ok;
-        _ -> ?log(debug, "Linked process died abnormally: ~p (reason: ~p)", [Pid, Status])
+        _ -> lager:debug("Linked process died abnormally: ~p (reason: ~p)", [Pid, Status])
         end,
         rem_value(PidProcs, Pid),
         catch rem_from_list(LangProcs, Proc#proc.lang, Proc),
@@ -509,11 +508,11 @@ proc_with_ddoc(DDoc, DDocKey, LangProcs) ->
         end, LangProcs),
     case DDocProcs of
         [DDocProc|_] ->
-            ?log(debug, "DDocProc found for DDocKey: ~p",[DDocKey]),
+            lager:debug("DDocProc found for DDocKey: ~p",[DDocKey]),
             {ok, DDocProc};
         [] ->
             [TeachProc|_] = LangProcs,
-            ?log(debug, "Teach ddoc to new proc ~p with DDocKey: ~p",[TeachProc, DDocKey]),
+            lager:debug("Teach ddoc to new proc ~p with DDocKey: ~p",[TeachProc, DDocKey]),
             {ok, SmartProc} = teach_ddoc(DDoc, DDocKey, TeachProc),
             {ok, SmartProc}
     end.

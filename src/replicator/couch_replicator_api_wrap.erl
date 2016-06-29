@@ -24,7 +24,6 @@
 -include_lib("couch_db.hrl").
 -include_lib("couch_mrview.hrl").
 -include("couch_replicator_api_wrap.hrl").
--include("log.hrl").
 
 -export([
     db_open/2,
@@ -197,7 +196,7 @@ open_doc_revs(#httpdb{retries = 0} = HttpDb, Id, Revs, Options, _Fun, _Acc) ->
     Url = barrel_lib:url_strip_password(
         couch_replicator_httpc:full_url(HttpDb, [{path,Path}, {qs,QS}])
     ),
-    ?log(error, "Replication crashing because GET ~s failed", [Url]),
+    lager:error("Replication crashing because GET ~s failed", [Url]),
     exit(kaboom);
 open_doc_revs(#httpdb{} = HttpDb, Id, Revs, Options, Fun, Acc) ->
     Path = barrel_doc:encode_doc_id(Id),
@@ -258,7 +257,7 @@ open_doc_revs(#httpdb{} = HttpDb, Id, Revs, Options, Fun, Acc) ->
             ),
             #httpdb{retries = Retries, wait = Wait0} = HttpDb,
             Wait = 2 * erlang:min(Wait0 * 2, ?MAX_WAIT),
-            ?log(info, "Retrying GET to ~s in ~p seconds due to error ~p",
+            lager:info("Retrying GET to ~s in ~p seconds due to error ~p",
                 [Url, Wait / 1000, error_reason(Else)]
             ),
             ok = timer:sleep(Wait),

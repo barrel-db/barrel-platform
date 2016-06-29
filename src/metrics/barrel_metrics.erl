@@ -25,7 +25,6 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3,
   terminate/2]).
 
--include("log.hrl").
 
 -define(DEFAULT_INTERVAL, 5000).  % change with option interval
 -define(MIN_INTERVAL, 100).
@@ -169,7 +168,7 @@ maybe_reload_metrics(Apps) ->
               {ok, Specs} ->
                 {Apps#{App => {Specs, LastMod}}, Specs1 ++ Specs};
               error ->
-                ?log(error, "error reloading metrics conf for ~p~n", [App]),
+                lager:error("error reloading metrics conf for ~p~n", [App]),
                 {Apps1#{ App => {AppSpecs, LastMod}}, Specs1 ++ AppSpecs}
             end;
           _ ->
@@ -205,7 +204,7 @@ load_app_metrics(AppName) ->
               LastMod = filelib:last_modified(Path),
               {ok, Specs, LastMod};
             bad_spec ->
-              ?log(error, "~p: stats_descriptions.cfg is invalid.~n", [AppName]),
+              lager:error("~p: stats_descriptions.cfg is invalid.~n", [AppName]),
               error
           end;
         {error, _Error} ->
