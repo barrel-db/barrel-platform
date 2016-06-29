@@ -55,7 +55,7 @@ open_db_file(Filepath, Options) ->
         % crashed during the file switch.
         case couch_file:open(Filepath ++ ".compact", [nologifmissing]) of
         {ok, Fd} ->
-            lager:info(, "Found ~s~s compaction file, using as primary storage.", [Filepath, ".compact"]),
+            lager:info("Found ~s~s compaction file, using as primary storage.", [Filepath, ".compact"]),
             ok = file:rename(Filepath ++ ".compact", Filepath),
             ok = couch_file:sync(Fd),
             {ok, Fd};
@@ -812,7 +812,7 @@ set_commit_option(Options) ->
     {_, false} ->
         [full_commit|Options];
     {_, Else} ->
-        lager:error(, "[couchdb] delayed_commits setting must be true/false, not ~p",
+        lager:error("[couchdb] delayed_commits setting must be true/false, not ~p",
             [Else]),
         [full_commit|Options]
     end.
@@ -1106,7 +1106,7 @@ handle_call(get_db, _From, Db) ->
 
 
 handle_cast(Msg, Db) ->
-    lager:error(, "Bad cast message received for db ~s: ~p", [Db#db.name, Msg]),
+    lager:error("Bad cast message received for db ~s: ~p", [Db#db.name, Msg]),
     exit({error, Msg}).
 
 code_change(_OldVsn, State, _Extra) ->
@@ -1128,7 +1128,7 @@ handle_info({'EXIT', _Pid, normal}, Db) ->
 handle_info({'EXIT', _Pid, Reason}, Server) ->
     {stop, Reason, Server};
 handle_info(Msg, Db) ->
-    lager:error(, "Bad message received for db ~s: ~p", [Db#db.name, Msg]),
+    lager:error("Bad message received for db ~s: ~p", [Db#db.name, Msg]),
     exit({error, Msg}).
 
 
@@ -1340,7 +1340,7 @@ validate_doc_read(Db, Doc) ->
                 throw:{unauthorized, _}=Error ->
                     throw(Error);
                 throw:Error ->
-                    lager:error(, "Error while validating read: ~p~n", [Error]),
+                    lager:error("Error while validating read: ~p~n", [Error]),
                     ok
             end
     end.
