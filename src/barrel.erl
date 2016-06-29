@@ -19,6 +19,13 @@
 -author("Benoit Chesneau").
 
 %% API
+
+-export([
+  databases/0,
+  fold_databases/2
+]).
+
+
 -export([
   start_listener/2,
   stop_listener/1,
@@ -26,6 +33,26 @@
   stop_console/0,
   info/0
 ]).
+
+-type dbname() :: string() | binary().
+
+%%%===================================================================
+%%% Database API
+%%%===================================================================
+
+%% @doc get the list of all databases
+-spec databases() -> [dbname()].
+databases() -> barrel_server:all_databases().
+
+%% @doc fold all databases name
+-spec fold_databases(fun(), any()) -> any().
+fold_databases(Fun, Acc) -> barrel_server:all_databases(Fun, Acc).
+
+
+%%%===================================================================
+%%% Server API
+%%%===================================================================
+
 
 -spec start_listener(atom(), list()) -> ok | {error, term()}.
 start_listener(Ref, Opts) when is_atom(Ref) ->

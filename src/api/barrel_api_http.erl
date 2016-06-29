@@ -159,6 +159,7 @@ binding(Opts) ->
 routes() ->
   [
     {"/", barrel_root_handler, []},
+    {"/_all_dbs", barrel_cb_all_dbs, []},
     {"/_session", barrel_session_handler, []},
     {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
   ].
