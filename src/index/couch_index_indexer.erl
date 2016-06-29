@@ -19,7 +19,6 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--include("log.hrl").
 
 -record(state, {index,
                 dbname,
@@ -137,7 +136,7 @@ handle_info(refresh_index, #state{index=Index,
 handle_info({'EXIT', Pid, normal}, #state{refresh_pid=Pid}=State) ->
     {noreply, State#state{refresh_pid=nil}};
 handle_info({'EXIT', Pid, Reason}, #state{refresh_pid=Pid}=State) ->
-    ?log(info, "Unexpected exit while refreshing index: ~p~n", [Reason]),
+    lager:info("Unexpected exit while refreshing index: ~p~n", [Reason]),
     {noreply, State#state{refresh_pid=nil}};
 handle_info({'DOWN', MRef, _, Pid, _}, #state{locks=Locks}=State) ->
     NLocks = case dict:find(Pid, Locks) of

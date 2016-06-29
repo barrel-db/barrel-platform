@@ -20,7 +20,6 @@
 
 -export([start/0, stop/0, start_extensions/0, stop_extensions/0, start_extension/2, stop_extension/2]).
 
--include("log.hrl").
 
 -type opts() :: [{atom(), any()}].
 
@@ -71,16 +70,16 @@ start_extension(Mod, Opts) ->
       catch
         Class:Reason ->
           ets:delete(barrel_ext, Mod),
-          ?log(error, "Problem starting ~s with ~p~n: ~p:~p~n", [Mod, Opts, Class, Reason]),
+          lager:error("Problem starting ~s with ~p~n: ~p:~p~n", [Mod, Opts, Class, Reason]),
           erlang:raise(Class, Reason, erlang:get_stacktrace())
       end;
     false ->
-      ?log(info, "~s not started. start function is missing~n", [Mod])
+      lager:info("~s not started. start function is missing~n", [Mod])
   end.
 
 stop_extension(Mod, Opts) ->
   case catch Mod:stop(Opts) of
-    {'EXIT', Reason} -> ?log(error, "error when stopping ~s:~n ~p", [Mod, Reason]);
+    {'EXIT', Reason} -> lager:error("error when stopping ~s:~n ~p", [Mod, Reason]);
     {wait, Pids} when is_list(Pids) -> wait_pids(Pids);
     {wait, Pid} when is_pid(Pid) -> wait_pid(Pid);
     _ -> ok

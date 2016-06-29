@@ -25,7 +25,6 @@
 
 
 -include_lib("couch_db.hrl").
--include("log.hrl").
 
 -record(st, {
     idx,
@@ -101,16 +100,16 @@ compact(Parent, Mod, IdxState) ->
 compact(Idx, Mod, IdxState, Opts) ->
     DbName = Mod:get(db_name, IdxState),
     Args = [DbName, Mod:get(idx_name, IdxState)],
-    ?log(info, "Compaction started for db: ~s idx: ~s", Args),
+    lager:info("Compaction started for db: ~s idx: ~s", Args),
     {ok, NewIdxState} = barrel_lib:with_db(DbName, fun(Db) ->
         Mod:compact(Db, IdxState, Opts)
     end),
     ok = Mod:commit(NewIdxState),
     case gen_server:call(Idx, {compacted, NewIdxState}) of
         recompact ->
-            ?log(info, "Compaction restarting for db: ~s idx: ~s", Args),
+            lager:info("Compaction restarting for db: ~s idx: ~s", Args),
             compact(Idx, Mod, NewIdxState, [recompact]);
         _ ->
-            ?log(info, "Compaction finished for db: ~s idx: ~s", Args),
+            lager:info("Compaction finished for db: ~s idx: ~s", Args),
             ok
     end.

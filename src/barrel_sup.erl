@@ -15,8 +15,6 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--include("log.hrl").
-
 -define(SERVER, ?MODULE).
 
 %%====================================================================
@@ -133,10 +131,10 @@ write_uri_file() ->
       case file:write_file(Filepath, Lines) of
         ok -> ok;
         {error, eacces} ->
-          ?log(info, "Permission error when writing to URI file ~s", [Filepath]),
+          lager:info("Permission error when writing to URI file ~s", [Filepath]),
           throw({file_permission_error, Filepath});
         Error ->
-          ?log(info, "Failed to write to URI file ~s: ~p~n", [Filepath, Error]),
+          lager:info("Failed to write to URI file ~s: ~p~n", [Filepath, Error]),
           throw(Error)
       end
   end.

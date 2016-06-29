@@ -16,7 +16,6 @@
 -module(couch_index).
 -behaviour(gen_server).
 
--include("log.hrl").
 
 %% API
 -export([start_link/1, stop/1, get_state/2, get_info/1]).
@@ -121,7 +120,7 @@ init({Mod, IdxState}) ->
             ],
 
             barrel_event:reg(DbName),
-            ?log(info, "Opening index for db: ~s idx: ~s sig: ~p", Args),
+            lager:info("Opening index for db: ~s idx: ~s sig: ~p", Args),
             proc_lib:init_ack({ok, self()}),
             gen_server:enter_loop(?MODULE, [], State);
         Other ->
@@ -141,7 +140,7 @@ terminate(Reason, State) ->
         barrel_lib:hexsig(Mod:get(signature, IdxState)),
         Reason
     ],
-    ?log(info, "Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),
+    lager:info("Closing index for db: ~s idx: ~s sig: ~p~nreason: ~p", Args),
     ok.
 
 
@@ -294,7 +293,7 @@ handle_cast({new_state, NewIdxState}, State) ->
         DDocId,
         CurrSeq
     ],
-    ?log(debug, "Updated index for db: ~s idx: ~s seq: ~B", Args),
+    lager:debug("Updated index for db: ~s idx: ~s seq: ~B", Args),
     Rest = send_replies(State#st.waiters, CurrSeq, NewIdxState),
     case State#st.committed of
         true -> erlang:send_after(Delay, self(), commit);
@@ -412,7 +411,7 @@ handle_info({'DOWN', _, _, Pid, _}, #st{mod=Mod, idx_state=IdxState,
                                         indexer=Pid}=State) ->
     Args = [Mod:get(db_name, IdxState),
             Mod:get(idx_name, IdxState)],
-    ?log(info, "Background indexer shutdown by monitor notice for db: ~s idx: ~s", Args),
+    lager:info("Background indexer shutdown by monitor notice for db: ~s idx: ~s", Args),
 
     {noreply, State#st{indexer=nil}};
 
@@ -425,7 +424,7 @@ handle_info({'DOWN', _, _, _Pid, _}, #st{mod=Mod, idx_state=IdxState}=State) ->
     hooks:run(index_reset, [DbName, DDocId, Mod]),
 
     Args = [DbName, DDocId],
-    ?log(info, "Index shutdown by monitor notice for db: ~s idx: ~s", Args),
+    lager:info("Index shutdown by monitor notice for db: ~s idx: ~s", Args),
     catch send_all(State#st.waiters, shutdown),
     {stop, normal, State#st{waiters=[]}}.
 

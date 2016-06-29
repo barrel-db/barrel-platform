@@ -23,7 +23,6 @@
 
 -include_lib("couch_db.hrl").
 -include("couch_mrview.hrl").
--include("log.hrl").
 
 get(Property, State) ->
     case Property of
@@ -106,7 +105,7 @@ open(Db, State) ->
                     {ok, NewSt#mrst{refc=RefCounter}}
             end;
         {error, Reason} = Error ->
-            ?log(error, "Failed to open view file '~s': ~s",
+            lager:error("Failed to open view file '~s': ~s",
                        [IndexFName, file:format_error(Reason)]),
             Error
     end.

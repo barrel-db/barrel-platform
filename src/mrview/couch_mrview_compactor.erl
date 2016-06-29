@@ -19,7 +19,6 @@
 
 -include_lib("couch_db.hrl").
 -include("couch_mrview.hrl").
--include("log.hrl").
 
 
 -record(acc, {
@@ -86,7 +85,7 @@ compact(State) ->
         #acc{btree = Bt, kvs = Kvs, kvs_size = KvsSize, last_id = LastId} = Acc,
         if DocId =:= LastId ->
             % COUCHDB-999 regression test
-            ?log(error, "Duplicate docid `~s` detected in view group `~s`"
+            lager:error("Duplicate docid `~s` detected in view group `~s`"
                 ++ ", database `~s` - This view needs to be rebuilt.",
                 [DocId, IdxName, DbName]
             ),

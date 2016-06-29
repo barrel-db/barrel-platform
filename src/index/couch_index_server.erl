@@ -27,7 +27,6 @@
 -export([index_update/3, index_reset/3]).
 
 -include_lib("couch_db.hrl").
--include("log.hrl").
 
 -define(BY_SIG, couchdb_indexes_by_sig).
 -define(BY_PID, couchdb_indexes_by_pid).
@@ -173,14 +172,14 @@ handle_info({'EXIT', Pid, Reason}, Server) ->
                 ets:match_object(?BY_DB, {DbName, {'$1', Sig}}),
             rem_from_ets(DbName, Sig, DDocId, Pid);
         [] when Reason /= normal ->
-            ?log(warning, "unhandled error ~p~n", [Reason]),
+            lager:warning("unhandled error ~p~n", [Reason]),
             ok;
         _Else ->
             ok
     end,
     {noreply, Server};
 handle_info(Msg, State) ->
-    ?log(warning, "~p did not expect ~p", [?MODULE, Msg]),
+    lager:warning("~p did not expect ~p", [?MODULE, Msg]),
     {noreply, State}.
 
 

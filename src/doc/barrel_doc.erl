@@ -31,7 +31,6 @@
 -export([load/3]).
 
 -include("couch_db.hrl").
--include("log.hrl").
 
 -spec to_path(#doc{}) -> path().
 to_path(#doc{revs={Start, RevIds}}=Doc) ->
@@ -211,7 +210,7 @@ validate_docid(Id) when is_binary(Id) ->
     _Else -> ok
     end;
 validate_docid(Id) ->
-    ?log(debug, "Document id is not a string: ~p", [Id]),
+    lager:debug("Document id is not a string: ~p", [Id]),
     throw({bad_request, <<"Document id must be a string">>}).
 
 
