@@ -8,7 +8,7 @@ defmodule Barrel.Mixfile do
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      compilers: Mix.compilers,
-     erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
+     erlc_options: erlc_env_options ++ [:debug_info, parse_transform: :mochicow],
      deps: deps,
      package: package,
      description: description
@@ -18,41 +18,38 @@ defmodule Barrel.Mixfile do
   def application do
     [
       mod: {:barrel_app, []},
-      applications:
+      applications: 
       [
-        :barrel_ex_logger,
         :kernel,
         :stdlib,
         :crypto,
-        :sasl,
         :asn1,
         :public_key,
         :ssl,
         :os_mon,
         :inets,
         :p1_utils,
-        :gproc,
-        :ibrowse,
+        :fast_yaml,
         :jsx,
+        :ibrowse,
+        :snappy,
         :ucol,
         :oauth,
-        :fast_yaml,
-        :ranch,
-        :cowboy,
+        :hackney,
         :mochiweb,
         :mochicow,
+        :cowlib,
+        :ranch,
+        :cowboy,
         :hooks,
-        :econfig,
-        :hackney,
-        :exometer_core,
-        :snappy
+        :exometer_core
       ]
     ]
   end
 
   defp deps do
     [
-      {:barrel_ex_logger, git: "https://github.com/barrel-db/barrel_ex_logger.git"},
+      {:lager, "~> 3.0.2"},
       {:exrm, "~> 0.18.1"},
       {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:hooks,  "~> 1.1.1"},
@@ -69,6 +66,14 @@ defmodule Barrel.Mixfile do
       {:exometer_core, "~> 1.4.0"},
       {:fast_yaml, "~> 1.0.3"}
     ]
+  end
+
+  def erlc_env_options do
+    case Mix.env do
+      :prod -> [parse_transform: :lager_transform]
+      :staging -> [parse_transform: :lager_transform]
+      _ -> []
+    end
   end
 
   defp description do
