@@ -604,7 +604,7 @@ update_doc_result_to_json(DocId, Error) ->
 
 
 update_doc(Req, Db, DocId, #doc{deleted=false}=Doc) ->
-    Loc = absolute_uri(Req, "/" ++ binary_to_list(Db#db.name) ++ "/" ++ ?b2l(DocId)),
+    Loc = absolute_uri(Req, "/" ++ binary_to_list(Db#db.name) ++ "/" ++ binary_to_list(DocId)),
     update_doc(Req, Db, DocId, Doc, [{"Location", Loc}]);
 update_doc(Req, Db, DocId, Doc) ->
     update_doc(Req, Db, DocId, Doc, []).

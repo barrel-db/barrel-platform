@@ -174,7 +174,7 @@ parse_rep_db(Props, ProxyParams, Options) when is_map(Props) ->
     Url = maybe_add_trailing_slash(maps:get(<<"url">>, Props)),
     AuthProps = maps:get(<<"auth">>, Props, #{}),
     BinHeaders = maps:get(<<"headers">>, Props, #{}),
-    Headers = lists:ukeysort(1, [{binary_to_list(K), ?b2l(V)} || {K, V} <- maps:to_list(BinHeaders)]),
+    Headers = lists:ukeysort(1, [{binary_to_list(K), binary_to_list(V)} || {K, V} <- maps:to_list(BinHeaders)]),
     DefaultHeaders = (#httpdb{})#httpdb.headers,
     OAuth = case maps:get(<<"oauth">>, AuthProps, undefined) of
     undefined ->

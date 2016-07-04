@@ -38,7 +38,7 @@ handle_welcome_req(#httpd{method='GET'}=Req) ->
         case barrel_config:get("vendor") of
             [] -> [];
             Properties ->
-                [{vendor, maps:from_list([{list_to_binary(K), ?l2b(V)} || {K, V} <- Properties])
+                [{vendor, maps:from_list([{list_to_binary(K), list_to_binary(V)} || {K, V} <- Properties])
                 }]
         end
     ));

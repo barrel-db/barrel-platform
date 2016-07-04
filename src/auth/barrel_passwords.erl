@@ -72,7 +72,7 @@ verify([], [], Result) ->
 -spec verify(binary(), binary()) -> boolean();
             (list(), list()) -> boolean().
 verify(<<X/binary>>, <<Y/binary>>) ->
-    verify(binary_to_list(X), ?b2l(Y));
+    verify(binary_to_list(X), binary_to_list(Y));
 verify(X, Y) when is_list(X) and is_list(Y) ->
     case length(X) == length(Y) of
         true ->

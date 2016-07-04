@@ -221,7 +221,7 @@ stop_port(#daemon{port=Port}=D) ->
 
 handle_port_message(#daemon{port=Port}=Daemon, [<<"get">>, Section]) ->
     KVs = barrel_config:get(Section),
-    Data = lists:map(fun({K, V}) -> {list_to_binary(K), ?l2b(V)} end, KVs),
+    Data = lists:map(fun({K, V}) -> {list_to_binary(K), list_to_binary(V)} end, KVs),
     Json = iolist_to_binary(?JSON_ENCODE({Data})),
     port_command(Port, <<Json/binary, "\n">>),
     {ok, Daemon};
@@ -238,7 +238,7 @@ handle_port_message(Daemon, [<<"register">>, Sec]) when is_binary(Sec) ->
     {ok, Daemon#daemon{cfg_patterns=Patterns}};
 handle_port_message(Daemon, [<<"register">>, Sec, Key])
                         when is_binary(Sec) andalso is_binary(Key) ->
-    Pattern = {binary_to_list(Sec), ?b2l(Key)},
+    Pattern = {binary_to_list(Sec), binary_to_list(Key)},
     Patterns = lists:usort(Daemon#daemon.cfg_patterns ++ [Pattern]),
     {ok, Daemon#daemon{cfg_patterns=Patterns}};
 handle_port_message(#daemon{name=Name}=Daemon, [<<"log">>, Msg]) ->
