@@ -60,7 +60,7 @@
 
 
 -include_lib("syntax_tools/include/merl.hrl").
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -include("barrel.hrl").
 

@@ -49,7 +49,7 @@
 -define(STATE, native_proc_state).
 -record(evstate, {ddocs, funs=[], query_config=[], list_pid=nil, timeout=5000}).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 start_link() ->
     gen_server:start_link(?MODULE, [], []).

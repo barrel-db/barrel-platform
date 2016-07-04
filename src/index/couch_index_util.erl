@@ -18,7 +18,7 @@
 -export([index_dir/2, index_file/3]).
 -export([sort_lib/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 root_dir() -> barrel_config:get_env(dir).
 

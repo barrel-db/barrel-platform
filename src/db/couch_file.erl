@@ -16,7 +16,7 @@
 -module(couch_file).
 -behaviour(gen_server).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -define(SIZE_BLOCK, 4096).
 

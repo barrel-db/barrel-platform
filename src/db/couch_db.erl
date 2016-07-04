@@ -34,7 +34,7 @@
 -export([check_is_admin/1, check_is_member/1]).
 -export([reopen/1, is_system_db/1, compression/1]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 start_link(DbName, Filepath, Options) ->
     case open_db_file(Filepath, Options) of

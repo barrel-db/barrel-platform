@@ -17,7 +17,7 @@
 
 -export([run/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_mrview.hrl").
 
 run(Db) ->

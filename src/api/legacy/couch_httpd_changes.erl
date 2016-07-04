@@ -27,7 +27,7 @@
 
 -export([handle_changes_req/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 handle_changes_req(#httpd{method='POST'}=Req, Db) ->
     couch_httpd:validate_ctype(Req, "application/json"),

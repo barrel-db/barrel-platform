@@ -24,7 +24,7 @@
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_cast/2, handle_call/3, handle_info/2]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -define(DEFAULT_BUFFER_SIZE, 4096).
 

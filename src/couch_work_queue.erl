@@ -15,7 +15,7 @@
 -module(couch_work_queue).
 -behaviour(gen_server).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 % public API
 -export([new/1, queue/2, dequeue/1, dequeue/2, close/1, item_count/1, size/1]).

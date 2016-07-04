@@ -14,7 +14,7 @@
 % the License.
 
 -module(couch_changes).
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include_lib("couch_mrview.hrl").
 
 -export([handle_changes/3]).

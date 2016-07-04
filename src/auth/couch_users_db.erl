@@ -17,7 +17,7 @@
 
 -export([before_doc_update/2, after_doc_read/2, strip_non_public_fields/1]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 % If the request's userCtx identifies an admin
 %   -> save_doc (see below)

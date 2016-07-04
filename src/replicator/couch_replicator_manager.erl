@@ -29,7 +29,7 @@
 %% internal
 -export([listen_db_changes/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_replicator.hrl").
 -include("couch_replicator_js_functions.hrl").
 

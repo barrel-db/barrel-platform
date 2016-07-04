@@ -26,7 +26,7 @@
 %% hook
 -export([index_update/3, index_reset/3]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -define(BY_SIG, couchdb_indexes_by_sig).
 -define(BY_PID, couchdb_indexes_by_pid).

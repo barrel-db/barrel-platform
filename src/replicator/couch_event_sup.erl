@@ -19,7 +19,7 @@
 -module(couch_event_sup).
 -behaviour(gen_server).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -export([start_link/3,start_link/4, stop/1]).
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2,code_change/3]).

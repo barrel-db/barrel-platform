@@ -16,7 +16,7 @@
 
 -export([handle_req/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include_lib("couch_httpd.hrl").
 
 -record(state, {resp, feed}).

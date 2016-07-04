@@ -14,7 +14,7 @@
 
 -module(couch_randomdoc).
 
--include_lib("couch_db.hrl").
+-include_lib("db.hrl").
 -include_lib("couch_mrview.hrl").
 
 -export([random_doc/1, random_doc/2, random_doc/3,

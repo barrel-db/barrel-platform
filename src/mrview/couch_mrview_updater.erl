@@ -17,7 +17,7 @@
 
 -export([start_update/3, purge/4, process_doc/3, finish_update/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_mrview.hrl").
 
 -define(REM_VAL, removed).

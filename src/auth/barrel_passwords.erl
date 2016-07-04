@@ -16,7 +16,7 @@
 
 -export([pbkdf2/3, pbkdf2/4, verify/2]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -define(MAX_DERIVED_KEY_LENGTH, (1 bsl 32 - 1)).
 -define(SHA1_OUTPUT_LENGTH, 20).

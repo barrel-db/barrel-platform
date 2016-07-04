@@ -39,7 +39,7 @@
 -export([db_updated/2, ddoc_updated/2]).
 
 -include("barrel.hrl").
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -record(state, {root_dir = [],
                 dbname_regexp,

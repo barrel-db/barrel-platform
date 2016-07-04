@@ -16,7 +16,7 @@
 
 -export([handle_req/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 
 handle_req(#httpd{method='GET', path_parts=[_ | Path]}=Req) ->

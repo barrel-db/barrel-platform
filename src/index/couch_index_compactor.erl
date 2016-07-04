@@ -24,7 +24,7 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -record(st, {
     idx,

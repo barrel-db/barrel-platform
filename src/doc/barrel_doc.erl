@@ -30,7 +30,7 @@
 -export([with_ejson_body/1]).
 -export([load/3]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -spec to_path(#doc{}) -> path().
 to_path(#doc{revs={Start, RevIds}}=Doc) ->

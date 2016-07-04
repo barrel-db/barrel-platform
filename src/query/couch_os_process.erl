@@ -20,7 +20,7 @@
 -export([send/2, writeline/2, readline/1, writejson/2, readjson/1]).
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -define(PORT_OPTIONS, [stream, {line, 4096}, binary, exit_status, hide]).
 

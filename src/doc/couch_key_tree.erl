@@ -35,7 +35,7 @@
 %% edit that is specially marked with the a deleted=true flag.
 %%
 %% What makes this a bit more complicated is that there is a limit to the
-%% number of revisions kept, specified in couch_db.hrl (default is 1000). When
+%% number of revisions kept, specified in db.hrl (default is 1000). When
 %% this limit is exceeded only the last 1000 are kept. This comes in to play
 %% when branches are merged. The comparison has to begin at the same place in
 %% the branches. A revision id is of the form N-XXXXXXX where N is the current
@@ -67,7 +67,7 @@
   stem/2
 ]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -type treenode() :: {Key::term(), Value::term(), [Node::treenode()]}.
 -type tree() :: {Depth::pos_integer(), [treenode()]}.

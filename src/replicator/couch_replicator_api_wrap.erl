@@ -21,7 +21,7 @@
 % Notes:
 % Many options and apis aren't yet supported here, they are added as needed.
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include_lib("couch_mrview.hrl").
 -include("couch_replicator_api_wrap.hrl").
 

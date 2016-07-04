@@ -16,7 +16,7 @@
 -behaviour(supervisor).
 -export([init/1, start_link/0]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 start_link() ->
     supervisor:start_link({local,?MODULE}, ?MODULE, []).

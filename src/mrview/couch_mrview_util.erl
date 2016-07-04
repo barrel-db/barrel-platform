@@ -34,7 +34,7 @@
 
 -define(MOD, couch_mrview_index).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_mrview.hrl").
 
 

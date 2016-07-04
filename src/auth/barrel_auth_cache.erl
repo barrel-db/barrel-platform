@@ -23,7 +23,7 @@
 % gen_server API
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2, code_change/3, terminate/2]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 -include("couch_js_functions.hrl").
 
 -define(STATE, auth_state_ets).

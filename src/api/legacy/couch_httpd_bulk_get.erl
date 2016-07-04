@@ -14,7 +14,7 @@
 %
 -module(couch_httpd_bulk_get).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_httpd.hrl").
 
 -export([handle_req/2]).

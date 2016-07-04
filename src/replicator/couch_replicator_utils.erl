@@ -26,7 +26,7 @@
 
 -export([init_compaction_notifier/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_replicator_api_wrap.hrl").
 -include("couch_replicator.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").

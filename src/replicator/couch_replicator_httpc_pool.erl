@@ -23,7 +23,7 @@
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
 -export([code_change/3, terminate/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -record(state, {
     url,

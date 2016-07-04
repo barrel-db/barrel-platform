@@ -19,7 +19,7 @@
 -export([parse_pos_int/1]).
 -export([parse_json/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 
 parse_boolean(true) ->

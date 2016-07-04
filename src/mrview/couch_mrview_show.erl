@@ -21,7 +21,7 @@
     handle_view_list_req/3
 ]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include_lib("couch_httpd.hrl").
 -include("couch_mrview.hrl").
 

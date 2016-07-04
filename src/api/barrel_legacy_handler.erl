@@ -23,7 +23,7 @@
 -export([apply_cors_headers/2]).
 -export([host/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 init(_, Req, _) ->
   {UserCtx, _} = cowboy_req:meta(user_ctx, Req, barrel_lib:userctx()),

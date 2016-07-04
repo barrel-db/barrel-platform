@@ -30,7 +30,7 @@
 
 -export([run_script/4]).
 
--include("couch_db.hrl").
+-include("db.hrl").
 
 -record(proc, {
     pid,

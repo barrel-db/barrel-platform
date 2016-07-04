@@ -14,7 +14,7 @@
 
 -module(couch_httpd_request).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 %% interface to the httpd record
 -export([method/1, mochi_req/1, peer/1, path_parts/1, requested_path_parts/1,

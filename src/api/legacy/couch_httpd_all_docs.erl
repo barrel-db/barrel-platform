@@ -30,7 +30,7 @@
 -export([parse_qs/2]).
 -export([is_keys/1]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -include("couch_httpd.hrl").
 

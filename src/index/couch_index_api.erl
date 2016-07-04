@@ -14,7 +14,7 @@
 
 -module(couch_index_api).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -type db() :: #db{}.
 

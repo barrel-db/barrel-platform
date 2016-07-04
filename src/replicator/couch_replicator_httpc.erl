@@ -15,7 +15,7 @@
 
 -module(couch_replicator_httpc).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_replicator_api_wrap.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
 

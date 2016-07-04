@@ -20,7 +20,7 @@
 
 -export([increment_update_seq_req/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 
 -import(couch_httpd,

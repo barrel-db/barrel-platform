@@ -21,7 +21,7 @@
 -export([start_update/3, purge/4, process_doc/3, finish_update/1, commit/1]).
 -export([compact/3, swap_compacted/2]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_mrview.hrl").
 
 get(Property, State) ->

@@ -25,7 +25,7 @@
          parse_qs/2
         ]).
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 
 -include("couch_mrview.hrl").
 

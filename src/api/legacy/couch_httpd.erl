@@ -46,7 +46,7 @@
 -export([http_1_0_keep_alive/2]).
 
 
--include_lib("couch_db.hrl").
+-include("db.hrl").
 -include("couch_httpd.hrl").
 
 % SpecStr is a string like "{my_module, my_fun}"
