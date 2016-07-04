@@ -26,10 +26,10 @@ new() ->
   gen_server:call(?MODULE, create).
 
 random() ->
-  barrel_lib:to_hex(crypto:rand_bytes(16)).
+  barrel_lib:to_hex(crypto:strong_rand_bytes(16)).
 
 utc_random() ->
-  utc_suffix(barrel_lib:to_hex(crypto:rand_bytes(9))).
+  utc_suffix(barrel_lib:to_hex(crypto:strong_rand_bytes(9))).
 
 utc_suffix(Suffix) ->
   Now = {_, _, Micro} = os:timestamp(),
@@ -73,7 +73,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 new_prefix() ->
-  barrel_lib:to_hex((crypto:rand_bytes(13))).
+  barrel_lib:to_hex((crypto:strong_rand_bytes(13))).
 
 inc() ->
   crypto:rand_uniform(1, 16#ffe).
