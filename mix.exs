@@ -20,7 +20,7 @@ defmodule Barrel.Mixfile do
       mod: {:barrel_app, []},
       applications:
       [
-        :barrel_ex_logger,
+        :lager_logger,
         :kernel,
         :stdlib,
         :crypto,
@@ -52,22 +52,37 @@ defmodule Barrel.Mixfile do
 
   defp deps do
     [
-      {:barrel_ex_logger, git: "https://github.com/barrel-db/barrel_ex_logger.git"},
+      {:lager_logger, "~> 1.0"},
       {:exrm, "~> 0.18.1"},
       {:barrel_nifs, path: "support/barrel_release_plugin"},
-      {:hooks,  "~> 1.1.1"},
-      {:mochicow, "~> 0.6.4"},
-      {:snappy, "~> 1.1"},
-      {:ucol, "~> 2.0"},
+      {:metrics, "~> 1.0.1", manager: :rebar, override: true},
+      {:econfig, "~> 0.7.3", manager: :rebar, override: true},
+      {:ranch, "~> 1.2.1", manager: :rebar, override: true},
+      {:hooks,  "~> 1.2", manager: :rebar, override: true},
+      {:mochicow, "~> 0.6.4", manager: :rebar, override: true},
+      {:snappy, "~> 1.1.1", manager: :rebar, override: true},
+      {:ucol, "~> 2.0", manager: :rebar, override: true},
+      {:folsom, "~> 0.8.3", manager: :rebar, override: true},
+      {:ssl_verify_fun, "~> 1.1.0", manager: :rebar, override: true},
+      {:edown, "~> 0.7.0", manager: :rebar, override: true},
+      {:parse_trans, "~> 2.9.0", manager: :rebar, override: true},
+      {:certifi, "~> 0.4.0", manager: :rebar, override: true},
       {:gproc, "~> 0.5.0"},
-      {:oauth, "~> 1.6", hex: :barrel_oauth},
-      {:ibrowse, "~> 4.3.1", hex: :barrel_ibrowse},
-      {:hackney, "~> 1.6"},
+      {:mochicow, "~> 0.6.4", manager: :rebar, override: true},      
+      {:hackney, "~> 1.6.0", manager: :rebar, override: true},
+      {:oauth, "~> 1.6", hex: :barrel_oauth, manager: :rebar, override: true},
+      {:ibrowse, "~> 4.3.1", hex: :barrel_ibrowse, manager: :rebar, override: true},
+      {:mochiweb, "~> 2.15.0", manager: :rebar, override: true},
+      {:cowlib, "~> 1.0.2", manager: :rebar, override: true},
+      {:goldrush, "~> 0.1.7", manager: :rebar, override: true},
+      {:cowboy, "~> 1.0.4", manager: :rebar, override: true},
+      {:lager, "~> 3.0.2", manager: :rebar, override: true},
+      {:exometer_core, "~> 1.4.0", manager: :rebar, override: true},      
       {:jsx, "~> 2.8.0"},
       {:stache, "~> 0.2.1"},
       {:econfig, "~> 0.7.3"},
       {:exometer_core, "~> 1.4.0"},
-      {:fast_yaml, "~> 1.0.3"}
+      {:fast_yaml, "~> 1.0.5"}
     ]
   end
 

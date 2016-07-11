@@ -9,6 +9,7 @@ defmodule ReleaseManager.Plugin.BarrelRelease do
     System.cmd("make", ["-C", "c_src/barrel_js", "clean"], into: IO.stream(:stdio, :line))
     System.cmd("escript", ["support/build_js.escript"], into: IO.stream(:stdio, :line))
     File.mkdir("rel/#{app}/etc")
+    File.mkdir("rel/#{app}/etc/barrel.d")
     File.touch("rel/#{app}/etc/barrel.yml")
     BarrelRelease.SetupConfig.update_config("config/barrel.yml", "rel/#{app}/etc/barrel.yml")
     BarrelRelease.SetupConfig.update_config("config/sys.config", "rel/#{app}/releases/#{version}/sys.config")
