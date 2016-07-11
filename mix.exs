@@ -70,6 +70,7 @@ defmodule Barrel.Mixfile do
       {:gproc, "~> 0.5.0"},
       {:mochicow, "~> 0.6.4", manager: :rebar, override: true},      
       {:hackney, "~> 1.6.0", manager: :rebar, override: true},
+      {:p1_utils, "~> 1.0.4", manager: :rebar, override: true},
       {:oauth, "~> 1.6", hex: :barrel_oauth, manager: :rebar, override: true},
       {:ibrowse, "~> 4.3.1", hex: :barrel_ibrowse, manager: :rebar, override: true},
       {:mochiweb, "~> 2.15.0", manager: :rebar, override: true},
@@ -82,7 +83,7 @@ defmodule Barrel.Mixfile do
       {:stache, "~> 0.2.1"},
       {:econfig, "~> 0.7.3"},
       {:exometer_core, "~> 1.4.0"},
-      {:fast_yaml, "~> 1.0.5"}
+      {:fast_yaml, "~> 1.0.5", manager: :rebar, override: true}
     ]
   end
 
