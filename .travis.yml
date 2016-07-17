@@ -13,6 +13,7 @@ before_install:
 - sudo apt-get -y install libtool automake autoconf autoconf-archive
 install:
 - "./support/bootstrap_travis.sh"
+- mix local.rebar --force
 - mix local.hex --force
 - mix deps.get
 
