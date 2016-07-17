@@ -13,7 +13,9 @@ before_install:
 - sudo apt-get -y install libtool automake autoconf autoconf-archive
 install:
 - "./support/bootstrap_travis.sh"
+- mix local.hex --force
 - mix deps.get
+
 script:
 - ./rebar3 eunit --dir="test"
 - ./rebar3 ct
