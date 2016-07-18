@@ -21,6 +21,7 @@ script:
 - ./rebar3 eunit --dir="test"
 - ./rebar3 ct
 - mix compile
+- mix eunit
 notifications:
   email:
   - bchesneau@gmail.com
