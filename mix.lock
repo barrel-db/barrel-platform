@@ -7,7 +7,7 @@
   "exometer_core": {:hex, :exometer_core, "1.4.0", "a546ccd38be910de6ea75ea95b724b6b2db513c26f02e30919b25eb19651815a", [:rebar3], [{:setup, "1.7.0", [hex: :setup, optional: false]}, {:parse_trans, "2.9.0", [hex: :parse_trans, optional: false]}, {:lager, "3.0.2", [hex: :lager, optional: false]}, {:folsom, "0.8.3", [hex: :folsom, optional: false]}, {:edown, "0.7.0", [hex: :edown, optional: false]}]},
   "fast_yaml": {:hex, :fast_yaml, "1.0.5", "a67772c75abb84181c6c9899e1f988b08ac214ea0d764ff1f9889bb7e27f74d4", [:rebar3], [{:p1_utils, "1.0.4", [hex: :p1_utils, optional: false]}]},
   "folsom": {:hex, :folsom, "0.8.3", "71cff146152fa95e6092e62119f9dc96888660111e7b61853c8fdcf80598a4e0", [:rebar3], [{:bear, "0.8.3", [hex: :bear, optional: false]}]},
-  "goldrush": {:hex, :goldrush, "0.1.8", "2024ba375ceea47e27ea70e14d2c483b2d8610101b4e852ef7f89163cdb6e649", [:rebar3], []},
+  "goldrush": {:hex, :goldrush, "0.1.7", "349a351d17c71c2fdaa18a6c2697562abe136fec945f147b381f0cf313160228", [:rebar3], []},
   "gproc": {:hex, :gproc, "0.5.0", "2df2d886f8f8a7b81a4b04aa17972b5965bbc5bf0100ea6d8e8ac6a0e7389afe", [:rebar], []},
   "hackney": {:hex, :hackney, "1.6.1", "ddd22d42db2b50e6a155439c8811b8f6df61a4395de10509714ad2751c6da817", [:rebar3], [{:ssl_verify_fun, "1.1.0", [hex: :ssl_verify_fun, optional: false]}, {:mimerl, "1.0.2", [hex: :mimerl, optional: false]}, {:metrics, "1.0.1", [hex: :metrics, optional: false]}, {:idna, "1.2.0", [hex: :idna, optional: false]}, {:certifi, "0.4.0", [hex: :certifi, optional: false]}]},
   "hooks": {:hex, :hooks, "1.2.0", "a1bf6247fb1a177e46d00455e3cb86e0b9816c822142f8295529cc0eb0388d75", [:rebar3], []},
@@ -26,6 +26,6 @@
   "ranch": {:hex, :ranch, "1.2.1", "a6fb992c10f2187b46ffd17ce398ddf8a54f691b81768f9ef5f461ea7e28c762", [:make], []},
   "setup": {:hex, :setup, "1.7.0", "15df8e57c6df9755e22bfb1aef0c640bd97e9889396fdfb2a85a5536a9043674", [:rebar3], []},
   "snappy": {:hex, :snappy, "1.1.1", "d63449a58f1358046b7adaec166ae8929c2b19881e76c4e13284304fe887c39a", [:rebar3], []},
-  "ssl_verify_fun": {:hex, :ssl_verify_fun, "1.1.1", "28a4d65b7f59893bc2c7de786dec1e1555bd742d336043fe644ae956c3497fbe", [:rebar, :make], []},
+  "ssl_verify_fun": {:hex, :ssl_verify_fun, "1.1.0", "edee20847c42e379bf91261db474ffbe373f8acb56e9079acb6038d4e0bf414f", [:rebar, :make], []},
   "stache": {:hex, :stache, "0.2.1", "500394cf691d06d04ebf44f5f32b9146954fa2b6874ce955b37bd6ae24f830a7", [:mix], []},
   "ucol": {:hex, :ucol, "2.0.0", "64f9589d682dac6ca59252e1222e22697784f74addd0b88c5e34d53d267356bb", [:rebar3], []}}
