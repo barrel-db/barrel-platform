@@ -53,8 +53,6 @@ defmodule Barrel.Mixfile do
   defp deps do
     [
       {:lager_logger, "~> 1.0"},
-      {:exrm, "~> 0.18.1"},
-      {:barrel_nifs, path: "support/barrel_release_plugin"},
       {:metrics, "~> 1.0.1", manager: :rebar, override: true},
       {:econfig, "~> 0.7.3", manager: :rebar, override: true},
       {:ranch, "~> 1.2.1", manager: :rebar, override: true},
