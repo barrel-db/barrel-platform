@@ -22,7 +22,7 @@ script:
 - ./rebar3 ct
 - mix compile
 - mix ct
-- mix eunit --only="test"
+- mix eunit -v
 notifications:
   email:
   - bchesneau@gmail.com
