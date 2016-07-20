@@ -1,9 +1,0 @@
-%{"bbmustache": {:hex, :bbmustache, "1.0.1"},
-  "conform": {:hex, :conform, "0.16.0"},
-  "erlware_commons": {:hex, :erlware_commons, "0.13.0"},
-  "exrm": {:hex, :exrm, "0.18.8"},
-  "getopt": {:hex, :getopt, "0.8.2"},
-  "neotoma": {:hex, :neotoma, "1.7.3"},
-  "providers": {:hex, :providers, "1.4.1"},
-  "relx": {:hex, :relx, "3.1.0"},
-  "stache": {:hex, :stache, "0.2.1"}}
