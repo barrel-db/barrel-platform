@@ -1,0 +1,2 @@
+defmodule BarrelElixir do
+end
