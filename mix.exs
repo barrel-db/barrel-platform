@@ -7,7 +7,7 @@ defmodule Barrel.Mixfile do
      elixir: "~> 1.2",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     compilers: [:support] ++ Mix.compilers,
+     compilers: Mix.compilers,
      erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
      deps: deps,
      erlc_paths: ["lib", "src"],
@@ -102,26 +102,4 @@ defmodule Barrel.Mixfile do
      links: %{"GitHub" => "https://github.com/barrel-db/barrel-platform",
               "Docs" => "https://docs.barrel-db.org/docs"}]
   end
-end
-
-
-defmodule Mix.Tasks.Compile.Support do
-  use Mix.Task
-  alias Mix.Compilers.Erlang
-
-  @recursive true
-  @manifest ".compile.Support"
-
-  def run(args) do
-    Mix.Shell.IO.info("=====> Compiling support")
-    System.cmd("make", ["-C", "c_src/barrel_js"], into: IO.stream(:stdio, :line))
-    System.cmd("escript", ["support/build_js.escript"], into: IO.stream(:stdio, :line))
-    Mix.Shell.IO.info("=====> Finished compiling support.")
-    {:ok, :done}
-  end
-
-  def manifests, do: [manifest]
-  defp manifest, do: Path.join(Mix.Project.manifest_path, @manifest)
-
-  def clean, do: Erlang.clean(manifest())
 end
