@@ -10,11 +10,11 @@ use Mix.Config
 
 # You can configure for your application as:
 #
-#     config :barrel_release_plugin, key: :value
+#     config :barrel_elixir, key: :value
 #
 # And access this configuration in your application as:
 #
-#     Application.get_env(:barrel_release_plugin, :key)
+#     Application.get_env(:barrel_elixir, :key)
 #
 # Or configure a 3rd-party app:
 #
