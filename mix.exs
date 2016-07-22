@@ -53,6 +53,7 @@ defmodule Barrel.Mixfile do
 
   defp deps do
     [
+      {:lager, "~> 3.2.1", override: true},
       {:lager_logger, "~> 1.0"},
       {:metrics, "~> 1.0.1"},
       {:econfig, "~> 0.7.3"},
