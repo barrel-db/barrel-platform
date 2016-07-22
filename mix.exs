@@ -8,9 +8,9 @@ defmodule Barrel.Mixfile do
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      compilers: Mix.compilers,
-     erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
+     erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow, i: './include'],
      deps: deps,
-     erlc_paths: ["lib", "src", "include"],
+     erlc_paths: ["lib", "src"],
      package: package,
      description: description
    ]

@@ -16,7 +16,7 @@
 -module(barrel_task_status_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--include("../include/db.hrl").
+-include("db.hrl").
 
 -define(TIMEOUT, 1000).
 
