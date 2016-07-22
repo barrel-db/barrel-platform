@@ -10,7 +10,7 @@ defmodule Barrel.Mixfile do
      compilers: Mix.compilers,
      erlc_options: [:debug_info, parse_transform: :lager_transform, parse_transform: :mochicow],
      deps: deps,
-     erlc_paths: ["lib", "src"],
+     erlc_paths: ["lib", "src", "include"],
      package: package,
      description: description
    ]
@@ -72,10 +72,9 @@ defmodule Barrel.Mixfile do
       {:oauth, "~> 1.6", hex: :barrel_oauth},
       {:ibrowse, "~> 4.3.1", hex: :barrel_ibrowse},
       {:mochiweb, "~> 2.15.0"},
-      {:cowlib, "~> 1.0.2"},
+      {:cowlib, "~> 1.0.2", override: true, compile: "make IS_DEP=1"},
       {:goldrush, "~> 0.1.7"},
       {:cowboy, "~> 1.0.4"},
-      {:lager, "~> 3.0.2"},
       {:exometer_core, "~> 1.4.0"},
       {:hackney, "~> 1.6.0"},      
       {:jsx, "~> 2.8.0"},
