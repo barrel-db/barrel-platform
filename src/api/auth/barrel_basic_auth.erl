@@ -45,13 +45,16 @@ authenticate(Req, Env) ->
 
 get_credentials(Req) ->
   case cowboy_req:header(<<"authorization">>, Req) of
-    <<"Basic ", BinCreds/binary>> ->
-      case binary:split(BinCreds, <<":">>) of
+    {<<"Basic ", BinCreds/binary>>, _} ->
+      case binary:split(base64:decode(BinCreds), <<":">>) of
         [<<"_">>, <<"_">>] -> nil;  % special name and pass to be logged out
         [User, Pass] -> {User, Pass};
-        _ -> nil
+        _Else ->
+          nil
       end;
-    _ -> nil
+    _Else ->
+      lager:info("bad credentials ~p~n", [_Else]),
+      nil
   end.
 
 check_password(Pass, UserProps) ->
