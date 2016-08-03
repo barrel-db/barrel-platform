@@ -15,6 +15,8 @@
 
 %% Created by benoitc on 10/06/16.
 
+%% @doc middleware to handle Cross Origin Requests implementing CORS (http://www.w3.org/TR/cors/)
+
 -module(barrel_cors_middleware).
 -behaviour(cowboy_middleware).
 -author("Benoit Chesneau").
