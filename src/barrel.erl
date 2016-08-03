@@ -56,7 +56,7 @@ fold_databases(Fun, Acc) -> barrel_server:all_databases(Fun, Acc).
 
 -spec start_listener(atom(), list()) -> ok | {error, term()}.
 start_listener(Ref, Opts) when is_atom(Ref) ->
-  Res = supervisor:start_child(barrel_api_sup, barrel_api_http:binding_spec(Ref, Opts)),
+  Res = supervisor:start_child(barrel_http_sup, barrel_http:binding_spec(Ref, Opts)),
   case Res of
     {ok, _Pid} ->
       Listeners = [{Ref, Opts} | barrel_lib:val(listen, [])],
@@ -67,16 +67,16 @@ start_listener(Ref, Opts) when is_atom(Ref) ->
   end.
 
 stop_listener(Ref) ->
-  case supervisor:terminate_child(barrel_api_sup, {ranch_listener_sup, Ref}) of
+  case supervisor:terminate_child(barrel_http_sup, {ranch_listener_sup, Ref}) of
     ok ->
-      _ = supervisor:delete_child(barrel_api_sup, {ranch_listener_sup, Ref}),
-      barrel_api_http:cleanup_listener_opts(Ref);
+      _ = supervisor:delete_child(barrel_http_sup, {ranch_listener_sup, Ref}),
+      barrel_http:cleanup_listener_opts(Ref);
     {error, Reason} ->
       {error, Reason}
   end.
 
 start_console(Opts) ->
-  Res = supervisor:start_child(barrel_api_sup, barrel_http_console:childspec(Opts)),
+  Res = supervisor:start_child(barrel_http_sup, barrel_http_console:childspec(Opts)),
   case Res of
     {ok, _Pid} ->
       barrel_lib:set(start_console, true),
@@ -87,9 +87,9 @@ start_console(Opts) ->
   end.
 
 stop_console() ->
-  case supervisor:terminate_child(barrel_api_sup, {ranch_listener_sup, barrel_console}) of
+  case supervisor:terminate_child(barrel_http_sup, {ranch_listener_sup, barrel_console}) of
     ok ->
-      _ = supervisor:delete_child(barrel_api_sup, {ranch_listener_sup, barrel_console}),
+      _ = supervisor:delete_child(barrel_http_sup, {ranch_listener_sup, barrel_console}),
       barrel_lib:unset(console),
       barrel_lib:set(start_console, false),
       ranch_server:cleanup_listener_opts(barrel_console);

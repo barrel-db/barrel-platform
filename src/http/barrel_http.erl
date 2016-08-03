@@ -13,7 +13,7 @@
 %% the License.
 
 
--module(barrel_api_http).
+-module(barrel_http).
 
 -export([get_listeners/0]).
 -export([binding_spec/2]).
@@ -159,8 +159,8 @@ binding(Opts) ->
 routes() ->
   [
     {"/", barrel_root_handler, []},
-    {"/_all_dbs", barrel_cb_all_dbs, []},
-    {"/_session", barrel_session_handler, []},
+    {"/_all_dbs", barrel_http_all_dbs, []},
+    {"/_session", barrel_http_session, []},
     {'_', barrel_legacy_handler, barrel_legacy_handler:options()}
   ].
 

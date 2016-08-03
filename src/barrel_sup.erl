@@ -32,7 +32,7 @@ start_link() ->
   end.
 
 status() ->
-  #{ api => barrel_api_http:web_uris(),
+  #{ api => barrel_http:web_uris(),
      console => case barrel_config:get_env(start_console) of
                   false -> not_started;
                   true -> barrel_http_console:admin_uri()
@@ -126,7 +126,7 @@ write_uri_file() ->
   case barrel_config:get_env(uri_file) of
     undefined -> ok;
     Filepath ->
-      Lines = [io_lib:format("~s~n", [URI]) || URI <- barrel_api_http:web_uris()],
+      Lines = [io_lib:format("~s~n", [URI]) || URI <- barrel_http:web_uris()],
       case file:write_file(Filepath, Lines) of
         ok -> ok;
         {error, eacces} ->

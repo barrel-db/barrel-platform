@@ -16,7 +16,9 @@
 
 %% Created by benoitc on 29/06/16.
 
--module(barrel_cb_all_dbs).
+%% @doc REST module for "/_all_dbs"
+
+-module(barrel_http_all_dbs).
 -author("Benoit Chesneau").
 
 %% API

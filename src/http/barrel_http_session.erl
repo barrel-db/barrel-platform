@@ -14,7 +14,7 @@
 
 %% Created by benoitc on 13/06/16.
 
--module(barrel_session_handler).
+-module(barrel_http_session).
 -author("Benoit Chesneau").
 
 %% API

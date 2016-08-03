@@ -36,11 +36,11 @@
 
 childspec(Config) ->
   {Scheme, Addr, Port} = binding(Config),
-  Ip = barrel_api_http:parse_address(Addr),
+  Ip = barrel_http:parse_address(Addr),
   NbAcceptors = proplists:get_value(nb_acceptors, Config, ?DEFAULT_NB_ACCEPTORS),
-  Transport = barrel_api_http:scheme_to_transport(Scheme),
+  Transport = barrel_http:scheme_to_transport(Scheme),
   ProtoOpts = protocol_opts(),
-  TransportOpts = barrel_api_http:transport_opts(Scheme, Ip, Port, Config),
+  TransportOpts = barrel_http:transport_opts(Scheme, Ip, Port, Config),
   ranch:child_spec(barrel_console, NbAcceptors, Transport, TransportOpts,
     cowboy_protocol, ProtoOpts).
 
@@ -89,7 +89,7 @@ protocol_opts() ->
 routes() ->
  lists:reverse(
    [{"/[...]", cowboy_static, {priv_dir, barrel, "www"}} |
-    prefix_routes(barrel_api_http:routes(), "/dbs",
+    prefix_routes(barrel_http:routes(), "/dbs",
       [{"/", cowboy_static, {priv_file, barrel, "www/index.html"}}])]).
 
 prefix_routes([{'_', Handler, HandlerOpts} | Rest], Prefix, Acc) ->

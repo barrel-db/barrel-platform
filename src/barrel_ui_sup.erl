@@ -53,9 +53,9 @@ init([]) ->
       {barrel_auth_cache, start_link, []},
       permanent, brutal_kill, worker, [barrel_aut_cache]},
 
-  Api = {barrel_api_sup,
-    {barrel_api_sup, start_link, []},
-    permanent, infinity, supervisor, [barrel_api_sup]},
+  Api = {barrel_http_sup,
+    {barrel_http_sup, start_link, []},
+    permanent, infinity, supervisor, [barrel_http_sup]},
 
 
   {ok, {SupFlags, [Auth, AuthCache, Api]}}.

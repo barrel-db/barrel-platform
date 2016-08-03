@@ -84,7 +84,7 @@ handle_preflight_request(Origin, Req, Env) ->
   end.
 
 send_preflight_response(Origin, Req, Env) ->
-  Host = barrel_api_http:host(Req),
+  Host = barrel_http:host(Req),
   PreflightHeaders0 = add_credentials(Origin, Host,
     [{<<"Access-Control-Allow-Origin">>, Origin}
       ,{<<"Access-Control-Max-Age">>, integer_to_binary(barrel_cors_config:max_age())}
@@ -130,7 +130,7 @@ check_req_headers(Req, Headers) ->
 apply_cors_headers(undefined, Req, Env) ->
   {ok, Req, Env};
 apply_cors_headers(Origin, Req, Env) ->
-  Host = barrel_api_http:host(Req),
+  Host = barrel_http:host(Req),
   case barrel_cors_config:allow_all() of
     true -> do_apply_cors_headers(Origin, Host, Req, Env);
     false ->

@@ -13,7 +13,7 @@
 %% the License.
 
 
--module(barrel_api_sup).
+-module(barrel_http_sup).
 
 -behaviour(supervisor).
 
@@ -42,7 +42,7 @@ start_link() ->
 init([]) ->
   init_config(),
 
-  WebProcesses = web_processes(barrel_api_http:get_listeners()),
+  WebProcesses = web_processes(barrel_http:get_listeners()),
 
   Console = case barrel_http_console:is_enabled() of
               true ->
@@ -57,7 +57,7 @@ init([]) ->
 %%%===================================================================
 
 web_processes(Listeners) ->
-  [barrel_api_http:binding_spec(Ref, Opts) || {Ref, Opts} <- Listeners].
+  [barrel_http:binding_spec(Ref, Opts) || {Ref, Opts} <- Listeners].
 
 %% TODO: move the CORS config initialisation to a config hook
 init_config() ->
