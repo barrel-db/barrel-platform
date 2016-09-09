@@ -90,9 +90,5 @@ parse_fold_options([{lte, LT} | Rest], Options)
   parse_fold_options(Rest, Options#{lte => LT});
 parse_fold_options([{max, Max} | Rest], Options) ->
   parse_fold_options(Rest, Options#{max => Max});
-parse_fold_options([{dir, fwd} | Rest], Options) ->
-  parse_fold_options(Rest, Options#{move => next});
-parse_fold_options([{dir, prev} | Rest], Options) ->
-  parse_fold_options(Rest, Options#{move => prev});
 parse_fold_options([_ | Rest], Options) ->
   parse_fold_options(Rest, Options).

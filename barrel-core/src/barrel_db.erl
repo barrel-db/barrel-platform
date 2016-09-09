@@ -411,7 +411,6 @@ get_infos(State) ->
 spawn_writer(DbId, Store, UpdateSeq) ->
   spawn_link(?MODULE, writer_init, [self(), DbId, Store, UpdateSeq]).
 
-
 writer_init(Parent, Dbid, Store, UpdateSeq) ->
   State = #{
     parent => Parent,

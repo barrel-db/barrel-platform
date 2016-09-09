@@ -116,7 +116,7 @@ fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   after erocksdb:iterator_close(Itr)
   end.
 
-do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE, move := Move}) ->
+do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
   {Start, Inclusive} = case {GT, GTE} of
                          {nil, nil} -> {Prefix, true};
                          {first, _} -> {Prefix, false};
@@ -126,7 +126,7 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE, move := 
   Opts2 = Opts#{prefix => Prefix},
   case erocksdb:iterator_move(Itr, Start) of
     {ok, {Start, _V}} when Inclusive /= true ->
-      fold_prefix_loop(erocksdb:iterator_move(Itr, Move), Itr, Fun, AccIn, 0, Opts2);
+      fold_prefix_loop(erocksdb:iterator_move(Itr, next), Itr, Fun, AccIn, 0, Opts2);
     Next ->
       fold_prefix_loop(Next, Itr, Fun, AccIn, 0, Opts2)
   end.
@@ -156,13 +156,13 @@ fold_prefix_loop(_KV, _Itr, _Fun, Acc, _N, _Opts) ->
   Acc.
 
 fold_prefix_loop1({ok, K, V}, Itr, Fun, Acc0, N0, Opts) ->
-  #{max := Max, move :=  Move, prefix := P} = Opts,
+  #{max := Max, prefix := P} = Opts,
   N = N0 + 1,
   case match_prefix(K, P) of
     true ->
       case Fun(K, V, Acc0) of
         {ok, Acc} when (Max =:= 0) orelse (N < Max) ->
-          fold_prefix_loop(erocksdb:iterator_move(Itr, Move),
+          fold_prefix_loop(erocksdb:iterator_move(Itr, next),
                            Itr, Fun, Acc, N, Opts);
         {ok, Acc} -> Acc;
         stop -> Acc0;
