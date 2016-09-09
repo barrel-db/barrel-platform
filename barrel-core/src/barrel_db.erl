@@ -341,7 +341,8 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
-handle_info({update_seq, Seq}, State) ->
+handle_info({update_seq, Seq}, State = #{ name := Name }) ->
+  barrel_db_event:notify(Name, db_updated),
   {noreply, State#{update_seq => Seq}};
 
 handle_info(_Info, State) ->
@@ -350,7 +351,7 @@ handle_info(_Info, State) ->
 -spec terminate(term(), state()) -> ok.
 terminate(_Reason, #{writer := Writer}) ->
   exit(Writer, normal),
-  
+
   ok.
 
 -spec code_change(term(), state(), term()) -> {ok, state()}.
