@@ -45,7 +45,7 @@
 ]).
 
 %% internal processes
--export([init_loop/4]).
+-export([writer_init/4]).
 
 -define(default_timeout, 5000).
 
@@ -354,7 +354,6 @@ handle_info({'EXIT', Pid, Reason}, State) ->
   if
     Pid =:= WriterPid ->
       lager:info("~p writer crashed: ~p~n", [Name, Reason]),
-      
       %% the writer crashed, respawn it
       UpdateSeq = barrel_store:last_update_seq(Store, DbId),
       NewWriter = spawn_writer(Store, DbId, UpdateSeq),
@@ -410,23 +409,23 @@ get_infos(State) ->
   }.
 
 spawn_writer(DbId, Store, UpdateSeq) ->
-  spawn_link(?MODULE, init_loop, [self(), DbId, Store, UpdateSeq]).
+  spawn_link(?MODULE, writer_init, [self(), DbId, Store, UpdateSeq]).
 
 
-init_loop(Parent, Dbid, Store, UpdateSeq) ->
+writer_init(Parent, Dbid, Store, UpdateSeq) ->
   State = #{
     parent => Parent,
     dbid => Dbid,
     store => Store,
     update_seq => UpdateSeq},
-  write_loop(State).
+  writer_loop(State).
 
-write_loop(State = #{dbid := DbId, store := Store}) ->
+writer_loop(State = #{dbid := DbId, store := Store}) ->
   receive
     {update_doc, {Pid, Tag}, DocId, Fun, Options} ->
       {Reply, NewState} = (catch write_doc(DbId, Store, DocId, Fun, Options, State)),
       catch Pid ! {Tag, Reply},
-      write_loop(NewState)
+      writer_loop(NewState)
   end.
 
 empty_doc_info() ->
