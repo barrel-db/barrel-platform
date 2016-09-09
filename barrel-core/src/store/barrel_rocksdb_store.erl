@@ -32,7 +32,8 @@
   write_doc/6,
   get_doc/7,
   fold_by_id/5,
-  changes_since/5
+  changes_since/5,
+  last_update_seq/2
 ]).
 
 -define(VERSION, 1).
@@ -190,6 +191,7 @@ get_doc_info(DbId, DocId,  Db, ReadOptions) ->
     not_found -> {error, not_found}
   end.
 
+
 get_update_seq(Db, DbId) ->
   {ok, SeqBin} = erocksdb:get(Db, meta_key(DbId, <<"update_seq">>), []),
   binary_to_integer(SeqBin).
@@ -305,6 +307,8 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
   after erocksdb:release_snapshot(Snapshot)
   end.
 
+
+last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 
 %% key api
 

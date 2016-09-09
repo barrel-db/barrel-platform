@@ -27,7 +27,8 @@
   write_doc/6,
   get_doc/7,
   fold_by_id/5,
-  changes_since/5
+  changes_since/5,
+  last_update_seq/2
 ]).
 
 -export([start_link/3]).
@@ -83,6 +84,9 @@
 -callback changes_since(DbId :: binary(), Since :: integer(), Fun :: fun(),
                         AccIn::any(), State::any()) -> AccOut :: any().
 
+-callback last_update_seq(DbId :: binary(), State :: any()) ->
+  Seq :: integer | {error, term()}.
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -111,6 +115,9 @@ fold_by_id(Store, DbId, Fun, AccIn, Opts) ->
 
 changes_since(Store, DbId, Since, Fun, AccIn) ->
   wpool:call(Store, {changes_since, DbId, Since, Fun, AccIn}).
+
+last_update_seq(Store, DbId) ->
+  wpool:call(Store, {last_update_seq, DbId}).
 
 
 %% @doc Starts and links a new process for the given store implementation.
@@ -168,10 +175,15 @@ handle_call({fold_by_id, DbId, Fun, AccIn, Opts}, _From,  State=#state{ mod=Mod,
   Reply = Mod:fold_by_id(DbId, Fun, AccIn, Opts, ModState),
   {reply, Reply, State};
 
-handle_call({changes_since, DbId, Since, Fun, AccIn}, _From,  State=#state{ mod=Mod, mod_state=ModState}) ->
+handle_call({changes_since, DbId, Since, Fun, AccIn}, _From,
+            State=#state{ mod=Mod, mod_state=ModState}) ->
   Reply = Mod:changes_since(DbId, Since, Fun, AccIn, ModState),
   {reply, Reply, State};
 
+handle_call({last_update_seq, DbId}, _From, State) ->
+  #state{ mod=Mod, mod_state=ModState} = State,
+  Reply = Mod:last_update_seq(DbId, ModState),
+  {reply, Reply, State};
 handle_call(all_dbs, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
   Reply = Mod:all_dbs(ModState),
   {reply, Reply, State};
