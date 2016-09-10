@@ -49,7 +49,7 @@ init(Name, _Options) ->
   {ok, #{db => Db }}.
 
 open_db(#{ db := Db }, Name) ->
-  DbKey = <<1, 0, (barrel_lib:to_binary(Name))/binary >>,
+  DbKey = << 0, 0, 0, 100, (barrel_lib:to_binary(Name))/binary >>,
   case erocksdb:get(Db, DbKey, []) of
     {ok, DbId} ->
       UpdateSeq = get_update_seq(Db, DbId),
@@ -57,32 +57,30 @@ open_db(#{ db := Db }, Name) ->
     not_found ->
       DbId = barrel_lib:uniqid(),
       Batch =  [
-        {put, DbKey, DbId},
-        {put, meta_key(DbId, <<"version">>), integer_to_binary(?VERSION)},
-        {put, meta_key(DbId, <<"update_seq">>), integer_to_binary(0)}
+                 {put, << 0, 0, 0, 0 >>, integer_to_binary(?VERSION)},
+                 {put, DbKey, DbId},
+                 {put, meta_key(DbId, 0), integer_to_binary(0)}
       ],
       ok = erocksdb:write(Db,Batch, [{sync, true}]),
       {DbId, 0}
   end.
 
 clean_db(Name, DbId, #{db := Db}) ->
-  ok = erocksdb:delete(Db, << 1, 0, Name/binary >>, [{sync, true}]),
+  DbKey = << 0, 0, 0, 100, (barrel_lib:to_binary(Name))/binary >>,
+  ok = erocksdb:delete(Db, DbKey, [{sync, true}]),
   spawn(fun() -> clean_db1(Db, DbId) end),
   ok.
 
 all_dbs(#{db := Db}) ->
   Fun = fun
-          (<< 1, 0, Name/binary >>, _, Acc) -> {ok, [Name | Acc]};
+          ( << 0, 0, 0, 100, Name/binary >>, _, Acc) -> {ok, [Name | Acc]};
           (_, _, _Acc) -> stop
         end,
-  AllDbs = fold_prefix(Db, << 1, 0 >>, Fun, []),
+  AllDbs = fold_prefix(Db, << 0, 0, 0, 100 >>, Fun, []),
   lists:usort(AllDbs).
 
 clean_db1(Db, DbId) ->
-  (catch clean_db_prefix(Db, << 10, 0, DbId/binary, 0 >>)),
-  (catch clean_db_prefix(Db, << 100, 0, DbId/binary >>)),
-  (catch clean_db_prefix(Db, << 200, 0, DbId/binary >>)),
-  (catch clean_db_prefix(Db, << 300, 0, DbId/binary >>)),
+  (catch clean_db_prefix(Db, DbId)),
   ok.
 
 clean_db_prefix(Db, Prefix) ->
@@ -185,7 +183,7 @@ get_doc_info(DbId, DocId, State) ->
 get_doc_info(DbId, DocId,  #{ db := Db}, ReadOptions) ->
   get_doc_info(DbId, DocId,  Db, ReadOptions);
 get_doc_info(DbId, DocId,  Db, ReadOptions) ->
-  DocKey = << 100, 0, DbId/binary, DocId/binary >>,
+  DocKey = doc_key(DbId, DocId),
   case erocksdb:get(Db, DocKey, ReadOptions) of
     {ok, BinDocInfo} -> {ok, binary_to_term(BinDocInfo)};
     not_found -> {error, not_found}
@@ -193,7 +191,7 @@ get_doc_info(DbId, DocId,  Db, ReadOptions) ->
 
 
 get_update_seq(Db, DbId) ->
-  {ok, SeqBin} = erocksdb:get(Db, meta_key(DbId, <<"update_seq">>), []),
+  {ok, SeqBin} = erocksdb:get(Db, meta_key(DbId, 0), []),
   binary_to_integer(SeqBin).
 
 write_doc(DbId, DocId, LastSeq, DocInfo, Body, #{ db := Db}) ->
@@ -204,7 +202,7 @@ write_doc(DbId, DocId, LastSeq, DocInfo, Body, #{ db := Db}) ->
     {put, rev_key(DbId, DocId, Rev), term_to_binary(Body)},
     {put, doc_key(DbId, DocId), DocInfoBin},
     {put, seq_key(DbId, Seq), DocInfoBin},
-    {put, meta_key(DbId, <<"update_seq">>), barrel_lib:to_binary(Seq)}
+    {put, meta_key(DbId, 0), barrel_lib:to_binary(Seq)}
   ] ++ case LastSeq of
          undefined -> [];
          _ -> [{delete, seq_key(DbId, LastSeq)}]
@@ -253,7 +251,7 @@ get_doc_rev(Db, DbId, DocId, RevId, ReadOptions) ->
   end.
 
 fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
-  Prefix = << 100, 0, DbId/binary >>,
+  Prefix = << DbId/binary, 0, 0, 50 >>,
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
@@ -277,7 +275,7 @@ fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
   end.
 
 changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
-  Prefix = << 200, 0, DbId/binary >>,
+  Prefix = << DbId/binary, 0, 0, 100 >>,
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
   Opts = [
@@ -312,10 +310,10 @@ last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 
 %% key api
 
-meta_key(DbId, Meta) -> << 10, 0, DbId/binary, 0, (barrel_lib:to_binary(Meta))/binary >>.
+meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binary >>.
 
-doc_key(DbId, DocId) -> << 100, 0, DbId/binary, DocId/binary >>.
+doc_key(DbId, DocId) -> << DbId/binary, 0, 0, 50, DocId/binary >>.
 
-seq_key(DbId, Seq) -> << 200, 0, DbId/binary, (barrel_lib:to_binary(Seq))/binary >>.
+seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, (barrel_lib:to_binary(Seq))/binary >>.
 
-rev_key(DbId, DocId, Rev) -> << 300, 0, DbId/binary, DocId/binary, "/", Rev/binary >>.
+rev_key(DbId, DocId, Rev) -> << DbId/binary, DocId/binary, 1, Rev/binary >>.
