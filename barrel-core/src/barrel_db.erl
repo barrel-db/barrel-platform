@@ -226,8 +226,12 @@ fold_by_id(Db, Fun, Acc, Opts) ->
   barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
 %% @doc fold all changes since last sequence
-changes_since(Db, Since, Fun, Acc) ->
+changes_since(Db, Since0, Fun, Acc) when is_integer(Since0) ->
   #{store := Store, id := DbId} = call(Db, get_state),
+  Since = if
+            Since0 > 0 -> Since0 + 1;
+            true -> Since0
+          end,
   barrel_store:changes_since(Store, DbId, Since, Fun, Acc).
 
 revsdiff(Db, DocId, RevIds) ->

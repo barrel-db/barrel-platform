@@ -119,10 +119,14 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
                          {nil, nil} -> {Prefix, true};
                          {first, _} -> {Prefix, false};
                          {K, _} when is_binary(K) ->
-                           FirstKey = << Prefix/binary,
-                                         (barrel_lib:to_binary(K))/binary >>,
+                           FirstKey = << Prefix/binary, K/binary >>,
+                           {FirstKey, true};
+                         {_, K} when is_binary(K) ->
+                           FirstKey = << Prefix/binary, K/binary >>,
                            {FirstKey, false};
-                         _ -> error(badarg)
+                         _ ->
+                           lager:error("folding: error: opts are ~p~n", [Opts]),
+                           error(badarg)
                        end,
   Opts2 = Opts#{prefix => Prefix},
   case erocksdb:iterator_move(Itr, Start) of
@@ -282,8 +286,7 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
   Opts = [
-           {gt, Since},
-           {gte, true},
+           {start_key, integer_to_binary(Since)},
            {read_options, ReadOptions}
          ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
