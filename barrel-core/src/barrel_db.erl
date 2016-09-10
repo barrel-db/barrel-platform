@@ -362,12 +362,11 @@ handle_info({'EXIT', Pid, Reason}, State) ->
       {noreply, State}
   end;
 handle_info(_Info, State) ->
-{noreply, State}.
+  {noreply, State}.
 
 -spec terminate(term(), state()) -> ok.
 terminate(_Reason, #{writer := Writer}) ->
   exit(Writer, normal),
-
   ok.
 
 -spec code_change(term(), state(), term()) -> {ok, state()}.
