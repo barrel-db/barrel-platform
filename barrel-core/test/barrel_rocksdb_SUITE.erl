@@ -163,6 +163,8 @@ change_since(_Config) ->
   [<<"bb">>, <<"aa">>] = barrel_db:changes_since(<<"testdb">>, 0, Fun, []),
   [<<"bb">>] = barrel_db:changes_since(<<"testdb">>, 1, Fun, []),
   [] = barrel_db:changes_since(<<"testdb">>, 2, Fun, []),
+  {ok, <<"cc">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"cc">>, Doc2, []),
+  [<<"cc">>] = barrel_db:changes_since(<<"testdb">>, 2, Fun, []),
   ok.
 
 revdiff(_Config) ->
