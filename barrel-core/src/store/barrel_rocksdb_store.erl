@@ -118,7 +118,10 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
   {Start, Inclusive} = case {GT, GTE} of
                          {nil, nil} -> {Prefix, true};
                          {first, _} -> {Prefix, false};
-                         {K, _} when is_binary(K) -> {<< Prefix/binary, K/binary >>, false};
+                         {K, _} when is_binary(K) ->
+                           FirstKey = << Prefix/binary,
+                                         (barrel_lib:to_binary(K))/binary >>,
+                           {FirstKey, false};
                          _ -> error(badarg)
                        end,
   Opts2 = Opts#{prefix => Prefix},
