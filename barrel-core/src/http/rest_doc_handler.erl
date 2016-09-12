@@ -50,14 +50,24 @@ handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
             http_reply:doc(Reply, Req2, State)
     end;
 
-handle(<<"DELETE">>, DbId, DocIdAsBin, Req, State) ->
-    {RevId, Req2} = cowboy_req:qs_val(<<"rev">>, Req),
-    {ok, DocIdAsBin, RevId2} = barrel_db:delete(DbId, DocIdAsBin, RevId, []),
-    Reply = #{<<"ok">> => true,
-              <<"id">> => DocIdAsBin,
-              <<"rev">> => RevId2},
-    http_reply:doc(Reply, Req2, State);
+handle(<<"DELETE">>, DbId, DocId, Req, State) ->
+    case cowboy_req:qs_val(<<"rev">>, Req) of
+        {undefined, Req2} ->
+            http_reply:code(400, Req2, State);
+        {RevId, Req2} ->
+            delete(DbId, DocId, RevId, Req2, State)
+    end;
+
 
 handle(_, _, _, Req, State) ->
     http_reply:code(405, Req, State).
+
+
+
+delete(DbId, DocId, RevId, Req, State) ->
+    {ok, DocId, RevId2} = barrel_db:delete(DbId, DocId, RevId, []),
+    Reply = #{<<"ok">> => true,
+              <<"id">> => DocId,
+              <<"rev">> => RevId2},
+    http_reply:doc(Reply, Req, State).
 

@@ -18,6 +18,8 @@
 %% specific API
 -export([start_link/0]).
 -export([stop/0]).
+-export([sync/2]).
+
 
 %% gen_server API
 -export([init/1, handle_call/3]).
@@ -36,15 +38,28 @@ stop() ->
 
 init(_) ->
     Routes = [{"/[:dbid]", rest_db_handler, []},
-              {"/[:dbid]/_rev_diffs", rest_revdiffs_handler, []},
+              {"/[:dbid]/_revs_diff", rest_revsdiff_handler, []},
               {"/[:dbid]/_changes", rest_changes_handler, []},
               {"/[:dbid]/[:docid]", rest_doc_handler, []}
              ],
 
     Dispatch = cowboy_router:compile([{'_', Routes}]),
-    {ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [{env, [{dispatch, Dispatch}]}]),
+    {ok, [{port, Port}]} = application:get_env(barrel, http_server),
+    {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
     {ok, []}.
 
+sync(DbId, RemoteUrl) ->
+    gen_server:call(?MODULE, {sync, DbId, RemoteUrl}).
+
+handle_call({sync, DbId, RemoteServer}, _From, State) ->
+    Sep = <<"/">>,
+    Path = <<"/_changes">>,
+    Url = <<RemoteServer/binary,Sep/binary,DbId/binary,Path/binary>>,
+    {ok, 200, _RespHeaders, Client} = hackney:request(get, Url, [], <<>>, []),
+    {ok, Body} = hackney:body(Client),
+    Json = jsx:decode(Body,[return_maps]),
+    io:format("body=~p~n",[Json]),
+    {reply, ok, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
@@ -54,9 +69,6 @@ handle_cast(shutdown, State) ->
 
 handle_info(_Info, State) -> {noreply, State}.
 
-
 %% default gen_server callbacks
 terminate(_Reason, _State) ->  ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
-

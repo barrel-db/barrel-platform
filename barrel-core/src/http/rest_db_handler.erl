@@ -27,20 +27,26 @@ handle(Req, State) ->
     handle(Method, DbId, Req3, State).
 
 handle(<<"GET">>, DbId, Req, State) ->
+    All = barrel:all_databases(),
+    case lists:member(DbId, All) of
+        false ->
+            http_reply:code(404, Req, State);
+        true ->
+            db_info(DbId, Req, State)
+    end;
+
+handle(_, _, Req, State) ->
+    http_reply:code(405, Req, State).
+
+terminate(_Reason, _Req, _State) ->
+    ok.
+
+%% ----------
+
+db_info(DbId, Req, State) ->
     {ok, Infos} = barrel_db:infos(DbId),
     [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
     DbInfo = [{<<"id">>, Id},
               {<<"name">>, Name},
               {<<"store">>, Store}],
-    Json = jsx:encode(DbInfo),
-    {ok, Req2} = cowboy_req:reply(200, [
-                                        {<<"content-type">>, <<"application/json">>}
-                                       ], Json, Req),
-    {ok, Req2, State};
-
-handle(_, _, Req, State) ->
-    {ok, Req2} = cowboy_req:reply(405, [], [], Req),
-    {ok, Req2, State}.
-
-terminate(_Reason, _Req, _State) ->
-    ok.
+    http_reply:doc(DbInfo, Req, State).

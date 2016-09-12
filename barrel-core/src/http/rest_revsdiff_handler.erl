@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_revdiffs_handler).
+-module(rest_revsdiff_handler).
 
 -export([init/3]).
 -export([handle/2]).
