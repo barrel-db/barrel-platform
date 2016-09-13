@@ -36,7 +36,8 @@
   fold_by_id/1,
   change_since/1,
   revdiff/1,
-  get_revisions/1
+  get_revisions/1,
+  put_rev/1
 ]).
 
 all() ->
@@ -50,7 +51,8 @@ all() ->
     get_revisions,
     fold_by_id,
     change_since,
-    revdiff
+    revdiff,
+    put_rev
   ].
 
 init_per_suite(Config) ->
@@ -146,6 +148,25 @@ get_revisions(_Config) ->
   {ok, Doc4} = barrel_db:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
+
+put_rev(_Config) ->
+  Doc = #{<<"v">> => 1},
+  {ok, DocId, RevId} =  barrel_db:post(<<"testdb">>, Doc, []),
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, DocId, []),
+  Doc3 = Doc2#{ v => 2},
+  {ok, DocId, RevId2} = barrel_db:put(<<"testdb">>, DocId, Doc3, []),
+
+  Doc4_0 = Doc2#{ v => 3 },
+  {Pos, _} = barrel_doc:parse_revision(RevId),
+  NewRev = barrel_doc:revid(Pos +1, RevId, Doc4_0),
+  Doc4 = Doc4_0#{<<"_rev">> => NewRev},
+  History = [NewRev, RevId],
+ 
+  {ok, DocId, RevId3} = barrel_db:put_rev(<<"testdb">>, DocId, Doc4, History, []),
+  {ok, Doc5} = barrel_db:get(<<"testdb">>, DocId, [{history, true}]),
+  Revisions = barrel_doc:parse_revisions(Doc5),
+  Revisions == [RevId2, RevId].
+
 
 fold_by_id(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
