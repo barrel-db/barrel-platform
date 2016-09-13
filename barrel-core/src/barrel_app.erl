@@ -37,7 +37,6 @@ stop(_State) ->
 %% Internal functions
 %%====================================================================
 
-
 have_default_store() ->
   case application:get_env(barrel, default_store) of
     undefined ->
@@ -54,6 +53,6 @@ have_default_store() ->
 init_dbs() ->
   {ok, Stores} = application:get_env(barrel, stores),
   lists:foreach(fun({Store, _, _}) ->
-      Dbs = barrel_store:all_dbs(Store),
+      Dbs = barrel_local_store:all_dbs(Store),
       [barrel_db:start(Name, Store) || Name <- Dbs]
     end, Stores).

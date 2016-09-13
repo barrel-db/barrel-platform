@@ -14,7 +14,7 @@
 
 %% Created by benoitc on 03/09/16.
 
--module(barrel_stores_sup).
+-module(barrel_local_stores_sup).
 -author("Benoit Chesneau").
 
 -behaviour(supervisor).
@@ -57,5 +57,5 @@ init([]) ->
 %% @private
 child_spec(Name, Module, Options) ->
   {Name,
-    {barrel_store, start_link, [Name, Module, Options]},
+    {barrel_local_store, start_link, [Name, Module, Options]},
     permanent, 5000, worker, [Module]}.
