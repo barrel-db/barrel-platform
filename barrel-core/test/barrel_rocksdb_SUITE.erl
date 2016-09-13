@@ -35,7 +35,8 @@
   create_doc/1,
   fold_by_id/1,
   change_since/1,
-  revdiff/1
+  revdiff/1,
+  get_revisions/1
 ]).
 
 all() ->
@@ -46,6 +47,7 @@ all() ->
     basic_op,
     update_doc,
     create_doc,
+    get_revisions,
     fold_by_id,
     change_since,
     revdiff
@@ -135,6 +137,16 @@ create_doc(_Config) ->
   Doc2 = #{<<"_id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} =  barrel_db:post(<<"testdb">>, Doc2, []).
 
+get_revisions(_Config) ->
+  Doc = #{<<"v">> => 1},
+  {ok, DocId, RevId} =  barrel_db:post(<<"testdb">>, Doc, []),
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, DocId, []),
+  Doc3 = Doc2#{ v => 2},
+  {ok, DocId, RevId2} = barrel_db:put(<<"testdb">>, DocId, Doc3, []),
+  {ok, Doc4} = barrel_db:get(<<"testdb">>, DocId, [{history, true}]),
+  Revisions = barrel_doc:parse_revisions(Doc4),
+  Revisions == [RevId2, RevId].
+
 fold_by_id(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
@@ -149,7 +161,6 @@ fold_by_id(_Config) ->
   Acc2 = barrel_db:fold_by_id(<<"testdb">>, Fun, [],
                               [{include_doc, true}, {start_key, <<"b">>}]),
   [<<"b">>] = Acc2.
-
 
 change_since(_Config) ->
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},

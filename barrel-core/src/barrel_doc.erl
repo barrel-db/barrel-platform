@@ -52,11 +52,11 @@ parse_revision(Rev) when is_binary(Rev) ->
     _ -> error(bad_rev)
   end;
 parse_revision(Rev) when is_list(Rev) -> parse_revision(list_to_binary(Rev));
-parse_revision(_) -> error(bad_rev).
+parse_revision(Rev) -> error({bad_rev, Rev}).
 
 parse_revisions(#{ <<"_revisions">> := Revisions}) ->
   case Revisions of
-    #{ start := Start, ids := Ids} ->
+    #{ <<"start">> := Start, <<"ids">> := Ids} ->
       {Revs, _} = lists:foldl(
         fun(Id, {Acc, I}) ->
           Acc2 = [<< (integer_to_binary(I))/binary,"-", Id/binary >> | Acc],
@@ -72,8 +72,11 @@ parse_revisions(_) -> [].
 encode_revisions(Revs) ->
   [Oldest | _] = Revs,
   {Start, _} = barrel_doc:parse_revision(Oldest),
-  Digests = [Digest || {_, Digest} <- Revs],
-  #{<<"start">> => Start, <<"ids">> => Digests}.
+  Digests = lists:foldl(fun(Rev, Acc) ->
+      {_, Digest}=parse_revision(Rev),
+      [Digest | Acc]
+    end, [], Revs),
+  #{<<"start">> => Start, <<"ids">> => lists:reverse(Digests)}.
 
 trim_history(EncodedRevs, Ancestors, Limit) ->
   #{ <<"start">> := Start, <<"ids">> := Digests} = EncodedRevs,
@@ -88,7 +91,7 @@ trim_history(EncodedRevs, Ancestors, Limit) ->
         true -> {Matched, Unmatched}
       end
     end, {length(Digests), Limit}, Ancestors),
-  EncodedRevs#{ ids := (lists:sublist(Digests, Limit2)) }.
+  EncodedRevs#{ <<"ids">> => (lists:sublist(Digests, Limit2)) }.
 
 compare(RevA, RevB) ->
   RevTupleA = parse_revision(RevA),
@@ -107,9 +110,6 @@ id(_) -> erlang:error(bad_doc).
 rev(#{<<"_rev">> := Rev}) -> Rev;
 rev(#{}) -> <<>>;
 rev(_) -> error(bad_doc).
-                       
-                       
-
 
 -spec id_rev(doc()) -> {docid(), revid()}.
 id_rev(#{<<"_id">> := Id, <<"_rev">> := Rev}) -> {Id, Rev};
@@ -143,5 +143,23 @@ compare_test() ->
 deleted_test() ->
   ?assertEqual(true, deleted(#{ <<"_deleted">> => true})),
   ?assertEqual(false, deleted(#{ <<"_deleted">> => false})).
+
+encode_revisions_test() ->
+  Revs = [<<"2-b19b17d048f082aa4a62c8da1262a33a">>,<<"1-5c1f0a9d721f0731a46645d18b763047">>],
+  ?assertEqual(#{
+    <<"start">> => 2,
+    <<"ids">> => [<<"b19b17d048f082aa4a62c8da1262a33a">>, <<"5c1f0a9d721f0731a46645d18b763047">>]
+  }, encode_revisions(Revs)).
+
+parse_revisions_test() ->
+  Revs = [<<"2-b19b17d048f082aa4a62c8da1262a33a">>,<<"1-5c1f0a9d721f0731a46645d18b763047">>],
+  Body = #{
+    <<"_revisions">> => #{
+      <<"start">> => 2,
+      <<"ids">> => [<<"b19b17d048f082aa4a62c8da1262a33a">>, <<"5c1f0a9d721f0731a46645d18b763047">>]
+    }
+  },
+  ?assertEqual(Revs, parse_revisions(Body)).
+
   
 -endif.
