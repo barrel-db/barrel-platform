@@ -18,8 +18,6 @@
 %% specific API
 -export([start_link/0]).
 -export([stop/0]).
--export([sync/2]).
-
 
 %% gen_server API
 -export([init/1, handle_call/3]).
@@ -47,19 +45,6 @@ init(_) ->
     {ok, [{port, Port}]} = application:get_env(barrel, http_server),
     {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
     {ok, []}.
-
-sync(DbId, RemoteUrl) ->
-    gen_server:call(?MODULE, {sync, DbId, RemoteUrl}).
-
-handle_call({sync, DbId, RemoteServer}, _From, State) ->
-    Sep = <<"/">>,
-    Path = <<"/_changes">>,
-    Url = <<RemoteServer/binary,Sep/binary,DbId/binary,Path/binary>>,
-    {ok, 200, _RespHeaders, Client} = hackney:request(get, Url, [], <<>>, []),
-    {ok, Body} = hackney:body(Client),
-    Json = jsx:decode(Body,[return_maps]),
-    io:format("body=~p~n",[Json]),
-    {reply, ok, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.

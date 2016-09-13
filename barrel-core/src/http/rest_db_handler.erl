@@ -35,6 +35,9 @@ handle(<<"GET">>, DbId, Req, State) ->
             db_info(DbId, Req, State)
     end;
 
+handle(<<"POST">>, DbId, Req, State) ->
+    rest_doc_handler:post_put(post, DbId, undefined, Req, State);
+
 handle(_, _, Req, State) ->
     http_reply:code(405, Req, State).
 
