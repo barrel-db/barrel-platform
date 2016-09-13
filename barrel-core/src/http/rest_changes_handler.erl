@@ -19,73 +19,107 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--record(st, {dbname=undefined, last_seq=undefined, gen_event=undefined}).
+-record(st, {dbname, changes, last_seq, mode}).
 
 init(_Type, Req, []) ->
     {Feed, Req2} = cowboy_req:qs_val(<<"feed">>, Req, <<"normal">>),
-    init_feed(Feed, Req2).
-
-init_feed(<<"normal">>, Req) ->
-    {ok, Req, undefined};
-
-init_feed(<<"longpoll">>, Req) ->
-    {DbId, Req2} = cowboy_req:binding(dbid, Req),
-    {SinceAsBin, Req3} = cowboy_req:qs_val(<<"since">>, Req2, <<"0">>),
+    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+    {SinceAsBin, Req3} = cowboy_req:qs_val(<<"since">>, Req3, <<"0">>),
     Since = binary_to_integer(SinceAsBin),
-    {ok, GenEventPid} = subscribe(DbId),
+    init_feed(Feed, DbId, Since, Req3).
+
+
+
+
+init_feed(<<"normal">>, DbId, Since, Req) ->
+    {LastSeq, Changes} = changes(DbId, Since),
+    State = #st{dbname=DbId, changes=Changes, last_seq=LastSeq, mode=normal},
+    {ok, Req, State};
+
+init_feed(<<"longpoll">>, DbId, Since, Req) ->
+    {LastSeq, Changes} = changes(DbId, Since),
+    State = #st{dbname=DbId, changes=Changes, last_seq=LastSeq, mode=longpoll},
+    case Changes of
+        [] ->
+            ok = subscribe(DbId),
+            info(db_updated, Req, State);
+        _ ->
+            {ok, Req, State}
+    end;
+
+init_feed(<<"eventsource">>, DbId, Since, Req) ->
+    ok = subscribe(DbId),
     Headers = [{<<"content-type">>, <<"text/event-stream">>}],
-    {ok, Req4} = cowboy_req:chunked_reply(200, Headers, Req3),
-    State = #st{dbname=DbId, last_seq=Since, gen_event=GenEventPid},
-    info(db_updated, Req4, State).
+    {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
+    State = #st{dbname=DbId, last_seq=Since, mode=eventsource},
+    info(db_updated, Req2, State).
+
+
 
 
 handle(Req, State) ->
     {Method, Req2} = cowboy_req:method(Req),
-    {IdAsBin, Req3} = cowboy_req:binding(dbid, Req2),
-    handle(Method, IdAsBin, Req3, State).
+    handle(Method, Req2, State).
 
-handle(<<"GET">>, DbId, Req, State) ->
-    {SinceAsBin, Req2} = cowboy_req:qs_val(<<"since">>, Req, <<"0">>),
-    Since = binary_to_integer(SinceAsBin),
-    {_, Changes} = changes(DbId, Since),
-    http_reply:doc(Changes, Req2, State);
+handle(<<"GET">>, Req, State) ->
+    LastSeq = State#st.last_seq,
+    Changes = State#st.changes,
+    Json = to_json(LastSeq, Changes),
+    http_reply:json(Json, Req, State);
 
-handle(_, _, Req, State) ->
+handle(_, Req, State) ->
     http_reply:code(405, Req, State).
+
 
 
 info(db_updated, Req, State) ->
     DbId = State#st.dbname,
-    Since = State#st.last_seq + 1,
+    Since = State#st.last_seq,
     {LastSeq, Changes} = changes(DbId, Since),
-    Json = jsx:encode(Changes),
-    %% format defined by https://www.w3.org/TR/eventsource/
-    ok = cowboy_req:chunk(["id: ", id(), "\ndata: ", Json, "\n\n"], Req),
-    {loop, Req, State#st{last_seq=LastSeq}}.
+    case State#st.mode of
+        longpoll ->
+            case Changes of
+                [] ->
+                    info(db_updated, Req, State);
+                _ ->
+                    {ok, Req, State#st{last_seq=LastSeq, changes=Changes}}
+            end;
+        eventsource ->
+            Json = to_json(LastSeq, Changes),
+            %% format defined by https://www.w3.org/TR/eventsource/
+            ok = cowboy_req:chunk(["id: ", id(), "\ndata: ", Json, "\n\n"], Req),
+            {loop, Req, State#st{last_seq=LastSeq}}
+    end.
 
-terminate(_Reason, _Req, #st{dbname=DbName}) ->
+
+
+terminate(_Reason, _Req, #st{dbname=DbId}) ->
     %% TODO improve closing of streamed changes
     %% by default, cowboy does not close connection
     %% this will never be called as we will receive
     %% a continuous flow of database update
     %% Maybe add a timeout in the change_events_handler?
-    ok = unsubsribe(DbName),
+    ok = unsubscribe(DbId),
     ok;
-
 terminate(_Reason, _Req, _State) ->
     ok.
 
 
 %% ----------
 
-
 changes(DbId, Since) ->
     Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
                   {ok, {Seq, [DocInfo|DocInfos]}}
           end,
-    {LastSeq, Changes} = barrel_db:changes_since(DbId, Since, Fun, {Since, []}),
-    {LastSeq, #{<<"last_seq">> => LastSeq,
-                <<"results">> => Changes}}.
+    barrel_db:changes_since(DbId, Since, Fun, {Since, []}).
+    %% {LastSeq, Changes} = barrel_db:changes_since(DbId, Since, Fun, {Since, []}),
+    %% {LastSeq, #{<<"last_seq">> => LastSeq,
+    %%             <<"results">> => Changes}}.
+
+to_json(LastSeq, Changes) ->
+    Map = #{<<"last_seq">> => LastSeq,
+            <<"results">> => Changes},
+    jsx:encode(Map).
 
 
 id() ->
@@ -94,16 +128,12 @@ id() ->
     integer_to_list(Id, 16).
 
 subscribe(DbName) ->
-    Key = key(DbName),
-    {ok, Pid} = gen_event:start_link({via, gproc, Key}),
+    Key = barrel_db_event:key(DbName),
     ok = gen_event:add_handler({via, gproc, Key}, change_events_handler, self()),
-    {ok, Pid}.
-
-unsubsribe(DbName) ->
-    Key = key(DbName),
-    ok = gen_event:stop(Key),
     ok.
 
+unsubscribe(DbName) ->
+    Key = barrel_db_event:key(DbName),
+    ok = gen_event:delete_handler({via, gproc, Key}, change_events_handler, self()),
+    ok.
 
-key(DbName) ->
-    {n, l, {ev, DbName}}.
