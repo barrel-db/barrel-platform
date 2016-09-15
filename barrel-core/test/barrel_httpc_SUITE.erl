@@ -44,9 +44,11 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+    {ok, _} = barrel_httpc:start_link(),
     Config.
 
 end_per_testcase(_, Config) ->
+    stopped = barrel_httpc:stop(),
     ok = barrel_db:clean(<<"testdb">>),
     Config.
 
@@ -85,20 +87,22 @@ put_get_delete(_Config) ->
     true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-    %% Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
-    %% {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
-    %% Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
-    %% {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
-    %% Fun = fun(Seq, DocInfo, D, Acc) ->
-    %%               {error, doc_not_fetched} = D,
-    %%               Id = maps:get(id, DocInfo),
-    %%               {ok, [{Seq, Id}|Acc]}
-    %%       end,
-    %% [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
-    %% [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
-    %% [] = barrel_httpc:changes_since(url(), 2, Fun, []),
-    %% {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
-    %% [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
+    Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+    {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
+    Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+    {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
+    Fun = fun(Seq, DocInfo, D, Acc) ->
+                  {error, doc_not_fetched} = D,
+                  Id = maps:get(id, DocInfo),
+                  {ok, [{Seq, Id}|Acc]}
+          end,
+    [] = barrel_httpc:changes_since(url(), 0, Fun, []),
+    [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
+    [] = barrel_httpc:changes_since(url(), 1, Fun, []),
+    [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
+    [] = barrel_httpc:changes_since(url(), 2, Fun, []),
+    {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
+    [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
     ok.
 
 notify(_Config) ->

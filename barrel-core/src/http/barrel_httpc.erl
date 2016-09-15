@@ -101,19 +101,7 @@ fold_by_id(_Db, _Fun, _Acc, _Opts) ->
     {error, not_implemented}.
 
 changes_since(BarrelId, Since, Fun, Acc) ->
-    ChangesSince = <<"/_changes?feed=longpoll&since=">>,
-    SinceBin = integer_to_binary(Since),
-    Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
-    {200, Reply} = req(get, Url),
-    R = jsx:decode(Reply, [return_maps, {labels, atom}]),
-    Results = maps:get(results, R),
-    Folder = fun(DocInfo, A) ->
-                     Seq = maps:get(update_seq, DocInfo),
-                     Doc = {error, doc_not_fetched},
-                     {ok, FunResult} = Fun(Seq, DocInfo, Doc, A),
-                     FunResult
-             end,
-    lists:foldr(Folder, Acc, Results).
+    gen_server:call(?MODULE, {changes_since, BarrelId, Since, Fun, Acc}).
 
 revsdiff(_Db, _DocId, _RevIds) ->
     {error, not_implemented}.
@@ -133,11 +121,39 @@ stop() ->
 init(_) ->
     {ok, #st{}}.
 
+handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, State) ->
+    Buffer = State#st.buffer,
+    case Buffer of
+        [] ->
+            gen_server:cast(?MODULE, {longpoll, BarrelId, Since, Fun, Acc}),
+            {reply, [], State};
+        Available ->
+            {reply, Available, State#st{buffer=[]}}
+    end;
+
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
 
+
+handle_cast({longpoll, BarrelId, Since, Fun, Acc}, State) ->
+    ChangesSince = <<"/_changes?feed=longpoll&since=">>,
+    SinceBin = integer_to_binary(Since),
+    Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
+    {ok, Reply} = get_longpoll(Url),
+    R = jsx:decode(Reply, [return_maps, {labels, atom}]),
+    Results = maps:get(results, R),
+    Folder = fun(DocInfo, A) ->
+                     Seq = maps:get(update_seq, DocInfo),
+                     Doc = {error, doc_not_fetched},
+                     {ok, FunResult} = Fun(Seq, DocInfo, Doc, A),
+                     FunResult
+             end,
+    Buffer = lists:foldr(Folder, Acc, Results),
+    {noreply, State#st{buffer=Buffer}};
+
 handle_cast(shutdown, State) ->
     {stop, normal, State}.
+
 
 handle_info(_Info, State) -> {noreply, State}.
 
@@ -158,3 +174,28 @@ req(Method, Url, Body) ->
     {ok, Code, _Headers, Ref} = hackney:request(Method, Url, [], Body, []),
     {ok, Answer} = hackney:body(Ref),
     {Code, Answer}.
+
+get_longpoll(Url) ->
+    Opts = [async, once],
+    {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
+    loop_longpoll(ClientRef, []).
+
+loop_longpoll(Ref, Acc) ->
+    receive
+        {hackney_response, Ref, {status, StatusInt, _Reason}} ->
+            200 = StatusInt,
+            loop_longpoll(Ref, Acc);
+        {hackney_response, Ref, {headers, _Headers}} ->
+            loop_longpoll(Ref, Acc);
+        {hackney_response, Ref, done} ->
+            {ok, Acc};
+        {hackney_response, Ref, <<>>} ->
+            loop_longpoll(Ref, Acc);
+        {hackney_response, Ref, Bin} ->
+            loop_longpoll(Ref, Bin)
+
+        %% Else ->
+        %%     {error, {unexpected_answer, Else}}
+    after 2000 ->
+            {error, timeout}
+    end.

@@ -112,9 +112,6 @@ changes(DbId, Since) ->
                   {ok, {Seq, [DocInfo|DocInfos]}}
           end,
     barrel_db:changes_since(DbId, Since, Fun, {Since, []}).
-    %% {LastSeq, Changes} = barrel_db:changes_since(DbId, Since, Fun, {Since, []}),
-    %% {LastSeq, #{<<"last_seq">> => LastSeq,
-    %%             <<"results">> => Changes}}.
 
 to_json(LastSeq, Changes) ->
     Map = #{<<"last_seq">> => LastSeq,
