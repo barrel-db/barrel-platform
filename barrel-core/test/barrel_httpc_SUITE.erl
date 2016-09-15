@@ -23,8 +23,7 @@
 -export([info_database/1,
          create_doc/1,
          put_get_delete/1,
-         changes_since/1,
-         notify/1
+         changes_since/1
          %% changes_normal/1,
          %% changes_longpoll/1
         ]).
@@ -32,8 +31,7 @@
 all() -> [info_database,
           create_doc,
           put_get_delete,
-          changes_since,
-          notify
+          changes_since
           %% changes_normal,
           %% changes_longpoll
          ].
@@ -87,6 +85,9 @@ put_get_delete(_Config) ->
     true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
+    Key = barrel_httpc:gproc_key(),
+    ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+
     Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
     {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
     Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
@@ -103,9 +104,19 @@ changes_since(_Config) ->
     [] = barrel_httpc:changes_since(url(), 2, Fun, []),
     {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
     [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
+
+    ok = gen_event:delete_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+
+    {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
+    FunReceive = fun() ->
+                         receive
+                             Any -> Any
+                         after 2000 ->
+                                 {error, timeout}
+                         end
+                 end,
+    Expected = [db_updated_received || _ <- lists:seq(1,3) ],
+    Events = [FunReceive() || _ <- Expected ],
+    Expected = Events,
     ok.
 
-notify(_Config) ->
-    {ok, Pid} = barrel_httpc:start_link(),
-    stopped = barrel_httpc:stop(),
-    ok.

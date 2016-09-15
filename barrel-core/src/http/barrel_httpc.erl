@@ -15,6 +15,8 @@
 -module(barrel_httpc).
 -author("Bernard Notarianni").
 
+-behaviour(gen_server).
+
 -export([
          start/2,
          stop/1,
@@ -28,6 +30,8 @@
          changes_since/4,
          revsdiff/3
         ]).
+
+-export([gproc_key/0]).
 
 -export([start_link/0]).
 -export([stop/0]).
@@ -109,6 +113,10 @@ revsdiff(_Db, _DocId, _RevIds) ->
 %% ----------
 -record(st, {buffer=[]}).
 
+gproc_key() ->
+    DbName = <<"hello">>,
+     {n, l, {httpc_event, DbName}}.
+
 start_link() ->
     case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
         {ok, Pid} -> {ok, Pid};
@@ -119,7 +127,10 @@ stop() ->
     gen_server:call(?MODULE, stop).
 
 init(_) ->
+    Name = gproc_key(),
+    {ok, _} = gen_event:start_link({via, gproc, Name}),
     {ok, #st{}}.
+
 
 handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, State) ->
     Buffer = State#st.buffer,
@@ -149,6 +160,7 @@ handle_cast({longpoll, BarrelId, Since, Fun, Acc}, State) ->
                      FunResult
              end,
     Buffer = lists:foldr(Folder, Acc, Results),
+    notify(BarrelId, db_updated),
     {noreply, State#st{buffer=Buffer}};
 
 handle_cast(shutdown, State) ->
@@ -158,10 +170,18 @@ handle_cast(shutdown, State) ->
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
-terminate(_Reason, _State) ->  ok.
+terminate(_Reason, _State) ->
+    Name = gproc_key(),
+    ok = gen_event:stop({via, gproc, Name}),
+    ok.
+
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
+
+notify(_DbName, Event) ->
+    Key = gproc_key(),
+    gen_event:notify({via, gproc, Key}, Event).
 
 req(Method, Url) ->
     req(Method, Url, []).
@@ -193,9 +213,6 @@ loop_longpoll(Ref, Acc) ->
             loop_longpoll(Ref, Acc);
         {hackney_response, Ref, Bin} ->
             loop_longpoll(Ref, Bin)
-
-        %% Else ->
-        %%     {error, {unexpected_answer, Else}}
     after 2000 ->
             {error, timeout}
     end.
