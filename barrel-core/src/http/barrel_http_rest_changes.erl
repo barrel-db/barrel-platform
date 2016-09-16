@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_changes_handler).
+-module(barrel_http_rest_changes).
 
 -export([init/3]).
 -export([info/3]).
@@ -65,10 +65,10 @@ handle(<<"GET">>, Req, State) ->
     LastSeq = State#st.last_seq,
     Changes = State#st.changes,
     Json = to_json(LastSeq, Changes),
-    http_reply:json(Json, Req, State);
+    barrel_http_reply:json(Json, Req, State);
 
 handle(_, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
 
 
@@ -126,11 +126,11 @@ id() ->
 
 subscribe(DbName) ->
     Key = barrel_db_event:key(DbName),
-    ok = gen_event:add_handler({via, gproc, Key}, change_events_handler, self()),
+    ok = gen_event:add_handler({via, gproc, Key}, barrel_http_evt_handler, self()),
     ok.
 
 unsubscribe(DbName) ->
     Key = barrel_db_event:key(DbName),
-    ok = gen_event:delete_handler({via, gproc, Key}, change_events_handler, self()),
+    ok = gen_event:delete_handler({via, gproc, Key}, barrel_http_evt_handler, self()),
     ok.
 

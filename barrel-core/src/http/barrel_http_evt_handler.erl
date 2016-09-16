@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(change_events_handler).
+-module(barrel_http_evt_handler).
 
 -behaviour(gen_event).
 

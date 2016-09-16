@@ -38,10 +38,10 @@ stop() ->
     gen_server:call(?MODULE, stop).
 
 init(_) ->
-    Routes = [{"/[:dbid]", rest_db_handler, []},
-              {"/[:dbid]/_revs_diff", rest_revsdiff_handler, []},
-              {"/[:dbid]/_changes", rest_changes_handler, []},
-              {"/[:dbid]/[:docid]", rest_doc_handler, []}
+    Routes = [{"/[:dbid]", barrel_http_rest_db, []},
+              {"/[:dbid]/_revs_diff", barrel_http_rest_revsdiff, []},
+              {"/[:dbid]/_changes", barrel_http_rest_changes, []},
+              {"/[:dbid]/[:docid]", barrel_http_rest_doc, []}
              ],
 
     Dispatch = cowboy_router:compile([{'_', Routes}]),
