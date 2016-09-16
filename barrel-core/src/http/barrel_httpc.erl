@@ -31,7 +31,7 @@
          revsdiff/3
         ]).
 
--export([gproc_key/0]).
+-export([gproc_key/1]).
 
 -export([start_link/0]).
 -export([stop/0]).
@@ -43,8 +43,8 @@
 -export([code_change/3]).
 -export([handle_cast/2]).
 
-start(_Name, _Store) ->
-    {error, not_implemented}.
+start(Name, Store) ->
+    gen_server:call(?MODULE, {start, Name, Store}).
 
 stop(_Name) ->
     {error, not_implemented}.
@@ -111,10 +111,9 @@ revsdiff(_Db, _DocId, _RevIds) ->
     {error, not_implemented}.
 
 %% ----------
--record(st, {buffer=[]}).
+-record(st, {dbid, buffer=[]}).
 
-gproc_key() ->
-    DbName = <<"hello">>,
+gproc_key(DbName) ->
      {n, l, {httpc_event, DbName}}.
 
 start_link() ->
@@ -127,10 +126,12 @@ stop() ->
     gen_server:call(?MODULE, stop).
 
 init(_) ->
-    Name = gproc_key(),
-    {ok, _} = gen_event:start_link({via, gproc, Name}),
     {ok, #st{}}.
 
+handle_call({start, DbId, _}, _From, State) ->
+    Key = gproc_key(DbId),
+    {ok, _} = gen_event:start_link({via, gproc, Key}),
+    {reply, ok, State#st{dbid=DbId}};
 
 handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, State) ->
     Buffer = State#st.buffer,
@@ -170,17 +171,17 @@ handle_cast(shutdown, State) ->
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
-terminate(_Reason, _State) ->
-    Name = gproc_key(),
-    ok = gen_event:stop({via, gproc, Name}),
+terminate(_Reason, #st{dbid=DbId}) ->
+    Key = gproc_key(DbId),
+    ok = gen_event:stop({via, gproc, Key}),
     ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
 
-notify(_DbName, Event) ->
-    Key = gproc_key(),
+notify(DbName, Event) ->
+    Key = gproc_key(DbName),
     gen_event:notify({via, gproc, Key}, Event).
 
 req(Method, Url) ->

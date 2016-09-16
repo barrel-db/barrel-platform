@@ -43,6 +43,7 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
     {ok, _} = barrel_httpc:start_link(),
+    ok = barrel_httpc:start(url(), undefined),
     Config.
 
 end_per_testcase(_, Config) ->
@@ -85,7 +86,7 @@ put_get_delete(_Config) ->
     true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-    Key = barrel_httpc:gproc_key(),
+    Key = barrel_httpc:gproc_key(url()),
     ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
 
     Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
