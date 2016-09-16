@@ -19,7 +19,7 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--record(st, {dbname, changes, last_seq, mode}).
+-record(st, {dbname, changes, last_seq, mode, subscribed}).
 
 init(_Type, Req, []) ->
     {Feed, Req2} = cowboy_req:qs_val(<<"feed">>, Req, <<"normal">>),
@@ -42,7 +42,7 @@ init_feed(<<"longpoll">>, DbId, Since, Req) ->
     case Changes of
         [] ->
             ok = subscribe(DbId),
-            info(db_updated, Req, State);
+            info(db_updated, Req, State#st{subscribed=true});
         _ ->
             {ok, Req, State}
     end;
@@ -52,7 +52,7 @@ init_feed(<<"eventsource">>, DbId, Since, Req) ->
     Headers = [{<<"content-type">>, <<"text/event-stream">>}],
     {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
     State = #st{dbname=DbId, last_seq=Since, mode=eventsource},
-    info(db_updated, Req2, State).
+    info(db_updated, Req2, State#st{subscribed=true}).
 
 
 
@@ -93,7 +93,7 @@ info(db_updated, Req, State) ->
 
 
 
-terminate(_Reason, _Req, #st{dbname=DbId}) ->
+terminate(_Reason, _Req, #st{dbname=DbId, subscribed=true}) ->
     %% TODO improve closing of streamed changes
     %% by default, cowboy does not close connection
     %% this will never be called as we will receive
