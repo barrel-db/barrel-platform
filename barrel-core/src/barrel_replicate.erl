@@ -28,7 +28,7 @@
 -export([code_change/3]).
 -export([handle_cast/2]).
 
--record(st, {source, target, last_seq=0, gen_event}).
+-record(st, {source, target, last_seq=0}).
 
 start_link(Source, Target) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target}, []).
@@ -38,11 +38,10 @@ stop() ->
 
 init({Source, Target}) ->
     {ok, LastSeq} = replicate_change(Source, Target, 0),
-    {ok, GenEventPid} = subscribe(Source),
+    ok = subscribe(Source),
     State = #st{source=Source,
                 target=Target,
-                last_seq=LastSeq,
-                gen_event=GenEventPid},
+                last_seq=LastSeq},
     {ok, State}.
 
 
@@ -60,8 +59,8 @@ handle_info(db_updated, State) ->
     {noreply, State#st{last_seq=LastSeq}}.
 
 %% default gen_server callback
-terminate(_Reason, #st{gen_event=Pid}) ->
-    ok = unsubsribe(Pid),
+terminate(_Reason, #st{source=Source}) ->
+    ok = unsubsribe(Source),
     ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
@@ -93,19 +92,14 @@ changes(Source, Since) ->
                 <<"results">> => Changes}}.
 
 subscribe(DbName) ->
-    Key = key(DbName),
-    {ok, Pid} = gen_event:start_link({via, gproc, Key}),
-    ok = gen_event:add_handler({via, gproc, Key}, change_events_handler, self()),
-    {ok, Pid}.
-
-unsubsribe(Pid) ->
-    ok = gen_event:stop(Pid),
+    Key = barrel_db_event:key(DbName),
+    ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
     ok.
 
-key(DbName) ->
-    {n, l, {ev, DbName}}.
-
-
+unsubsribe(DbName) ->
+    Key = barrel_db_event:key(DbName),
+    ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
+    ok.
 
 history(Id, RevTree) ->
     history(Id, RevTree, []).

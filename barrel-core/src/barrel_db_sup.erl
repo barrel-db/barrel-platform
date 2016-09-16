@@ -73,7 +73,7 @@ init([Name, Store]) ->
 %%%===================================================================
 
 event_mgr(Name) ->
-  Key = {n, l, {event, Name}},
+  Key = barrel_db_event:key(Name),
   #{id    => {ev, Name},
     start => {gen_event, start_link, [{via, gproc, Key}]}}.
 

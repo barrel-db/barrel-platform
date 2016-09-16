@@ -1,4 +1,4 @@
-%% Copyright 2016, Benoit Chesneau
+%% Copyright 2016, Bernard Notarianni
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -12,16 +12,30 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_db_event).
--author("benoitc").
+-module(barrel_replicate_events).
 
-%% API
--export([key/1]).
--export([notify/2]).
+-behaviour(gen_event).
 
-key(DbName) ->
-    {n, l, {event, DbName}}.
+-export([init/1,
+         handle_event/2, handle_call/2, handle_info/2,
+         code_change/3, terminate/2]).
 
-notify(DbName, Event) ->
-  Key = key(DbName),
-  gen_event:notify({via, gproc, Key}, Event).
+init(ClientPid) ->
+    {ok, ClientPid}.
+
+handle_event(Event, ClientPid) ->
+    ClientPid ! Event,
+    {ok, ClientPid}.
+
+handle_call(_, State) ->
+    {ok, ok, State}.
+
+handle_info(_, State) ->
+    {ok, State}.
+
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+terminate(_Reason, _State) ->
+    ok.

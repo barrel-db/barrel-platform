@@ -25,14 +25,16 @@
          delete_require_rev_parameter/1,
          revsdiff/1,
          changes_normal/1,
-         changes_longpoll/1]).
+         changes_longpoll/1,
+         changes_eventsource/1]).
 
 all() -> [info_database,
           put_get_delete,
           delete_require_rev_parameter,
           revsdiff,
           changes_normal,
-          changes_longpoll].
+          changes_longpoll,
+          changes_eventsource].
 
 init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(barrel),
@@ -110,7 +112,7 @@ revsdiff(_Config) ->
     ok.
 
 
-%% ----------
+%%=======================================================================
 
 changes_normal(_Config) ->
     put_cat(),
@@ -129,10 +131,47 @@ changes_normal(_Config) ->
     1 = length(Results2),
     ok.
 
+%%=======================================================================
+
 changes_longpoll(_Config) ->
+    Url = <<"http://localhost:8080/testdb/_changes?feed=longpoll">>,
+    Opts = [async, once],
+    {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
+    CatRevId = put_cat(),
+    delete_cat(CatRevId),
+    LoopFun = fun(Loop, Ref) ->
+                      receive
+                          {hackney_response, Ref, {status, StatusInt, _Reason}} ->
+                              200 = StatusInt,
+                              Loop(Loop, Ref);
+                          {hackney_response, Ref, {headers, _Headers}} ->
+                              Loop(Loop, Ref);
+                          {hackney_response, Ref, done} ->
+                              ok;
+                          {hackney_response, Ref, <<>>} ->
+                              Loop(Loop, Ref);
+                          {hackney_response, Ref, Bin} ->
+                              R = jsx:decode(Bin,[return_maps]),
+                              Results = maps:get(<<"results">>, R),
+                              [_OnlyOneChange] = Results,
+                              Loop(Loop, Ref);
+
+                          _Else ->
+                              ok
+                      after 2000 ->
+                              {error, timeout}
+                      end
+              end,
+    ok = LoopFun(LoopFun, ClientRef),
+    {ok, ClientRef2} = hackney:get(Url, [], <<>>, Opts),
+    ok=  LoopFun(LoopFun, ClientRef2).
+
+%%=======================================================================
+
+changes_eventsource(_Config) ->
     Self = self(),
     Pid = spawn(fun () -> wait_response([], 4, Self) end),
-    Url = <<"http://localhost:8080/testdb/_changes?feed=longpoll">>,
+    Url = <<"http://localhost:8080/testdb/_changes?feed=eventsource">>,
     Opts = [async, {stream_to, Pid}],
     {ok, Ref} = hackney:get(Url, [], <<>>, Opts),
     CatRevId = put_cat(),
@@ -143,7 +182,7 @@ changes_longpoll(_Config) ->
         {Msgs, received_as_expected} ->
             [[200, <<"OK">>], _Headers, _CatPut, _CatDelete] = Msgs
     after 2000 ->
-            ct:fail(changes_test_timeout)
+            ct:fail(eventsource_timeout)
     end.
 
 wait_response(Msgs, 0, Parent) ->
@@ -164,7 +203,7 @@ wait_response(Msgs, Expected, Parent) ->
             ok
     end.
 
-%% ----------
+%%=======================================================================
 
 req(Method, Route) ->
     req(Method,Route,[]).

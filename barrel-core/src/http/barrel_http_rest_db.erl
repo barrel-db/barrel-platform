@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_db_handler).
+-module(barrel_http_rest_db).
 
 -export([init/3]).
 -export([handle/2]).
@@ -30,16 +30,16 @@ handle(<<"GET">>, DbId, Req, State) ->
     All = barrel:all_databases(),
     case lists:member(DbId, All) of
         false ->
-            http_reply:code(404, Req, State);
+            barrel_http_reply:code(404, Req, State);
         true ->
             db_info(DbId, Req, State)
     end;
 
 handle(<<"POST">>, DbId, Req, State) ->
-    rest_doc_handler:post_put(post, DbId, undefined, Req, State);
+    barrel_http_rest_doc:post_put(post, DbId, undefined, Req, State);
 
 handle(_, _, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
     ok.
@@ -52,4 +52,4 @@ db_info(DbId, Req, State) ->
     DbInfo = [{<<"id">>, Id},
               {<<"name">>, Name},
               {<<"store">>, Store}],
-    http_reply:doc(DbInfo, Req, State).
+    barrel_http_reply:doc(DbInfo, Req, State).

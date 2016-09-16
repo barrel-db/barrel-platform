@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_revsdiff_handler).
+-module(barrel_http_rest_revsdiff).
 
 -export([init/3]).
 -export([handle/2]).
@@ -37,11 +37,11 @@ handle(<<"POST">>, DbId, Req, State) ->
                                                         <<"possible_ancestors">> => Possible}}
                                end
                        end,#{}, RequestedDocs),
-    http_reply:doc(Result, Req2, State);
+    barrel_http_reply:doc(Result, Req2, State);
 
 
 handle(_, _, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
     ok.

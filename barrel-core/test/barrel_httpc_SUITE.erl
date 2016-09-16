@@ -23,8 +23,7 @@
 -export([info_database/1,
          create_doc/1,
          put_get_delete/1,
-         delete_require_rev_parameter/1,
-         revsdiff/1
+         changes_since/1
          %% changes_normal/1,
          %% changes_longpoll/1
         ]).
@@ -32,8 +31,7 @@
 all() -> [info_database,
           create_doc,
           put_get_delete,
-          delete_require_rev_parameter,
-          revsdiff
+          changes_since
           %% changes_normal,
           %% changes_longpoll
          ].
@@ -44,9 +42,12 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+    {ok, _} = barrel_httpc:start_link(),
+    ok = barrel_httpc:start(url(), undefined),
     Config.
 
 end_per_testcase(_, Config) ->
+    stopped = barrel_httpc:stop(),
     ok = barrel_db:clean(<<"testdb">>),
     Config.
 
@@ -84,58 +85,39 @@ put_get_delete(_Config) ->
     {ok, DeletedDoc} = barrel_httpc:get(url(), <<"a">>, []),
     true = maps:get(<<"_deleted">>, DeletedDoc).
 
-delete_require_rev_parameter(_Config)->
-    put_cat(),
-    {400, _} = req(delete, "/testdb/cat?badparametername=42"),
+changes_since(_Config) ->
+    Key = barrel_httpc:gproc_key(url()),
+    ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+
+    Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+    {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
+    Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+    {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
+    Fun = fun(Seq, DocInfo, D, Acc) ->
+                  {error, doc_not_fetched} = D,
+                  Id = maps:get(id, DocInfo),
+                  {ok, [{Seq, Id}|Acc]}
+          end,
+    [] = barrel_httpc:changes_since(url(), 0, Fun, []),
+    [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
+    [] = barrel_httpc:changes_since(url(), 1, Fun, []),
+    [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
+    [] = barrel_httpc:changes_since(url(), 2, Fun, []),
+    {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
+    [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
+
+    ok = gen_event:delete_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+
+    {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
+    FunReceive = fun() ->
+                         receive
+                             Any -> Any
+                         after 2000 ->
+                                 {error, timeout}
+                         end
+                 end,
+    Expected = [db_updated_received || _ <- lists:seq(1,3) ],
+    Events = [FunReceive() || _ <- Expected ],
+    Expected = Events,
     ok.
 
-put_cat() ->
-    Doc = "{\"name\" : \"tom\"}",
-    {200, R} = req(put, "/testdb/cat", Doc),
-    J = jsx:decode(R, [return_maps]),
-    binary_to_list(maps:get(<<"rev">>, J)).
-
-
-delete_cat(CatRevId) ->
-    {200, R3} = req(delete, "/testdb/cat?rev=" ++ CatRevId),
-    A3 = jsx:decode(R3, [return_maps]),
-    true = maps:get(<<"ok">>, A3),
-    A3.
-
-put_dog() ->
-    Doc = "{\"name\" : \"spike\"}",
-    {200, R} = req(put, "/testdb/dog", Doc),
-    J = jsx:decode(R, [return_maps]),
-    binary_to_list(maps:get(<<"rev">>, J)).
-
-
-revsdiff(_Config) ->
-    CatRevId = put_cat(),
-    Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-    {200, R} = req(post, "/testdb/_revs_diff", Request),
-    A = jsx:decode(R, [return_maps]),
-    CatDiffs = maps:get(<<"cat">>, A),
-    Missing = maps:get(<<"missing">>, CatDiffs),
-    true = lists:member(<<"2-missing">>, Missing),
-    ok.
-
-
-%% ----------
-
-req(Method, Route) ->
-    req(Method,Route,[]).
-
-req(Method, Route, Map) when is_map(Map) ->
-    Body = jsx:encode(Map),
-    req(Method, Route, Body);
-
-req(Method, Route, String) when is_list(String) ->
-    Body = list_to_binary(String),
-    req(Method, Route, Body);
-
-req(Method, Route, Body) when is_binary(Body) ->
-    Server = "http://localhost:8080",
-    Path = list_to_binary(Server ++ Route),
-    {ok, Code, _Headers, Ref} = hackney:request(Method, Path, [], Body, []),
-    {ok, Answer} = hackney:body(Ref),
-    {Code, Answer}.

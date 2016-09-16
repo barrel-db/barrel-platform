@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(http_reply).
+-module(barrel_http_reply).
 
 -export([doc/3]).
 -export([json/3]).

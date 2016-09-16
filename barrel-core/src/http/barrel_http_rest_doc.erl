@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_doc_handler).
+-module(barrel_http_rest_doc).
 
 -export([init/3]).
 -export([handle/2]).
@@ -34,8 +34,8 @@ handle(Req, State) ->
 
 handle(<<"GET">>, DbId, DocIdAsBin, Req, State) ->
     case barrel_db:get(DbId, DocIdAsBin, []) of
-        {error, not_found} -> http_reply:code(404, Req, State);
-        {ok, Doc} -> http_reply:doc(Doc, Req, State)
+        {error, not_found} -> barrel_http_reply:code(404, Req, State);
+        {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
     end;
 
 handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
@@ -44,14 +44,14 @@ handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
 handle(<<"DELETE">>, DbId, DocId, Req, State) ->
     case cowboy_req:qs_val(<<"rev">>, Req) of
         {undefined, Req2} ->
-            http_reply:code(400, Req2, State);
+            barrel_http_reply:code(400, Req2, State);
         {RevId, Req2} ->
             delete(DbId, DocId, RevId, Req2, State)
     end;
 
 
 handle(_, _, _, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
 %% ---------
 
@@ -65,14 +65,14 @@ post_put(Method, DbId, DocIdAsBin, Req, State) ->
         end,
     case R of
         {error, not_found} ->
-            http_reply:code(404, Req2, State);
+            barrel_http_reply:code(404, Req2, State);
         {error, {conflict, doc_exists}} ->
-            http_reply:code(409, Req2, State);
+            barrel_http_reply:code(409, Req2, State);
         {ok, DocId, RevId} ->
             Reply = #{<<"ok">> => true,
                       <<"id">> => DocId,
                       <<"rev">> => RevId},
-            http_reply:doc(Reply, Req2, State)
+            barrel_http_reply:doc(Reply, Req2, State)
     end.
 
 delete(DbId, DocId, RevId, Req, State) ->
@@ -80,5 +80,5 @@ delete(DbId, DocId, RevId, Req, State) ->
     Reply = #{<<"ok">> => true,
               <<"id">> => DocId,
               <<"rev">> => RevId2},
-    http_reply:doc(Reply, Req, State).
+    barrel_http_reply:doc(Reply, Req, State).
 
