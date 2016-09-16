@@ -184,14 +184,15 @@ fold_by_id(_Config) ->
   [<<"b">>] = Acc2.
 
 change_since(_Config) ->
+  Fun = fun(_Seq, DocInfo, _Doc, Acc) ->
+                  Id = maps:get(id, DocInfo),
+                  {ok, [Id|Acc]}
+        end,
+  [] = barrel_db:changes_since(<<"testdb">>, 0, Fun, []),
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_db:put(<<"testdb">>, <<"aa">>, Doc, []),
   Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"bb">>, Doc2, []),
-  Fun = fun(_Seq, DocInfo, _Doc, Acc) ->
-    Id = maps:get(id, DocInfo),
-    {ok, [Id|Acc]}
-        end,
   [<<"bb">>, <<"aa">>] = barrel_db:changes_since(<<"testdb">>, 0, Fun, []),
   [<<"bb">>] = barrel_db:changes_since(<<"testdb">>, 1, Fun, []),
   [] = barrel_db:changes_since(<<"testdb">>, 2, Fun, []),

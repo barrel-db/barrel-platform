@@ -12,11 +12,13 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_doc_handler).
+-module(barrel_http_rest_doc).
 
 -export([init/3]).
 -export([handle/2]).
 -export([terminate/3]).
+-export([post_put/5]).
+
 
 init(_Type, Req, []) ->
     {ok, Req, undefined}.
@@ -32,42 +34,51 @@ handle(Req, State) ->
 
 handle(<<"GET">>, DbId, DocIdAsBin, Req, State) ->
     case barrel_db:get(DbId, DocIdAsBin, []) of
-        {error, not_found} -> http_reply:code(404, Req, State);
-        {ok, Doc} -> http_reply:doc(Doc, Req, State)
+        {error, not_found} -> barrel_http_reply:code(404, Req, State);
+        {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
     end;
 
 handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
-    {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-    Json = jsx:decode(Body),
-    Doc = maps:from_list(Json),
-    case barrel_db:put(DbId, DocIdAsBin, Doc, []) of
-        {error, {conflict, doc_exists}} ->
-            http_reply:code(409, Req2, State);
-        {ok, _DocIdAsBin, RevId} ->
-            Reply = #{<<"ok">> => true,
-                      <<"id">> => DocIdAsBin,
-                      <<"rev">> => RevId},
-            http_reply:doc(Reply, Req2, State)
-    end;
+    post_put(put, DbId, DocIdAsBin, Req, State);
 
 handle(<<"DELETE">>, DbId, DocId, Req, State) ->
     case cowboy_req:qs_val(<<"rev">>, Req) of
         {undefined, Req2} ->
-            http_reply:code(400, Req2, State);
+            barrel_http_reply:code(400, Req2, State);
         {RevId, Req2} ->
             delete(DbId, DocId, RevId, Req2, State)
     end;
 
 
 handle(_, _, _, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
+%% ---------
 
+post_put(Method, DbId, DocIdAsBin, Req, State) ->
+    {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
+    Json = jsx:decode(Body),
+    Doc = maps:from_list(Json),
+    R = case Method of
+            post -> barrel_db:post(DbId, Doc, []);
+            put ->barrel_db:put(DbId, DocIdAsBin, Doc, [])
+        end,
+    case R of
+        {error, not_found} ->
+            barrel_http_reply:code(404, Req2, State);
+        {error, {conflict, doc_exists}} ->
+            barrel_http_reply:code(409, Req2, State);
+        {ok, DocId, RevId} ->
+            Reply = #{<<"ok">> => true,
+                      <<"id">> => DocId,
+                      <<"rev">> => RevId},
+            barrel_http_reply:doc(Reply, Req2, State)
+    end.
 
 delete(DbId, DocId, RevId, Req, State) ->
     {ok, DocId, RevId2} = barrel_db:delete(DbId, DocId, RevId, []),
     Reply = #{<<"ok">> => true,
               <<"id">> => DocId,
               <<"rev">> => RevId2},
-    http_reply:doc(Reply, Req, State).
+    barrel_http_reply:doc(Reply, Req, State).
 

@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(rest_revsdiff_handler).
+-module(barrel_http_rest_db).
 
 -export([init/3]).
 -export([handle/2]).
@@ -26,22 +26,30 @@ handle(Req, State) ->
     {DbId, Req3} = cowboy_req:binding(dbid, Req2),
     handle(Method, DbId, Req3, State).
 
-handle(<<"POST">>, DbId, Req, State) ->
-    {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-    RequestedDocs = jsx:decode(Body, [return_maps]),
-    Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                               {ok, Missing, Possible} = barrel_db:revsdiff(DbId, DocId, RevIds),
-                               case Possible of
-                                   [] -> Acc#{DocId => #{<<"missing">> => Missing}};
-                                   _ -> Acc#{DocId => #{<<"missing">> => Missing,
-                                                        <<"possible_ancestors">> => Possible}}
-                               end
-                       end,#{}, RequestedDocs),
-    http_reply:doc(Result, Req2, State);
+handle(<<"GET">>, DbId, Req, State) ->
+    All = barrel:all_databases(),
+    case lists:member(DbId, All) of
+        false ->
+            barrel_http_reply:code(404, Req, State);
+        true ->
+            db_info(DbId, Req, State)
+    end;
 
+handle(<<"POST">>, DbId, Req, State) ->
+    barrel_http_rest_doc:post_put(post, DbId, undefined, Req, State);
 
 handle(_, _, Req, State) ->
-    http_reply:code(405, Req, State).
+    barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
     ok.
+
+%% ----------
+
+db_info(DbId, Req, State) ->
+    {ok, Infos} = barrel_db:infos(DbId),
+    [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
+    DbInfo = [{<<"id">>, Id},
+              {<<"name">>, Name},
+              {<<"store">>, Store}],
+    barrel_http_reply:doc(DbInfo, Req, State).

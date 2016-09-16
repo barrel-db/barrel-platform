@@ -16,8 +16,12 @@
 -author("benoitc").
 
 %% API
+-export([key/1]).
 -export([notify/2]).
 
+key(DbName) ->
+    {n, l, {event, DbName}}.
+
 notify(DbName, Event) ->
-  Key = {n, l, {ev, DbName}},
+  Key = key(DbName),
   gen_event:notify({via, gproc, Key}, Event).
