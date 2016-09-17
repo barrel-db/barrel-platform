@@ -19,14 +19,14 @@
 -export([code/3]).
 
 doc(Doc, Req, State ) ->
-    Json = jsx:encode(Doc),
-    json(Json, Req, State).
+  Json = jsx:encode(Doc),
+  json(Json, Req, State).
 
 json(Json, Req, State) ->
-    {ok, Req2} = cowboy_req:reply(200, [{<<"content-type">>, <<"application/json">>}],
-                                  Json, Req),
-    {ok, Req2, State}.
+  {ok, Req2} = cowboy_req:reply(200, [{<<"content-type">>, <<"application/json">>}],
+                                Json, Req),
+  {ok, Req2, State}.
 
 code(HttpCode, Req, State ) ->
-    {ok, Req2} = cowboy_req:reply(HttpCode, [], [], Req),
-    {ok, Req2, State}.
+  {ok, Req2} = cowboy_req:reply(HttpCode, [], [], Req),
+  {ok, Req2, State}.

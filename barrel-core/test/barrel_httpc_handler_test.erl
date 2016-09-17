@@ -5,23 +5,23 @@
          terminate/2]).
 
 init(Args) ->
-    {ok, Args}.
+  {ok, Args}.
 
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
 
 terminate(_Args, _State) ->
-    ok.
+  ok.
 
 handle_event(db_updated, Pid) ->
-    Pid ! db_updated_received,
-    {ok, Pid};
+  Pid ! db_updated_received,
+  {ok, Pid};
 
 handle_event(_, State) ->
-    {ok, State}.
+  {ok, State}.
 
 handle_call(_, State) ->
-    {ok, ok, State}.
+  {ok, ok, State}.
 
 handle_info(_, State) ->
-    {ok, State}.
+  {ok, State}.

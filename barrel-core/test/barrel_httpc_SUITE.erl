@@ -37,87 +37,87 @@ all() -> [info_database,
          ].
 
 init_per_suite(Config) ->
-    {ok, _} = application:ensure_all_started(barrel),
-    Config.
+  {ok, _} = application:ensure_all_started(barrel),
+  Config.
 
 init_per_testcase(_, Config) ->
-    ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-    {ok, _} = barrel_httpc:start_link(),
-    ok = barrel_httpc:start(url(), undefined),
-    Config.
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  {ok, _} = barrel_httpc:start_link(),
+  ok = barrel_httpc:start(url(), undefined),
+  Config.
 
 end_per_testcase(_, Config) ->
-    stopped = barrel_httpc:stop(),
-    ok = barrel_db:clean(<<"testdb">>),
-    Config.
+  stopped = barrel_httpc:stop(),
+  ok = barrel_db:clean(<<"testdb">>),
+  Config.
 
 end_per_suite(Config) ->
-    catch erocksdb:destroy(<<"testdb">>),
-    Config.
+  catch erocksdb:destroy(<<"testdb">>),
+  Config.
 
 %% ----------
 
 url() ->
-    <<"http://localhost:8080/testdb">>.
+  <<"http://localhost:8080/testdb">>.
 
 info_database(_Config) ->
-    {ok, Info} = barrel_httpc:infos(url()),
-    <<"testdb">> = maps:get(<<"name">>, Info),
-    ok.
+  {ok, Info} = barrel_httpc:infos(url()),
+  <<"testdb">> = maps:get(<<"name">>, Info),
+  ok.
 
 create_doc(_Config) ->
-    Doc = #{<<"v">> => 1},
-    {ok, DocId, RevId} =  barrel_httpc:post(url(), Doc, []),
-    CreatedDoc = Doc#{ <<"_id">> => DocId, <<"_rev">> => RevId},
-    {ok, CreatedDoc} = barrel_httpc:get(url(), DocId, []),
-    {error, not_found} =  barrel_httpc:post(url(), CreatedDoc, []),
-    Doc2 = #{<<"_id">> => <<"b">>, <<"v">> => 1},
-    {ok, <<"b">>, _RevId2} =  barrel_httpc:post(url(), Doc2, []).
+  Doc = #{<<"v">> => 1},
+  {ok, DocId, RevId} =  barrel_httpc:post(url(), Doc, []),
+  CreatedDoc = Doc#{ <<"_id">> => DocId, <<"_rev">> => RevId},
+  {ok, CreatedDoc} = barrel_httpc:get(url(), DocId, []),
+  {error, not_found} =  barrel_httpc:post(url(), CreatedDoc, []),
+  Doc2 = #{<<"_id">> => <<"b">>, <<"v">> => 1},
+  {ok, <<"b">>, _RevId2} =  barrel_httpc:post(url(), Doc2, []).
 
 
 put_get_delete(_Config) ->
-    {error, not_found} = barrel_httpc:get(url(), <<"a">>, []),
-    Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-    {ok, <<"a">>, RevId} = barrel_httpc:put(url(), <<"a">>, Doc, []),
-    Doc2 = Doc#{<<"_rev">> => RevId},
-    {ok, Doc2} = barrel_httpc:get(url(), <<"a">>, []),
-    {ok, <<"a">>, _RevId2} = barrel_httpc:delete(url(), <<"a">>, RevId, []),
-    {ok, DeletedDoc} = barrel_httpc:get(url(), <<"a">>, []),
-    true = maps:get(<<"_deleted">>, DeletedDoc).
+  {error, not_found} = barrel_httpc:get(url(), <<"a">>, []),
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_httpc:put(url(), <<"a">>, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId},
+  {ok, Doc2} = barrel_httpc:get(url(), <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel_httpc:delete(url(), <<"a">>, RevId, []),
+  {ok, DeletedDoc} = barrel_httpc:get(url(), <<"a">>, []),
+  true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-    Key = barrel_httpc:gproc_key(url()),
-    ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+  Key = barrel_httpc:gproc_key(url()),
+  ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
 
-    Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
-    {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
-    Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
-    {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
-    Fun = fun(Seq, DocInfo, D, Acc) ->
-                  {error, doc_not_fetched} = D,
-                  Id = maps:get(id, DocInfo),
-                  {ok, [{Seq, Id}|Acc]}
-          end,
-    [] = barrel_httpc:changes_since(url(), 0, Fun, []),
-    [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
-    [] = barrel_httpc:changes_since(url(), 1, Fun, []),
-    [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
-    [] = barrel_httpc:changes_since(url(), 2, Fun, []),
-    {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
-    [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
+  Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
+  Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+  {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
+  Fun = fun(Seq, DocInfo, D, Acc) ->
+            {error, doc_not_fetched} = D,
+            Id = maps:get(id, DocInfo),
+            {ok, [{Seq, Id}|Acc]}
+        end,
+  [] = barrel_httpc:changes_since(url(), 0, Fun, []),
+  [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
+  [] = barrel_httpc:changes_since(url(), 1, Fun, []),
+  [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
+  [] = barrel_httpc:changes_since(url(), 2, Fun, []),
+  {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
+  [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
 
-    ok = gen_event:delete_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+  ok = gen_event:delete_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
 
-    {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
-    FunReceive = fun() ->
-                         receive
-                             Any -> Any
-                         after 2000 ->
-                                 {error, timeout}
-                         end
-                 end,
-    Expected = [db_updated_received || _ <- lists:seq(1,3) ],
-    Events = [FunReceive() || _ <- Expected ],
-    Expected = Events,
-    ok.
+  {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
+  FunReceive = fun() ->
+                   receive
+                     Any -> Any
+                   after 2000 ->
+                       {error, timeout}
+                   end
+               end,
+  Expected = [db_updated_received || _ <- lists:seq(1,3) ],
+  Events = [FunReceive() || _ <- Expected ],
+  Expected = Events,
+  ok.
 

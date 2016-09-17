@@ -31,61 +31,61 @@
         ]).
 
 all() ->
-    [
-     replicate,
-     replicate_non_empty,
-     replicate_delete
-    ].
+  [
+   replicate,
+   replicate_non_empty,
+   replicate_delete
+  ].
 
 init_per_suite(Config) ->
-    {ok, _} = application:ensure_all_started(barrel),
-    Config.
+  {ok, _} = application:ensure_all_started(barrel),
+  Config.
 
 init_per_testcase(_, Config) ->
-    ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-    ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
-    Config.
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
+  Config.
 
 end_per_testcase(_, _Config) ->
-    ok = barrel_db:clean(<<"testdb">>),
-    ok = barrel_db:clean(<<"source">>),
-    ok.
+  ok = barrel_db:clean(<<"testdb">>),
+  ok = barrel_db:clean(<<"source">>),
+  ok.
 
 end_per_suite(Config) ->
-    %ok = erocksdb:destroy("testdb", []),
-    %ok = erocksdb:destroy("source", []),
-    Config.
+  %% ok = erocksdb:destroy("testdb", []),
+  %% ok = erocksdb:destroy("source", []),
+  Config.
 
 replicate(_Config) ->
-    {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
-    Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-    {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
-    Doc2 = Doc#{<<"_rev">> => RevId},
-    timer:sleep(200),
-    {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-    stopped = barrel_replicate:stop(),
-    ok.
+  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId},
+  timer:sleep(200),
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  stopped = barrel_replicate:stop(),
+  ok.
 
 replicate_non_empty(_Config) ->
-    Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-    {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
-    Doc2 = Doc#{<<"_rev">> => RevId},
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId},
 
-    {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
-    timer:sleep(200),
+  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  timer:sleep(200),
 
-    {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-    stopped = barrel_replicate:stop(),
-    ok.
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  stopped = barrel_replicate:stop(),
+  ok.
 
 replicate_delete(_Config) ->
-    Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-    {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
 
-    {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
-    barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
-    timer:sleep(200),
-    {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-    true = maps:get(<<"_deleted">>, Doc3),
-    stopped = barrel_replicate:stop(),
-    ok.
+  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
+  timer:sleep(200),
+  {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  true = maps:get(<<"_deleted">>, Doc3),
+  stopped = barrel_replicate:stop(),
+  ok.

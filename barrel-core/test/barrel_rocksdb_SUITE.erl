@@ -201,9 +201,9 @@ change_since(_Config) ->
   ok.
 
 revdiff(_Config) ->
-    Doc = #{ <<"_id">> => <<"revdiff">>, <<"v">> => 1},
-    {ok, <<"revdiff">>, RevId} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc, []),
-    Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
-    {ok, <<"revdiff">>, _RevId3} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc2, []),
-    {ok, [<<"1-missing">>], []} = barrel_db: revsdiff(<<"testdb">>, <<"revdiff">>, [<<"1-missing">>]),
-    ok.
+  Doc = #{ <<"_id">> => <<"revdiff">>, <<"v">> => 1},
+  {ok, <<"revdiff">>, RevId} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
+  {ok, <<"revdiff">>, _RevId3} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc2, []),
+  {ok, [<<"1-missing">>], []} = barrel_db: revsdiff(<<"testdb">>, <<"revdiff">>, [<<"1-missing">>]),
+  ok.

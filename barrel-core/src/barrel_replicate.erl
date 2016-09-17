@@ -31,37 +31,37 @@
 -record(st, {source, target, last_seq=0}).
 
 start_link(Source, Target) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target}, []).
+  gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target}, []).
 
 stop() ->
-    gen_server:call(?MODULE, stop).
+  gen_server:call(?MODULE, stop).
 
 init({Source, Target}) ->
-    {ok, LastSeq} = replicate_change(Source, Target, 0),
-    ok = subscribe(Source),
-    State = #st{source=Source,
-                target=Target,
-                last_seq=LastSeq},
-    {ok, State}.
+  {ok, LastSeq} = replicate_change(Source, Target, 0),
+  ok = subscribe(Source),
+  State = #st{source=Source,
+              target=Target,
+              last_seq=LastSeq},
+  {ok, State}.
 
 
 handle_call(stop, _From, State) ->
-    {stop, normal, stopped, State}.
+  {stop, normal, stopped, State}.
 
 handle_cast(shutdown, State) ->
-    {stop, normal, State}.
+  {stop, normal, State}.
 
 handle_info(db_updated, State) ->
-    Source = State#st.source,
-    Target = State#st.target,
-    Since = State#st.last_seq,
-    {ok, LastSeq} = replicate_change(Source, Target, Since),
-    {noreply, State#st{last_seq=LastSeq}}.
+  Source = State#st.source,
+  Target = State#st.target,
+  Since = State#st.last_seq,
+  {ok, LastSeq} = replicate_change(Source, Target, Since),
+  {noreply, State#st{last_seq=LastSeq}}.
 
 %% default gen_server callback
 terminate(_Reason, #st{source=Source}) ->
-    ok = unsubsribe(Source),
-    ok.
+  ok = unsubsribe(Source),
+  ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
@@ -69,43 +69,43 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%---------------------------------------------------
 
 replicate_change(Source, Target, Since) ->
-    {LastSeq, Changes} = changes(Source, Since),
-    Results = maps:get(<<"results">>, Changes) ,
-    [ sync_change (Source, Target, C) || C <- Results ],
-    {ok, LastSeq}.
+  {LastSeq, Changes} = changes(Source, Since),
+  Results = maps:get(<<"results">>, Changes) ,
+  [ sync_change (Source, Target, C) || C <- Results ],
+  {ok, LastSeq}.
 
 sync_change(Source, Target, Change) ->
-    Id = maps:get(id, Change),
-    RevTree = maps:get(revtree, Change),
-    CurrentRev = maps:get(current_rev, Change),
-    History = history(CurrentRev, RevTree),
-    {ok, Doc} = barrel_db:get(Source, Id, []),
-    {ok, _, _} = barrel_db:put_rev(Target, Id, Doc, History, []),
-    ok.
+  Id = maps:get(id, Change),
+  RevTree = maps:get(revtree, Change),
+  CurrentRev = maps:get(current_rev, Change),
+  History = history(CurrentRev, RevTree),
+  {ok, Doc} = barrel_db:get(Source, Id, []),
+  {ok, _, _} = barrel_db:put_rev(Target, Id, Doc, History, []),
+  ok.
 
 changes(Source, Since) ->
-    Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
-                  {ok, {Seq, [DocInfo|DocInfos]}}
-          end,
-    {LastSeq, Changes} = barrel_db:changes_since(Source, Since, Fun, {Since, []}),
-    {LastSeq, #{<<"last_seq">> => LastSeq,
-                <<"results">> => Changes}}.
+  Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
+            {ok, {Seq, [DocInfo|DocInfos]}}
+        end,
+  {LastSeq, Changes} = barrel_db:changes_since(Source, Since, Fun, {Since, []}),
+  {LastSeq, #{<<"last_seq">> => LastSeq,
+              <<"results">> => Changes}}.
 
 subscribe(DbName) ->
-    Key = barrel_db_event:key(DbName),
-    ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
-    ok.
+  Key = barrel_db_event:key(DbName),
+  ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
+  ok.
 
 unsubsribe(DbName) ->
-    Key = barrel_db_event:key(DbName),
-    ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
-    ok.
+  Key = barrel_db_event:key(DbName),
+  ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
+  ok.
 
 history(Id, RevTree) ->
-    history(Id, RevTree, []).
+  history(Id, RevTree, []).
 history(<<>>, _RevTree, History) ->
-    lists:reverse(History);
+  lists:reverse(History);
 history(Rev, RevTree, History) ->
-    DocInfo = maps:get(Rev, RevTree),
-    Parent = maps:get(parent, DocInfo),
-    history(Parent, RevTree, [Rev|History]).
+  DocInfo = maps:get(Rev, RevTree),
+  Parent = maps:get(parent, DocInfo),
+  history(Parent, RevTree, [Rev|History]).

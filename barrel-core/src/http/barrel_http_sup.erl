@@ -34,14 +34,14 @@
 %%====================================================================
 
 start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 init(_Args) ->
-    SupFlags = #{strategy => one_for_one, intensity => 5, period => 10},
-    ChildSpecs = [#{id => barrel_http,
-                    start => {barrel_http, start_link, []}}],
-    {ok, {SupFlags, ChildSpecs}}.
+  SupFlags = #{strategy => one_for_one, intensity => 5, period => 10},
+  ChildSpecs = [#{id => barrel_http,
+                  start => {barrel_http, start_link, []}}],
+  {ok, {SupFlags, ChildSpecs}}.
 

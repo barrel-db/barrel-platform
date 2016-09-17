@@ -19,37 +19,37 @@
 -export([terminate/3]).
 
 init(_Type, Req, []) ->
-    {ok, Req, undefined}.
+  {ok, Req, undefined}.
 
 handle(Req, State) ->
-    {Method, Req2} = cowboy_req:method(Req),
-    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-    handle(Method, DbId, Req3, State).
+  {Method, Req2} = cowboy_req:method(Req),
+  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+  handle(Method, DbId, Req3, State).
 
 handle(<<"GET">>, DbId, Req, State) ->
-    All = barrel:all_databases(),
-    case lists:member(DbId, All) of
-        false ->
-            barrel_http_reply:code(404, Req, State);
-        true ->
-            db_info(DbId, Req, State)
-    end;
+  All = barrel:all_databases(),
+  case lists:member(DbId, All) of
+    false ->
+      barrel_http_reply:code(404, Req, State);
+    true ->
+      db_info(DbId, Req, State)
+  end;
 
 handle(<<"POST">>, DbId, Req, State) ->
-    barrel_http_rest_doc:post_put(post, DbId, undefined, Req, State);
+  barrel_http_rest_doc:post_put(post, DbId, undefined, Req, State);
 
 handle(_, _, Req, State) ->
-    barrel_http_reply:code(405, Req, State).
+  barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
-    ok.
+  ok.
 
 %% ----------
 
 db_info(DbId, Req, State) ->
-    {ok, Infos} = barrel_db:infos(DbId),
-    [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
-    DbInfo = [{<<"id">>, Id},
-              {<<"name">>, Name},
-              {<<"store">>, Store}],
-    barrel_http_reply:doc(DbInfo, Req, State).
+  {ok, Infos} = barrel_db:infos(DbId),
+  [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
+  DbInfo = [{<<"id">>, Id},
+            {<<"name">>, Name},
+            {<<"store">>, Store}],
+  barrel_http_reply:doc(DbInfo, Req, State).

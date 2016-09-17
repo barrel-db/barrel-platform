@@ -29,31 +29,31 @@
 
 
 start_link() ->
-    case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-        {ok, Pid} -> {ok, Pid};
-        {error, {already_started, Pid}} -> {ok, Pid}
-    end.
+  case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
+    {ok, Pid} -> {ok, Pid};
+    {error, {already_started, Pid}} -> {ok, Pid}
+  end.
 
 stop() ->
-    gen_server:call(?MODULE, stop).
+  gen_server:call(?MODULE, stop).
 
 init(_) ->
-    Routes = [{"/[:dbid]", barrel_http_rest_db, []},
-              {"/[:dbid]/_revs_diff", barrel_http_rest_revsdiff, []},
-              {"/[:dbid]/_changes", barrel_http_rest_changes, []},
-              {"/[:dbid]/[:docid]", barrel_http_rest_doc, []}
-             ],
+  Routes = [{"/[:dbid]", barrel_http_rest_db, []},
+            {"/[:dbid]/_revs_diff", barrel_http_rest_revsdiff, []},
+            {"/[:dbid]/_changes", barrel_http_rest_changes, []},
+            {"/[:dbid]/[:docid]", barrel_http_rest_doc, []}
+           ],
 
-    Dispatch = cowboy_router:compile([{'_', Routes}]),
-    {ok, [{port, Port}]} = application:get_env(barrel, http_server),
-    {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
-    {ok, []}.
+  Dispatch = cowboy_router:compile([{'_', Routes}]),
+  {ok, [{port, Port}]} = application:get_env(barrel, http_server),
+  {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
+  {ok, []}.
 
 handle_call(stop, _From, State) ->
-    {stop, normal, stopped, State}.
+  {stop, normal, stopped, State}.
 
 handle_cast(shutdown, State) ->
-    {stop, normal, State}.
+  {stop, normal, State}.
 
 handle_info(_Info, State) -> {noreply, State}.
 

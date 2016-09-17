@@ -19,29 +19,29 @@
 -export([terminate/3]).
 
 init(_Type, Req, []) ->
-    {ok, Req, undefined}.
+  {ok, Req, undefined}.
 
 handle(Req, State) ->
-    {Method, Req2} = cowboy_req:method(Req),
-    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-    handle(Method, DbId, Req3, State).
+  {Method, Req2} = cowboy_req:method(Req),
+  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+  handle(Method, DbId, Req3, State).
 
 handle(<<"POST">>, DbId, Req, State) ->
-    {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-    RequestedDocs = jsx:decode(Body, [return_maps]),
-    Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                               {ok, Missing, Possible} = barrel_db:revsdiff(DbId, DocId, RevIds),
-                               case Possible of
-                                   [] -> Acc#{DocId => #{<<"missing">> => Missing}};
-                                   _ -> Acc#{DocId => #{<<"missing">> => Missing,
-                                                        <<"possible_ancestors">> => Possible}}
-                               end
-                       end,#{}, RequestedDocs),
-    barrel_http_reply:doc(Result, Req2, State);
+  {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
+  RequestedDocs = jsx:decode(Body, [return_maps]),
+  Result = maps:fold(fun(DocId, RevIds, Acc) ->
+                         {ok, Missing, Possible} = barrel_db:revsdiff(DbId, DocId, RevIds),
+                         case Possible of
+                           [] -> Acc#{DocId => #{<<"missing">> => Missing}};
+                           _ -> Acc#{DocId => #{<<"missing">> => Missing,
+                                                <<"possible_ancestors">> => Possible}}
+                         end
+                     end,#{}, RequestedDocs),
+  barrel_http_reply:doc(Result, Req2, State);
 
 
 handle(_, _, Req, State) ->
-    barrel_http_reply:code(405, Req, State).
+  barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
-    ok.
+  ok.
