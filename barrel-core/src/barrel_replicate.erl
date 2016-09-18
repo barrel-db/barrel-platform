@@ -79,7 +79,8 @@ sync_change(Source, Target, Change) ->
   RevTree = maps:get(revtree, Change),
   CurrentRev = maps:get(current_rev, Change),
   History = history(CurrentRev, RevTree),
-  {ok, Doc} = barrel_db:get(Source, Id, []),
+  BarrelDb = protocol(Source),
+  {ok, Doc} = BarrelDb:get(Source, Id, []),
   {ok, _, _} = barrel_db:put_rev(Target, Id, Doc, History, []),
   ok.
 
@@ -87,19 +88,29 @@ changes(Source, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  {LastSeq, Changes} = barrel_db:changes_since(Source, Since, Fun, {Since, []}),
+  BarrelDb = protocol(Source),
+  {LastSeq, Changes} = BarrelDb:changes_since(Source, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
               <<"results">> => Changes}}.
 
 subscribe(DbName) ->
-  Key = barrel_db_event:key(DbName),
+  Key = key(DbName),
   ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
   ok.
 
 unsubsribe(DbName) ->
-  Key = barrel_db_event:key(DbName),
+  Key = key(DbName),
   ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
   ok.
+
+key(<<"http://", _/binary>>=Url) ->
+  barrel_httpc:gproc_key(Url);
+key(DbName) ->
+  barrel_db_event:key(DbName).
+protocol(<<"http://", _Url/binary>>) ->
+  barrel_httpc;
+protocol(_DbBame) ->
+  barrel_db.
 
 history(Id, RevTree) ->
   history(Id, RevTree, []).

@@ -69,7 +69,7 @@ post_put(Req) ->
     {404, _} ->
       {error, not_found};
     {200, R} ->
-      Reply = jsx:decode(R, [return_maps, {labels, atom}]),
+      Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
       DocId = maps:get(id, Reply),
       RevId = maps:get(rev, Reply),
       true = maps:get(ok, Reply),
@@ -95,7 +95,7 @@ delete(BarrelId, DocId, RevId, _Options) ->
   Rev = <<"?rev=">>,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
   {200, R} = req(delete, Url),
-  Reply = jsx:decode(R, [return_maps, {labels, atom}]),
+  Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
   DocId = maps:get(id, Reply),
   NewRevId = maps:get(rev, Reply),
   true = maps:get(ok, Reply),
@@ -138,7 +138,8 @@ handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, State) ->
   case Buffer of
     [] ->
       gen_server:cast(?MODULE, {longpoll, BarrelId, Since, Fun, Acc}),
-      {reply, [], State};
+      Reply = fold_result(Fun, Acc, []),
+      {reply, Reply, State};
     Available ->
       {reply, Available, State#st{buffer=[]}}
   end;
@@ -152,15 +153,9 @@ handle_cast({longpoll, BarrelId, Since, Fun, Acc}, State) ->
   SinceBin = integer_to_binary(Since),
   Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
   {ok, Reply} = get_longpoll(Url),
-  R = jsx:decode(Reply, [return_maps, {labels, atom}]),
+  R = jsx:decode(Reply, [return_maps, {labels, attempt_atom}]),
   Results = maps:get(results, R),
-  Folder = fun(DocInfo, A) ->
-               Seq = maps:get(update_seq, DocInfo),
-               Doc = {error, doc_not_fetched},
-               {ok, FunResult} = Fun(Seq, DocInfo, Doc, A),
-               FunResult
-           end,
-  Buffer = lists:foldr(Folder, Acc, Results),
+  Buffer = fold_result(Fun, Acc, Results),
   notify(BarrelId, db_updated),
   {noreply, State#st{buffer=Buffer}};
 
@@ -179,6 +174,16 @@ terminate(_Reason, #st{dbid=DbId}) ->
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
+
+fold_result(Fun, Acc, Results) ->
+  Folder = fun(DocInfo, A) ->
+               Seq = maps:get(update_seq, DocInfo),
+               Doc = {error, doc_not_fetched},
+               {ok, FunResult} = Fun(Seq, DocInfo, Doc, A),
+               FunResult
+           end,
+ lists:foldr(Folder, Acc, Results).
+
 
 notify(DbName, Event) ->
   Key = gproc_key(DbName),
@@ -203,8 +208,9 @@ get_longpoll(Url) ->
 
 loop_longpoll(Ref, Acc) ->
   receive
-    {hackney_response, Ref, {status, StatusInt, _Reason}} ->
-      200 = StatusInt,
+    {hackney_response, Ref, {status, 204, _Reason}} ->
+      loop_longpoll(Ref, Acc);
+    {hackney_response, Ref, {status, 200, _Reason}} ->
       loop_longpoll(Ref, Acc);
     {hackney_response, Ref, {headers, _Headers}} ->
       loop_longpoll(Ref, Acc);

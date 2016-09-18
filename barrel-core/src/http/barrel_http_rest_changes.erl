@@ -73,6 +73,7 @@ handle(_, Req, State) ->
 
 
 info(db_updated, Req, State) ->
+  {message_queue_len, L} = erlang:process_info(self(), message_queue_len),
   DbId = State#st.dbname,
   Since = State#st.last_seq,
   {LastSeq, Changes} = changes(DbId, Since),
@@ -80,9 +81,10 @@ info(db_updated, Req, State) ->
     longpoll ->
       case Changes of
         [] ->
-          info(db_updated, Req, State);
+          {loop, Req, State#st{last_seq=LastSeq, changes=Changes}};
         _ ->
-          {ok, Req, State#st{last_seq=LastSeq, changes=Changes}}
+          Json = to_json(LastSeq, Changes),
+          barrel_http_reply:json(Json, Req, State)
       end;
     eventsource ->
       Json = to_json(LastSeq, Changes),

@@ -16,25 +16,29 @@
 -author("Bernard Notarianni").
 
 %% API
--export([
-         all/0,
-         init_per_suite/1,
-         end_per_suite/1,
-         init_per_testcase/2,
-         end_per_testcase/2
-        ]).
+-export(
+   [
+    all/0,
+    init_per_suite/1,
+    end_per_suite/1,
+    init_per_testcase/2,
+    end_per_testcase/2
+   ]).
 
--export([
-         replicate/1,
-         replicate_non_empty/1,
-         replicate_delete/1
-        ]).
+-export(
+   [
+    one_doc/1,
+    target_not_empty/1,
+    deleted_doc/1,
+    over_http/1
+   ]).
 
 all() ->
   [
-   replicate,
-   replicate_non_empty,
-   replicate_delete
+   one_doc,
+   target_not_empty,
+   deleted_doc,
+   over_http
   ].
 
 init_per_suite(Config) ->
@@ -52,11 +56,11 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  %% ok = erocksdb:destroy("testdb", []),
-  %% ok = erocksdb:destroy("source", []),
+  %%ok = erocksdb:destroy("testdb", []),
+  %%ok = erocksdb:destroy("source", []),
   Config.
 
-replicate(_Config) ->
+one_doc(_Config) ->
   {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
@@ -66,7 +70,7 @@ replicate(_Config) ->
   stopped = barrel_replicate:stop(),
   ok.
 
-replicate_non_empty(_Config) ->
+target_not_empty(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
@@ -78,14 +82,32 @@ replicate_non_empty(_Config) ->
   stopped = barrel_replicate:stop(),
   ok.
 
-replicate_delete(_Config) ->
+deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
-
+  
   {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
   stopped = barrel_replicate:stop(),
+  ok.
+
+over_http(_Config) -> 
+  %% debughelper:start(),
+  %% debughelper:trace(barrel_http_rest_changes),
+
+  Source = <<"http://localhost:8080/source">>,
+  {ok, _} = barrel_httpc:start_link(),
+  ok = barrel_httpc:start(Source, undefined),
+  Target= <<"testdb">>,
+  {ok, _Pid} = barrel_replicate:start_link(Source, Target),
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId},
+  timer:sleep(200),
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  stopped = barrel_replicate:stop(),
+  stopped = barrel_httpc:stop(),
   ok.
