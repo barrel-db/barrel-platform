@@ -56,8 +56,12 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  %%ok = erocksdb:destroy("testdb", []),
-  %%ok = erocksdb:destroy("source", []),
+  %% TODO this gives an error
+  %% {error_db_destroy,
+  %%     "IO error: lock testdb/LOCK: No locks available"}}}
+
+  %% ok = erocksdb:destroy("testdb", []),
+  %% ok = erocksdb:destroy("source", []),
   Config.
 
 one_doc(_Config) ->
@@ -95,9 +99,6 @@ deleted_doc(_Config) ->
   ok.
 
 over_http(_Config) -> 
-  %% debughelper:start(),
-  %% debughelper:trace(barrel_http_rest_changes),
-
   Source = <<"http://localhost:8080/source">>,
   {ok, _} = barrel_httpc:start_link(),
   ok = barrel_httpc:start(Source, undefined),

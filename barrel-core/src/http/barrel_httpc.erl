@@ -55,26 +55,26 @@ infos(Barrel) ->
   {ok, Info}.
 
 post(Barrel, Doc, _Options) ->
-  Req = fun() -> req(post, Barrel, Doc) end,
-  post_put(Req).
+  post_put(post, Barrel, Doc).
 
 put(BarrelId, DocId, Doc, _Options) ->
   Sep = <<"/">>,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
-  Req = fun() -> req(put, Url, Doc) end,
-  post_put(Req).
+  post_put(put, Url, Doc).
 
-post_put(Req) ->
-  case Req() of
-    {404, _} ->
-      {error, not_found};
-    {200, R} ->
-      Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
-      DocId = maps:get(id, Reply),
-      RevId = maps:get(rev, Reply),
-      true = maps:get(ok, Reply),
-      {ok, DocId, RevId}
-  end.
+post_put(Method, Url, Doc) ->
+  {Code, Reply} = req(Method, Url, Doc),
+  post_put_resp(Code, Reply).
+
+post_put_resp(404, _) ->
+  {error, not_found};
+post_put_resp(200, R) ->
+  Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
+  DocId = maps:get(id, Reply),
+  RevId = maps:get(rev, Reply),
+  true = maps:get(ok, Reply),
+  {ok, DocId, RevId}.
+
 
 put_rev(_Db, _DocId, _Body, _History, _Options) ->
   {error, not_implemented}.
@@ -82,13 +82,15 @@ put_rev(_Db, _DocId, _Body, _History, _Options) ->
 get(BarrelId, DocId, _Options) ->
   Sep = <<"/">>,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
-  case req(get, Url) of
-    {404, _} ->
-      {error, not_found};
-    {200, R} ->
-      Doc = jsx:decode(R, [return_maps]),
-      {ok, Doc}
-  end.
+  {Code, Reply} = req(get, Url),
+  get_resp(Code, Reply).
+
+get_resp(404, _) ->
+  {error, not_found};
+get_resp(200, Reply) ->
+  Doc = jsx:decode(Reply, [return_maps]),
+  {ok, Doc}.
+  
 
 delete(BarrelId, DocId, RevId, _Options) ->
   Sep = <<"/">>,
@@ -111,7 +113,7 @@ revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
 
 %% ----------
--record(st, {dbid, buffer=[]}).
+-record(state, {dbid, buffer=[]}).
 
 gproc_key(DbName) ->
   {n, l, {httpc_event, DbName}}.
@@ -126,23 +128,20 @@ stop() ->
   gen_server:call(?MODULE, stop).
 
 init(_) ->
-  {ok, #st{}}.
+  {ok, #state{}}.
 
 handle_call({start, DbId, _}, _From, State) ->
   Key = gproc_key(DbId),
   {ok, _} = gen_event:start_link({via, gproc, Key}),
-  {reply, ok, State#st{dbid=DbId}};
+  {reply, ok, State#state{dbid=DbId}};
 
-handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, State) ->
-  Buffer = State#st.buffer,
-  case Buffer of
-    [] ->
-      gen_server:cast(?MODULE, {longpoll, BarrelId, Since, Fun, Acc}),
-      Reply = fold_result(Fun, Acc, []),
-      {reply, Reply, State};
-    Available ->
-      {reply, Available, State#st{buffer=[]}}
-  end;
+handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, #state{buffer=[]}=S) ->
+  gen_server:cast(?MODULE, {longpoll, BarrelId, Since, Fun, Acc}),
+  Reply = fold_result(Fun, Acc, []),
+  {reply, Reply, S};
+
+handle_call({changes_since, _, _, _, _}, _From, #state{buffer=Buf}=S) ->
+  {reply, Buf, S#state{buffer=[]}};
 
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
@@ -157,7 +156,7 @@ handle_cast({longpoll, BarrelId, Since, Fun, Acc}, State) ->
   Results = maps:get(results, R),
   Buffer = fold_result(Fun, Acc, Results),
   notify(BarrelId, db_updated),
-  {noreply, State#st{buffer=Buffer}};
+  {noreply, State#state{buffer=Buffer}};
 
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
@@ -166,7 +165,7 @@ handle_cast(shutdown, State) ->
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
-terminate(_Reason, #st{dbid=DbId}) ->
+terminate(_Reason, #state{dbid=DbId}) ->
   Key = gproc_key(DbId),
   ok = gen_event:stop({via, gproc, Key}),
   ok.
