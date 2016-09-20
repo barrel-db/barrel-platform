@@ -13,6 +13,7 @@
 %% the License.
 
 -module(barrel_http_evt_handler).
+-author("Bernard Notarianni").
 
 -behaviour(gen_event).
 

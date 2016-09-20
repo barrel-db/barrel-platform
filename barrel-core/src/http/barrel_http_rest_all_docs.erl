@@ -22,6 +22,23 @@
 
 -export([allowed_methods/2, content_types_provided/2, to_json/2]).
 
+-export([trails/0]).
+
+trails() ->
+  Metadata =
+    #{ get => #{ summary => "Get list of all available documents."
+               , produces => ["application/json"]
+               , parameters => 
+                   [#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     },
+  [trails:trail("/:dbid/_all_docs", ?MODULE, [], Metadata)].
+
 
 init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 
