@@ -23,8 +23,8 @@ doc(Doc, Req, State ) ->
   json(Json, Req, State).
 
 json(Json, Req, State) ->
-  {ok, Req2} = cowboy_req:reply(200, [{<<"content-type">>, <<"application/json">>}],
-                                Json, Req),
+  Headers = [{<<"content-type">>, <<"application/json">>}],
+  {ok, Req2} = cowboy_req:reply(200, Headers, Json, Req),
   {ok, Req2, State}.
 
 code(HttpCode, Req, State ) ->
