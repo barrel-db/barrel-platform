@@ -21,21 +21,21 @@
          code_change/3, terminate/2]).
 
 init(ClientPid) ->
-    {ok, ClientPid}.
+  {ok, ClientPid}.
 
 handle_event(Event, ClientPid) ->
-    ClientPid ! Event,
-    {ok, ClientPid}.
+  ClientPid ! Event,
+  {ok, ClientPid}.
 
 handle_call(_, State) ->
-    {ok, ok, State}.
+  {ok, ok, State}.
 
 handle_info(_, State) ->
-    {ok, State}.
+  {ok, State}.
 
 
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
 
 terminate(_Reason, _State) ->
-    ok.
+  ok.

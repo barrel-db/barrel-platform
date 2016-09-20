@@ -12,21 +12,30 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_reply).
+-module(barrel_replicate_events).
 
--export([doc/3]).
--export([json/3]).
--export([code/3]).
+-behaviour(gen_event).
 
-doc(Doc, Req, State ) ->
-  Json = jsx:encode(Doc),
-  json(Json, Req, State).
+-export([init/1,
+         handle_event/2, handle_call/2, handle_info/2,
+         code_change/3, terminate/2]).
 
-json(Json, Req, State) ->
-  {ok, Req2} = cowboy_req:reply(200, [{<<"content-type">>, <<"application/json">>}],
-                                Json, Req),
-  {ok, Req2, State}.
+init(ClientPid) ->
+  {ok, ClientPid}.
 
-code(HttpCode, Req, State ) ->
-  {ok, Req2} = cowboy_req:reply(HttpCode, [], [], Req),
-  {ok, Req2, State}.
+handle_event(Event, ClientPid) ->
+  ClientPid ! Event,
+  {ok, ClientPid}.
+
+handle_call(_, State) ->
+  {ok, ok, State}.
+
+handle_info(_, State) ->
+  {ok, State}.
+
+
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+terminate(_Reason, _State) ->
+  ok.
