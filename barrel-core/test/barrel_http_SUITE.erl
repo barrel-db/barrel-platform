@@ -24,6 +24,7 @@
          put_get_delete/1,
          delete_require_rev_parameter/1,
          revsdiff/1,
+         all_docs/1,
          changes_normal/1,
          changes_longpoll/1,
          changes_eventsource/1]).
@@ -32,6 +33,7 @@ all() -> [info_database,
           put_get_delete,
           delete_require_rev_parameter,
           revsdiff,
+          all_docs,
           changes_normal,
           changes_longpoll,
           changes_eventsource].
@@ -82,7 +84,7 @@ delete_require_rev_parameter(_Config)->
   ok.
 
 put_cat() ->
-  Doc = "{\"name\" : \"tom\"}",
+  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
   {200, R} = req(put, "/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
@@ -95,7 +97,7 @@ delete_cat(CatRevId) ->
   A3.
 
 put_dog() ->
-  Doc = "{\"name\" : \"spike\"}",
+  Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
   {200, R} = req(put, "/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
@@ -111,6 +113,23 @@ revsdiff(_Config) ->
   true = lists:member(<<"2-missing">>, Missing),
   ok.
 
+all_docs(_Config) ->
+  {200, R1} = req(get, "/testdb/_all_docs"),
+  A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
+  Rows1 = maps:get(rows, A1),
+  0 = length(Rows1),
+  
+  put_cat(),
+  DogRevId = put_dog(),
+
+  {200, R2} = req(get, "/testdb/_all_docs"),
+  A2 = jsx:decode(R2, [return_maps, {labels, attempt_atom}]),
+  Rows2 = maps:get(rows, A2),
+  2 = length(Rows2),
+  Row = hd(Rows2),
+  <<"dog">> = maps:get(id, Row),
+  DogRevId = binary_to_list(maps:get(rev, Row)),
+  ok.
 
 %%=======================================================================
 

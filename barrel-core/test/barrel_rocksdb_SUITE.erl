@@ -162,7 +162,7 @@ put_rev(_Config) ->
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
  
-  {ok, DocId, RevId3} = barrel_db:put_rev(<<"testdb">>, DocId, Doc4, History, []),
+  {ok, DocId, _RevId3} = barrel_db:put_rev(<<"testdb">>, DocId, Doc4, History, []),
   {ok, Doc5} = barrel_db:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].

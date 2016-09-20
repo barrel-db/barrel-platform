@@ -41,6 +41,7 @@ init(_) ->
   Routes = [{"/[:dbid]", barrel_http_rest_db, []},
             {"/[:dbid]/_revs_diff", barrel_http_rest_revsdiff, []},
             {"/[:dbid]/_changes", barrel_http_rest_changes, []},
+            {"/[:dbid]/_all_docs", barrel_http_rest_all_docs, []},
             {"/[:dbid]/[:docid]", barrel_http_rest_doc, []}
            ],
 
