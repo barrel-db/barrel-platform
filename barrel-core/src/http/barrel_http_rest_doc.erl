@@ -112,6 +112,9 @@ handle(<<"GET">>, DbId, DocIdAsBin, Req, State) ->
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
 
+handle(<<"POST">>, DbId, DocIdAsBin, Req, State) ->
+  post_put(put, DbId, DocIdAsBin, Req, State);
+
 handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
   post_put(put, DbId, DocIdAsBin, Req, State);
 
