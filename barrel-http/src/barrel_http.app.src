@@ -1,0 +1,24 @@
+{application, barrel_http,
+  [{description, "Barrel-db HTTP Server"},
+   {vsn, "0.1.0"},
+   {registered, []},
+   {mod, {barrel_http_app, []}},
+   {applications,
+    [kernel,
+     stdlib,
+     sasl,
+     lager,
+     crypto,
+     barrel,
+     cowboy,
+     trails,
+     cowboy_swagger,
+     hackney
+    ]},
+   {env, []},
+   {modules, []},
+  
+   {maintainers, []},
+   {licenses, []},
+   {links, []}
+  ]}.
