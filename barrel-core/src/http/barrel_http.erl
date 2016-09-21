@@ -13,6 +13,8 @@
 %% the License.
 
 -module(barrel_http).
+-author("Bernard Notarianni").
+
 -behaviour(gen_server).
 
 %% specific API
@@ -38,14 +40,17 @@ stop() ->
   gen_server:call(?MODULE, stop).
 
 init(_) ->
-  Routes = [{"/[:dbid]", barrel_http_rest_db, []},
-            {"/[:dbid]/_revs_diff", barrel_http_rest_revsdiff, []},
-            {"/[:dbid]/_changes", barrel_http_rest_changes, []},
-            {"/[:dbid]/_all_docs", barrel_http_rest_all_docs, []},
-            {"/[:dbid]/[:docid]", barrel_http_rest_doc, []}
-           ],
+  Trails =
+    trails:trails([ cowboy_swagger_handler
+                  , barrel_http_rest_db
+                  , barrel_http_rest_revsdiff
+                  , barrel_http_rest_changes
+                  , barrel_http_rest_all_docs
+                  , barrel_http_rest_doc
+                  ]),
+  trails:store(Trails),
+  Dispatch = trails:single_host_compile(Trails),
 
-  Dispatch = cowboy_router:compile([{'_', Routes}]),
   {ok, [{port, Port}]} = application:get_env(barrel, http_server),
   {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
   {ok, []}.

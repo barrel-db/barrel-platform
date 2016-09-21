@@ -13,10 +13,29 @@
 %% the License.
 
 -module(barrel_http_rest_revsdiff).
+-author("Bernard Notarianni").
 
 -export([init/3]).
 -export([handle/2]).
 -export([terminate/3]).
+
+-export([trails/0]).
+
+trails() ->
+  Metadata =
+    #{ get => #{ summary => "Check for differences in documents history"
+               , produces => ["application/json"]
+               , parameters => 
+                   [#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     },
+  [trails:trail("/:dbid/_revs_diff", ?MODULE, [], Metadata)].
+
 
 init(_Type, Req, []) ->
   {ok, Req, undefined}.

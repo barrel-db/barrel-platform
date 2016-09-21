@@ -21,6 +21,7 @@
          init_per_testcase/2]).
 
 -export([info_database/1,
+         post/1,
          put_get_delete/1,
          delete_require_rev_parameter/1,
          revsdiff/1,
@@ -30,6 +31,7 @@
          changes_eventsource/1]).
 
 all() -> [info_database,
+          post,
           put_get_delete,
           delete_require_rev_parameter,
           revsdiff,
@@ -63,6 +65,18 @@ info_database(_Config) ->
   {404, _} = req(get, "/unknwondb"),
   ok.
 
+post(_Config) ->
+  D1 = "{\"name\" : \"tom\"}",
+  {200, R} = req(post, "/testdb", D1),
+  J = jsx:decode(R, [return_maps]),
+  DocId = maps:get(<<"id">>, J),
+  Url = <<"/testdb/", DocId/binary>>,
+  {200, R2} = req(get, Url),
+  D2 = jsx:decode(R2, [return_maps]),
+  <<"tom">> = maps:get(<<"name">>, D2),
+  ok.
+
+
 put_get_delete(_Config) ->
   CatRevId = put_cat(),
 
@@ -82,6 +96,7 @@ delete_require_rev_parameter(_Config)->
   put_cat(),
   {400, _} = req(delete, "/testdb/cat?badparametername=42"),
   ok.
+
 
 put_cat() ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",

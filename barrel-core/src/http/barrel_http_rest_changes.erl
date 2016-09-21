@@ -13,11 +13,48 @@
 %% the License.
 
 -module(barrel_http_rest_changes).
+-author("Bernard Notarianni").
 
 -export([init/3]).
 -export([info/3]).
 -export([handle/2]).
 -export([terminate/3]).
+
+-export([trails/0]).
+
+trails() ->
+  Metadata =
+    #{ get => #{ summary => "Get changes which happened on the database."
+               , produces => ["application/json"]
+               , parameters => 
+                   [#{ name => <<"feed">>
+                     , description => <<"longpoll/eventsource reply">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>
+                     , enum => [ <<"normal">>
+                               , <<"longpoll">>
+                               , <<"eventsource">>
+                               ]
+                     }
+                   ,#{ name => <<"since">>
+                     , description => <<"Starting sequence">>
+                     , in => <<"path">>
+                     , required => false
+                     , type => <<"integer">>
+                     }
+                   ,#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>
+                     }
+                   ]
+               }
+     },
+  [trails:trail("/:dbid/_changes", ?MODULE, [], Metadata)].
+
+
 
 -record(state, {dbid, changes, last_seq, feed, subscribed}).
 

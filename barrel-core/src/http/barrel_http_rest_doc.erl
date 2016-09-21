@@ -13,11 +13,85 @@
 %% the License.
 
 -module(barrel_http_rest_doc).
+-author("Bernard Notarianni").
 
 -export([init/3]).
 -export([handle/2]).
 -export([terminate/3]).
 -export([post_put/5]).
+
+-export([trails/0]).
+
+trails() ->
+  Metadata =
+    #{ get => #{ summary => "Get a document"
+               , description => "Get a document."
+               , produces => ["application/json"]
+               , responses => 
+                   #{ <<"200">> => #{ description => "Document found." }
+                    , <<"404">> => #{ description => "Document not found." }
+                    }
+               , parameters => 
+                   [#{ name => <<"docid">>
+                     , description => <<"Document ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ,#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     , post => #{ summary => "Add a new document."
+                , produces => ["application/json"]
+                , responses => 
+                    #{ <<"200">> => #{ description => "Document added." }
+                     }
+                , parameters => 
+                    [#{ name => <<"body">>
+                      , description => <<"Document to be added">>
+                      , in => <<"body">>
+                      , required => true
+                      , type => <<"json">>}
+                    ,#{ name => <<"docid">>
+                      , description => <<"Document ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ,#{ name => <<"dbid">>
+                      , description => <<"Database ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ]
+                }
+     , put => #{ summary => "Add/update a document."
+               , produces => ["application/json"]
+               , responses => 
+                   #{ <<"200">> => #{ description => "Document updated." }
+                    }
+               , parameters => 
+                   [#{ name => <<"body">>
+                     , description => <<"Document to be added">>
+                     , in => <<"body">>
+                     , required => true
+                     , type => <<"json">>}
+                   ,#{ name => <<"docid">>
+                     , description => <<"Document ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ,#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     },
+  [trails:trail("/:dbid/[:docid]", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -37,6 +111,9 @@ handle(<<"GET">>, DbId, DocIdAsBin, Req, State) ->
     {error, not_found} -> barrel_http_reply:code(404, Req, State);
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
+
+handle(<<"POST">>, DbId, DocIdAsBin, Req, State) ->
+  post_put(put, DbId, DocIdAsBin, Req, State);
 
 handle(<<"PUT">>, DbId, DocIdAsBin, Req, State) ->
   post_put(put, DbId, DocIdAsBin, Req, State);

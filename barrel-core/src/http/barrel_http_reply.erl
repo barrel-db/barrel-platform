@@ -13,6 +13,7 @@
 %% the License.
 
 -module(barrel_http_reply).
+-author("Bernard Notarianni").
 
 -export([doc/3]).
 -export([json/3]).
