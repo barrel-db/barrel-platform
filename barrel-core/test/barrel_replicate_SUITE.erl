@@ -29,16 +29,14 @@
    [
     one_doc/1,
     target_not_empty/1,
-    deleted_doc/1,
-    over_http/1
+    deleted_doc/1
    ]).
 
 all() ->
   [
    one_doc,
    target_not_empty,
-   deleted_doc,
-   over_http
+   deleted_doc
   ].
 
 init_per_suite(Config) ->
@@ -96,19 +94,4 @@ deleted_doc(_Config) ->
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
   stopped = barrel_replicate:stop(),
-  ok.
-
-over_http(_Config) -> 
-  Source = <<"http://localhost:8080/source">>,
-  {ok, _} = barrel_httpc:start_link(),
-  ok = barrel_httpc:start(Source, undefined),
-  Target= <<"testdb">>,
-  {ok, _Pid} = barrel_replicate:start_link(Source, Target),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
-  Doc2 = Doc#{<<"_rev">> => RevId},
-  timer:sleep(200),
-  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
-  stopped = barrel_httpc:stop(),
   ok.

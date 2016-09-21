@@ -59,7 +59,6 @@ init([]) ->
 init(safe) ->
   Specs =[?sup(barrel_local_stores_sup)
           , ?sup(barrel_dbs_sup)
-          , ?sup(barrel_http)
          ],
   
   {ok, { {one_for_one, 5, 10}, Specs} }.
