@@ -31,7 +31,7 @@
          revsdiff/3
         ]).
 
--export([gproc_key/1]).
+-export([key_notify/1]).
 
 -export([start_link/0]).
 -export([stop/0]).
@@ -115,7 +115,7 @@ revsdiff(_Db, _DocId, _RevIds) ->
 %% ----------
 -record(state, {dbid, buffer=[]}).
 
-gproc_key(DbName) ->
+key_notify(DbName) ->
   {n, l, {httpc_event, DbName}}.
 
 start_link() ->
@@ -131,7 +131,7 @@ init(_) ->
   {ok, #state{}}.
 
 handle_call({start, DbId, _}, _From, State) ->
-  Key = gproc_key(DbId),
+  Key = key_notify(DbId),
   {ok, _} = gen_event:start_link({via, gproc, Key}),
   {reply, ok, State#state{dbid=DbId}};
 
@@ -166,7 +166,7 @@ handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
 terminate(_Reason, #state{dbid=DbId}) ->
-  Key = gproc_key(DbId),
+  Key = key_notify(DbId),
   ok = gen_event:stop({via, gproc, Key}),
   ok.
 
@@ -185,7 +185,7 @@ fold_result(Fun, Acc, Results) ->
 
 
 notify(DbName, Event) ->
-  Key = gproc_key(DbName),
+  Key = key_notify(DbName),
   gen_event:notify({via, gproc, Key}, Event).
 
 req(Method, Url) ->

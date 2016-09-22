@@ -86,7 +86,7 @@ put_get_delete(_Config) ->
   true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-  Key = barrel_httpc:gproc_key(url()),
+  Key = barrel_httpc:key_notify(url()),
   ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
 
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
