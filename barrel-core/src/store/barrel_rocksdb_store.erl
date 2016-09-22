@@ -68,8 +68,21 @@ open_db(#{ db := Db }, Name) ->
 clean_db(Name, DbId, #{db := Db}) ->
   DbKey = << 0, 0, 0, 100, (barrel_lib:to_binary(Name))/binary >>,
   ok = erocksdb:delete(Db, DbKey, [{sync, true}]),
-  spawn(fun() -> clean_db1(Db, DbId) end),
+  _ = spawn(fun() ->
+          fold_prefix(Db, DbId, fun clean_db_fun/3, {Db, []})
+        end),
   ok.
+
+clean_db_fun(K, _V, {Db, Acc}) ->
+  Acc2 = [{delete, K} | Acc],
+  Sz = length(Acc2),
+  if
+    Sz >= 500 ->
+      _ = erocksdb:write(Db, Acc2, []),
+      {ok, {Db, []}};
+    true ->
+      {ok, {Db, Acc2}}
+  end.
 
 all_dbs(#{db := Db}) ->
   Fun = fun
@@ -78,30 +91,6 @@ all_dbs(#{db := Db}) ->
         end,
   AllDbs = fold_prefix(Db, << 0, 0, 0, 100 >>, Fun, []),
   lists:usort(AllDbs).
-
-clean_db1(Db, DbId) ->
-  (catch clean_db_prefix(Db, DbId)),
-  ok.
-
-clean_db_prefix(Db, Prefix) ->
-  {ok, Itr} = erocksdb:iterator(Db, []),
-  try clean_db_prefix1(erocksdb:iterator_move(Itr, Prefix), Itr, Db, [])
-  after erocksdb:iterator_close(Itr)
-  end.
-
-clean_db_prefix1({error, iterator_closed}, _Itr, _Db, _Acc) -> ok;
-clean_db_prefix1({error, invalid_iterator}, _Itr, Db, Acc) ->
-  erocksdb:write(Db, lists:reverse(Acc), []);
-clean_db_prefix1({ok, K, _V}, Itr, Db, Acc) ->
-  Acc2 = [{delete, K} | Acc],
-  Sz = length(Acc2),
-  if
-    Sz >= 500 ->
-      _ = erocksdb:write(Db, Acc2, []),
-      clean_db_prefix1(erocksdb:iterator_move(Itr, next), Itr, Db, []);
-    true ->
-      clean_db_prefix1(erocksdb:iterator_move(Itr, next), Itr, Db, Acc2)
-  end.
 
 fold_prefix(Db, Prefix, Fun, AccIn) ->
   fold_prefix(Db, Prefix, Fun, AccIn, []).
@@ -197,7 +186,6 @@ get_doc_info(DbId, DocId,  Db, ReadOptions) ->
     not_found -> {error, not_found}
   end.
 
-
 get_update_seq(Db, DbId) ->
   {ok, SeqBin} = erocksdb:get(Db, meta_key(DbId, 0), []),
   binary_to_integer(SeqBin).
@@ -221,7 +209,7 @@ write_doc(DbId, DocId, LastSeq, DocInfo, Body, #{ db := Db}) ->
 get_doc(DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom, #{ db := Db}) ->
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
-  
+
   try get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, HistoryFrom, ReadOptions)
   after erocksdb:release_snapshot(Snapshot)
   end.
@@ -233,7 +221,7 @@ get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) 
               <<"">> -> maps:get(current_rev, DocInfo);
               UserRev -> UserRev
             end,
-      
+
       case get_doc_rev(Db, DbId, DocId, RevId, ReadOptions) of
         {ok, Doc} ->
           case WithHistory of
@@ -264,7 +252,7 @@ fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
   ReadOptions = [{snapshot, Snapshot}],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   Opts2 = [{read_options, ReadOptions} | Opts],
-  
+
   WrapperFun = fun(_Key, BinDocInfo, Acc) ->
     DocInfo = binary_to_term(BinDocInfo),
     RevId = maps:get(current_rev, DocInfo),
@@ -274,10 +262,10 @@ fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
               get_doc_rev(Db, DbId, DocId, RevId, ReadOptions);
             false -> {ok, nil}
           end,
-    
+
     Fun(DocId, DocInfo, Doc, Acc)
   end,
-  
+
   try fold_prefix(Db, Prefix, WrapperFun, AccIn, Opts2)
   after erocksdb:release_snapshot(Snapshot)
   end.
@@ -291,27 +279,26 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
            {read_options, ReadOptions}
          ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
-  
+
   WrapperFun = fun(Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
       [_, SeqBin] = binary:split(Key, Prefix),
       Seq = binary_to_integer(SeqBin),
       RevId = maps:get(current_rev, DocInfo),
       DocId = maps:get(id, DocInfo),
-      
+
       Doc = case IncludeDoc of
               true ->
                 get_doc_rev(Db, DbId, DocId, RevId, ReadOptions);
               false -> {ok, nil}
             end,
-      
+
       Fun(Seq, DocInfo, Doc, Acc)
     end,
-  
+
   try fold_prefix(Db, Prefix, WrapperFun, AccIn, Opts)
   after erocksdb:release_snapshot(Snapshot)
   end.
-
 
 last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 
