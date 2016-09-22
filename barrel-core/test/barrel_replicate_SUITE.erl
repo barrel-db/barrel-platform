@@ -62,8 +62,20 @@ end_per_suite(Config) ->
   %% ok = erocksdb:destroy("source", []),
   Config.
 
+
+source() ->
+  Mod = barrel_db,
+  Ctx = <<"source">>,
+  {Mod, Ctx}.
+
+target() ->
+  Mod = barrel_db,
+  Ctx = <<"testdb">>,
+  {Mod, Ctx}.
+
+
 one_doc(_Config) ->
-  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
@@ -77,7 +89,7 @@ target_not_empty(_Config) ->
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
   timer:sleep(200),
 
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
@@ -88,7 +100,7 @@ deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   
-  {ok, _Pid} = barrel_replicate:start_link(<<"source">>, <<"testdb">>),
+  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),

@@ -79,38 +79,40 @@ sync_change(Source, Target, Change) ->
   RevTree = maps:get(revtree, Change),
   CurrentRev = maps:get(current_rev, Change),
   History = history(CurrentRev, RevTree),
-  BarrelDb = protocol(Source),
-  {ok, Doc} = BarrelDb:get(Source, Id, []),
-  {ok, _, _} = barrel_db:put_rev(Target, Id, Doc, History, []),
+  {SourceMod, SourceCtx} = Source,
+  {ok, Doc} = SourceMod:get(SourceCtx, Id, []),
+  {TargetMod, TargetCtx} = Target,
+  {ok, _, _} = TargetMod:put_rev(TargetCtx, Id, Doc, History, []),
   ok.
 
 changes(Source, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  BarrelDb = protocol(Source),
-  {LastSeq, Changes} = BarrelDb:changes_since(Source, Since, Fun, {Since, []}),
+  {SourceMod, SourceCtx} = Source,
+  {LastSeq, Changes} = SourceMod:changes_since(SourceCtx, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
               <<"results">> => Changes}}.
 
-subscribe(DbName) ->
-  Key = key(DbName),
+subscribe(DbRef) ->
+  Key = key(DbRef),
   ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
   ok.
 
-unsubsribe(DbName) ->
-  Key = key(DbName),
+unsubsribe(DbRef) ->
+  Key = key(DbRef),
   ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
   ok.
 
-key(<<"http://", _/binary>>=Url) ->
-  barrel_httpc:gproc_key(Url);
-key(DbName) ->
-  barrel_db_event:key(DbName).
-protocol(<<"http://", _Url/binary>>) ->
-  barrel_httpc;
-protocol(_DbBame) ->
-  barrel_db.
+%% TODO move this logic to a barrel_db:key_notify(DbName)
+%% and barrel_httpc:key_notify(DbName)
+%% This will avoid coupling of barrel application to barrel_httpc
+%% by inverting the dependance.
+key({barrel_db, DbName}) ->
+  barrel_db_event:key(DbName);
+key({barrel_httpc, DbName}) ->
+  barrel_httpc:key_notify(DbName).
+  
 
 history(Id, RevTree) ->
   history(Id, RevTree, []).
