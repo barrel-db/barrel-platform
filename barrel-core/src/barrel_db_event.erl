@@ -20,8 +20,7 @@
 -export([notify/2]).
 
 key(DbName) ->
-    {n, l, {event, DbName}}.
+  {n, l, {event, DbName}}.
 
 notify(DbName, Event) ->
-  Key = key(DbName),
-  gen_event:notify({via, gproc, Key}, Event).
+  barrel_event:notify(DbName, Event).

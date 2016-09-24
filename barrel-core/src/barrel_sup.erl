@@ -57,8 +57,9 @@ init([]) ->
   {ok, { {one_for_all, 0, 10}, Specs} };
 
 init(safe) ->
-  Specs =[?sup(barrel_local_stores_sup)
-          , ?sup(barrel_dbs_sup)
+  Specs =[ ?sup(barrel_local_stores_sup)
+         , ?sup(barrel_dbs_sup)
+         , ?sup(barrel_event)
          ],
   
   {ok, { {one_for_one, 5, 10}, Specs} }.
