@@ -63,20 +63,13 @@ start_link(Name, Store) ->
   ignore |
   {error, Reason :: term()}).
 init([Name, Store]) ->
-  Children = [db_spec(Name, Store),
-              event_mgr(Name)],
+  Children = [db_spec(Name, Store)],
   
   {ok, {{rest_for_one, 1, 5}, Children}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-event_mgr(Name) ->
-  Key = barrel_db_event:key(Name),
-  #{id    => {ev, Name},
-    start => {gen_event, start_link, [{via, gproc, Key}]}}.
-
 
 db_spec(Name, Store) ->
   #{

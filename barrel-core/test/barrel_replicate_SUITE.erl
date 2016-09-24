@@ -64,15 +64,10 @@ end_per_suite(Config) ->
 
 
 source() ->
-  Mod = barrel_db,
-  Ctx = <<"source">>,
-  {Mod, Ctx}.
+  <<"source">>.
 
 target() ->
-  Mod = barrel_db,
-  Ctx = <<"testdb">>,
-  {Mod, Ctx}.
-
+  <<"testdb">>.
 
 one_doc(_Config) ->
   {ok, _Pid} = barrel_replicate:start_link(source(), target()),

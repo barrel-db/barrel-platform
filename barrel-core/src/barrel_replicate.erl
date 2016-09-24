@@ -38,7 +38,7 @@ stop() ->
 
 init({Source, Target}) ->
   {ok, LastSeq} = replicate_change(Source, Target, 0),
-  ok = subscribe(Source),
+  ok = barrel_event:reg(Source),
   State = #st{source=Source,
               target=Target,
               last_seq=LastSeq},
@@ -51,16 +51,20 @@ handle_call(stop, _From, State) ->
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
-handle_info(db_updated, State) ->
-  Source = State#st.source,
-  Target = State#st.target,
-  Since = State#st.last_seq,
+handle_info({'$barrel_event', {_Mod, _Db}, db_updated}, S) ->
+  Source = S#st.source,
+  Target = S#st.target,
+  Since = S#st.last_seq,
   {ok, LastSeq} = replicate_change(Source, Target, Since),
-  {noreply, State#st{last_seq=LastSeq}}.
+  {noreply, S#st{last_seq=LastSeq}};
+
+%% default source event Module=barrel_db
+handle_info({'$barrel_event', DbId, db_updated}, S) when is_binary(DbId) ->
+  handle_info({'$barrel_event', {barrel_db, DbId}, db_updated}, S).
 
 %% default gen_server callback
-terminate(_Reason, #st{source=Source}) ->
-  ok = unsubsribe(Source),
+terminate(_Reason, _State) ->
+  ok = barrel_event:unreg(),
   ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
@@ -79,40 +83,34 @@ sync_change(Source, Target, Change) ->
   RevTree = maps:get(revtree, Change),
   CurrentRev = maps:get(current_rev, Change),
   History = history(CurrentRev, RevTree),
-  {SourceMod, SourceCtx} = Source,
-  {ok, Doc} = SourceMod:get(SourceCtx, Id, []),
-  {TargetMod, TargetCtx} = Target,
-  {ok, _, _} = TargetMod:put_rev(TargetCtx, Id, Doc, History, []),
+  {ok, Doc} = get(Source, Id, []),
+  {ok, _, _} = put_rev(Target, Id, Doc, History, []),
   ok.
+
 
 changes(Source, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  {SourceMod, SourceCtx} = Source,
-  {LastSeq, Changes} = SourceMod:changes_since(SourceCtx, Since, Fun, {Since, []}),
+  {LastSeq, Changes} = changes_since(Source, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
               <<"results">> => Changes}}.
 
-subscribe(DbRef) ->
-  Key = key(DbRef),
-  ok = gen_event:add_handler({via, gproc, Key}, barrel_replicate_events, self()),
-  ok.
+get({Mod,_Db}=DbRef, Id, Opts) ->
+  Mod:get(DbRef, Id, Opts);
+get(Db, Id, Opts) when is_binary(Db) ->
+  barrel_db:get(Db, Id, Opts).
 
-unsubsribe(DbRef) ->
-  Key = key(DbRef),
-  ok = gen_event:delete_handler({via, gproc, Key}, barrel_replicate_events, self()),
-  ok.
+put_rev({Mod,_Db}=DbRef, Id, Doc, History, Opts) ->
+  Mod:put_rev(DbRef, Id, Doc, History, Opts);
+put_rev(Db, Id, Doc, History, Opts) when is_binary(Db) ->
+  barrel_db:put_rev(Db, Id, Doc, History, Opts).
 
-%% TODO move this logic to a barrel_db:key_notify(DbName)
-%% and barrel_httpc:key_notify(DbName)
-%% This will avoid coupling of barrel application to barrel_httpc
-%% by inverting the dependance.
-key({barrel_db, DbName}) ->
-  barrel_db_event:key(DbName);
-key({barrel_httpc, DbName}) ->
-  barrel_httpc:key_notify(DbName).
-  
+changes_since({Mod,_Db}=DbRef, Since, Fun, Acc) ->
+  Mod:changes_since(DbRef, Since, Fun, Acc);
+changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
+  barrel_db:changes_since(Db, Since, Fun, Acc).
+
 
 history(Id, RevTree) ->
   history(Id, RevTree, []).
