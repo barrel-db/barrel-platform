@@ -14,26 +14,23 @@
 
 -module(barrel_httpc_SUITE).
 
--export([all/0,
-         end_per_suite/1,
-         end_per_testcase/2,
-         init_per_suite/1,
-         init_per_testcase/2]).
-
--export([info_database/1,
-         create_doc/1,
-         put_get_delete/1,
-         changes_since/1
-         %% changes_normal/1,
-         %% changes_longpoll/1
+-export([ all/0
+        , end_per_suite/1
+        , end_per_testcase/2
+        , init_per_suite/1
+        , init_per_testcase/2
         ]).
 
-all() -> [info_database,
-          create_doc,
-          put_get_delete,
-          changes_since
-          %% changes_normal,
-          %% changes_longpoll
+-export([ info_database/1
+        , create_doc/1
+        , put_get_delete/1
+        , changes_since/1
+        ]).
+
+all() -> [ info_database
+         , create_doc
+         , put_get_delete
+           %% , changes_since
          ].
 
 init_per_suite(Config) ->
@@ -58,7 +55,7 @@ end_per_suite(Config) ->
 %% ----------
 
 url() ->
-  <<"http://localhost:8080/testdb">>.
+  {barrel_httpc, <<"http://localhost:8080/testdb">>}.
 
 info_database(_Config) ->
   {ok, Info} = barrel_httpc:infos(url()),
@@ -86,8 +83,7 @@ put_get_delete(_Config) ->
   true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-  Key = barrel_httpc:key_notify(url()),
-  ok = gen_event:add_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+  ok = barrel_event:reg(url()),
 
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
@@ -98,7 +94,7 @@ changes_since(_Config) ->
             Id = maps:get(id, DocInfo),
             {ok, [{Seq, Id}|Acc]}
         end,
-  [] = barrel_httpc:changes_since(url(), 0, Fun, []),
+  [{1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
   [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
   [] = barrel_httpc:changes_since(url(), 1, Fun, []),
   [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
@@ -106,7 +102,7 @@ changes_since(_Config) ->
   {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
   [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
 
-  ok = gen_event:delete_handler({via, gproc, Key}, barrel_httpc_handler_test, self()),
+  ok = barrel_event:unreg(),
 
   {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
   FunReceive = fun() ->
@@ -116,7 +112,7 @@ changes_since(_Config) ->
                        {error, timeout}
                    end
                end,
-  Expected = [db_updated_received || _ <- lists:seq(1,3) ],
+  Expected = [{'$barrel_event', url(), db_updated} || _ <- lists:seq(1,3) ],
   Events = [FunReceive() || _ <- Expected ],
   Expected = Events,
   ok.

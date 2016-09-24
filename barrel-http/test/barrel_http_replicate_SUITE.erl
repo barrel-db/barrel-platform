@@ -47,7 +47,7 @@ init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
   ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
   {ok, _} = barrel_httpc:start_link(),
-  ok = barrel_httpc:start(<<"http://localhost:8080/source">>, undefined),
+  ok = barrel_httpc:start(source(), undefined),
   Config.
 
 end_per_testcase(_, _Config) ->
@@ -71,9 +71,7 @@ source() ->
   {Mod, Ctx}.
 
 target() ->
-  Mod = barrel_db,
-  Ctx = <<"testdb">>,
-  {Mod, Ctx}.
+  <<"testdb">>.
 
 one_doc(_Config) ->
   {ok, _Pid} = barrel_replicate:start_link(source(), target()),
@@ -104,11 +102,11 @@ deleted_doc(_Config) ->
   {ok, _Pid} = barrel_replicate:start_link(source(), target()),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
-  {ok, _Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
 
   %% TODO bug to be fixed
   %% https://gitlab.com/barrel-db/barrel-http/issues/1 
-  %% true = maps:get(<<"_deleted">>, Doc3),
+  true = maps:get(<<"_deleted">>, Doc3),
 
   stopped = barrel_replicate:stop(),
   ok.

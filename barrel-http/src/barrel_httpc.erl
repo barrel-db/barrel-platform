@@ -31,8 +31,6 @@
          revsdiff/3
         ]).
 
--export([key_notify/1]).
-
 -export([start_link/0]).
 -export([stop/0]).
 
@@ -49,16 +47,19 @@ start(Name, Store) ->
 stop(_Name) ->
   {error, not_implemented}.
 
-infos(Barrel) ->
-  {200, R} = req(get, Barrel),
+infos(DbRef) ->
+  {_, BarrelId} = DbRef,
+  {200, R} = req(get, BarrelId),
   Info = jsx:decode(R, [return_maps]),
   {ok, Info}.
 
-post(Barrel, Doc, _Options) ->
-  post_put(post, Barrel, Doc).
+post(DbRef, Doc, _Options) ->
+  {_, BarrelId} = DbRef,
+  post_put(post, BarrelId, Doc).
 
-put(BarrelId, DocId, Doc, _Options) ->
+put(DbRef, DocId, Doc, _Options) ->
   Sep = <<"/">>,
+  {_, BarrelId} = DbRef,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
   post_put(put, Url, Doc).
 
@@ -79,7 +80,8 @@ post_put_resp(200, R) ->
 put_rev(_Db, _DocId, _Body, _History, _Options) ->
   {error, not_implemented}.
 
-get(BarrelId, DocId, _Options) ->
+get(DbRef, DocId, _Options) ->
+  {_, BarrelId} = DbRef,
   Sep = <<"/">>,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
   {Code, Reply} = req(get, Url),
@@ -92,9 +94,10 @@ get_resp(200, Reply) ->
   {ok, Doc}.
   
 
-delete(BarrelId, DocId, RevId, _Options) ->
+delete(DbRef, DocId, RevId, _Options) ->
   Sep = <<"/">>,
   Rev = <<"?rev=">>,
+  {_, BarrelId} = DbRef,
   Url = <<BarrelId/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
   {200, R} = req(delete, Url),
   Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
@@ -113,10 +116,9 @@ revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
 
 %% ----------
--record(state, {dbid, buffer=[]}).
 
-key_notify(DbName) ->
-  {n, l, {httpc_event, DbName}}.
+
+-record(state, {dbid, hackney_ref, hackney_acc, buffer=[]}).
 
 start_link() ->
   case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -130,46 +132,65 @@ stop() ->
 init(_) ->
   {ok, #state{}}.
 
-handle_call({start, DbId, _}, _From, State) ->
-  Key = key_notify(DbId),
-  {ok, _} = gen_event:start_link({via, gproc, Key}),
+handle_call({start, DbRef, _}, _From, State) ->
+  {_, DbId} = DbRef,
+  Since = 0, % TODO: pass it in parameter
+  gen_server:cast(?MODULE, {longpoll, DbRef, Since}),
   {reply, ok, State#state{dbid=DbId}};
 
-handle_call({changes_since, BarrelId, Since, Fun, Acc}, _From, #state{buffer=[]}=S) ->
-  gen_server:cast(?MODULE, {longpoll, BarrelId, Since, Fun, Acc}),
-  Reply = fold_result(Fun, Acc, []),
-  {reply, Reply, S};
-
-handle_call({changes_since, _, _, _, _}, _From, #state{buffer=Buf}=S) ->
-  {reply, Buf, S#state{buffer=[]}};
+handle_call({changes_since, _BarrelId, _Since, Fun, Acc}, _From, #state{buffer=Buf}=S) ->
+  Reply = fold_result(Fun, Acc, Buf),
+  {reply, Reply, S#state{buffer=[]}};
 
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
 
 
-handle_cast({longpoll, BarrelId, Since, Fun, Acc}, State) ->
+handle_cast({longpoll, DbRef, Since}, S) ->
   ChangesSince = <<"/_changes?feed=longpoll&since=">>,
   SinceBin = integer_to_binary(Since),
+  {_Module, BarrelId} = DbRef,
   Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
-  {ok, Reply} = get_longpoll(Url),
-  R = jsx:decode(Reply, [return_maps, {labels, attempt_atom}]),
-  Results = maps:get(results, R),
-  Buffer = fold_result(Fun, Acc, Results),
-  notify(BarrelId, db_updated),
-  {noreply, State#state{buffer=Buffer}};
+  Opts = [async, once],
+  {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
+  {noreply, S#state{dbid=BarrelId, hackney_ref=ClientRef}};
 
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
+handle_info({hackney_response, _Ref, {status, 204, _Reason}}, State) ->
+  {noreply, State};
+handle_info({hackney_response, _Ref, {status, 200, _Reason}}, State) ->
+  {noreply, State};
+handle_info({hackney_response, _Ref, {headers, _Headers}}, State) ->
+  {noreply, State};
+handle_info({hackney_response, _Ref, <<>>}, State) ->
+  {noreply, State};
+
+handle_info({hackney_response, _Ref, done}, S) ->
+  BarrelId = S#state.dbid,
+  Reply = S#state.hackney_acc, 
+  R = jsx:decode(Reply, [return_maps, {labels, attempt_atom}]),
+  Results = maps:get(results, R),
+  LastSeq = maps:get(last_seq, R),
+  NewBuffer = S#state.buffer ++ Results,
+  DbRef = {?MODULE, BarrelId},
+  ok = gen_server:cast(?MODULE, {longpoll, DbRef, LastSeq}),
+  ok = barrel_event:notify(DbRef, db_updated),
+  {noreply, S#state{buffer=NewBuffer}};
+
+handle_info({hackney_response,_Ref, Bin}, S) ->
+  {noreply, S#state{hackney_acc=Bin}};
 
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
-terminate(_Reason, #state{dbid=DbId}) ->
-  Key = key_notify(DbId),
-  ok = gen_event:stop({via, gproc, Key}),
+terminate(_Reason, #state{hackney_ref=undefined}) ->
+  ok;
+terminate(_Reason, #state{hackney_ref=Ref}) ->
+  ok = hackney:close(Ref),
   ok.
-
+  
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
@@ -183,12 +204,7 @@ fold_result(Fun, Acc, Results) ->
            end,
  lists:foldr(Folder, Acc, Results).
 
-
-notify(DbName, Event) ->
-  Key = key_notify(DbName),
-  gen_event:notify({via, gproc, Key}, Event).
-
-req(Method, Url) ->
+req(Method,Url) ->
   req(Method, Url, []).
 
 req(Method, Url, Map) when is_map(Map) ->
@@ -199,26 +215,3 @@ req(Method, Url, Body) ->
   {ok, Code, _Headers, Ref} = hackney:request(Method, Url, [], Body, []),
   {ok, Answer} = hackney:body(Ref),
   {Code, Answer}.
-
-get_longpoll(Url) ->
-  Opts = [async, once],
-  {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
-  loop_longpoll(ClientRef, []).
-
-loop_longpoll(Ref, Acc) ->
-  receive
-    {hackney_response, Ref, {status, 204, _Reason}} ->
-      loop_longpoll(Ref, Acc);
-    {hackney_response, Ref, {status, 200, _Reason}} ->
-      loop_longpoll(Ref, Acc);
-    {hackney_response, Ref, {headers, _Headers}} ->
-      loop_longpoll(Ref, Acc);
-    {hackney_response, Ref, done} ->
-      {ok, Acc};
-    {hackney_response, Ref, <<>>} ->
-      loop_longpoll(Ref, Acc);
-    {hackney_response, Ref, Bin} ->
-      loop_longpoll(Ref, Bin)
-  after 2000 ->
-      {error, timeout}
-  end.

@@ -75,18 +75,18 @@ init_feed(Req, #state{feed=normal}=S) ->
 
 init_feed(Req, #state{feed=longpoll, changes=[]}=S) ->
   DbId = S#state.dbid,
-  ok = subscribe(DbId),
-  info(db_updated, Req, S#state{subscribed=true});
+  ok = barrel_event:reg(DbId),
+  info({'$barrel_event', DbId, db_updated}, Req, S#state{subscribed=true});
 
 init_feed(Req, #state{feed=longpoll}=S) ->
   {ok, Req, S};
 
 init_feed(Req, #state{feed=eventsource}=S) ->
   DbId = S#state.dbid,
-  ok = subscribe(DbId),
+  ok = barrel_event:reg(DbId),
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
   {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
-  info(db_updated, Req2, S#state{subscribed=true}).
+  info({'$barrel_event', DbId, db_updated}, Req2, S#state{subscribed=true}).
 
 
 
@@ -105,7 +105,7 @@ handle(_, Req, S) ->
 
 
 
-info(db_updated, Req, S) ->
+info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
   DbId = S#state.dbid,
   Since = S#state.last_seq,
   {LastSeq, Changes} = changes(DbId, Since),
@@ -126,13 +126,13 @@ db_updated(Changes, LastSeq, Req, #state{feed=eventsource}=S) ->
 
 
 
-terminate(_Reason, _Req, #state{dbid=DbId, subscribed=true}) ->
+terminate(_Reason, _Req, #state{subscribed=true}) ->
   %% TODO improve closing of streamed changes
   %% by default, cowboy does not close connection
   %% this will never be called as we will receive
   %% a continuous flow of database update
   %% Maybe add a timeout in the change_events_handler?
-  ok = unsubscribe(DbId),
+  ok = barrel_event:unreg(),
   ok;
 
 terminate(_Reason, _Req, _S) ->
@@ -157,14 +157,4 @@ id() ->
   {Mega, Sec, Micro} = erlang:timestamp(),
   Id = (Mega * 1000000 + Sec) * 1000000 + Micro,
   integer_to_list(Id, 16).
-
-subscribe(Dbid) ->
-  Key = barrel_db_event:key(Dbid),
-  ok = gen_event:add_handler({via, gproc, Key}, barrel_http_evt_handler, self()),
-  ok.
-
-unsubscribe(Dbid) ->
-  Key = barrel_db_event:key(Dbid),
-  ok = gen_event:delete_handler({via, gproc, Key}, barrel_http_evt_handler, self()),
-  ok.
 
