@@ -1,5 +1,5 @@
 {application, barrel,
-  [{description, "An OTP application"},
+  [{description, "Barrel-db core application"},
    {vsn, "0.1.0"},
    {registered, []},
    {mod, {barrel_app, []}},
@@ -11,16 +11,12 @@
      crypto,
      worker_pool,
      gproc,
-     erocksdb,
-     cowboy,
-     trails,
-     cowboy_swagger,
-     hackney
+     erocksdb
     ]},
    {env, []},
    {modules, []},
-  
    {maintainers, []},
-   {licenses, []},
-   {links, []}
+   {licenses, ["Apache 2"]},
+   {links, [{"Main site", "https://barrel-db.org"},
+            {"Gitlab", "https://gitlab.com/barrel-db/barrel"}]}
   ]}.
