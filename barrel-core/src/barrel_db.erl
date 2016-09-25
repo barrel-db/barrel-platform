@@ -92,7 +92,7 @@ stop(Name) -> barrel_dbs_sup:stop_db(Name).
 
 clean(Name) ->
   #{store := Store, id := DbId} = call(Name, get_state),
-  barrel_local_store:clean_db(Store, Name, DbId),
+  barrel_store:clean_db(Store, Name, DbId),
   stop(Name).
 
 infos(Name) -> call(Name, get_infos).
@@ -107,7 +107,7 @@ get(Db, DocId, Options) ->
   MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
   Ancestors = proplists:get_value(ancestors, Options, []),
   #{store := Store, id := DbId} = call(Db, get_state),
-  barrel_local_store:get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, Ancestors).
+  barrel_store:get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, Ancestors).
 
 
 %% @doc create or update a document. Return the new created revision
@@ -223,7 +223,7 @@ post(Db, Doc, Options) ->
 %% @doc fold all docs by Id
 fold_by_id(Db, Fun, Acc, Opts) ->
   #{store := Store, id := DbId} = call(Db, get_state),
-  barrel_local_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
+  barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
 %% @doc fold all changes since last sequence
 changes_since(Db, Since0, Fun, Acc) when is_integer(Since0) ->
@@ -232,12 +232,12 @@ changes_since(Db, Since0, Fun, Acc) when is_integer(Since0) ->
             Since0 > 0 -> Since0 + 1;
             true -> Since0
           end,
-  barrel_local_store:changes_since(Store, DbId, Since, Fun, Acc).
+  barrel_store:changes_since(Store, DbId, Since, Fun, Acc).
 
 revsdiff(Db, DocId, RevIds) ->
   #{store := Store, id := DbId} = call(Db, get_state),
 
-  case barrel_local_store:get_doc_info(Store, DbId, DocId) of
+  case barrel_store:get_doc_info(Store, DbId, DocId) of
     {ok, #{revtree := RevTree}} -> revsdiff1(RevTree, RevIds);
     {error, not_found} -> {ok, RevIds, []};
     Error -> Error
@@ -359,7 +359,7 @@ handle_info({'EXIT', Pid, Reason}, State) ->
     Pid =:= WriterPid ->
       lager:info("~p writer crashed: ~p~n", [Name, Reason]),
       %% the writer crashed, respawn it
-      UpdateSeq = barrel_local_store:last_update_seq(Store, DbId),
+      UpdateSeq = barrel_store:last_update_seq(Store, DbId),
       NewWriter = spawn_writer(Store, DbId, UpdateSeq),
       {noreply, #{update_seq => UpdateSeq, writer => NewWriter}};
     true ->
@@ -389,7 +389,7 @@ db_key(Name) -> {n, l, {db, Name}}.
 call(Name, Req) -> gen_server:call(via(Name), Req).
 
 init_db(Name, Store) ->
-  {DbId, UpdateSeq} = barrel_local_store:open_db(Store, Name),
+  {DbId, UpdateSeq} = barrel_store:open_db(Store, Name),
   %% spawn writer actor
   WriterPid = spawn_writer(DbId, Store, UpdateSeq),
 
@@ -436,7 +436,7 @@ empty_doc_info() ->
 write_doc(DbId, Store, DocId, Fun, _Options, State) ->
   #{ parent := Parent, update_seq := Seq} = State,
 
-  DocInfo = case barrel_local_store:get_doc_info(Store, DbId, DocId) of
+  DocInfo = case barrel_store:get_doc_info(Store, DbId, DocId) of
               {ok, DI} -> DI;
               {error, not_found} -> empty_doc_info();
               Error -> throw(Error)
@@ -446,7 +446,7 @@ write_doc(DbId, Store, DocId, Fun, _Options, State) ->
     {ok, DocInfo2, Body, NewRev} ->
       NewSeq = Seq + 1,
       LastSeq = maps:get(update_seq, DocInfo2, undefined),
-      case barrel_local_store:write_doc(Store, DbId, DocId, LastSeq, DocInfo2#{update_seq => NewSeq}, Body) of
+      case barrel_store:write_doc(Store, DbId, DocId, LastSeq, DocInfo2#{update_seq => NewSeq}, Body) of
         ok ->
           Parent ! {update_seq, NewSeq},
           {{ok, DocId, NewRev}, State#{update_seq => NewSeq}};
