@@ -25,12 +25,14 @@
         , create_doc/1
         , put_get_delete/1
         , changes_since/1
+        , db_updated/1
         ]).
 
 all() -> [ info_database
          , create_doc
          , put_get_delete
-           %% , changes_since
+         , changes_since
+         , db_updated
          ].
 
 init_per_suite(Config) ->
@@ -83,37 +85,58 @@ put_get_delete(_Config) ->
   true = maps:get(<<"_deleted">>, DeletedDoc).
 
 changes_since(_Config) ->
-  ok = barrel_event:reg(url()),
-
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
   Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
-  Fun = fun(Seq, DocInfo, D, Acc) ->
-            {error, doc_not_fetched} = D,
+
+  [{2, <<"bb">>}, {1, <<"aa">>}] = since(0),
+                 [{2, <<"bb">>}] = since(1),
+                              [] = since(2),
+
+  {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
+
+                 [{3, <<"cc">>}] = since(2).
+
+db_updated(_Config) ->
+
+  ok = barrel_event:reg(url()),
+  Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
+  
+  Msg = one_msg(),
+  DbRef = url(),
+  {'$barrel_event', DbRef, db_updated} = Msg,
+  true = queue_is_empty(),
+ 
+  Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+  {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
+                        
+  Msg = one_msg(),
+  DbRef = url(),
+  {'$barrel_event', DbRef, db_updated} = Msg,
+  true = queue_is_empty(),
+
+  ok = barrel_event:unreg(),
+  ok.
+
+
+since(Since) ->
+  Fun = fun(Seq, DocInfo, Doc, Acc) ->
+            {error, doc_not_fetched} = Doc,
             Id = maps:get(id, DocInfo),
             {ok, [{Seq, Id}|Acc]}
         end,
-  [{1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
-  [{2, <<"bb">>}, {1, <<"aa">>}] = barrel_httpc:changes_since(url(), 0, Fun, []),
-  [] = barrel_httpc:changes_since(url(), 1, Fun, []),
-  [{2, <<"bb">>}] = barrel_httpc:changes_since(url(), 1, Fun, []),
-  [] = barrel_httpc:changes_since(url(), 2, Fun, []),
-  {ok, <<"cc">>, _RevId2} = barrel_httpc:put(url(), <<"cc">>, Doc2, []),
-  [{3, <<"cc">>}] = barrel_httpc:changes_since(url(), 2, Fun, []),
+  barrel_httpc:changes_since(url(), Since, Fun, []).
+ 
 
-  ok = barrel_event:unreg(),
+one_msg() -> 
+  receive
+    M -> M
+  after 2000 ->
+      {error, timeout}
+  end.
 
-  {message_queue_len, 3} = erlang:process_info(self(), message_queue_len),
-  FunReceive = fun() ->
-                   receive
-                     Any -> Any
-                   after 2000 ->
-                       {error, timeout}
-                   end
-               end,
-  Expected = [{'$barrel_event', url(), db_updated} || _ <- lists:seq(1,3) ],
-  Events = [FunReceive() || _ <- Expected ],
-  Expected = Events,
-  ok.
-
+queue_is_empty() ->
+  {message_queue_len, 0} = erlang:process_info(self(), message_queue_len),
+  true.
