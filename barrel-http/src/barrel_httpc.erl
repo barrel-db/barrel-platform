@@ -41,6 +41,8 @@
 -export([code_change/3]).
 -export([handle_cast/2]).
 
+-include_lib("hackney/include/hackney_lib.hrl").
+
 -record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
 
 
@@ -243,14 +245,15 @@ req(Method, Url, Map) when is_map(Map) ->
   req(Method, Url, Body);
 
 req(Method, Url, Body) ->
-  PoolName = pool_name(Url),
+  ParsedUrl = hackney_url:parse_url(Url),
+  PoolName = pool_name(ParsedUrl),
   Options = [{timeout, 150000}, {max_connections, 20}, {pool, PoolName}],
-  {ok, Code, _Headers, Ref} = hackney:request(Method, Url, [], Body, Options),
+  {ok, Code, _Headers, Ref} = hackney:request(Method, ParsedUrl, [], Body, Options),
   {ok, Answer} = hackney:body(Ref),
   {Code, Answer}.
 
 
-pool_name(Url) ->
-  [_,_,Host|_] = binary:split(Url,<<"/">>, [global]),
-  PoolName = <<"pool-httpc-", Host/binary>>,
-  binary_to_atom(PoolName, utf8).
+pool_name(ParsedUrl) ->
+  #hackney_url{netloc = NetLoc} = ParsedUrl,
+  PoolName = <<"pool-httpc-", NetLoc/binary>>,
+  barrel_lib:to_atom(PoolName).
