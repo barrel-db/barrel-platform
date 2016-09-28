@@ -41,6 +41,11 @@
 -export([code_change/3]).
 -export([handle_cast/2]).
 
+-include_lib("hackney/include/hackney_lib.hrl").
+
+-record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
+
+
 start(Name, Store) ->
   gen_server:call(?MODULE, {start, Name, Store}).
 
@@ -48,63 +53,22 @@ stop(_Name) ->
   {error, not_implemented}.
 
 infos(DbRef) ->
-  {_, BarrelId} = DbRef,
-  {200, R} = req(get, BarrelId),
-  Info = jsx:decode(R, [return_maps]),
-  {ok, Info}.
+  gen_server:call(?MODULE, {infos, DbRef}).
 
-post(DbRef, Doc, _Options) ->
-  {_, BarrelId} = DbRef,
-  post_put(post, BarrelId, Doc).
+post(DbRef, Doc, Options) ->
+  gen_server:call(?MODULE, {post, DbRef, Doc, Options}).
 
-put(DbRef, DocId, Doc, _Options) ->
-  Sep = <<"/">>,
-  {_, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
-  post_put(put, Url, Doc).
-
-post_put(Method, Url, Doc) ->
-  {Code, Reply} = req(Method, Url, Doc),
-  post_put_resp(Code, Reply).
-
-post_put_resp(404, _) ->
-  {error, not_found};
-post_put_resp(200, R) ->
-  Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
-  DocId = maps:get(id, Reply),
-  RevId = maps:get(rev, Reply),
-  true = maps:get(ok, Reply),
-  {ok, DocId, RevId}.
-
+put(DbRef, DocId, Doc, Options) ->
+  gen_server:call(?MODULE, {put, DbRef, DocId, Doc, Options}).
 
 put_rev(_Db, _DocId, _Body, _History, _Options) ->
   {error, not_implemented}.
 
-get(DbRef, DocId, _Options) ->
-  {_, BarrelId} = DbRef,
-  Sep = <<"/">>,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
-  {Code, Reply} = req(get, Url),
-  get_resp(Code, Reply).
+get(DbRef, DocId, Options) ->
+  gen_server:call(?MODULE, {get, DbRef, DocId, Options}).
 
-get_resp(404, _) ->
-  {error, not_found};
-get_resp(200, Reply) ->
-  Doc = jsx:decode(Reply, [return_maps]),
-  {ok, Doc}.
-  
-
-delete(DbRef, DocId, RevId, _Options) ->
-  Sep = <<"/">>,
-  Rev = <<"?rev=">>,
-  {_, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
-  {200, R} = req(delete, Url),
-  Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
-  DocId = maps:get(id, Reply),
-  NewRevId = maps:get(rev, Reply),
-  true = maps:get(ok, Reply),
-  {ok, DocId, NewRevId}.
+delete(DbRef, DocId, RevId, Options) ->
+  gen_server:call(?MODULE, {delete, DbRef, DocId, RevId, Options}).
 
 fold_by_id(_Db, _Fun, _Acc, _Opts) ->
   {error, not_implemented}.
@@ -116,9 +80,6 @@ revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
 
 %% ----------
-
-
--record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
 
 start_link() ->
   case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -137,6 +98,41 @@ handle_call({start, DbRef, _}, _From, State) ->
   Since = 0, % TODO: pass it in parameter
   gen_server:cast(?MODULE, {longpoll, DbRef, Since}),
   {reply, ok, State#state{dbid=DbId}};
+
+handle_call({infos, DbRef}, _From, State) ->
+  {_, BarrelId} = DbRef,
+  {200, R} = req(get, BarrelId),
+  Info = jsx:decode(R, [return_maps]),
+  {reply, {ok, Info}, State};
+
+handle_call({post, DbRef, Doc, _Options}, _From, State) ->
+  {_, BarrelId} = DbRef,
+  post_put(post, BarrelId, Doc, State);
+
+handle_call({put, DbRef, DocId, Doc, _Options}, _From, State) ->
+  Sep = <<"/">>,
+  {_, BarrelId} = DbRef,
+  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
+  post_put(put, Url, Doc, State);
+
+handle_call({get, DbRef, DocId, _Options}, _From, State) ->
+  {_, BarrelId} = DbRef,
+  Sep = <<"/">>,
+  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
+  {Code, Reply} = req(get, Url),
+  get_resp(Code, Reply, State);
+
+handle_call({delete, DbRef, DocId, RevId, _Options}, _From, State) ->
+  Sep = <<"/">>,
+  Rev = <<"?rev=">>,
+  {_, BarrelId} = DbRef,
+  Url = <<BarrelId/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
+  {200, R} = req(delete, Url),
+  Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
+  DocId = maps:get(id, Reply),
+  NewRevId = maps:get(rev, Reply),
+  true = maps:get(ok, Reply),
+  {reply, {ok, DocId, NewRevId}, State};
 
 handle_call({changes_since, {_, DbId}, Since, Fun, Acc}, _From,
             #state{dbid=DbId, first_seq=Since}=S) ->
@@ -198,15 +194,38 @@ handle_info({hackney_response, _Ref, done}, S) ->
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
-terminate(_Reason, #state{hackney_ref=undefined}) ->
-  ok;
-terminate(_Reason, #state{hackney_ref=Ref}) ->
-  ok = hackney:close(Ref),
+terminate(_Reason, _State) ->
   ok.
   
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
+
+
+post_put(Method, Url, Doc, State) ->
+  {Code, Reply} = req(Method, Url, Doc),
+  post_put_resp(Code, Reply, State).
+
+
+post_put_resp(404, _, State) ->
+  {reply, {error, not_found}, State};
+
+post_put_resp(200, R, State) ->
+  Answer = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
+  DocId = maps:get(id, Answer),
+  RevId = maps:get(rev, Answer),
+  true = maps:get(ok, Answer),
+  Reply = {ok, DocId, RevId},
+  {reply, Reply, State}.
+
+
+get_resp(404, _, State) ->
+  {reply, {error, not_found}, State};
+
+get_resp(200, Reply, State) ->
+  Doc = jsx:decode(Reply, [return_maps]),
+  {reply, {ok, Doc}, State}.
+
 
 fold_result(Fun, Acc, Results) ->
   Folder = fun(DocInfo, A) ->
@@ -217,6 +236,7 @@ fold_result(Fun, Acc, Results) ->
            end,
  lists:foldr(Folder, Acc, Results).
 
+
 req(Method,Url) ->
   req(Method, Url, []).
 
@@ -225,6 +245,15 @@ req(Method, Url, Map) when is_map(Map) ->
   req(Method, Url, Body);
 
 req(Method, Url, Body) ->
-  {ok, Code, _Headers, Ref} = hackney:request(Method, Url, [], Body, []),
+  ParsedUrl = hackney_url:parse_url(Url),
+  PoolName = pool_name(ParsedUrl),
+  Options = [{timeout, 150000}, {max_connections, 20}, {pool, PoolName}],
+  {ok, Code, _Headers, Ref} = hackney:request(Method, ParsedUrl, [], Body, Options),
   {ok, Answer} = hackney:body(Ref),
   {Code, Answer}.
+
+
+pool_name(ParsedUrl) ->
+  #hackney_url{netloc = NetLoc} = ParsedUrl,
+  PoolName = <<"pool-httpc-", NetLoc/binary>>,
+  barrel_lib:to_atom(PoolName).
