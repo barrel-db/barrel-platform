@@ -118,7 +118,7 @@ revsdiff(_Db, _DocId, _RevIds) ->
 %% ----------
 
 
--record(state, {dbid, hackney_ref, hackney_acc, buffer=[]}).
+-record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
 
 start_link() ->
   case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -138,9 +138,23 @@ handle_call({start, DbRef, _}, _From, State) ->
   gen_server:cast(?MODULE, {longpoll, DbRef, Since}),
   {reply, ok, State#state{dbid=DbId}};
 
-handle_call({changes_since, _BarrelId, _Since, Fun, Acc}, _From, #state{buffer=Buf}=S) ->
+handle_call({changes_since, {_, DbId}, Since, Fun, Acc}, _From,
+            #state{dbid=DbId, first_seq=Since}=S) ->
+  Buf = S#state.buffer,
   Reply = fold_result(Fun, Acc, Buf),
   {reply, Reply, S#state{buffer=[]}};
+
+handle_call({changes_since, DbRef, Since, Fun, Acc}, _From, S) ->
+  ChangesSince = <<"/_changes?feed=normal&since=">>,
+  SinceBin = integer_to_binary(Since),
+  {_Mod, BarrelId} = DbRef,
+  Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
+  {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
+  {ok, Body} = hackney:body(Ref),
+  Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
+  Changes = maps:get(results, Answer),
+  Reply = fold_result(Fun, Acc, Changes),
+  {reply, Reply, S};
 
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
@@ -166,6 +180,8 @@ handle_info({hackney_response, _Ref, {headers, _Headers}}, State) ->
   {noreply, State};
 handle_info({hackney_response, _Ref, <<>>}, State) ->
   {noreply, State};
+handle_info({hackney_response,_Ref, Bin}, S) when is_binary(Bin) ->
+  {noreply, S#state{hackney_acc=Bin}};
 
 handle_info({hackney_response, _Ref, done}, S) ->
   BarrelId = S#state.dbid,
@@ -178,9 +194,6 @@ handle_info({hackney_response, _Ref, done}, S) ->
   ok = gen_server:cast(?MODULE, {longpoll, DbRef, LastSeq}),
   ok = barrel_event:notify(DbRef, db_updated),
   {noreply, S#state{buffer=NewBuffer}};
-
-handle_info({hackney_response,_Ref, Bin}, S) ->
-  {noreply, S#state{hackney_acc=Bin}};
 
 handle_info(_Info, State) -> {noreply, State}.
 
