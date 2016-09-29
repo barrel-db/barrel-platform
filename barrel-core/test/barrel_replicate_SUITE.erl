@@ -70,13 +70,18 @@ target() ->
   <<"testdb">>.
 
 one_doc(_Config) ->
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  Options = [{metrics_freq, 100}],
+  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   stopped = barrel_replicate:stop(),
+
+  [Stats] = barrel_task_status:all(),
+  1 = proplists:get_value(docs_read, Stats),
+  1 = proplists:get_value(docs_written, Stats),
   ok.
 
 target_not_empty(_Config) ->

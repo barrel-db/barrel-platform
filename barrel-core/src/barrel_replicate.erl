@@ -19,6 +19,7 @@
 
 %% specific API
 -export([start_link/2]).
+-export([start_link/3]).
 -export([stop/0]).
 
 %% gen_server API
@@ -28,20 +29,39 @@
 -export([code_change/3]).
 -export([handle_cast/2]).
 
--record(st, {source, target, last_seq=0}).
+-record(stats,
+        { docs_read = 0
+        , doc_read_failures = 0
+        , docs_written = 0
+        , doc_write_failures = 0
+        }).
+
+-define(inc_stat(StatPos, Stats, Inc),
+        setelement(StatPos, Stats, element(StatPos, Stats) + Inc)).
+
+
+-record(st, {source, target, last_seq=0, stats=#stats{}}).
+
 
 start_link(Source, Target) ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target}, []).
+  start_link(Source, Target, []).
+
+start_link(Source, Target, Options) ->
+  gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target, Options}, []).
 
 stop() ->
   gen_server:call(?MODULE, stop).
 
-init({Source, Target}) ->
-  {ok, LastSeq} = replicate_change(Source, Target, 0),
-  ok = barrel_event:reg(Source),
+init({Source, Target, Options}) ->
+  Stats = #stats{},
+  {ok, LastSeq, Stats2} = replicate_change(Source, Target, 0, Stats),
+  ok = barrel_event:reg(Source),
   State = #st{source=Source,
               target=Target,
-              last_seq=LastSeq},
+              last_seq=LastSeq,
+              stats=Stats2},
+  ok = create_metrics_task(State, Options),
+  update_task(State),
   {ok, State}.
 
 
@@ -55,15 +75,19 @@ handle_info({'$barrel_event', {_Mod, _Db}, db_updated}, S) ->
   Source = S#st.source,
   Target = S#st.target,
   Since = S#st.last_seq,
-  {ok, LastSeq} = replicate_change(Source, Target, Since),
-  {noreply, S#st{last_seq=LastSeq}};
+  Stats = S#st.stats,
+  {ok, LastSeq, Stats2} = replicate_change(Source, Target, Since, Stats),
+  NewState = S#st{last_seq=LastSeq, stats=Stats2},
+  update_task(NewState),
+  {noreply, NewState};
 
 %% default source event Module=barrel_db
 handle_info({'$barrel_event', DbId, db_updated}, S) when is_binary(DbId) ->
   handle_info({'$barrel_event', {barrel_db, DbId}, db_updated}, S).
 
 %% default gen_server callback
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+  update_task(State),
   ok = barrel_event:unreg(),
   ok.
 
@@ -72,20 +96,26 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%---------------------------------------------------
 
-replicate_change(Source, Target, Since) ->
+replicate_change(Source, Target, Since, Stats) ->
   {LastSeq, Changes} = changes(Source, Since),
   Results = maps:get(<<"results">>, Changes) ,
-  [ sync_change (Source, Target, C) || C <- Results ],
-  {ok, LastSeq}.
+  {ok, Stats2} = lists:foldl(fun(C, {ok, Acc}) ->
+                           sync_change(Source, Target, C, Acc)
+                       end, {ok, Stats}, Results),
+  {ok, LastSeq, Stats2}.
 
-sync_change(Source, Target, Change) ->
+sync_change(Source, Target, Change, Stats) ->
   Id = maps:get(id, Change),
   RevTree = maps:get(revtree, Change),
   CurrentRev = maps:get(current_rev, Change),
   History = history(CurrentRev, RevTree),
+  
   {ok, Doc} = get(Source, Id, []),
+  Stats2 = ?inc_stat(#stats.docs_read, Stats, 1),
+
   {ok, _, _} = put_rev(Target, Id, Doc, History, []),
-  ok.
+  Stats3 = ?inc_stat(#stats.docs_written, Stats2, 1),
+  {ok, Stats3}.
 
 
 changes(Source, Since) ->
@@ -120,3 +150,34 @@ history(Rev, RevTree, History) ->
   DocInfo = maps:get(Rev, RevTree),
   Parent = maps:get(parent, DocInfo),
   history(Parent, RevTree, [Rev|History]).
+
+
+%%==============================================================================
+%% Metrics
+%%==============================================================================
+
+create_metrics_task(State, Options) ->
+  ok = barrel_task_status:add_task(
+         [ {type, replication}
+         , {source, State#st.source}
+         , {target, State#st.target}
+         , {revisions_checked, 0}
+         , {missing_revisions_found, 0}
+         , {docs_read, 0}
+         , {docs_written, 0}
+         , {doc_write_failures, 0}
+         ]),
+  Frequency = proplists:get_value(metrics_freq, Options, 1000),
+  barrel_task_status:set_update_frequency(Frequency),
+  ok.
+  
+stats(State) ->
+  Stats = State#st.stats,
+  [ {docs_read, Stats#stats.docs_read}
+  , {doc_read_failures, Stats#stats.doc_read_failures}
+  , {docs_written, Stats#stats.docs_written}
+  , {doc_write_failures, Stats#stats.doc_write_failures}
+  ].
+
+update_task(State) ->
+  barrel_task_status:update(stats(State)).
