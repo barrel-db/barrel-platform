@@ -114,19 +114,42 @@ random_activity(_Config) ->
   play_scenario(Scenario),
   timer:sleep(200),
   stopped = barrel_replicate:stop(),
-  {ok, DocF1} = barrel_db:get(<<"source">>, <<"f">>, []),
-  {ok, DocF2} = barrel_db:get(<<"testdb">>, <<"f">>, []),
-  3 = maps:get(<<"v">>, DocF1),
-  3 = maps:get(<<"v">>, DocF2),
+  Scenario = generate_scenario(),
+  ExpectedResults = play_scenario(Scenario),
+  ok = check_all(ExpectedResults),
   ok.
 
 play_scenario(Scenario) ->
-  [play(C) || C <- Scenario].
+  Map = maps:new(),
+  lists:foldl(fun(C, Acc) ->
+                  play(C, Acc)
+              end, Map, Scenario).
 
-play({put, DocName, Value})->
-  put_doc(DocName,Value);
-play({del, DocName}) ->
-  delete_doc(DocName).
+play({put, DocName, Value}, Map)->
+  put_doc(DocName,Value),
+  Map#{DocName => Value};
+play({del, DocName}, Map) ->
+  delete_doc(DocName),
+  Map#{DocName => deleted}.
+
+check_all(Map) ->
+  Keys = maps:keys(Map),
+  [ ok = check(K, Map) || K <- Keys ],
+  ok.
+
+check(DocName, Map) ->
+  Id = list_to_binary(DocName),
+  {ok, DocSource} = barrel_db:get(<<"source">>, Id, []),
+  {ok, DocTarget} = barrel_db:get(<<"testdb">>, Id, []),
+  case maps:get(DocName, Map) of
+    deleted ->
+      true = maps:get(<<"_deleted">>, DocSource),
+      true = maps:get(<<"_deleted">>, DocTarget);
+    Expected ->
+      Expected = maps:get(<<"v">>, DocSource),
+      Expected = maps:get(<<"v">>, DocTarget)
+  end,
+  ok.
 
 put_doc(DocName, Value) ->
   Id = list_to_binary(DocName),
