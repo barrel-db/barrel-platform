@@ -100,10 +100,10 @@ sync_change(Source, Target, Change, Metrics) ->
   RevTree = maps:get(revtree, Change),
   CurrentRev = maps:get(current_rev, Change),
   History = history(CurrentRev, RevTree),
- 
+
   {Doc, Metrics2} = read_doc(Source, Id, Metrics),
   Metrics3 = write_doc(Target, Id, Doc, History, Metrics2),
- 
+
   {ok, Metrics3}.
 
 
@@ -118,8 +118,8 @@ read_doc(Source, Id, Metrics) ->
       lager:error("replicate read error on dbid=~p for docid=~p", [Source, Id]),
       Metrics2 = barrel_metrics:inc(doc_read_failures, Metrics, 1),
       {undefined, Metrics2}
-    end.    
-        
+    end.
+
 write_doc(_, _, undefined, _, Metrics) ->
   Metrics;
 write_doc(Target, Id, Doc, History, Metrics) ->
@@ -129,11 +129,10 @@ write_doc(Target, Id, Doc, History, Metrics) ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
-    _ -> 
+    _ ->
       lager:error("replicate write error on dbid=~p for docid=~p", [Target, Id]),
       barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
-      
 
 changes(Source, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->

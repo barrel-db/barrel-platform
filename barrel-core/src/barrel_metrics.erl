@@ -31,7 +31,7 @@ new() ->
    , doc_write_failures => 0
    , doc_write_times => new_time_stats()
    }.
-     
+
 new_time_stats() ->
   #{ values => []
    , period => 10
@@ -40,7 +40,7 @@ new_time_stats() ->
 
 to_list(Metrics) ->
   maps:to_list(Metrics). 
-  
+
 
 inc(CounterName, Stats, Number) ->
   Counter = maps:get(CounterName, Stats),
@@ -65,7 +65,7 @@ mean([_|_], Acc, Sum, Size, Period) when Size > Period ->
 
 mean([V|Others], Acc, Sum, Size, Period) ->
   mean(Others, [V|Acc], Sum+V, Size+1, Period).
-  
+
 
 %%==============================================================================
 %% Storage of collected metrics
