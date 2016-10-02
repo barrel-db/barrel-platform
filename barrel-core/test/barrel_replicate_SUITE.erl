@@ -111,12 +111,10 @@ deleted_doc(_Config) ->
 random_activity(_Config) ->
   Scenario = generate_scenario(),
   {ok, _Pid} = barrel_replicate:start_link(source(), target()),
-  play_scenario(Scenario),
-  timer:sleep(200),
-  stopped = barrel_replicate:stop(),
-  Scenario = generate_scenario(),
   ExpectedResults = play_scenario(Scenario),
+  timer:sleep(200),
   ok = check_all(ExpectedResults),
+  stopped = barrel_replicate:stop(),
   ok.
 
 play_scenario(Scenario) ->
