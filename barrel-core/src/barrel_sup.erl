@@ -60,6 +60,7 @@ init(safe) ->
   Specs =[ ?sup(barrel_stores_sup)
          , ?sup(barrel_dbs_sup)
          , ?sup(barrel_event)
+         , ?sup(barrel_task_status)
          ],
   
   {ok, { {one_for_one, 5, 10}, Specs} }.

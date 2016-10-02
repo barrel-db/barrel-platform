@@ -350,8 +350,8 @@ handle_info({update_seq, Seq}, State = #{ name := Name }) ->
   barrel_db_event:notify(Name, db_updated),
   {noreply, State#{update_seq => Seq}};
 
-handle_info({'EXIT', Pid, Reason}, State) ->
-  #{dbid := DbId,
+handle_info({'EXIT', Pid, Reason},State) ->
+  #{id := DbId,
     name := Name,
     store := Store,
     writer := WriterPid}=State,
@@ -360,8 +360,9 @@ handle_info({'EXIT', Pid, Reason}, State) ->
       lager:info("~p writer crashed: ~p~n", [Name, Reason]),
       %% the writer crashed, respawn it
       UpdateSeq = barrel_store:last_update_seq(Store, DbId),
-      NewWriter = spawn_writer(Store, DbId, UpdateSeq),
-      {noreply, #{update_seq => UpdateSeq, writer => NewWriter}};
+      NewWriter = spawn_writer(DbId, Store, UpdateSeq),
+      lager:info("~p new writer spawned: dbid=~p store=~p~n", [Name, DbId, Store]),
+      {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
     true ->
       {noreply, State}
   end;
