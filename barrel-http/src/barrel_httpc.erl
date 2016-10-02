@@ -163,7 +163,8 @@ handle_cast({longpoll, DbRef, Since}, S) ->
   Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
   Opts = [async, once],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
-  {noreply, S#state{dbid=BarrelId, hackney_ref=ClientRef}};
+  EmptyAcc = <<>>,
+  {noreply, S#state{dbid=BarrelId, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
 
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
@@ -177,11 +178,13 @@ handle_info({hackney_response, _Ref, {headers, _Headers}}, State) ->
 handle_info({hackney_response, _Ref, <<>>}, State) ->
   {noreply, State};
 handle_info({hackney_response,_Ref, Bin}, S) when is_binary(Bin) ->
-  {noreply, S#state{hackney_acc=Bin}};
+  Acc = S#state.hackney_acc,
+  Acc2 = <<Acc/binary, Bin/binary>>,
+  {noreply, S#state{hackney_acc=Acc2}};
 
 handle_info({hackney_response, _Ref, done}, S) ->
   BarrelId = S#state.dbid,
-  Reply = S#state.hackney_acc, 
+  Reply = S#state.hackney_acc,
   R = jsx:decode(Reply, [return_maps, {labels, attempt_atom}]),
   Results = maps:get(results, R),
   LastSeq = maps:get(last_seq, R),
@@ -189,14 +192,15 @@ handle_info({hackney_response, _Ref, done}, S) ->
   DbRef = {?MODULE, BarrelId},
   ok = gen_server:cast(?MODULE, {longpoll, DbRef, LastSeq}),
   ok = barrel_event:notify(DbRef, db_updated),
-  {noreply, S#state{buffer=NewBuffer}};
+  EmptyAcc = <<>>,
+  {noreply, S#state{buffer=NewBuffer, hackney_acc=EmptyAcc}};
 
 handle_info(_Info, State) -> {noreply, State}.
 
 %% default gen_server callbacks
 terminate(_Reason, _State) ->
   ok.
-  
+
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ----------
