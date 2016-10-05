@@ -76,22 +76,22 @@ target() ->
 
 one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
-  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
-  Info = barrel_replicate:info(),
+  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
+  Info = barrel_replicate:info(Pid),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   timer:sleep(200),
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
 
   [Stats] = barrel_task_status:all(),
   1 = proplists:get_value(docs_read, Stats),
   1 = proplists:get_value(docs_written, Stats),
 
   Id = maps:get(id, Info),
-  {ok, _Checkpoint} = barrel_db:get(<<"source">>, <<"_local/", Id/binary>>, []),
-  {ok, _Checkpoint} = barrel_db:get(<<"testdb">>, <<"_local/", Id/binary>>, []),
+  {ok, _Checkpoint} = barrel_db:get(<<"source">>, <<"_replication_", Id/binary>>, []),
+  {ok, _Checkpoint} = barrel_db:get(<<"testdb">>, <<"_replication_", Id/binary>>, []),
   ok.
 
 target_not_empty(_Config) ->
@@ -99,23 +99,23 @@ target_not_empty(_Config) ->
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   timer:sleep(200),
 
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 %% =============================================================================
@@ -124,11 +124,11 @@ deleted_doc(_Config) ->
 
 random_activity(_Config) ->
   Scenario = scenario(),
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   ExpectedResults = play_scenario(Scenario, source()),
   timer:sleep(200),
   ok = check_all(ExpectedResults, source(), target()),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok = purge_scenario(ExpectedResults, source()),
   ok = purge_scenario(ExpectedResults, target()),
   ok.
@@ -148,7 +148,7 @@ checkpoints(_Config) ->
   {_, M4} = play_checkpoint(P4, M3),
 
   RepId = maps:get(id, Info),
-  CheckId = <<"_local/", RepId/binary>>,
+  CheckId = <<"_replication_", RepId/binary>>,
   {ok, Checkpoint} = barrel_db:get(source(), CheckId, []),
   History = maps:get(<<"history">>, Checkpoint),
   4 = length(History),
@@ -158,16 +158,16 @@ checkpoints(_Config) ->
   ok.
 
 play_checkpoint(Scenario, M) ->
-  {ok, _} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   Expected = play_scenario(Scenario, source(), M),
   timer:sleep(200),
   ok = check_all(Expected, source(), target()),
-  Info = barrel_replicate:info(),
-  stopped = barrel_replicate:stop(),
+  Info = barrel_replicate:info(Pid),
+  stopped = barrel_replicate:stop(Pid),
   {Info, Expected}.
 
 split(2, L) ->
-  {L1,L2} = lists:split(2, L), 
+  {L1,L2} = lists:split(2, L),
   [L1,L2];
 split(N, L) ->
   [L1, L2] = split(N div 2,L),
@@ -217,7 +217,7 @@ purge_scenario(Map, Db) ->
   Keys = maps:keys(Map),
   [{ok, _,_} = delete_doc(K, Db) || K <- Keys],
   ok.
-                   
+
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   case barrel_db:get(Db, Id, []) of
@@ -247,5 +247,5 @@ scenario() ->
   , {del, "a"}
   , {put, "f", 3}
   , {put, "g", 1}
-  , {put, "f", 4}  
+  , {put, "f", 4}
   ].

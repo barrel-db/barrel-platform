@@ -20,8 +20,8 @@
 %% specific API
 -export([start_link/2]).
 -export([start_link/3]).
--export([stop/0]).
--export([info/0]).
+-export([stop/1]).
+-export([info/1]).
 
 %% gen_server API
 -export([init/1, handle_call/3]).
@@ -44,13 +44,13 @@ start_link(Source, Target) ->
   start_link(Source, Target, []).
 
 start_link(Source, Target, Options) ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, {Source, Target, Options}, []).
+  gen_server:start_link(?MODULE, {Source, Target, Options}, []).
 
-stop() ->
-  gen_server:call(?MODULE, stop).
+stop(Pid) ->
+  gen_server:call(Pid, stop).
 
-info() ->
-  gen_server:call(?MODULE, info).
+info(Pid) ->
+  gen_server:call(Pid, info).
 
 init({Source, Target, Options}) ->
   RepId = uniqueid(Source, Target),
@@ -160,7 +160,7 @@ write_doc(Target, Id, Doc, History, Metrics) ->
 
 changes(Source, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
-            {ok, {Seq, [DocInfo|DocInfos]}} 
+            {ok, {Seq, [DocInfo|DocInfos]}}
         end,
   {LastSeq, Changes} = changes_since(Source, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
@@ -246,11 +246,11 @@ read_last_seq(Db, RepId) ->
       lager:error("replication cannot read checkpoint on ~p: ~p", [Db, Other]),
       0
   end.
-  
+
 checkpoint_docname(RepId) ->
-  <<"_local/", RepId/binary>>.
-  
-  
+  <<"_replication_", RepId/binary>>.
+
+
 %% =============================================================================
 %% Helpers
 %% =============================================================================

@@ -65,14 +65,14 @@ target() ->
 
 replicate_ok(_Config) ->
   Options = [{metrics_freq, 100}],
-  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
+  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
-  
+  stopped = barrel_replicate:stop(Pid),
+
   [Stats] = barrel_task_status:all(),
   1 = proplists:get_value(docs_read, Stats),
   1 = proplists:get_value(docs_written, Stats),
@@ -87,11 +87,11 @@ replicate_read_fail(_Config) ->
   meck:expect(barrel_db, get, MeckGet),
 
   Options = [{metrics_freq, 100}],
-  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
+  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   timer:sleep(200),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
 
   [Stats] = barrel_task_status:all(),
   0 = proplists:get_value(docs_read, Stats),
@@ -111,9 +111,9 @@ replicate_write_fail(_Config) ->
   meck:expect(barrel_db, put_rev, MeckPutRev),
 
   Options = [{metrics_freq, 100}],
-  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
+  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
   timer:sleep(200),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
 
   [Stats] = barrel_task_status:all(),
   1 = proplists:get_value(docs_read, Stats),
