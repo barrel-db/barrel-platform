@@ -82,7 +82,7 @@ replicate_ok(_Config) ->
 replicate_read_fail(_Config) ->
   meck:new(barrel_db, [passthrough]),
   MeckGet = fun(_Db, _DocId, _Options) ->
-                {error, from_mock}
+                {error, generated_by_mock_from, ?MODULE}
             end,
   meck:expect(barrel_db, get, MeckGet),
 
