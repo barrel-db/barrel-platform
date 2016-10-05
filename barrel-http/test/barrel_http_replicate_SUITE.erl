@@ -73,13 +73,13 @@ target() ->
   <<"testdb">>.
 
 one_doc(_Config) ->
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 target_not_empty(_Config) ->
@@ -87,36 +87,36 @@ target_not_empty(_Config) ->
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   timer:sleep(200),
 
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
 
   %% TODO bug to be fixed
-  %% https://gitlab.com/barrel-db/barrel-http/issues/1 
+  %% https://gitlab.com/barrel-db/barrel-http/issues/1
   true = maps:get(<<"_deleted">>, Doc3),
 
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 random_activity(_Config) ->
   Scenario = generate_scenario(),
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   ExpectedResults = play_scenario(Scenario),
   timer:sleep(200),
   ok = check_all(ExpectedResults),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 play_scenario(Scenario) ->
