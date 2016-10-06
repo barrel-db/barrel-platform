@@ -26,7 +26,7 @@
 
 -export(
    [ one_doc/1
-   , target_not_empty/1
+   , source_not_empty/1
    , deleted_doc/1
    , random_activity/1
    , checkpoints/1
@@ -34,7 +34,7 @@
 
 all() ->
   [ one_doc
-  , target_not_empty
+  , source_not_empty
   , deleted_doc
   , random_activity
   , checkpoints
@@ -45,13 +45,14 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-  ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
+  ok = barrel_db:start(source(), barrel_test_rocksdb),
+  ok = barrel_db:start(target(), barrel_test_rocksdb),
   Config.
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_db:clean(<<"testdb">>),
-  ok = barrel_db:clean(<<"source">>),
+  ok = barrel_db:clean(source()),
+  ok = barrel_db:clean(target()),
+  ok = barrel_replicate:clean(source(), target()),
   ok.
 
 end_per_suite(Config) ->
@@ -77,43 +78,45 @@ target() ->
 one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
   {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
-  Info = barrel_replicate:info(Pid),
+  %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   timer:sleep(200),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
   stopped = barrel_replicate:stop(Pid),
 
   [Stats] = barrel_task_status:all(),
   1 = proplists:get_value(docs_read, Stats),
   1 = proplists:get_value(docs_written, Stats),
 
-  Id = maps:get(id, Info),
-  {ok, _Checkpoint} = barrel_db:get(<<"source">>, <<"_replication_", Id/binary>>, []),
-  {ok, _Checkpoint} = barrel_db:get(<<"testdb">>, <<"_replication_", Id/binary>>, []),
+  {ok, _, _} = delete_doc("a", source()),
+  {ok, _, _} = delete_doc("a", target()),
+  %% Id = maps:get(id, Info),
+  %% {ok, _Checkpoint} = barrel_db:get(source(), <<"_replication_", Id/binary>>, []),
+  %% {ok, _Checkpoint} = barrel_db:get(target(), <<"_replication_", Id/binary>>, []),
   ok.
 
-target_not_empty(_Config) ->
+source_not_empty(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
   {ok, Pid} = barrel_replicate:start_link(source(), target()),
   timer:sleep(200),
 
-  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
   stopped = barrel_replicate:stop(Pid),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
 
   {ok, Pid} = barrel_replicate:start_link(source(), target()),
-  barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
+  barrel_db:delete(source(), <<"a">>, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  {ok,Doc3} = barrel_db:get(target(), <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
   stopped = barrel_replicate:stop(Pid),
   ok.
@@ -142,16 +145,13 @@ checkpoints(_Config) ->
   [P1,P2,P3,P4] = split(4, Scenario),
 
   %% start and stop replication 4 times
-  {Info, M1} = play_checkpoint(P1, maps:new()),
+  {_, M1} = play_checkpoint(P1, maps:new()),
   {_, M2} = play_checkpoint(P2, M1),
   {_, M3} = play_checkpoint(P3, M2),
-  {_, M4} = play_checkpoint(P4, M3),
+  {Info, M4} = play_checkpoint(P4, M3),
 
-  RepId = maps:get(id, Info),
-  CheckId = <<"_replication_", RepId/binary>>,
-  {ok, Checkpoint} = barrel_db:get(source(), CheckId, []),
-  History = maps:get(<<"history">>, Checkpoint),
-  4 = length(History),
+  History = maps:get(checkpoints, Info),
+  15 = length(History),
 
   ok = purge_scenario(M4, source()),
   ok = purge_scenario(M2, target()),
