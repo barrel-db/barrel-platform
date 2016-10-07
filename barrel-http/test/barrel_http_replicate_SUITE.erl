@@ -53,6 +53,7 @@ end_per_testcase(_, _Config) ->
   ok = barrel_db:clean(<<"testdb">>),
   ok = barrel_db:clean(<<"source">>),
   stopped = barrel_httpc:stop(),
+  ok = barrel_replicate:clean(source(), target()),
   ok.
 
 end_per_suite(Config) ->
