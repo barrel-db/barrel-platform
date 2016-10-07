@@ -17,26 +17,27 @@
 
 %% API
 -export(
-   [
-    all/0,
-    init_per_suite/1,
-    end_per_suite/1,
-    init_per_testcase/2,
-    end_per_testcase/2
+   [ all/0
+   , init_per_suite/1
+   , end_per_suite/1
+   , init_per_testcase/2
+   , end_per_testcase/2
    ]).
 
 -export(
    [ one_doc/1
-   , target_not_empty/1
+   , source_not_empty/1
    , deleted_doc/1
    , random_activity/1
+   , checkpoints/1
    ]).
 
 all() ->
   [ one_doc
-  , target_not_empty
+  , source_not_empty
   , deleted_doc
   , random_activity
+  , checkpoints
   ].
 
 init_per_suite(Config) ->
@@ -44,13 +45,14 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-  ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
+  ok = barrel_db:start(source(), barrel_test_rocksdb),
+  ok = barrel_db:start(target(), barrel_test_rocksdb),
   Config.
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_db:clean(<<"testdb">>),
-  ok = barrel_db:clean(<<"source">>),
+  ok = barrel_db:clean(source()),
+  ok = barrel_db:clean(target()),
+  ok = barrel_replicate:clean(source(), target()),
   ok.
 
 end_per_suite(Config) ->
@@ -69,76 +71,141 @@ source() ->
 target() ->
   <<"testdb">>.
 
+%% =============================================================================
+%% Basic usage
+%% =============================================================================
+
 one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
-  {ok, _Pid} = barrel_replicate:start_link(source(), target(), Options),
+  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
+  %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
-  Doc2 = Doc#{<<"_rev">> => RevId},
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   timer:sleep(200),
-  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  Doc2 = Doc#{<<"_rev">> => RevId},
+  {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
+  stopped = barrel_replicate:stop(Pid),
 
   [Stats] = barrel_task_status:all(),
   1 = proplists:get_value(docs_read, Stats),
   1 = proplists:get_value(docs_written, Stats),
+
+  {ok, _, _} = delete_doc("a", source()),
+  {ok, _, _} = delete_doc("a", target()),
+  %% Id = maps:get(id, Info),
+  %% {ok, _Checkpoint} = barrel_db:get(source(), <<"_replication_", Id/binary>>, []),
+  %% {ok, _Checkpoint} = barrel_db:get(target(), <<"_replication_", Id/binary>>, []),
   ok.
 
-target_not_empty(_Config) ->
+source_not_empty(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
   timer:sleep(200),
 
-  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  stopped = barrel_replicate:stop(),
+  {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
+  stopped = barrel_replicate:stop(Pid),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
 
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
-  barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  barrel_db:delete(source(), <<"a">>, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  {ok,Doc3} = barrel_db:get(target(), <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
-  stopped = barrel_replicate:stop(),
+  stopped = barrel_replicate:stop(Pid),
   ok.
+
+%% =============================================================================
+%% Complex scenarios
+%% =============================================================================
 
 random_activity(_Config) ->
-  Scenario = generate_scenario(),
-  {ok, _Pid} = barrel_replicate:start_link(source(), target()),
-  ExpectedResults = play_scenario(Scenario),
+  Scenario = scenario(),
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  ExpectedResults = play_scenario(Scenario, source()),
   timer:sleep(200),
-  ok = check_all(ExpectedResults),
-  stopped = barrel_replicate:stop(),
+  ok = check_all(ExpectedResults, source(), target()),
+  stopped = barrel_replicate:stop(Pid),
+  ok = purge_scenario(ExpectedResults, source()),
+  ok = purge_scenario(ExpectedResults, target()),
   ok.
 
-play_scenario(Scenario) ->
-  Map = maps:new(),
+%% =============================================================================
+%% Checkpoints
+%% =============================================================================
+
+checkpoints(_Config) ->
+  Scenario = scenario(),
+  [P1,P2,P3,P4] = split(4, Scenario),
+
+  %% start and stop replication 4 times
+  M1 = play_checkpoint(P1, maps:new()),
+  M2 = play_checkpoint(P2, M1),
+  M3 = play_checkpoint(P3, M2),
+  M4 = play_checkpoint(P4, M3),
+
+  Info = barrel_replicate:info(source(), target()),
+  SourceCheckpoints = maps:get(source_checkpoints, Info),
+  History = maps:get(<<"history">>, SourceCheckpoints),
+  4 = length(History),
+  LastSession = hd(History),
+  12 = maps:get(<<"source_last_seq">>, LastSession),
+
+  ok = purge_scenario(M4, source()),
+  ok = purge_scenario(M2, target()),
+  ok.
+
+play_checkpoint(Scenario, M) ->
+  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  Expected = play_scenario(Scenario, source(), M),
+  timer:sleep(200),
+  ok = check_all(Expected, source(), target()),
+  stopped = barrel_replicate:stop(Pid),
+  Expected.
+
+split(2, L) ->
+  {L1,L2} = lists:split(2, L),
+  [L1,L2];
+split(N, L) ->
+  [L1, L2] = split(N div 2,L),
+  S1 = split(N div 2, L1),
+  S2 = split(N div 2, L2),
+  S1 ++ S2.
+
+%% =============================================================================
+%% Scenario helpers
+%% =============================================================================
+
+play_scenario(Scenario, Db) ->
+  play_scenario(Scenario, Db, maps:new()).
+
+play_scenario(Scenario, Db, Map) ->
   lists:foldl(fun(C, Acc) ->
-                  play(C, Acc)
+                  play(C, Db, Acc)
               end, Map, Scenario).
 
-play({put, DocName, Value}, Map)->
-  put_doc(DocName,Value),
+play({put, DocName, Value}, Db, Map)->
+  put_doc(DocName, Value, Db),
   Map#{DocName => Value};
-play({del, DocName}, Map) ->
-  delete_doc(DocName),
+play({del, DocName}, Db, Map) ->
+  delete_doc(DocName, Db),
   Map#{DocName => deleted}.
 
-check_all(Map) ->
+check_all(Map, Db1, Db2) ->
   Keys = maps:keys(Map),
-  [ ok = check(K, Map) || K <- Keys ],
+  [ ok = check(K, Map, Db1, Db2) || K <- Keys ],
   ok.
 
-check(DocName, Map) ->
+check(DocName, Map, Db1, Db2) ->
   Id = list_to_binary(DocName),
-  {ok, DocSource} = barrel_db:get(<<"source">>, Id, []),
-  {ok, DocTarget} = barrel_db:get(<<"testdb">>, Id, []),
+  {ok, DocSource} = barrel_db:get(Db1, Id, []),
+  {ok, DocTarget} = barrel_db:get(Db2, Id, []),
   case maps:get(DocName, Map) of
     deleted ->
       true = maps:get(<<"_deleted">>, DocSource),
@@ -149,24 +216,29 @@ check(DocName, Map) ->
   end,
   ok.
 
-put_doc(DocName, Value) ->
+purge_scenario(Map, Db) ->
+  Keys = maps:keys(Map),
+  [{ok, _,_} = delete_doc(K, Db) || K <- Keys],
+  ok.
+
+put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
-  case barrel_db:get(<<"source">>, Id, []) of
+  case barrel_db:get(Db, Id, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel_db:put(<<"source">>, Id, Doc2, []);
+      {ok,_,_} = barrel_db:put(Db, Id, Doc2, []);
     {error, not_found} ->
       Doc = #{<<"_id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel_db:put(<<"source">>, Id, Doc, [])
+      {ok,_,_} = barrel_db:put(Db, Id, Doc, [])
   end.
 
-delete_doc(DocName) ->
+delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
-  {ok, Doc} = barrel_db:get(<<"source">>, Id, []),
+  {ok, Doc} = barrel_db:get(Db, Id, []),
   RevId = maps:get(<<"_rev">>, Doc),
-  barrel_db:delete(<<"source">>, Id, RevId, []).
+  barrel_db:delete(Db, Id, RevId, []).
 
-generate_scenario() ->
+scenario() ->
   [ {put, "a", 1}
   , {put, "b", 1}
   , {put, "c", 1}
@@ -177,4 +249,6 @@ generate_scenario() ->
   , {put, "f", 2}
   , {del, "a"}
   , {put, "f", 3}
+  , {put, "g", 1}
+  , {put, "f", 4}
   ].
