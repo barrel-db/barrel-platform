@@ -22,6 +22,7 @@
 -export([start_link/3]).
 -export([stop/1]).
 -export([info/1]).
+-export([info/2]).
 -export([clean/2]).
 
 %% gen_server API
@@ -39,6 +40,7 @@
             , last_seq=0  ::integer() % last received seq from source
             , target_seq  ::integer() % target seq for current repl session
             , metrics
+            , options
             }).
 
 
@@ -51,8 +53,12 @@ start_link(Source, Target, Options) ->
 stop(Pid) ->
   gen_server:call(Pid, stop).
 
-info(Pid) ->
+info(Pid) when is_pid(Pid)->
   gen_server:call(Pid, info).
+
+info(Source, Target) ->
+  RepId = uniqueid(Source, Target),
+  get_checkpoints(Source, Target, RepId).
 
 clean(Source, Target) ->
   RepId = uniqueid(Source, Target),
@@ -64,7 +70,6 @@ init({Source, Target, Options}) ->
   RepId = uniqueid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
-  TargetSeq = checkpoint_target_seq(Source),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
   ok = barrel_event:reg(Source),
   State = #st{source=Source,
@@ -72,12 +77,13 @@ init({Source, Target, Options}) ->
               id=RepId,
               session_id = barrel_lib:uniqid(binary),
               start_seq=StartSeq,
-              target_seq=TargetSeq,
               last_seq=LastSeq,
-              metrics=Metrics2},
+              metrics=Metrics2,
+              options=Options},
+  State2 = compute_target_seq(State),
   ok = barrel_metrics:create_task(Metrics2, Options),
   barrel_metrics:update_task(Metrics2),
-  {ok, State}.
+  {ok, State2}.
 
 handle_call(info, _From, State) ->
   RepId = State#st.id,
@@ -110,10 +116,10 @@ handle_info({'$barrel_event', {_Mod, _Db}, db_updated}, S) ->
   From = S#st.last_seq,
   Metrics = S#st.metrics,
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, From, Metrics),
-  NewState = S#st{last_seq=LastSeq, metrics=Metrics2},
-  ok = write_checkpoint(S),
+  S2 = S#st{last_seq=LastSeq, metrics=Metrics2},
+  S3 = maybe_write_checkpoint(S2),
   barrel_metrics:update_task(Metrics2),
-  {noreply, NewState};
+  {noreply, S3};
 
 %% default source event Module=barrel_db
 handle_info({'$barrel_event', DbId, db_updated}, S) when is_binary(DbId) ->
@@ -130,7 +136,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 
 %% =============================================================================
-%% Internals
+%% Replicate changes from source to target
 %% =============================================================================
 
 replicate_change(Source, Target, StartSeq, Metrics) ->
@@ -211,19 +217,31 @@ changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
   barrel_db:changes_since(Db, Since, Fun, Acc).
 
 %% =============================================================================
-%% Checkpoints management
+%% Checkpoints management: when, where and what
 %% =============================================================================
+
+%% @doc Decide it we should write checkpoints, and do it.
+maybe_write_checkpoint(#st{last_seq=L, target_seq=T}=S) when L >= T ->
+  write_checkpoint(S),
+  compute_target_seq(S);
+maybe_write_checkpoint(State) ->
+  State.
+
+compute_target_seq(State) ->
+  LastSeq = State#st.last_seq,
+  CheckpointSize = proplists:get_value(checkpoint_size, State#st.options, 10),
+  TargetSeq = LastSeq + CheckpointSize,
+  State#st{target_seq=TargetSeq}.
+
 
 %% @doc Write checkpoint information on both source and target databases.
 write_checkpoint(State) ->
   StartSeq = State#st.start_seq,
   LastSeq = State#st.last_seq,
-  TargetSeq = State#st.target_seq,
   Source = State#st.source,
   Target = State#st.target,
   Checkpoint = #{<<"source_last_seq">>   => LastSeq
                 ,<<"source_start_seq">>  => StartSeq
-                ,<<"source_target_seq">> => TargetSeq
                 ,<<"session_id">> => State#st.session_id
                 ,<<"end_time">> => timestamp()
                 ,<<"end_time_microsec">> => erlang:system_time(micro_seconds)
@@ -267,16 +285,12 @@ read_last_seq(Db, RepId) ->
       0
   end.
 
-%% @doc Compute target seq for a replication session
-checkpoint_target_seq({_Mod, _Db}) ->
-  {error, not_implemented};
-checkpoint_target_seq(Source) when is_binary(Source) ->
-  %% TODO change this code with new peer API refactoring
-  {ok, Info} = barrel_db:infos(Source),
-  DbId = maps:get(id, Info),
-  Store = maps:get(store, Info),
-  UpdateSeq = barrel_store:last_update_seq(Store, DbId),
-  UpdateSeq.
+get_checkpoints(Source, Target, RepId) ->
+  {ok, SourceCheckpoint} = read_checkpoint_doc(Source, RepId),
+  {ok, TargetCheckpoint} = read_checkpoint_doc(Target, RepId),
+  #{id => RepId,
+    source_checkpoints => SourceCheckpoint,
+    target_checkpoints => TargetCheckpoint}.
 
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
   Path = checkpoint_filename(Db, RepId),
@@ -301,6 +315,7 @@ checkpoint_filename({Mod, _Url}, RepId) ->
   ModStr = atom_to_list(Mod),
   DocIdStr = binary_to_list(RepId),
   "checkpoint_" ++ ModStr ++ "_" ++ DocIdStr;
+
 checkpoint_filename(Db, RepId) when is_binary(Db) ->
   DbStr = binary_to_list(Db),
   DocIdStr = binary_to_list(RepId),

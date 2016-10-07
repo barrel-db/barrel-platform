@@ -145,13 +145,17 @@ checkpoints(_Config) ->
   [P1,P2,P3,P4] = split(4, Scenario),
 
   %% start and stop replication 4 times
-  {_, M1} = play_checkpoint(P1, maps:new()),
-  {_, M2} = play_checkpoint(P2, M1),
-  {_, M3} = play_checkpoint(P3, M2),
-  {Info, M4} = play_checkpoint(P4, M3),
+  M1 = play_checkpoint(P1, maps:new()),
+  M2 = play_checkpoint(P2, M1),
+  M3 = play_checkpoint(P3, M2),
+  M4 = play_checkpoint(P4, M3),
 
-  History = maps:get(checkpoints, Info),
-  15 = length(History),
+  Info = barrel_replicate:info(source(), target()),
+  SourceCheckpoints = maps:get(source_checkpoints, Info),
+  History = maps:get(<<"history">>, SourceCheckpoints),
+  4 = length(History),
+  LastSession = hd(History),
+  12 = maps:get(<<"source_last_seq">>, LastSession),
 
   ok = purge_scenario(M4, source()),
   ok = purge_scenario(M2, target()),
@@ -162,9 +166,8 @@ play_checkpoint(Scenario, M) ->
   Expected = play_scenario(Scenario, source(), M),
   timer:sleep(200),
   ok = check_all(Expected, source(), target()),
-  Info = barrel_replicate:info(Pid),
   stopped = barrel_replicate:stop(Pid),
-  {Info, Expected}.
+  Expected.
 
 split(2, L) ->
   {L1,L2} = lists:split(2, L),
