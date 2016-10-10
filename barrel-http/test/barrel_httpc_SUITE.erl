@@ -103,15 +103,15 @@ db_updated(_Config) ->
   ok = barrel_event:reg(url()),
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(url(), <<"aa">>, Doc, []),
-  
+
   Msg = one_msg(),
   DbRef = url(),
   {'$barrel_event', DbRef, db_updated} = Msg,
   true = queue_is_empty(),
- 
+
   Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(url(), <<"bb">>, Doc2, []),
-                        
+
   Msg = one_msg(),
   DbRef = url(),
   {'$barrel_event', DbRef, db_updated} = Msg,
@@ -128,9 +128,9 @@ since(Since) ->
             {ok, [{Seq, Id}|Acc]}
         end,
   barrel_httpc:changes_since(url(), Since, Fun, []).
- 
 
-one_msg() -> 
+
+one_msg() ->
   receive
     M -> M
   after 2000 ->
