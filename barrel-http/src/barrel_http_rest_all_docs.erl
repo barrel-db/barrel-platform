@@ -60,7 +60,8 @@ to_json(Req, State) ->
                     <<"rev">> => Rev},
             {ok, [Row | Acc1]}
         end,
-  Rows = barrel_db:fold_by_id(DbId, Fun, [], []),
+  Conn = barrel_http_conn:peer(DbId),
+  Rows = barrel_db:fold_by_id(Conn, Fun, [], []),
   OffSet = 0,
   TotalRows = length(Rows),
   Reply = #{<<"offset">> => OffSet,
