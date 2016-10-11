@@ -110,7 +110,7 @@ handle_call(stop, _From, State) ->
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
-handle_info({'$barrel_event', {_Mod, _Db}, db_updated}, S) ->
+handle_info({'$barrel_event', _, db_updated}, S) ->
   Source = S#st.source,
   Target = S#st.target,
   From = S#st.last_seq,
@@ -119,11 +119,7 @@ handle_info({'$barrel_event', {_Mod, _Db}, db_updated}, S) ->
   S2 = S#st{last_seq=LastSeq, metrics=Metrics2},
   S3 = maybe_write_checkpoint(S2),
   barrel_metrics:update_task(Metrics2),
-  {noreply, S3};
-
-%% default source event Module=barrel_db
-handle_info({'$barrel_event', DbId, db_updated}, S) when is_binary(DbId) ->
-  handle_info({'$barrel_event', {barrel_db, DbId}, db_updated}, S).
+  {noreply, S3}.
 
 %% default gen_server callback
 terminate(_Reason, State) ->
