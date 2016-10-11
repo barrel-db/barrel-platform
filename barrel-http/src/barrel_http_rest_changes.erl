@@ -26,7 +26,7 @@ trails() ->
   Metadata =
     #{ get => #{ summary => "Get changes which happened on the database."
                , produces => ["application/json"]
-               , parameters => 
+               , parameters =>
                    [#{ name => <<"feed">>
                      , description => <<"longpoll/eventsource reply">>
                      , in => <<"query">>

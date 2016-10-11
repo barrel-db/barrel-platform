@@ -36,7 +36,7 @@ all() -> [ info_database
          ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_http),
   Config.
 
 url() ->
@@ -44,14 +44,14 @@ url() ->
 
 init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-  {ok, HttpHttpConn} = barrel_httpc:connect(url(), []),
-  [{http_conn, HttpHttpConn}|Config].
+  {ok, HttpConn} = barrel_httpc:connect(url(), []),
+  [{http_conn, HttpConn}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   stopped = barrel_httpc:stop(HttpConn),
   ok = barrel_db:clean(<<"testdb">>),
-  Config.
+  ok.
 
 end_per_suite(Config) ->
   catch erocksdb:destroy(<<"testdb">>),
@@ -105,20 +105,19 @@ changes_since(Config) ->
 db_updated(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
 
-  ok = barrel_event:reg(url()),
+  ok = barrel_event:reg(HttpConn),
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(HttpConn, <<"aa">>, Doc, []),
 
   Msg = one_msg(),
-  Url = url(),
-  {'$barrel_event', Url, db_updated} = Msg,
+  {'$barrel_event', HttpConn, db_updated} = Msg,
   true = queue_is_empty(),
 
   Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
 
   Msg = one_msg(),
-  {'$barrel_event', Url, db_updated} = Msg,
+  {'$barrel_event', HttpConn, db_updated} = Msg,
   true = queue_is_empty(),
 
   ok = barrel_event:unreg(),

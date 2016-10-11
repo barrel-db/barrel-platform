@@ -49,35 +49,37 @@ connect(Url, Options) ->
 
 start_link(Url, Options) ->
   case gen_server:start_link(?MODULE, [Url, Options], []) of
-    {ok, Pid} -> {ok, Pid};
+    {ok, Pid} ->
+      Conn = {?MODULE, Pid},
+      {ok, Conn};
     {error, {already_started, Pid}} -> {ok, Pid}
   end.
 
-stop(Pid) ->
+stop({?MODULE, Pid}) ->
   gen_server:call(Pid, stop).
 
-infos(Pid) ->
+infos({?MODULE, Pid}) ->
   gen_server:call(Pid, infos).
 
-post(Pid, Doc, Options) ->
+post({?MODULE, Pid}, Doc, Options) ->
   gen_server:call(Pid, {post, Doc, Options}).
 
-put(Pid, DocId, Doc, Options) ->
+put({?MODULE, Pid}, DocId, Doc, Options) ->
   gen_server:call(Pid, {put, DocId, Doc, Options}).
 
 put_rev(_Db, _DocId, _Body, _History, _Options) ->
   {error, not_implemented}.
 
-get(Pid, DocId, Options) ->
+get({?MODULE, Pid}, DocId, Options) ->
   gen_server:call(Pid, {get, DocId, Options}).
 
-delete(Pid, DocId, RevId, Options) ->
+delete({?MODULE, Pid}, DocId, RevId, Options) ->
   gen_server:call(Pid, {delete, DocId, RevId, Options}).
 
 fold_by_id(_Db, _Fun, _Acc, _Opts) ->
   {error, not_implemented}.
 
-changes_since(Pid, Since, Fun, Acc) ->
+changes_since({?MODULE, Pid}, Since, Fun, Acc) ->
   gen_server:call(Pid, {changes_since, Since, Fun, Acc}).
 
 revsdiff(_Db, _DocId, _RevIds) ->
@@ -90,12 +92,6 @@ init([Url, _Options]) ->
   State = #state{dbid=Url},
   {noreply, State2} =  handle_cast({longpoll, Url, Since}, State),
   {ok, State2}.
-
-handle_call({start, DbRef, _}, _From, State) ->
-  {_, DbId} = DbRef,
-  Since = 0, % TODO: pass it in parameter
-  gen_server:cast(self(), {longpoll, DbRef, Since}),
-  {reply, ok, State#state{dbid=DbId}};
 
 handle_call(infos, _From, State) ->
   DbUrl = State#state.dbid,
@@ -144,7 +140,7 @@ handle_call({changes_since, Since, Fun, Acc}, _From, S) ->
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
-  {ok, Body} = hackney:body(Ref),
+  {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
   Changes = maps:get(results, Answer),
   Reply = fold_result(Fun, Acc, Changes),
@@ -187,7 +183,7 @@ handle_info({hackney_response, _Ref, done}, S) ->
   LastSeq = maps:get(last_seq, R),
   NewBuffer = S#state.buffer ++ Results,
   ok = gen_server:cast(self(), {longpoll, DbUrl, LastSeq}),
-  ok = barrel_event:notify(DbUrl, db_updated),
+  ok = barrel_event:notify({?MODULE, self()}, db_updated),
   EmptyAcc = <<>>,
   {noreply, S#state{buffer=NewBuffer, hackney_acc=EmptyAcc}};
 

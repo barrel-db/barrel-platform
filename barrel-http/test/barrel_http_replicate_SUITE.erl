@@ -44,15 +44,15 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-  ok = barrel_db:start(<<"source">>, barrel_test_rocksdb),
-  {ok, _} = barrel_httpc:start_link(),
-  ok = barrel_httpc:start(source(), undefined),
-  Config.
+  ok = barrel_db:start(<<"source">>, barrel_source_rocksdb),
+  {ok, HttpConn} = barrel_httpc:connect(source_url(), []),
+  [{http_conn, HttpConn}|Config].
 
-end_per_testcase(_, _Config) ->
+end_per_testcase(_, Config) ->
   ok = barrel_db:clean(<<"testdb">>),
   ok = barrel_db:clean(<<"source">>),
-  stopped = barrel_httpc:stop(),
+  HttpConn = proplists:get_value(http_conn, Config),
+  stopped = barrel_httpc:stop(HttpConn),
   ok = barrel_replicate:clean(source(), target()),
   ok.
 
@@ -65,41 +65,53 @@ end_per_suite(Config) ->
   %% ok = erocksdb:destroy("source", []),
   Config.
 
+source_url() ->
+  <<"http://localhost:8080/source">>.
+
 source() ->
-  Mod = barrel_httpc,
-  Ctx = <<"http://localhost:8080/source">>,
-  {Mod, Ctx}.
+  {barrel_httpc, source_url()}.
 
 target() ->
   <<"testdb">>.
 
-one_doc(_Config) ->
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+one_doc(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
+  {ok, Pid} = barrel_replicate:start_link(HttpConn, target()),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
+  {1, [_]} = changes(<<"source">>, 0),
+  {ok, _} = barrel_db:get(<<"source">>, <<"a">>, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   stopped = barrel_replicate:stop(Pid),
   ok.
 
-target_not_empty(_Config) ->
+changes(DbId, Since) ->
+  Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
+            {ok, {Seq, [DocInfo|DocInfos]}}
+        end,
+  barrel_db:changes_since(DbId, Since, Fun, {Since, []}).
+
+target_not_empty(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(HttpConn, target()),
   timer:sleep(200),
 
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   stopped = barrel_replicate:stop(Pid),
   ok.
 
-deleted_doc(_Config) ->
+deleted_doc(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"source">>, <<"a">>, Doc, []),
 
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(HttpConn, target()),
   barrel_db:delete(<<"source">>, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok, Doc3} = barrel_db:get(<<"testdb">>, <<"a">>, []),
@@ -111,9 +123,10 @@ deleted_doc(_Config) ->
   stopped = barrel_replicate:stop(Pid),
   ok.
 
-random_activity(_Config) ->
+random_activity(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
   Scenario = generate_scenario(),
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, Pid} = barrel_replicate:start_link(HttpConn, target()),
   ExpectedResults = play_scenario(Scenario),
   timer:sleep(200),
   ok = check_all(ExpectedResults),
@@ -134,7 +147,7 @@ play({del, DocName}, Map) ->
   Map#{DocName => deleted}.
 
 check_all(Map) ->
-  Keys = maps:keys(Map),
+ Keys = maps:keys(Map),
   [ ok = check(K, Map) || K <- Keys ],
   ok.
 
