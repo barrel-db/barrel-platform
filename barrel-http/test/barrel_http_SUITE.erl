@@ -25,6 +25,7 @@
          put_get_delete/1,
          delete_require_rev_parameter/1,
          revsdiff/1,
+         put_rev/1,
          all_docs/1,
          changes_normal/1,
          changes_longpoll/1,
@@ -35,6 +36,7 @@ all() -> [info_database,
           put_get_delete,
           delete_require_rev_parameter,
           revsdiff,
+          put_rev,
           all_docs,
           changes_normal,
           changes_longpoll,
@@ -128,12 +130,25 @@ revsdiff(_Config) ->
   true = lists:member(<<"2-missing">>, Missing),
   ok.
 
+put_rev(_Config) ->
+  RevId = put_cat(),
+  {ok, Doc} = barrel_db:get(<<"testdb">>, <<"cat">>, []),
+  {Pos, _} = barrel_doc:parse_revision(RevId),
+  NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
+  History = [NewRev, RevId],
+  Request = #{<<"document">> => Doc,
+              <<"history">> => History},
+  {200, R} = req(put, "/testdb/cat/_revs", Request),
+  A = jsx:decode(R, [return_maps]),
+  true = maps:get(<<"ok">>, A),
+  ok.
+
 all_docs(_Config) ->
   {200, R1} = req(get, "/testdb/_all_docs"),
   A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
   Rows1 = maps:get(rows, A1),
   0 = length(Rows1),
-  
+
   put_cat(),
   DogRevId = put_dog(),
 

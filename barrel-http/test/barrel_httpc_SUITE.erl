@@ -24,6 +24,7 @@
 -export([ info_database/1
         , create_doc/1
         , put_get_delete/1
+        , put_rev/1
         , changes_since/1
         , db_updated/1
         ]).
@@ -31,6 +32,7 @@
 all() -> [ info_database
          , create_doc
          , put_get_delete
+         , put_rev
          , changes_since
          , db_updated
          ].
@@ -86,6 +88,20 @@ put_get_delete(Config) ->
   {ok, <<"a">>, _RevId2} = barrel_httpc:delete(HttpConn, <<"a">>, RevId, []),
   {ok, DeletedDoc} = barrel_httpc:get(HttpConn, <<"a">>, []),
   true = maps:get(<<"_deleted">>, DeletedDoc).
+
+put_rev(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
+  DocId = <<"a">>,
+  Doc = #{ <<"_id">> => DocId, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_httpc:put(HttpConn, DocId, Doc, []),
+  {ok, Doc2} = barrel_httpc:get(HttpConn, DocId, []),
+  Doc3 = Doc2#{ v => 2 },
+  {Pos, _} = barrel_doc:parse_revision(RevId),
+  NewRev = barrel_doc:revid(Pos +1, RevId, Doc3),
+  Doc4 = Doc3#{<<"_rev">> => NewRev},
+  History = [NewRev, RevId],
+  {ok, DocId, NewRev} = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
+  ok.
 
 changes_since(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),

@@ -67,8 +67,8 @@ post({?MODULE, Pid}, Doc, Options) ->
 put({?MODULE, Pid}, DocId, Doc, Options) ->
   gen_server:call(Pid, {put, DocId, Doc, Options}).
 
-put_rev(_Db, _DocId, _Body, _History, _Options) ->
-  {error, not_implemented}.
+put_rev({?MODULE, Pid}, DocId, Doc, History, Options) ->
+  gen_server:call(Pid, {put_rev, DocId, Doc, History, Options}).
 
 get({?MODULE, Pid}, DocId, Options) ->
   gen_server:call(Pid, {get, DocId, Options}).
@@ -108,6 +108,11 @@ handle_call({put, DocId, Doc, _Options}, _From, State) ->
   Sep = <<"/">>,
   Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
   post_put(put, Url, Doc, State);
+
+handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
+  Url = <<DbUrl/binary, "/", DocId/binary, "/_revs">>,
+  put_rev(Url, Doc, History, State);
 
 handle_call({get, DocId, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
@@ -195,13 +200,13 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-%% ----------
-
+%% =============================================================================
+%% Process HTTP requests and construct erlang responses
+%% =============================================================================
 
 post_put(Method, Url, Doc, State) ->
   {Code, Reply} = req(Method, Url, Doc),
   post_put_resp(Code, Reply, State).
-
 
 post_put_resp(404, _, State) ->
   {reply, {error, not_found}, State};
@@ -214,6 +219,25 @@ post_put_resp(200, R, State) ->
   Reply = {ok, DocId, RevId},
   {reply, Reply, State}.
 
+%% -----------------------------------------------------------------------------
+
+put_rev(Url, Doc, History, State) ->
+  Request = #{<<"document">> => Doc,
+              <<"history">> => History},
+  {Code, Reply} = req(put, Url, Request),
+  put_rev_resp(Code, Reply, State).
+
+put_rev_resp(404, _, State) ->
+  {reply, {error, not_found}, State};
+
+put_rev_resp(200, R, State) ->
+  Answer = jsx:decode(R, [return_maps]),
+  DocId = maps:get(<<"_id">>, Answer),
+  RevId = maps:get(<<"_rev">>, Answer),
+  Reply = {ok, DocId, RevId},
+  {reply, Reply, State}.
+
+%% -----------------------------------------------------------------------------
 
 get_resp(404, _, State) ->
   {reply, {error, not_found}, State};
@@ -222,6 +246,7 @@ get_resp(200, Reply, State) ->
   Doc = jsx:decode(Reply, [return_maps]),
   {reply, {ok, Doc}, State}.
 
+%% -----------------------------------------------------------------------------
 
 fold_result(Fun, Acc, Results) ->
   Folder = fun(DocInfo, A) ->
@@ -232,6 +257,9 @@ fold_result(Fun, Acc, Results) ->
            end,
  lists:foldr(Folder, Acc, Results).
 
+%% =============================================================================
+%% Internal helpers
+%% =============================================================================
 
 req(Method,Url) ->
   req(Method, Url, []).
