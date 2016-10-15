@@ -180,6 +180,8 @@ handle_info({hackney_response,_Ref, Bin}, S) when is_binary(Bin) ->
   Acc2 = <<Acc/binary, Bin/binary>>,
   {noreply, S#state{hackney_acc=Acc2}};
 
+handle_info({hackney_response, _Ref, done}, #state{hackney_acc= <<>>}=S) ->
+  {noreply, S};
 handle_info({hackney_response, _Ref, done}, S) ->
   DbUrl = S#state.dbid,
   Reply = S#state.hackney_acc,
