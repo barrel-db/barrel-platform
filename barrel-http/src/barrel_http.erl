@@ -40,6 +40,11 @@ stop() ->
   gen_server:call(?MODULE, stop).
 
 init(_) ->
+  {ok, Options} = application:get_env(barrel, http_server),
+  Port = proplists:get_value(port, Options),
+  Aliases = proplists:get_value(aliases, Options),
+  ok = barrel_http_aliases:add(Aliases),
+
   Trails =
     trails:trails([ cowboy_swagger_handler
                   , barrel_http_rest_db
@@ -52,7 +57,6 @@ init(_) ->
   trails:store(Trails),
   Dispatch = trails:single_host_compile(Trails),
 
-  {ok, [{port, Port}]} = application:get_env(barrel, http_server),
   {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
   {ok, []}.
 

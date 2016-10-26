@@ -25,7 +25,7 @@ trails() ->
   Metadata =
     #{ get => #{ summary => "Get information about a database."
                , produces => ["application/json"]
-               , parameters => 
+               , parameters =>
                    [#{ name => <<"dbid">>
                      , description => <<"Database ID">>
                      , in => <<"path">>
