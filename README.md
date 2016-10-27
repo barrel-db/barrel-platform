@@ -10,29 +10,37 @@ able to create a release.
 
 ## Building a release
 
-   $ ./rebar3 release
+    $ ./rebar3 release
 
 ## Testing a release
 
 To start a barrel http server:
 
-   $ ./build/default/rel/barrel/bin/barrel_http start
+    $ ./build/default/rel/barrel/bin/barrel_http start
 
 To stop it:
 
-   $ ./build/default/rel/barrel/bin/barrel_http stop
+    $ ./build/default/rel/barrel/bin/barrel_http stop
 
 List of available commands:
 
-   $ ./build/default/rel/barrel/bin/barrel_http
-
+    $ ./build/default/rel/barrel/bin/barrel_http
 
 You can consult the embedded [Swagger](http://swagger.io/) page at
 http://localhost:8080/api-docs
 
-![Swagger](/doc/swagger.png)
+<img src="doc/swagger.png" width="800">
 
 ## Packaging an autonomous tar file
 
-(to do)
+This command create a tarbal including barrek, erlang and associated libs:
+
+    $ ./rebar3 as prod tar
+
+You can deploy the tarball wherever you want:
+
+    $ mkdir barrelprod
+    $ cd barrelprod
+    $ tar -xzf barrel-0.1.0.tar.gz
+    $ bin/barrel_http start
 
