@@ -42,6 +42,7 @@ start_link() ->
 %%====================================================================
 
 init(_Args) ->
+  barrel_http_aliases:init_ets(),
   SupFlags = #{strategy => one_for_one, intensity => 5, period => 10},
   ChildSpecs = [#{id => barrel_http,
                   start => {barrel_http, start_link, []}}],

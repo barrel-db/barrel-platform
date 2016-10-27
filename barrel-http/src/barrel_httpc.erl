@@ -18,7 +18,7 @@
 -behaviour(gen_server).
 
 -export([
-         start/2,
+         connect/2,
          stop/1,
          infos/1,
          put/4,
@@ -31,8 +31,7 @@
          revsdiff/3
         ]).
 
--export([start_link/0]).
--export([stop/0]).
+-export([start_link/2]).
 
 %% gen_server API
 -export([init/1, handle_call/3]).
@@ -45,88 +44,88 @@
 
 -record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
 
+connect(Url, Options) ->
+  start_link(Url, Options).
 
-start(Name, Store) ->
-  gen_server:call(?MODULE, {start, Name, Store}).
+start_link(Url, Options) ->
+  case gen_server:start_link(?MODULE, [Url, Options], []) of
+    {ok, Pid} ->
+      Conn = {?MODULE, Pid},
+      {ok, Conn};
+    {error, {already_started, Pid}} -> {ok, Pid}
+  end.
 
-stop(_Name) ->
-  {error, not_implemented}.
+stop({?MODULE, Pid}) ->
+  gen_server:call(Pid, stop).
 
-infos(DbRef) ->
-  gen_server:call(?MODULE, {infos, DbRef}).
+infos({?MODULE, Pid}) ->
+  gen_server:call(Pid, infos).
 
-post(DbRef, Doc, Options) ->
-  gen_server:call(?MODULE, {post, DbRef, Doc, Options}).
+post({?MODULE, Pid}, Doc, Options) ->
+  gen_server:call(Pid, {post, Doc, Options}).
 
-put(DbRef, DocId, Doc, Options) ->
-  gen_server:call(?MODULE, {put, DbRef, DocId, Doc, Options}).
+put({?MODULE, Pid}, DocId, Doc, Options) ->
+  gen_server:call(Pid, {put, DocId, Doc, Options}).
 
-put_rev(_Db, _DocId, _Body, _History, _Options) ->
-  {error, not_implemented}.
+put_rev({?MODULE, Pid}, DocId, Doc, History, Options) ->
+  gen_server:call(Pid, {put_rev, DocId, Doc, History, Options}).
 
-get(DbRef, DocId, Options) ->
-  gen_server:call(?MODULE, {get, DbRef, DocId, Options}).
+get({?MODULE, Pid}, DocId, Options) ->
+  gen_server:call(Pid, {get, DocId, Options}).
 
-delete(DbRef, DocId, RevId, Options) ->
-  gen_server:call(?MODULE, {delete, DbRef, DocId, RevId, Options}).
+delete({?MODULE, Pid}, DocId, RevId, Options) ->
+  gen_server:call(Pid, {delete, DocId, RevId, Options}).
 
 fold_by_id(_Db, _Fun, _Acc, _Opts) ->
   {error, not_implemented}.
 
-changes_since(BarrelId, Since, Fun, Acc) ->
-  gen_server:call(?MODULE, {changes_since, BarrelId, Since, Fun, Acc}).
+changes_since({?MODULE, Pid}, Since, Fun, Acc) ->
+  gen_server:call(Pid, {changes_since, Since, Fun, Acc}).
 
 revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
 
 %% ----------
 
-start_link() ->
-  case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-    {ok, Pid} -> {ok, Pid};
-    {error, {already_started, Pid}} -> {ok, Pid}
-  end.
-
-stop() ->
-  gen_server:call(?MODULE, stop).
-
-init(_) ->
-  {ok, #state{}}.
-
-handle_call({start, DbRef, _}, _From, State) ->
-  {_, DbId} = DbRef,
+init([Url, _Options]) ->
   Since = 0, % TODO: pass it in parameter
-  gen_server:cast(?MODULE, {longpoll, DbRef, Since}),
-  {reply, ok, State#state{dbid=DbId}};
+  State = #state{dbid=Url},
+  {noreply, State2} =  handle_cast({longpoll, Url, Since}, State),
+  {ok, State2}.
 
-handle_call({infos, DbRef}, _From, State) ->
-  {_, BarrelId} = DbRef,
-  {200, R} = req(get, BarrelId),
+handle_call(infos, _From, State) ->
+  DbUrl = State#state.dbid,
+  {200, R} = req(get, DbUrl),
   Info = jsx:decode(R, [return_maps]),
   {reply, {ok, Info}, State};
 
-handle_call({post, DbRef, Doc, _Options}, _From, State) ->
-  {_, BarrelId} = DbRef,
-  post_put(post, BarrelId, Doc, State);
+handle_call({post, Doc, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
+  post_put(post, DbUrl, Doc, State);
 
-handle_call({put, DbRef, DocId, Doc, _Options}, _From, State) ->
+handle_call({put, DocId, Doc, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
   Sep = <<"/">>,
-  {_, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
   post_put(put, Url, Doc, State);
 
-handle_call({get, DbRef, DocId, _Options}, _From, State) ->
-  {_, BarrelId} = DbRef,
+handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
+  Url = <<DbUrl/binary, "/", DocId/binary, "/_revs">>,
+  put_rev(Url, Doc, History, State);
+
+handle_call({get, DocId, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
   Sep = <<"/">>,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary>>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
   {Code, Reply} = req(get, Url),
   get_resp(Code, Reply, State);
 
-handle_call({delete, DbRef, DocId, RevId, _Options}, _From, State) ->
+handle_call({delete, DocId, RevId, _Options}, _From, State) ->
+  DbUrl = State#state.dbid,
   Sep = <<"/">>,
   Rev = <<"?rev=">>,
-  {_, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
   {200, R} = req(delete, Url),
   Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
   DocId = maps:get(id, Reply),
@@ -134,19 +133,19 @@ handle_call({delete, DbRef, DocId, RevId, _Options}, _From, State) ->
   true = maps:get(ok, Reply),
   {reply, {ok, DocId, NewRevId}, State};
 
-handle_call({changes_since, {_, DbId}, Since, Fun, Acc}, _From,
-            #state{dbid=DbId, first_seq=Since}=S) ->
+handle_call({changes_since, Since, Fun, Acc}, _From,
+            #state{first_seq=Since}=S) ->
   Buf = S#state.buffer,
   Reply = fold_result(Fun, Acc, Buf),
   {reply, Reply, S#state{buffer=[]}};
 
-handle_call({changes_since, DbRef, Since, Fun, Acc}, _From, S) ->
+handle_call({changes_since, Since, Fun, Acc}, _From, S) ->
+  DbUrl = S#state.dbid,
   ChangesSince = <<"/_changes?feed=normal&since=">>,
   SinceBin = integer_to_binary(Since),
-  {_Mod, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
+  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
-  {ok, Body} = hackney:body(Ref),
+  {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
   Changes = maps:get(results, Answer),
   Reply = fold_result(Fun, Acc, Changes),
@@ -156,15 +155,14 @@ handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
 
 
-handle_cast({longpoll, DbRef, Since}, S) ->
+handle_cast({longpoll, DbUrl, Since}, S) ->
   ChangesSince = <<"/_changes?feed=longpoll&since=">>,
   SinceBin = integer_to_binary(Since),
-  {_Module, BarrelId} = DbRef,
-  Url = <<BarrelId/binary, ChangesSince/binary, SinceBin/binary>>,
+  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   Opts = [async, once],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
-  {noreply, S#state{dbid=BarrelId, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
+  {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
 
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
@@ -182,16 +180,17 @@ handle_info({hackney_response,_Ref, Bin}, S) when is_binary(Bin) ->
   Acc2 = <<Acc/binary, Bin/binary>>,
   {noreply, S#state{hackney_acc=Acc2}};
 
+handle_info({hackney_response, _Ref, done}, #state{hackney_acc= <<>>}=S) ->
+  {noreply, S};
 handle_info({hackney_response, _Ref, done}, S) ->
-  BarrelId = S#state.dbid,
+  DbUrl = S#state.dbid,
   Reply = S#state.hackney_acc,
   R = jsx:decode(Reply, [return_maps, {labels, attempt_atom}]),
   Results = maps:get(results, R),
   LastSeq = maps:get(last_seq, R),
   NewBuffer = S#state.buffer ++ Results,
-  DbRef = {?MODULE, BarrelId},
-  ok = gen_server:cast(?MODULE, {longpoll, DbRef, LastSeq}),
-  ok = barrel_event:notify(DbRef, db_updated),
+  ok = gen_server:cast(self(), {longpoll, DbUrl, LastSeq}),
+  ok = barrel_event:notify({?MODULE, self()}, db_updated),
   EmptyAcc = <<>>,
   {noreply, S#state{buffer=NewBuffer, hackney_acc=EmptyAcc}};
 
@@ -203,13 +202,13 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-%% ----------
-
+%% =============================================================================
+%% Process HTTP requests and construct erlang responses
+%% =============================================================================
 
 post_put(Method, Url, Doc, State) ->
   {Code, Reply} = req(Method, Url, Doc),
   post_put_resp(Code, Reply, State).
-
 
 post_put_resp(404, _, State) ->
   {reply, {error, not_found}, State};
@@ -222,6 +221,25 @@ post_put_resp(200, R, State) ->
   Reply = {ok, DocId, RevId},
   {reply, Reply, State}.
 
+%% -----------------------------------------------------------------------------
+
+put_rev(Url, Doc, History, State) ->
+  Request = #{<<"document">> => Doc,
+              <<"history">> => History},
+  {Code, Reply} = req(put, Url, Request),
+  put_rev_resp(Code, Reply, State).
+
+put_rev_resp(404, _, State) ->
+  {reply, {error, not_found}, State};
+
+put_rev_resp(200, R, State) ->
+  Answer = jsx:decode(R, [return_maps]),
+  DocId = maps:get(<<"_id">>, Answer),
+  RevId = maps:get(<<"_rev">>, Answer),
+  Reply = {ok, DocId, RevId},
+  {reply, Reply, State}.
+
+%% -----------------------------------------------------------------------------
 
 get_resp(404, _, State) ->
   {reply, {error, not_found}, State};
@@ -230,6 +248,7 @@ get_resp(200, Reply, State) ->
   Doc = jsx:decode(Reply, [return_maps]),
   {reply, {ok, Doc}, State}.
 
+%% -----------------------------------------------------------------------------
 
 fold_result(Fun, Acc, Results) ->
   Folder = fun(DocInfo, A) ->
@@ -240,6 +259,9 @@ fold_result(Fun, Acc, Results) ->
            end,
  lists:foldr(Folder, Acc, Results).
 
+%% =============================================================================
+%% Internal helpers
+%% =============================================================================
 
 req(Method,Url) ->
   req(Method, Url, []).

@@ -25,7 +25,7 @@ trails() ->
   Metadata =
     #{ get => #{ summary => "Get information about a database."
                , produces => ["application/json"]
-               , parameters => 
+               , parameters =>
                    [#{ name => <<"dbid">>
                      , description => <<"Database ID">>
                      , in => <<"path">>
@@ -66,7 +66,8 @@ terminate(_Reason, _Req, _State) ->
 %% ----------
 
 db_info(DbId, Req, State) ->
-  {ok, Infos} = barrel_db:infos(DbId),
+  Conn = barrel_http_conn:peer(DbId),
+  {ok, Infos} = barrel_db:infos(Conn),
   [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
   DbInfo = [{<<"id">>, Id},
             {<<"name">>, Name},

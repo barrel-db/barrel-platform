@@ -107,7 +107,8 @@ handle(Req, State) ->
   handle(Method, DbIdAsBin, DocIdAsBin, Req4, State).
 
 handle(<<"GET">>, DbId, DocIdAsBin, Req, State) ->
-  case barrel_db:get(DbId, DocIdAsBin, []) of
+  Conn = barrel_http_conn:peer(DbId),
+  case barrel_db:get(Conn, DocIdAsBin, []) of
     {error, not_found} -> barrel_http_reply:code(404, Req, State);
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
@@ -136,9 +137,10 @@ post_put(Method, DbId, DocIdAsBin, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   Json = jsx:decode(Body),
   Doc = maps:from_list(Json),
+  Conn = barrel_http_conn:peer(DbId),
   R = case Method of
-        post -> barrel_db:post(DbId, Doc, []);
-        put ->barrel_db:put(DbId, DocIdAsBin, Doc, [])
+        post -> barrel_db:post(Conn, Doc, []);
+        put ->barrel_db:put(Conn, DocIdAsBin, Doc, [])
       end,
   case R of
     {error, not_found} ->
@@ -153,7 +155,8 @@ post_put(Method, DbId, DocIdAsBin, Req, State) ->
   end.
 
 delete(DbId, DocId, RevId, Req, State) ->
-  {ok, DocId, RevId2} = barrel_db:delete(DbId, DocId, RevId, []),
+  Conn = barrel_http_conn:peer(DbId),
+  {ok, DocId, RevId2} = barrel_db:delete(Conn, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},

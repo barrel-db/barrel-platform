@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_rest_revsdiff).
+-module(barrel_http_rest_putrev).
 -author("Bernard Notarianni").
 
 -export([init/3]).
@@ -23,18 +23,18 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Check for differences in documents history"
+    #{ put => #{ summary => "Insert a specific revision for a document"
                , produces => ["application/json"]
-               , parameters => 
-                   [#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
+               , parameters =>
+                   [#{ name => <<"body">>
+                     , description => <<"Document and history as JSON">>
+                     , in => <<"body">>
                      , required => true
-                     , type => <<"string">>}
+                     , type => <<"json">>}
                    ]
                }
      },
-  [trails:trail("/:dbid/_revs_diff", ?MODULE, [], Metadata)].
+  [trails:trail("/:dbid/:docid/_revs", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -43,24 +43,23 @@ init(_Type, Req, []) ->
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  handle(Method, DbId, Req3, State).
+  {DocId, Req4} = cowboy_req:binding(docid, Req3),
+  handle(Method, DbId, DocId, Req4, State).
 
-handle(<<"POST">>, DbId, Req, State) ->
+handle(<<"PUT">>, DbId, DocId, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-  RequestedDocs = jsx:decode(Body, [return_maps]),
+  BodyJson = jsx:decode(Body, [return_maps]),
+  Doc = maps:get(<<"document">>, BodyJson),
+  History = maps:get(<<"history">>, BodyJson),
   Conn = barrel_http_conn:peer(DbId),
-  Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                         {ok, Missing, Possible} = barrel_db:revsdiff(Conn, DocId, RevIds),
-                         case Possible of
-                           [] -> Acc#{DocId => #{<<"missing">> => Missing}};
-                           _ -> Acc#{DocId => #{<<"missing">> => Missing,
-                                                <<"possible_ancestors">> => Possible}}
-                         end
-                     end,#{}, RequestedDocs),
+  {ok, DocId, RevId} = barrel_db:put_rev(Conn, DocId, Doc, History, []),
+  Result = #{<<"ok">> => true,
+             <<"_id">> => DocId,
+             <<"_rev">> => RevId},
   barrel_http_reply:doc(Result, Req2, State);
 
 
-handle(_, _, Req, State) ->
+handle(_, _, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
