@@ -1,6 +1,6 @@
 {application, barrel,
   [{description, "Barrel-db core application"},
-   {vsn, "0.1.0"},
+   {vsn, "0.1.1"},
    {registered, []},
    {mod, {barrel_app, []}},
    {applications,
@@ -11,7 +11,8 @@
      crypto,
      worker_pool,
      gproc,
-     erocksdb
+     erocksdb,
+     uuid
     ]},
    {env, []},
    {modules, []},

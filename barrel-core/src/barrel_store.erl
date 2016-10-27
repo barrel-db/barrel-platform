@@ -118,7 +118,7 @@ start_link(Name, Module, Options) ->
       ok;
     true -> Module:pre_start(Name, Options)
   end,
-  
+
   WPoolConfigOpts = application:get_env(barrel, wpool_opts, []),
   WPoolOptions = [
     {overrun_warning, 5000},
