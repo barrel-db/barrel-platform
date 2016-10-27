@@ -10,5 +10,5 @@ test:
     - ./rebar3 release
     - ./_build/default/rel/barrel/bin/barrel start
     - ./_build/default/rel/barrel/bin/barrel ping
-    - curl -f -X GET --header "Accept: application/json" "http://localhost:8080/testdb"
+    - 'curl -f -X GET --header "Accept: application/json" "http://localhost:8080/testdb"'
     - ./_build/default/rel/barrel/bin/barrel stop
