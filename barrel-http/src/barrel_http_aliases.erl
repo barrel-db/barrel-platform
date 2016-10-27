@@ -33,12 +33,18 @@ add(Alias, Uri) when is_list(Alias) ->
 
 add(Alias, Uri) when is_binary(Alias) ->
   true = ets:insert(barrel_http_aliases, {Alias, Uri}),
+  %% TODO: remove when plugging new API
+  ok = barrel_db:start(Alias, Uri),
   ok.
 
 get(Alias) ->
-  case ets:lookup(barrel_http_aliases, Alias) of
-    [] ->
-      {error, {unknown_alias, Alias}};
-    [{Alias, Uri}] ->
-      {ok, Uri}
-  end.
+  %% TODO: remove when pluggin new API
+  {ok, Alias}.
+
+  %% TODO: uncomment when plugging new API
+  %% case ets:lookup(barrel_http_aliases, Alias) of
+  %%   [] ->
+  %%     {error, {unknown_alias, Alias}};
+  %%   [{Alias, Uri}] ->
+  %%     {ok, Uri}
+  %% end.
