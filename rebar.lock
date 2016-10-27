@@ -5,7 +5,7 @@
   0},
  {<<"barrel_http">>,
   {git,"https://gitlab.com/barrel-db/barrel-http.git",
-       {ref,"a09366907129a59b304fae072efca03fc395bb52"}},
+       {ref,"766ef79ea169f43fb16a647a427cf94d710388d9"}},
   0},
  {<<"certifi">>,{pkg,<<"certifi">>,<<"0.4.0">>},2},
  {<<"cowboy">>,
