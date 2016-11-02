@@ -1,0 +1,12 @@
+language: erlang
+script: "make"
+notifications:
+  email: false
+otp_release:
+  - R16B03-1
+before_install:
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+install:
+  - sudo apt-get install -qq gcc-4.8 g++-4.8
+  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
