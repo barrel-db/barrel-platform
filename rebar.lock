@@ -1,7 +1,7 @@
 {"1.1.0",
 [{<<"barrel">>,
   {git,"https://gitlab.com/barrel-db/barrel.git",
-       {ref,"2f89eeacce54d00d5f8fbe3408d0d2bea9a78ffd"}},
+       {ref,"4cfc0c9835c4e60d60ab652d1d9d19a5b92c35f5"}},
   0},
  {<<"barrel_http">>,
   {git,"https://gitlab.com/barrel-db/barrel-http.git",
@@ -22,7 +22,7 @@
   2},
  {<<"erocksdb">>,
   {git,"https://gitlab.com/barrel-db/erocksdb.git",
-       {ref,"14914482792bf8d0d9f1643d391ac6a68e437aab"}},
+       {ref,"3eee08d58d75558fe3f1bc6673f9fda4087d5ba1"}},
   1},
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.8">>},2},
  {<<"gproc">>,{pkg,<<"gproc">>,<<"0.6.1">>},1},
@@ -45,7 +45,7 @@
   2},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.0">>},2},
  {<<"trails">>,{pkg,<<"trails">>,<<"0.2.0">>},2},
- {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.5.2">>},1},
+ {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.5.4">>},1},
  {<<"worker_pool">>,{pkg,<<"worker_pool">>,<<"2.2.0">>},1}]}.
 [
 {pkg_hash,[
@@ -59,6 +59,6 @@
  {<<"quickrand">>, <<"47ADD4755CC5F209CBEFFD6F47C84061196CD7FAD99FD8FD12418EB0D06B939D">>},
  {<<"ssl_verify_fun">>, <<"EDEE20847C42E379BF91261DB474FFBE373F8ACB56E9079ACB6038D4E0BF414F">>},
  {<<"trails">>, <<"8A26C8F32B2A4D317830FAF55F034CC532D849547686806B83063AA1F65213D2">>},
- {<<"uuid">>, <<"D5F12B5814F9E8EA27A9C2527C35FF3661294FA51CA8E43CC15038EFE519E58B">>},
+ {<<"uuid">>, <<"06240EFF3EAF013CC22274689B0C1FF6345645EE5D47A9E4ED7545EEB7698B23">>},
  {<<"worker_pool">>, <<"73BD8AD5EC5E7A1F9AA352A3A8C5CA228DDAA9DAD518E7A1149F091481B6D79C">>}]}
 ].
