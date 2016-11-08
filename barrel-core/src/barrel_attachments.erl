@@ -20,7 +20,7 @@
 -export([get_attachment/4]).
 -export([get_attachment_binary/4]).
 -export([replace_attachment/5]).
--export([replace_attachment_binary/4]).
+-export([replace_attachment_binary/5]).
 -export([delete_attachment/4]).
 -export([attachments/3]).
 
@@ -38,16 +38,24 @@ attach(Db, DocId, AttDescription, Options) ->
       barrel_db:put(Db, DocId, Doc#{?ATTTAG => Attachments2}, Options)
   end.
 
-attach(_Db, _DocId, _AttDescription, _Binary, _Options) ->
-  {error, not_implemented}.
+attach(Db, DocId, AttDescription, Binary, Options) ->
+  Data = base64:encode(Binary),
+  attach(Db, DocId, AttDescription#{<<"_data">> => Data}, Options).
 
 get_attachment(Db, DocId, AttId, Options) ->
   {ok, Doc} = barrel_db:get(Db, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   find_att_doc(AttId, Attachments).
 
-get_attachment_binary(_Db, _DocId, _AttId, _Options) ->
-  {error, not_implemented}.
+get_attachment_binary(Db, DocId, AttId, Options) ->
+  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+  Attachments = maps:get(?ATTTAG, Doc, []),
+  case find_att_doc(AttId, Attachments) of
+    {error, not_found} -> {error, not_found};
+    {ok, Attachment} ->
+      Data = maps:get(<<"_data">>, Attachment),
+      {ok, base64:decode(Data)}
+  end.
 
 replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
   {ok, Doc} = barrel_db:get(Db, DocId, Options),
@@ -56,8 +64,16 @@ replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
   NewAttachments = replace_att_doc(AttId, AttDescription, Attachments),
   barrel_db:put(Db, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
 
-replace_attachment_binary(_Db, _DocId, _AttId, _Binary) ->
-  {error, not_implemented}.
+replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
+  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+  Attachments = maps:get(?ATTTAG, Doc, []),
+  case find_att_doc(AttId, Attachments) of
+    {error, not_found} -> {error, not_found};
+    {ok, Attachment} ->
+      NewData = base64:encode(Binary),
+      NewAttachment = Attachment#{<<"_data">> => NewData},
+      replace_attachment(Db, DocId, AttId, NewAttachment, Options)
+  end.
 
 delete_attachment(Db, DocId, AttId, Options) ->
   {ok, Doc} = barrel_db:get(Db, DocId, Options),
