@@ -29,7 +29,9 @@
   post/3,
   fold_by_id/4,
   changes_since/4,
-  revsdiff/3
+  revsdiff/3,
+  write_system_doc/3,
+  read_system_doc/2
 ]).
 
 -export([start_link/2]).
@@ -324,6 +326,14 @@ update_doc1(Db, DocId, Fun, Options, Timeout) ->
     erlang:demonitor(Mref, [flush]),
     error(timeout)
   end.
+
+write_system_doc(Db, DocId, Doc) ->
+  #{store := Store, id := DbId} = call(Db, get_state),
+  barrel_store:write_system_doc(Store, DbId, DocId, Doc).
+
+read_system_doc(Db, DocId) ->
+  #{store := Store, id := DbId} = call(Db, get_state),
+  barrel_store:read_system_doc(Store, DbId, DocId).
 
 -spec start_link(dbname(), atom()) -> {ok, pid()}.
 start_link(Name, Store) ->

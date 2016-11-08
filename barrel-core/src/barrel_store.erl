@@ -14,7 +14,9 @@
   get_doc/7,
   fold_by_id/5,
   changes_since/5,
-  last_update_seq/2
+  last_update_seq/2,
+  write_system_doc/4,
+  read_system_doc/3
 ]).
 
 -export([start_link/3]).
@@ -106,6 +108,11 @@ changes_since(Store, DbId, Since, Fun, AccIn) ->
 last_update_seq(Store, DbId) ->
   wpool:call(Store, {last_update_seq, DbId}).
 
+write_system_doc(Store, DbId, DocId, Doc) ->
+  wpool:call(Store, {write_system_doc, DbId, DocId, Doc}).
+
+read_system_doc(Store, DbId, DocId) ->
+  wpool:call(Store, {read_system_doc, DbId, DocId}).
 
 %% @doc Starts and links a new process for the given store implementation.
 -spec start_link(atom(), module(), [term()]) -> {ok, pid()}.
@@ -175,6 +182,13 @@ handle_call(all_dbs, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
   Reply = Mod:all_dbs(ModState),
   {reply, Reply, State};
 
+handle_call({write_system_doc, DbId, DocId, Doc}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:write_system_doc(DbId, DocId, Doc, ModState),
+  {reply, Reply, State};
+
+handle_call({read_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:read_system_doc(DbId, DocId, ModState),
+  {reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
   io:format("request is ~p~nstate is ~p~n", [_Request, State]),
