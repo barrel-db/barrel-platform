@@ -118,14 +118,24 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
-
+  
+  Lww = proplists:get_value(lww, Options, false),
+  
   update_doc(
     Db,
     DocId,
     fun(DocInfo) ->
       #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = case Rev of
-              <<>> ->
+      Res = case {Lww, Rev} of
+              {true, _} ->
+                if
+                  CurrentRev /= <<>> ->
+                    {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                    {ok, CurrentGen + 1, CurrentRev};
+                  true ->
+                    {ok, Gen + 1, <<>>}
+                end;
+              {false, <<>>} ->
                 if
                   CurrentRev /= <<>> ->
                     case maps:get(CurrentRev, RevTree) of
@@ -138,7 +148,7 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
                   true ->
                     {ok, Gen + 1, Rev}
                 end;
-              _ ->
+              {false, _} ->
                 case barrel_revtree:is_leaf(Rev, RevTree) of
                   true -> {ok, Gen + 1, Rev};
                   false -> {conflict, revision_conflict}

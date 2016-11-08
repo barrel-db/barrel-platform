@@ -32,6 +32,7 @@
   all_databases/1,
   basic_op/1,
   update_doc/1,
+  update_doc_lwww/1,
   create_doc/1,
   fold_by_id/1,
   change_since/1,
@@ -47,6 +48,7 @@ all() ->
     all_databases,
     basic_op,
     update_doc,
+    update_doc_lwww,
     create_doc,
     get_revisions,
     fold_by_id,
@@ -129,6 +131,19 @@ update_doc(_Config) ->
   {ok, DeletedDoc} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   true = maps:get(<<"_deleted">>, DeletedDoc),
   {ok, <<"a">>, _RevId3} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []).
+
+update_doc_lwww(_Config) ->
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
+  {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  #{ <<"v">> := 1 } = Doc2,
+  
+  Doc3 = #{ <<"_id">> => <<"a">>, <<"v">> => 2},
+  {error, {conflict, doc_exists}} = barrel_db:put(<<"testdb">>, <<"a">>, Doc3, []),
+  
+  {ok, <<"a">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"a">>, Doc3, [{lww, true}]),
+  {ok, Doc4} = barrel_db:get(<<"testdb">>, <<"a">>, []),
+  #{ <<"v">> := 2 } = Doc4.
 
 create_doc(_Config) ->
   Doc = #{<<"v">> => 1},
