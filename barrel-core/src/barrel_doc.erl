@@ -74,7 +74,7 @@ encode_revisions(Revs) ->
   {Start, _} = barrel_doc:parse_revision(Oldest),
   Digests = lists:foldl(fun(Rev, Acc) ->
       {_, Digest}=parse_revision(Rev),
-      [Digest | Acc]
+      [Digest | Acc]
     end, [], Revs),
   #{<<"start">> => Start, <<"ids">> => lists:reverse(Digests)}.
 
