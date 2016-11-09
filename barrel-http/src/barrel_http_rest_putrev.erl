@@ -34,7 +34,7 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/:dbid/:docid/_revs", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/:dbid/:docid/_revs", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -42,16 +42,17 @@ init(_Type, Req, []) ->
 
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  {DocId, Req4} = cowboy_req:binding(docid, Req3),
-  handle(Method, DbId, DocId, Req4, State).
+  {Store, Req3} = cowboy_req:binding(store, Req2),
+  {DbId, Req4} = cowboy_req:binding(dbid, Req3),
+  {DocId, Req5} = cowboy_req:binding(docid, Req4),
+  handle(Method, Store, DbId, DocId, Req5, State).
 
-handle(<<"PUT">>, DbId, DocId, Req, State) ->
+handle(<<"PUT">>, Store, DbId, DocId, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   BodyJson = jsx:decode(Body, [return_maps]),
   Doc = maps:get(<<"document">>, BodyJson),
   History = maps:get(<<"history">>, BodyJson),
-  Conn = barrel_http_conn:peer(DbId),
+  Conn = barrel_http_conn:peer(Store, DbId),
   {ok, DocId, RevId} = barrel_db:put_rev(Conn, DocId, Doc, History, []),
   Result = #{<<"ok">> => true,
              <<"_id">> => DocId,
@@ -59,7 +60,7 @@ handle(<<"PUT">>, DbId, DocId, Req, State) ->
   barrel_http_reply:doc(Result, Req2, State);
 
 
-handle(_, _, _, Req, State) ->
+handle(_, _, _, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->

@@ -24,6 +24,7 @@
          post/1,
          put_get_delete/1,
          delete_require_rev_parameter/1,
+         two_databases_on_same_store/1,
          revsdiff/1,
          put_rev/1,
          all_docs/1,
@@ -31,23 +32,25 @@
          changes_longpoll/1,
          changes_eventsource/1]).
 
-all() -> [info_database,
-          post,
-          put_get_delete,
-          delete_require_rev_parameter,
-          revsdiff,
-          put_rev,
-          all_docs,
-          changes_normal,
-          changes_longpoll,
-          changes_eventsource].
+all() -> [ info_database
+         , post
+         , put_get_delete
+         , delete_require_rev_parameter
+         , two_databases_on_same_store
+         , revsdiff
+         , put_rev
+         , all_docs
+         , changes_normal
+         , changes_longpoll
+         , changes_eventsource
+         ].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  %ok = barrel_db:start(<<"testdb">>, testdb),
   Config.
 
 end_per_testcase(_, Config) ->
@@ -60,19 +63,19 @@ end_per_suite(Config) ->
 %% ----------
 
 info_database(_Config) ->
-  {200, R1} = req(get, "/testdb"),
+  {200, R1} = req(get, "/testdb/testdb"),
   A1 = jsx:decode(R1, [return_maps]),
   <<"testdb">> = maps:get(<<"name">>, A1),
-
-  {404, _} = req(get, "/unknwondb"),
+  %% TODO refactor
+  %% {404, _} = req(get, "/unknwondb"),
   ok.
 
 post(_Config) ->
   D1 = "{\"name\" : \"tom\"}",
-  {200, R} = req(post, "/testdb", D1),
+  {200, R} = req(post, "/testdb/testdb", D1),
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  Url = <<"/testdb/", DocId/binary>>,
+  Url = <<"/testdb/testdb/", DocId/binary>>,
   {200, R2} = req(get, Url),
   D2 = jsx:decode(R2, [return_maps]),
   <<"tom">> = maps:get(<<"name">>, D2),
@@ -82,48 +85,58 @@ post(_Config) ->
 put_get_delete(_Config) ->
   CatRevId = put_cat(),
 
-  {200, R2} = req(get, "/testdb/cat"),
+  {200, R2} = req(get, "/testdb/testdb/cat"),
   A2 = jsx:decode(R2, [return_maps]),
   <<"tom">> = maps:get(<<"name">>, A2),
 
   A3 = delete_cat(CatRevId),
 
   RevId2 = binary_to_list(maps:get(<<"rev">>, A3)),
-  {200, R4} = req(get, "/testdb/cat?rev=" ++ RevId2),
+  {200, R4} = req(get, "/testdb/testdb/cat?rev=" ++ RevId2),
   A4 = jsx:decode(R4, [return_maps]),
   true = maps:get(<<"_deleted">>, A4),
   ok.
 
 delete_require_rev_parameter(_Config)->
   put_cat(),
-  {400, _} = req(delete, "/testdb/cat?badparametername=42"),
+  {400, _} = req(delete, "/testdb/testdb/cat?badparametername=42"),
   ok.
 
 
 put_cat() ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {200, R} = req(put, "/testdb/cat", Doc),
+  {200, R} = req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 
 delete_cat(CatRevId) ->
-  {200, R3} = req(delete, "/testdb/cat?rev=" ++ CatRevId),
+  {200, R3} = req(delete, "/testdb/testdb/cat?rev=" ++ CatRevId),
   A3 = jsx:decode(R3, [return_maps]),
   true = maps:get(<<"ok">>, A3),
   A3.
 
 put_dog() ->
   Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
-  {200, R} = req(put, "/testdb/dog", Doc),
+  {200, R} = req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
+two_databases_on_same_store(_Config) ->
+  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Dog = "{\"_id\": \"dog\", \"name\": \"spike\"}",
+  {200, _} = req(put, "/testdb/db1/cat", Cat),
+  {200, _} = req(put, "/testdb/db2/dog", Dog),
+  {200, _} = req(get, <<"/testdb/db1/cat">>),
+  {404, _} = req(get, <<"/testdb/db2/cat">>),
+  {200, _} = req(get, <<"/testdb/db2/dog">>),
+  {404, _} = req(get, <<"/testdb/db1/dog">>),
+  ok.
 
 revsdiff(_Config) ->
   CatRevId = put_cat(),
   Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = req(post, "/testdb/_revs_diff", Request),
+  {200, R} = req(post, "/testdb/testdb/_revs_diff", Request),
   A = jsx:decode(R, [return_maps]),
   CatDiffs = maps:get(<<"cat">>, A),
   Missing = maps:get(<<"missing">>, CatDiffs),
@@ -138,13 +151,13 @@ put_rev(_Config) ->
   History = [NewRev, RevId],
   Request = #{<<"document">> => Doc,
               <<"history">> => History},
-  {200, R} = req(put, "/testdb/cat/_revs", Request),
+  {200, R} = req(put, "/testdb/testdb/cat/_revs", Request),
   A = jsx:decode(R, [return_maps]),
   true = maps:get(<<"ok">>, A),
   ok.
 
 all_docs(_Config) ->
-  {200, R1} = req(get, "/testdb/_all_docs"),
+  {200, R1} = req(get, "/testdb/testdb/_all_docs"),
   A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
   Rows1 = maps:get(rows, A1),
   0 = length(Rows1),
@@ -152,7 +165,7 @@ all_docs(_Config) ->
   put_cat(),
   DogRevId = put_dog(),
 
-  {200, R2} = req(get, "/testdb/_all_docs"),
+  {200, R2} = req(get, "/testdb/testdb/_all_docs"),
   A2 = jsx:decode(R2, [return_maps, {labels, attempt_atom}]),
   Rows2 = maps:get(rows, A2),
   2 = length(Rows2),
@@ -167,13 +180,13 @@ changes_normal(_Config) ->
   put_cat(),
   put_dog(),
 
-  {200, R1} = req(get, "/testdb/_changes"),
+  {200, R1} = req(get, "/testdb/testdb/_changes"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
   2 = length(Results1),
 
-  {200, R2} = req(get, "/testdb/_changes?since=1"),
+  {200, R2} = req(get, "/testdb/testdb/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   2 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -183,7 +196,7 @@ changes_normal(_Config) ->
 %%=======================================================================
 
 changes_longpoll(_Config) ->
-  Url = <<"http://localhost:8080/testdb/_changes?feed=longpoll">>,
+  Url = <<"http://localhost:8080/testdb/testdb/_changes?feed=longpoll">>,
   Opts = [async, once],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   CatRevId = put_cat(),
@@ -220,7 +233,7 @@ changes_longpoll(_Config) ->
 changes_eventsource(_Config) ->
   Self = self(),
   Pid = spawn(fun () -> wait_response([], 4, Self) end),
-  Url = <<"http://localhost:8080/testdb/_changes?feed=eventsource">>,
+  Url = <<"http://localhost:8080/testdb/testdb/_changes?feed=eventsource">>,
   Opts = [async, {stream_to, Pid}],
   {ok, Ref} = hackney:get(Url, [], <<>>, Opts),
   CatRevId = put_cat(),
