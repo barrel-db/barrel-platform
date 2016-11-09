@@ -1,4 +1,4 @@
-image: erlang:19.0.5
+image: erlang:19.1
 
 before_script:
   - apt-get update -y
@@ -7,6 +7,9 @@ before_script:
 
 test:
   script:
+    - wget https://s3.amazonaws.com/rebar3/rebar3
+    - chmod +x rebar3
+    - ./rebar3 --version
     - ./rebar3 eunit
     - ./rebar3 ct
 
