@@ -13,71 +13,69 @@
 %% the License.
 
 -module(barrel_db_sup).
--author("benoitc").
+-author("Benoit Chesneau").
 
 -behaviour(supervisor).
 
 %% API
--export([start_link/2]).
+-export([start_link/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
 
+-export([start_db/2, stop_db/1, await_db/1]).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the supervisor
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec(start_link(term(), term()) ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(Name, Store) ->
-  Key = {n, l, {db_sup, Name}},
-  supervisor:start_link({via, gproc, Key}, ?MODULE, [Name, Store]).
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Whenever a supervisor is started using supervisor:start_link/[2,3],
-%% this function is called by the new process to find out about
-%% restart strategy, maximum restart frequency and child
-%% specifications.
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec(init(Args :: term()) ->
-  {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
-                     MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
-        [ChildSpec :: supervisor:child_spec()]
-  }} |
-  ignore |
-  {error, Reason :: term()}).
-init([Name, Store]) ->
-  Children = [db_spec(Name, Store)],
-  
-  {ok, {{rest_for_one, 1, 5}, Children}}.
+-spec init(any()) ->
+  {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+init([]) ->
+  {ok, {{one_for_one, 5, 10}, []}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+
+-spec start_db(term(), atom()) -> supervisor:startchild_ret().
+start_db(Name, Store) ->
+  supervisor:start_child(?MODULE, db_spec(Name, Store)).
+
+-spec stop_db(term()) -> ok |{error, term()}.
+stop_db(Name) ->
+  case supervisor:terminate_child(?MODULE, Name) of
+    ok ->
+      _ = supervisor:delete_child(?MODULE, Name),
+      ok;
+    {error, not_found} -> ok;
+    Error ->
+      Error
+  end.
+
+await_db(Name) ->
+  _ = gproc:await({n, l, {barrel_db, Name}}, 5000),
+  ok.
+
 db_spec(Name, Store) ->
   #{
-    id => {db, Name},
+    id => Name,
     start => {barrel_db, start_link, [Name, Store]},
     restart => permanent,
     shutdown => 5000,
     type => worker,
     modules => [barrel_db]
   }.
-  
+

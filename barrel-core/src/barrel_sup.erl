@@ -48,7 +48,7 @@ init([]) ->
     {barrel_safe_sup,
      {supervisor, start_link, [{local, barrel_safe_sup}, ?MODULE, safe]},
      permanent, infinity, supervisor, [?MODULE]},
-  
+
   Specs = [
     ?sup(barrel_ext_sup),
     SafeSup
@@ -58,11 +58,11 @@ init([]) ->
 
 init(safe) ->
   Specs =[ ?sup(barrel_stores_sup)
-         , ?sup(barrel_dbs_sup)
+         , ?sup(barrel_db_sup)
          , ?sup(barrel_event)
          , ?sup(barrel_task_status)
          ],
-  
+
   {ok, { {one_for_one, 5, 10}, Specs} }.
 
-  
+

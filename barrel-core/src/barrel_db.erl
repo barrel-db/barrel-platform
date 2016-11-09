@@ -79,16 +79,18 @@
 %%%===================================================================
 
 start(Name, Store) when is_binary(Name)->
-  Key = db_key(Name),
-  case gproc:where(Key) of
+  case gproc:where(db_key(Name)) of
     Pid when is_pid(Pid) -> ok;
     undefined ->
-      _ = barrel_dbs_sup:start_db(Name, Store),
-      barrel_dbs_sup:await_db(Name)
+      case barrel_db_sup:start_db(Name, Store) of
+        {ok, _Pid} -> ok;
+        {error, {already_started, _}} -> ok;
+        Error -> Error
+      end
   end;
 start(_, _) -> erlang:error(bad_db).
 
-stop(Name) -> barrel_dbs_sup:stop_db(Name).
+stop(Name) -> barrel_db_sup:stop_db(Name).
 
 clean(Name) ->
   #{store := Store, id := DbId} = call(Name, get_state),
@@ -118,9 +120,9 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
-  
+
   Lww = proplists:get_value(lww, Options, false),
-  
+
   update_doc(
     Db,
     DocId,
@@ -395,7 +397,7 @@ code_change(_OldVsn, State, _Extra) ->
 via(Name) ->
   {via, gproc, db_key(Name)}.
 
-db_key(Name) -> {n, l, {db, Name}}.
+db_key(Name) -> {n, l, {barrel_db, Name}}.
 
 call(Name, Req) -> gen_server:call(via(Name), Req).
 
