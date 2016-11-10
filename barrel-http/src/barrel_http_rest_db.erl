@@ -51,8 +51,12 @@ handle(Req, State) ->
   {Db, Req4} = cowboy_req:binding(dbid, Req3),
   handle(Method, Store, Db, Req4, State).
 
+handle(<<"PUT">>, StoreAsBin, Db, Req, State) ->
+  Store = binary_to_atom(StoreAsBin, utf8),
+  ok = barrel_db:start(Db, Store, [{create_if_missing, true}]),
+  barrel_http_reply:code(201, Req, State);
 handle(<<"GET">>, Store, Db, Req, State) ->
-  Conn = barrel_http_conn:peer(Store, Db),
+  {ok, Conn} = barrel_http_conn:peer(Store, Db),
   All = barrel:all_databases(),
   case lists:member(Db, All) of
     false ->

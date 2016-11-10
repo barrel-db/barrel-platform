@@ -66,7 +66,7 @@ to_json(Req, State) ->
                     <<"rev">> => Rev},
             {ok, [Row | Acc1]}
         end,
-  Conn = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   Rows = barrel_db:fold_by_id(Conn, Fun, [], []),
   OffSet = 0,
   TotalRows = length(Rows),

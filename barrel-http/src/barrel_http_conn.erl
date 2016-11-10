@@ -21,12 +21,15 @@
 peer(Store, DbId) ->
   %% TODO: remove when plugging new API
   try barrel_db:infos(DbId) of
-      {ok, _} -> ok
+      {ok, _} -> {ok, DbId}
   catch
     exit:_ ->
-      ok = barrel_db:start(DbId, binary_to_atom(Store, utf8))
-  end,
-  DbId.
+      case barrel_db:start(DbId, binary_to_atom(Store, utf8), []) of
+        ok -> {ok, DbId};
+        {error, not_found} ->
+          {error, database_not_found}
+      end
+  end.
   %% Key = {n, l, DbId},
   %% case gproc:where(Key) of
   %%   {ok, Peer} ->

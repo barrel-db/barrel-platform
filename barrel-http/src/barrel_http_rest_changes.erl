@@ -153,7 +153,7 @@ changes(Store, DbId, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  Conn = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   barrel_db:changes_since(Conn, Since, Fun, {Since, []}).
 
 to_json(LastSeq, Changes) ->

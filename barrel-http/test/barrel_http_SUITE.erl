@@ -30,7 +30,8 @@
          all_docs/1,
          changes_normal/1,
          changes_longpoll/1,
-         changes_eventsource/1]).
+         changes_eventsource/1,
+         create_database/1]).
 
 all() -> [ info_database
          , post
@@ -43,6 +44,7 @@ all() -> [ info_database
          , changes_normal
          , changes_longpoll
          , changes_eventsource
+         , create_database
          ].
 
 init_per_suite(Config) ->
@@ -50,7 +52,7 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  %ok = barrel_db:start(<<"testdb">>, testdb),
+  ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
   Config.
 
 end_per_testcase(_, Config) ->
@@ -68,6 +70,13 @@ info_database(_Config) ->
   <<"testdb">> = maps:get(<<"name">>, A1),
   %% TODO refactor
   %% {404, _} = req(get, "/unknwondb"),
+  ok.
+
+create_database(_Config) ->
+  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  {404, _} = req(put, "/testdb/newdb/cat", Cat),
+  {201, _} = req(put, "/testdb/newdb", []),
+  {200, _} = req(put, "/testdb/newdb/cat", Cat),
   ok.
 
 post(_Config) ->
@@ -125,6 +134,8 @@ put_dog() ->
 two_databases_on_same_store(_Config) ->
   Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
   Dog = "{\"_id\": \"dog\", \"name\": \"spike\"}",
+  {201, _} = req(put, "/testdb/db1", []),
+  {201, _} = req(put, "/testdb/db2", []),
   {200, _} = req(put, "/testdb/db1/cat", Cat),
   {200, _} = req(put, "/testdb/db2/dog", Dog),
   {200, _} = req(get, <<"/testdb/db1/cat">>),

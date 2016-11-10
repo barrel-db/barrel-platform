@@ -52,7 +52,7 @@ handle(<<"PUT">>, Store, DbId, DocId, Req, State) ->
   BodyJson = jsx:decode(Body, [return_maps]),
   Doc = maps:get(<<"document">>, BodyJson),
   History = maps:get(<<"history">>, BodyJson),
-  Conn = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   {ok, DocId, RevId} = barrel_db:put_rev(Conn, DocId, Doc, History, []),
   Result = #{<<"ok">> => true,
              <<"_id">> => DocId,
