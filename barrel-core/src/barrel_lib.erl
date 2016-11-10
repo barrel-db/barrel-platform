@@ -21,7 +21,8 @@
   hex_to_binary/1,
   report_overrun/1,
   uniqid/0, uniqid/1,
-  parse_fold_options/1
+  parse_fold_options/1,
+  data_dir/0
 ]).
 
 -include("barrel.hrl").
@@ -63,6 +64,12 @@ uniqid(binary)    -> uuid:uuid_to_string(uuid:get_v4(), binary_standard);
 uniqid(integer)   -> <<Id:128>> = uuid:get_v4(), Id;
 uniqid(float)     -> <<Id:128>> = uuid:get_v4(), Id * 1.0;
 uniqid(_) -> error(badarg).
+
+-spec data_dir() -> string().
+data_dir() ->
+  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
+  filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
+  Dir.
 
 
 parse_fold_options(Opts) ->

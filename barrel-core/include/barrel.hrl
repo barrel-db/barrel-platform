@@ -1,3 +1,6 @@
+
+-define(DATA_DIR, "./data").
+
 -define(default_fold_options,
   #{
     start_key => first,

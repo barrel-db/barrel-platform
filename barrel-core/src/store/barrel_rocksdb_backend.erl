@@ -50,16 +50,17 @@
 get_db(Name) -> gen_server:call(Name, get_db).
 
 -spec start_link(atom(), atom(), list()) -> {ok, pid()}.
-start_link(Backend, _Name, Options) ->
-  gen_server:start_link({local, Backend}, ?MODULE, Options, []).
+start_link(Backend, Name, Config) ->
+  gen_server:start_link({local, Backend}, ?MODULE, [Name, Config], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 %%%
 -spec init(term()) -> {ok, state()}.
-init(Options) ->
-  DbDir = maps:get(dir, Options),
+init([Name, Config]) ->
+  DefaultDir = filename:join(barrel_lib:data_dir(), Name),
+  DbDir = maps:get(dir, Config, DefaultDir),
   filelib:ensure_dir(filename:join(DbDir, "empty")),
   {ok, Db} = erocksdb:open(DbDir, [{create_if_missing, true}], []),
   {ok, #state{db=Db}}.
