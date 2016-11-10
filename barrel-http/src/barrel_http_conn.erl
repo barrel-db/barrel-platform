@@ -15,12 +15,21 @@
 -module(barrel_http_conn).
 -author("Bernard Notarianni").
 
--export([peer/1]).
+-export([peer/2]).
 
 %% @doc returns the peer process for provided dbid
-peer(Alias) ->
-  {ok, Uri} = barrel_http_aliases:get(Alias),
-  Uri.
+peer(Store, DbId) ->
+  %% TODO: remove when plugging new API
+  try barrel_db:infos(DbId) of
+      {ok, _} -> {ok, DbId}
+  catch
+    exit:_ ->
+      case barrel_db:start(DbId, binary_to_atom(Store, utf8), []) of
+        ok -> {ok, DbId};
+        {error, not_found} ->
+          {error, database_not_found}
+      end
+  end.
   %% Key = {n, l, DbId},
   %% case gproc:where(Key) of
   %%   {ok, Peer} ->

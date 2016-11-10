@@ -31,10 +31,30 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+                   , #{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
                    ]
-               }
+               },
+       put => #{ summary => "Create a new database"
+                  , produces => ["application/json"]
+                  , parameters =>
+                      [#{ name => <<"dbid">>
+                        , description => <<"Database ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      , #{ name => <<"store">>
+                         , description => <<"Store ID">>
+                         , in => <<"path">>
+                         , required => true
+                         , type => <<"string">>}
+                      ]
+                  }
      },
-  [trails:trail("/:dbid", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/:dbid", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -42,22 +62,28 @@ init(_Type, Req, []) ->
 
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  handle(Method, DbId, Req3, State).
+  {Store, Req3} = cowboy_req:binding(store, Req2),
+  {Db, Req4} = cowboy_req:binding(dbid, Req3),
+  handle(Method, Store, Db, Req4, State).
 
-handle(<<"GET">>, DbId, Req, State) ->
+handle(<<"PUT">>, StoreAsBin, Db, Req, State) ->
+  Store = binary_to_atom(StoreAsBin, utf8),
+  ok = barrel_db:start(Db, Store, [{create_if_missing, true}]),
+  barrel_http_reply:code(201, Req, State);
+handle(<<"GET">>, Store, Db, Req, State) ->
+  {ok, Conn} = barrel_http_conn:peer(Store, Db),
   All = barrel:all_databases(),
-  case lists:member(DbId, All) of
+  case lists:member(Db, All) of
     false ->
       barrel_http_reply:code(404, Req, State);
     true ->
-      db_info(DbId, Req, State)
+      db_info(Conn, Req, State)
   end;
 
-handle(<<"POST">>, DbId, Req, State) ->
-  barrel_http_rest_doc:post_put(post, DbId, undefined, Req, State);
+handle(<<"POST">>, Store, Db, Req, State) ->
+  barrel_http_rest_doc:post_put(post, Store, Db, undefined, Req, State);
 
-handle(_, _, Req, State) ->
+handle(_, _, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->
@@ -65,8 +91,7 @@ terminate(_Reason, _Req, _State) ->
 
 %% ----------
 
-db_info(DbId, Req, State) ->
-  Conn = barrel_http_conn:peer(DbId),
+db_info(Conn, Req, State) ->
   {ok, Infos} = barrel_db:infos(Conn),
   [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
   DbInfo = [{<<"id">>, Id},

@@ -49,24 +49,31 @@ trails() ->
                      , required => true
                      , type => <<"string">>
                      }
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>
+                     }
                    ]
                }
      },
-  [trails:trail("/:dbid/_changes", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/:dbid/_changes", ?MODULE, [], Metadata)].
 
 
 
--record(state, {dbid, changes, last_seq, feed, subscribed}).
+-record(state, {store, dbid, changes, last_seq, feed, subscribed}).
 
 init(_Type, Req, []) ->
-  {DbId, Req2} = cowboy_req:binding(dbid, Req),
-  {FeedBin, Req3} = cowboy_req:qs_val(<<"feed">>, Req2, <<"normal">>),
+  {Store, Req2} = cowboy_req:binding(store, Req),
+  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+  {FeedBin, Req4} = cowboy_req:qs_val(<<"feed">>, Req3, <<"normal">>),
   Feed = binary_to_atom(FeedBin, utf8),
-  {SinceBin, Req4} = cowboy_req:qs_val(<<"since">>, Req3, <<"0">>),
+  {SinceBin, Req5} = cowboy_req:qs_val(<<"since">>, Req4, <<"0">>),
   Since = binary_to_integer(SinceBin),
-  {LastSeq, Changes} = changes(DbId, Since),
-  S = #state{dbid=DbId, changes=Changes, last_seq=LastSeq, feed=Feed},
-  init_feed(Req4, S).
+  {LastSeq, Changes} = changes(Store, DbId, Since),
+  S = #state{store=Store, dbid=DbId, changes=Changes, last_seq=LastSeq, feed=Feed},
+  init_feed(Req5, S).
 
 
 
@@ -106,9 +113,10 @@ handle(_, Req, S) ->
 
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
+  Store = S#state.store,
   DbId = S#state.dbid,
   Since = S#state.last_seq,
-  {LastSeq, Changes} = changes(DbId, Since),
+  {LastSeq, Changes} = changes(Store, DbId, Since),
   db_updated(Changes, LastSeq, Req, S).
 
 db_updated([], LastSeq, Req, #state{feed=longpoll}=S) ->
@@ -141,11 +149,11 @@ terminate(_Reason, _Req, _S) ->
 
 %% ----------
 
-changes(DbId, Since) ->
+changes(Store, DbId, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  Conn = barrel_http_conn:peer(DbId),
+  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   barrel_db:changes_since(Conn, Since, Fun, {Since, []}).
 
 to_json(LastSeq, Changes) ->

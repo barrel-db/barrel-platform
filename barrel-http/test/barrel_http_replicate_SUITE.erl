@@ -43,8 +43,8 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
-  ok = barrel_db:start(<<"source">>, barrel_source_rocksdb),
+  ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
+  ok = barrel_db:start(<<"source">>, source, [{create_if_missing, true}]),
   {ok, SourceConn} = barrel_httpc:connect(source_url(), []),
   {ok, TargetConn} = barrel_httpc:connect(target_url(), []),
   [{source_conn, SourceConn},{target_conn, TargetConn}|Config].
@@ -69,13 +69,13 @@ end_per_suite(Config) ->
   Config.
 
 source_url() ->
-  <<"http://localhost:8080/source">>.
+  <<"http://localhost:8080/source/source">>.
 
 source() ->
   {barrel_httpc, source_url()}.
 
 target_url() ->
-  <<"http://localhost:8080/testdb">>.
+  <<"http://localhost:8080/testdb/testdb">>.
 
 target() ->
   {barrel_httpc, target_url()}.

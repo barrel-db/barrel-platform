@@ -23,18 +23,28 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Check for differences in documents history"
+    #{ post => #{ summary => "Check for differences in documents history"
                , produces => ["application/json"]
-               , parameters => 
-                   [#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
+               , parameters =>
+                    [#{ name => <<"body">>
+                      , description => <<"List of docid/revisions to be checked">>
+                      , in => <<"body">>
+                      , required => true
+                      , type => <<"json">>}
+                    ,#{ name => <<"dbid">>
+                      , description => <<"Database ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ,#{ name => <<"store">>
+                      , description => <<"Store ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ]
+                }
      },
-  [trails:trail("/:dbid/_revs_diff", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/:dbid/_revs_diff", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -42,13 +52,14 @@ init(_Type, Req, []) ->
 
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  handle(Method, DbId, Req3, State).
+  {Store, Req3} = cowboy_req:binding(store, Req2),
+  {DbId, Req4} = cowboy_req:binding(dbid, Req3),
+  handle(Method, Store, DbId, Req4, State).
 
-handle(<<"POST">>, DbId, Req, State) ->
+handle(<<"POST">>, Store, DbId, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
-  Conn = barrel_http_conn:peer(DbId),
+  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
                          {ok, Missing, Possible} = barrel_db:revsdiff(Conn, DocId, RevIds),
                          case Possible of
@@ -60,7 +71,7 @@ handle(<<"POST">>, DbId, Req, State) ->
   barrel_http_reply:doc(Result, Req2, State);
 
 
-handle(_, _, Req, State) ->
+handle(_, _, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->

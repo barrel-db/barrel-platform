@@ -42,10 +42,10 @@ init_per_suite(Config) ->
   Config.
 
 url() ->
-  <<"http://localhost:8080/testdb">>.
+  <<"http://localhost:8080/testdb/testdb">>.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
   {ok, HttpConn} = barrel_httpc:connect(url(), []),
   [{http_conn, HttpConn}|Config].
 

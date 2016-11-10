@@ -42,8 +42,6 @@ stop() ->
 init(_) ->
   {ok, Options} = application:get_env(barrel, http_server),
   Port = proplists:get_value(port, Options),
-  Aliases = proplists:get_value(aliases, Options),
-  ok = barrel_http_aliases:add(Aliases),
 
   Trails =
     trails:trails([ cowboy_swagger_handler
