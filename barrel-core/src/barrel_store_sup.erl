@@ -14,7 +14,7 @@
 
 %% Created by benoitc on 03/09/16.
 
--module(barrel_stores_sup).
+-module(barrel_store_sup).
 -author("Benoit Chesneau").
 
 -behaviour(supervisor).
@@ -44,8 +44,8 @@ start_link() ->
 init([]) ->
   {ok, Stores} = application:get_env(barrel, stores),
   Children = lists:map(
-    fun({Name, Module, Options}) ->
-      child_spec(Name, Module, Options)
+    fun({Name, Config}) ->
+      storage_spec(Name, Config)
     end, Stores),
   
   {ok, {{one_for_one, 5, 10}, Children}}.
@@ -55,7 +55,10 @@ init([]) ->
 %%%===================================================================
 
 %% @private
-child_spec(Name, Module, Options) ->
-  {Name,
-    {barrel_store, start_link, [Name, Module, Options]},
-    permanent, 5000, worker, [Module]}.
+storage_spec(Name, Config) when is_map(Config) ->
+  #{id => Name,
+    start => {barrel_store, start_link, [Name, Config]},
+    restart => permanent,
+    shutdown => 5000,
+    type => worker,
+    modules => [barrel_store]}.

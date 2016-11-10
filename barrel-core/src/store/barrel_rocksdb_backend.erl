@@ -21,7 +21,7 @@
 %% API
 
 -export([get_db/1]).
--export([start_link/2]).
+-export([start_link/3]).
 
 %% gen_server callbacks
 -export([
@@ -49,10 +49,9 @@
 
 get_db(Name) -> gen_server:call(Name, get_db).
 
--spec start_link(atom(), list()) -> {ok, pid()}.
-start_link(Name, Options) ->
-  BackendName = {n, l, {rocksdb_backend, Name}},
-  gen_server:start_link({via, gproc, BackendName}, ?MODULE, Options, []).
+-spec start_link(atom(), atom(), list()) -> {ok, pid()}.
+start_link(Backend, _Name, Options) ->
+  gen_server:start_link({local, Backend}, ?MODULE, Options, []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -60,7 +59,8 @@ start_link(Name, Options) ->
 %%%
 -spec init(term()) -> {ok, state()}.
 init(Options) ->
-  DbDir = proplists:get_value(dir, Options),
+  DbDir = maps:get(dir, Options),
+  filelib:ensure_dir(filename:join(DbDir, "empty")),
   {ok, Db} = erocksdb:open(DbDir, [{create_if_missing, true}], []),
   {ok, #state{db=Db}}.
 

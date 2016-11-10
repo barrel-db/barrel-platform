@@ -48,7 +48,7 @@
 all_databases() ->
   {ok, Stores} = application:get_env(barrel, stores),
   AllDbs = lists:foldl(
-    fun({Store, _, _}, Acc) ->
+    fun({Store, _}, Acc) ->
       Dbs = barrel_store:all_dbs(Store),
       Dbs ++ Acc
     end, [], Stores),

@@ -44,25 +44,11 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  SafeSup =
-    {barrel_safe_sup,
-     {supervisor, start_link, [{local, barrel_safe_sup}, ?MODULE, safe]},
-     permanent, infinity, supervisor, [?MODULE]},
-
-  Specs = [
-    ?sup(barrel_ext_sup),
-    SafeSup
-
+  Specs =[
+      ?sup(barrel_store_sup)
+    , ?sup(barrel_db_sup)
+    , ?sup(barrel_event)
+    , ?sup(barrel_task_status)
   ],
-  {ok, { {one_for_all, 0, 10}, Specs} };
-
-init(safe) ->
-  Specs =[ ?sup(barrel_stores_sup)
-         , ?sup(barrel_db_sup)
-         , ?sup(barrel_event)
-         , ?sup(barrel_task_status)
-         ],
-
+  
   {ok, { {one_for_one, 5, 10}, Specs} }.
-
-

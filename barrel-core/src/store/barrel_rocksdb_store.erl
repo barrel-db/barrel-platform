@@ -23,7 +23,6 @@
 
 %% API
 -export([
-  pre_start/2,
   init/2,
   open_db/3,
   clean_db/3,
@@ -41,13 +40,7 @@
 
 -define(VERSION, 1).
 
-
-pre_start(Name, Options) ->
-  {ok, _} = barrel_ext_sup:start_proc({rocksdb_backend, Name}, barrel_rocksdb_backend,
-    start_link, [Name, Options], [{restart, permanent}, {shutdown, 5000}]).
-
-init(Name, _Options) ->
-  {Backend, _} = gproc:await({n, l, {rocksdb_backend, Name}}, 5000),
+init(_Name, #{ store_backend := Backend }) ->
   Db = barrel_rocksdb_backend:get_db(Backend),
   {ok, #{db => Db }}.
 

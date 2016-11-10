@@ -73,11 +73,11 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  erocksdb:destroy("testdb", []),
+  erocksdb:destroy("data/testdb", []),
   Config.
 
 store_exists(_Config) ->
-  true = filelib:is_dir(<<"testdb">>),
+  true = filelib:is_dir(<<"data/testdb">>),
   ok.
 
 missing_db(_Config) ->
