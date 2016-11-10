@@ -25,7 +25,7 @@
 -export([
   pre_start/2,
   init/2,
-  open_db/2,
+  open_db/3,
   clean_db/3,
   all_dbs/1,
   get_doc_info/3, get_doc_info/4,
@@ -48,13 +48,14 @@ init(Name, _Options) ->
   Db = barrel_rocksdb_backend:get_db(Backend),
   {ok, #{db => Db }}.
 
-open_db(#{ db := Db }, Name) ->
+open_db(#{ db := Db }, Name, Options) ->
+  CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
   DbKey = << 0, 0, 0, 100, (barrel_lib:to_binary(Name))/binary >>,
   case erocksdb:get(Db, DbKey, []) of
     {ok, DbId} ->
       UpdateSeq = get_update_seq(Db, DbId),
-      {DbId, UpdateSeq};
-    not_found ->
+      {ok, {DbId, UpdateSeq}};
+    not_found when CreateIfMissing /= false  ->
       DbId = barrel_lib:uniqid(),
       Batch =  [
                  {put, << 0, 0, 0, 0 >>, integer_to_binary(?VERSION)},
@@ -62,7 +63,11 @@ open_db(#{ db := Db }, Name) ->
                  {put, meta_key(DbId, 0), integer_to_binary(0)}
       ],
       ok = erocksdb:write(Db,Batch, [{sync, true}]),
-      {DbId, 0}
+      {ok, {DbId, 0}};
+    not_found ->
+      {error, not_found};
+    Error ->
+      Error
   end.
 
 clean_db(Name, DbId, #{db := Db}) ->

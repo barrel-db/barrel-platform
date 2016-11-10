@@ -25,7 +25,7 @@
 
 -define(SERVER, ?MODULE).
 
--export([start_db/2, stop_db/1, await_db/1]).
+-export([start_db/3, stop_db/1, await_db/1]).
 
 %%%===================================================================
 %%% API functions
@@ -50,9 +50,9 @@ init([]) ->
 
 %% @private
 
--spec start_db(term(), atom()) -> supervisor:startchild_ret().
-start_db(Name, Store) ->
-  supervisor:start_child(?MODULE, db_spec(Name, Store)).
+-spec start_db(term(), atom(), barrel_db:db_options()) -> supervisor:startchild_ret().
+start_db(Name, Store, Options) ->
+  supervisor:start_child(?MODULE, db_spec(Name, Store, Options)).
 
 -spec stop_db(term()) -> ok |{error, term()}.
 stop_db(Name) ->
@@ -69,10 +69,10 @@ await_db(Name) ->
   _ = gproc:await({n, l, {barrel_db, Name}}, 5000),
   ok.
 
-db_spec(Name, Store) ->
+db_spec(Name, Store, Options) ->
   #{
     id => Name,
-    start => {barrel_db, start_link, [Name, Store]},
+    start => {barrel_db, start_link, [Name, Store, Options]},
     restart => permanent,
     shutdown => 5000,
     type => worker,

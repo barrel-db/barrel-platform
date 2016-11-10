@@ -18,7 +18,7 @@
 
 %% API
 -export([
-  start/2,
+  start/3,
   stop/1,
   clean/1,
   infos/1,
@@ -32,7 +32,7 @@
   revsdiff/3
 ]).
 
--export([start_link/2]).
+-export([start_link/3]).
 
 %% gen_server callbacks
 -export([
@@ -64,6 +64,7 @@
 -type read_options() :: [{rev, rev()} | {history, boolean()}
   | {max_history, integer()} | {ancestors, [rev()]}].
 -type write_options() :: [{async, boolean()} | {timeout, integer()}].
+-type db_options() :: [{creat_if_missing, boolean()}].
 
 -export_type([
   dbname/0,
@@ -71,24 +72,28 @@
   rev/0,
   docid/0,
   read_options/0,
-  write_options/0
+  write_options/0,
+  db_options/0
 ]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-start(Name, Store) when is_binary(Name)->
+-spec start(binary(), atom(), db_options()) -> ok | {error, term()}.
+start(Name, Store, Options) when is_binary(Name)->
   case gproc:where(db_key(Name)) of
-    Pid when is_pid(Pid) -> ok;
+    Pid when is_pid(Pid) ->
+      ok;
     undefined ->
-      case barrel_db_sup:start_db(Name, Store) of
+      case barrel_db_sup:start_db(Name, Store, Options) of
         {ok, _Pid} -> ok;
         {error, {already_started, _}} -> ok;
+        {error, {{error, not_found}, _}} -> {error, not_found};
         Error -> Error
       end
   end;
-start(_, _) -> erlang:error(bad_db).
+start(_, _, _) -> erlang:error(bad_db).
 
 stop(Name) -> barrel_db_sup:stop_db(Name).
 
@@ -327,19 +332,23 @@ update_doc1(Db, DocId, Fun, Options, Timeout) ->
     error(timeout)
   end.
 
--spec start_link(dbname(), atom()) -> {ok, pid()}.
-start_link(Name, Store) ->
-  gen_server:start_link(via(Name), ?MODULE, [Name, Store], []).
+-spec start_link(dbname(), atom(), db_options()) -> {ok, pid()}.
+start_link(Name, Store, Options) ->
+  gen_server:start_link(via(Name), ?MODULE, [Name, Store, Options], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 %%%
 -spec init(term()) -> {ok, state()}.
-init([Name, Store]) ->
-  process_flag(trap_exit, true),
-  State = init_db(Name, Store),
-  {ok, State}.
+init([Name, Store, Options]) ->
+  case init_db(Name, Store, Options) of
+    {ok, State} ->
+      process_flag(trap_exit, true),
+      {ok, State};
+    Error ->
+      {stop, Error}
+  end.
 
 -spec handle_call(term(), term(), state()) -> {reply, term(), state()}.
 handle_call(get_infos, _From, State) ->
@@ -401,19 +410,24 @@ db_key(Name) -> {n, l, {barrel_db, Name}}.
 
 call(Name, Req) -> gen_server:call(via(Name), Req).
 
-init_db(Name, Store) ->
-  {DbId, UpdateSeq} = barrel_store:open_db(Store, Name),
-  %% spawn writer actor
-  WriterPid = spawn_writer(DbId, Store, UpdateSeq),
-
-  %% return state
-  #{
-    id => DbId,
-    store => Store,
-    writer => WriterPid,
-    name => Name,
-    update_seq => UpdateSeq
-  }.
+init_db(Name, Store, Options) ->
+  case barrel_store:open_db(Store, Name, Options) of
+    {ok, {DbId, UpdateSeq}} ->
+      %% spawn writer actor
+      WriterPid = spawn_writer(DbId, Store, UpdateSeq),
+  
+      %% return state
+      {ok, #{
+        id => DbId,
+        store => Store,
+        writer => WriterPid,
+        name => Name,
+        update_seq => UpdateSeq
+      }};
+    Error ->
+      Error
+  end.
+  
 
 %% TODO: retrieve status from the store
 get_infos(State) ->
