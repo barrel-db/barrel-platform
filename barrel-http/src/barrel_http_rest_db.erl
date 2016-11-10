@@ -37,7 +37,22 @@ trails() ->
                      , required => true
                      , type => <<"string">>}
                    ]
-               }
+               },
+       put => #{ summary => "Create a new database"
+                  , produces => ["application/json"]
+                  , parameters =>
+                      [#{ name => <<"dbid">>
+                        , description => <<"Database ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      , #{ name => <<"store">>
+                         , description => <<"Store ID">>
+                         , in => <<"path">>
+                         , required => true
+                         , type => <<"string">>}
+                      ]
+                  }
      },
   [trails:trail("/:store/:dbid", ?MODULE, [], Metadata)].
 

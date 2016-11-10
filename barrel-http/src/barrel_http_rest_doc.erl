@@ -90,11 +90,6 @@ trails() ->
                      , in => <<"body">>
                      , required => true
                      , type => <<"json">>}
-                   ,#{ name => <<"docid">>
-                     , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => false
-                     , type => <<"string">>}
                    ,#{ name => <<"dbid">>
                      , description => <<"Database ID">>
                      , in => <<"path">>

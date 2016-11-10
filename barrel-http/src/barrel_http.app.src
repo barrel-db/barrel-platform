@@ -1,6 +1,6 @@
 {application, barrel_http,
   [{description, "Barrel-db HTTP Server"},
-   {vsn, "0.1.2"},
+   {vsn, "0.2.0"},
    {registered, []},
    {mod, {barrel_http_app, []}},
    {applications,
