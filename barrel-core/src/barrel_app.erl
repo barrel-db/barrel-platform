@@ -24,35 +24,9 @@
 %%====================================================================
 
 start(_StartType, _StartArgs) ->
-  ok = have_default_store(),
-  {ok, Sup} = barrel_sup:start_link(),
-  init_dbs(),
-  {ok, Sup}.
+  barrel_sup:start_link().
 
 %%--------------------------------------------------------------------
 stop(_State) ->
   ok.
 
-%%====================================================================
-%% Internal functions
-%%====================================================================
-
-have_default_store() ->
-  case application:get_env(barrel, default_store) of
-    undefined ->
-      erlang:error(no_default_store);
-    {ok, Name} ->
-      {ok, Stores} = application:get_env(barrel, stores),
-      case lists:keymember(Name, 1, Stores) of
-        true -> ok;
-        false -> erlang:error({invalid_default_store, Name})
-      end
-  end,
-  ok.
-
-init_dbs() ->
-  {ok, Stores} = application:get_env(barrel, stores),
-  lists:foreach(fun({Store, _, _}) ->
-      Dbs = barrel_store:all_dbs(Store),
-      [barrel_db:start(Name, Store) || Name <- Dbs]
-    end, Stores).
