@@ -34,6 +34,11 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
                    ]
                }
      },
@@ -68,5 +73,5 @@ to_json(Req, State) ->
   Reply = #{<<"offset">> => OffSet,
             <<"rows">> => Rows,
             <<"total_rows">> => TotalRows},
-  barrel_http_reply:doc(Reply, Req3, State).
-
+  Json = jsx:encode(Reply),
+  {Json, Req3, State}.

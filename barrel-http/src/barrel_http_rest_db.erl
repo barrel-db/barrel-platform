@@ -31,10 +31,15 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+                   , #{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
                    ]
                }
      },
-  [trails:trail("/:store/:db", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/:dbid", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -43,7 +48,7 @@ init(_Type, Req, []) ->
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
   {Store, Req3} = cowboy_req:binding(store, Req2),
-  {Db, Req4} = cowboy_req:binding(db, Req3),
+  {Db, Req4} = cowboy_req:binding(dbid, Req3),
   handle(Method, Store, Db, Req4, State).
 
 handle(<<"GET">>, Store, Db, Req, State) ->

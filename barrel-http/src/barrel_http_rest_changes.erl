@@ -49,6 +49,12 @@ trails() ->
                      , required => true
                      , type => <<"string">>
                      }
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>
+                     }
                    ]
                }
      },

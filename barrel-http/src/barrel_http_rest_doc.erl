@@ -23,7 +23,7 @@
 -export([trails/0]).
 
 trails() ->
-  Metadata =
+  GetPut =
     #{ get => #{ summary => "Get a document"
                , description => "Get a document."
                , produces => ["application/json"]
@@ -42,31 +42,13 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
                    ]
                }
-     , post => #{ summary => "Add a new document."
-                , produces => ["application/json"]
-                , responses =>
-                    #{ <<"200">> => #{ description => "Document added." }
-                     }
-                , parameters =>
-                    [#{ name => <<"body">>
-                      , description => <<"Document to be added">>
-                      , in => <<"body">>
-                      , required => true
-                      , type => <<"json">>}
-                    ,#{ name => <<"docid">>
-                      , description => <<"Document ID">>
-                      , in => <<"path">>
-                      , required => true
-                      , type => <<"string">>}
-                    ,#{ name => <<"dbid">>
-                      , description => <<"Database ID">>
-                      , in => <<"path">>
-                      , required => true
-                      , type => <<"string">>}
-                    ]
-                }
      , put => #{ summary => "Add/update a document."
                , produces => ["application/json"]
                , responses =>
@@ -77,7 +59,7 @@ trails() ->
                      , description => <<"Document to be added">>
                      , in => <<"body">>
                      , required => true
-                     , type => <<"json">>}
+                     , type => <<"application/json">>}
                    ,#{ name => <<"docid">>
                      , description => <<"Document ID">>
                      , in => <<"path">>
@@ -88,10 +70,46 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
                    ]
                }
      },
-  [trails:trail("/:store/:dbid/[:docid]", ?MODULE, [], Metadata)].
+  Post =
+    #{post => #{ summary => "Add a new document."
+               , produces => ["application/json"]
+               , responses =>
+                   #{ <<"200">> => #{ description => "Document added." }
+                    }
+               , parameters =>
+                   [#{ name => <<"body">>
+                     , description => <<"Document to be added">>
+                     , in => <<"body">>
+                     , required => true
+                     , type => <<"json">>}
+                   ,#{ name => <<"docid">>
+                     , description => <<"Document ID">>
+                     , in => <<"path">>
+                     , required => false
+                     , type => <<"string">>}
+                   ,#{ name => <<"dbid">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                      , type => <<"string">>}
+                   ]
+               }
+     },
+  [trails:trail("/:store/:dbid/", ?MODULE, [], Post),
+   trails:trail("/:store/:dbid/[:docid]", ?MODULE, [], GetPut)].
 
 
 init(_Type, Req, []) ->
@@ -114,8 +132,8 @@ handle(<<"GET">>, Store, DbId, DocIdAsBin, Req, State) ->
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
 
-handle(<<"POST">>, Store, DbId, DocIdAsBin, Req, State) ->
-  post_put(put, Store, DbId, DocIdAsBin, Req, State);
+handle(<<"POST">>, Store, DbId, _, Req, State) ->
+  post_put(post, Store, DbId, undefined, Req, State);
 
 handle(<<"PUT">>, Store, DbId, DocIdAsBin, Req, State) ->
   post_put(put, Store, DbId, DocIdAsBin, Req, State);

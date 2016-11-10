@@ -23,16 +23,26 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Check for differences in documents history"
+    #{ post => #{ summary => "Check for differences in documents history"
                , produces => ["application/json"]
-               , parameters => 
-                   [#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
+               , parameters =>
+                    [#{ name => <<"body">>
+                      , description => <<"List of docid/revisions to be checked">>
+                      , in => <<"body">>
+                      , required => true
+                      , type => <<"json">>}
+                    ,#{ name => <<"dbid">>
+                      , description => <<"Database ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ,#{ name => <<"store">>
+                      , description => <<"Store ID">>
+                      , in => <<"path">>
+                      , required => true
+                      , type => <<"string">>}
+                    ]
+                }
      },
   [trails:trail("/:store/:dbid/_revs_diff", ?MODULE, [], Metadata)].
 
