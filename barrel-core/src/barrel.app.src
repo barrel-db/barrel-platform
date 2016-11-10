@@ -1,6 +1,6 @@
 {application, barrel,
   [{description, "Barrel-db core application"},
-   {vsn, "0.1.1"},
+   {vsn, "0.1.2"},
    {registered, []},
    {mod, {barrel_app, []}},
    {applications,
