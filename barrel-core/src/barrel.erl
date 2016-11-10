@@ -19,7 +19,7 @@
 -export([all_databases/0]).
 
 -export([
-  start/2,
+  start/3,
   stop/1,
   clean/1,
   infos/1,
@@ -55,8 +55,9 @@ all_databases() ->
   lists:usort(AllDbs).
 
 
-start(Name, Store) ->
-  barrel_db:start(Name, Store).
+
+start(Name, Store, Options) ->
+  barrel_db:start(Name, Store, Options).
 
 stop(Name) ->
   barrel_db:stop(Name).

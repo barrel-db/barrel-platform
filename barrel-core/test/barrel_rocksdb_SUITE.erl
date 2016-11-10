@@ -28,6 +28,7 @@
 
 -export([
   store_exists/1,
+  missing_db/1,
   open_db/1,
   all_databases/1,
   basic_op/1,
@@ -44,6 +45,7 @@
 all() ->
   [
     store_exists,
+    missing_db,
     open_db,
     all_databases,
     basic_op,
@@ -63,7 +65,7 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   Config.
 
 end_per_testcase(_, _Config) ->
@@ -78,25 +80,30 @@ store_exists(_Config) ->
   true = filelib:is_dir(<<"testdb">>),
   ok.
 
+missing_db(_Config) ->
+  {error, not_found} = barrel_db:start(<<"testdb_unknown">>, barrel_test_rocksdb, []),
+  ok.
+
+
 open_db(_Config) ->
   {ok, Infos} = barrel_db:infos(<<"testdb">>),
   Id = maps:get(id, Infos),
   {ok, Infos2} = barrel_db:infos(<<"testdb">>),
   Id = maps:get(id, Infos2),
   ok = barrel_db:clean(<<"testdb">>),
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   {ok, Infos3} = barrel_db:infos(<<"testdb">>),
   true = (Id /= maps:get(id, Infos3)).
 
 all_databases(_Config) ->
   [<<"testdb">>] = barrel:all_databases(),
-  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   [<<"testdb">>, <<"testdb1">>] = barrel:all_databases(),
-  ok = barrel_db:start(<<"testdb2">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb2">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:all_databases(),
   ok = barrel_db:stop(<<"testdb1">>),
   [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:all_databases(),
-  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   ok =  barrel_db:clean(<<"testdb1">>),
   [<<"testdb">>, <<"testdb2">>] = barrel:all_databases(),
   ok =  barrel_db:clean(<<"testdb2">>),

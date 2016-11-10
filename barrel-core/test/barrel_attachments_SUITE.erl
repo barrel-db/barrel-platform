@@ -41,7 +41,7 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb),
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   [{db, <<"testdb">>}|Config].
 
 end_per_testcase(_, _Config) ->

@@ -6,7 +6,7 @@
 
 %% API
 -export([
-  open_db/2,
+  open_db/3,
   clean_db/3,
   all_dbs/1,
   get_doc_info/3,
@@ -51,7 +51,7 @@
 
 -callback init(atom(), term()) -> {ok, any()}.
 
--callback open_db(term(), term()) -> term().
+-callback open_db(term(), term(), list()) -> term().
 
 -callback clean_db(term(), term(), term()) -> ok | {error, term()}.
 
@@ -80,8 +80,8 @@
 %%% API
 %%%===================================================================
 
-open_db(Store, Name) ->
-  wpool:call(Store, {open_db, Name}).
+open_db(Store, Name, Options) ->
+  wpool:call(Store, {open_db, Name, Options}).
 
 clean_db(Store, Name, DbId) ->
   wpool:call(Store, {clean_db, Name, DbId}).
@@ -145,8 +145,8 @@ init([Name, Mod, Opts]) ->
   {ok, #state{mod=Mod, mod_state=ModState}}.
 
 -spec handle_call(term(), term(), state()) -> {reply, term(), state()}.
-handle_call({open_db, Name}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
-  Reply = Mod:open_db(ModState, Name),
+handle_call({open_db, Name, Options}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:open_db(ModState, Name, Options),
   {reply, Reply, State};
 
 handle_call({clean_db, Name, DbId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
