@@ -81,32 +81,39 @@
 %%%===================================================================
 
 open_db(Store, Name, Options) ->
-  wpool:call(Store, {open_db, Name, Options}).
+  call(Store, {open_db, Name, Options}).
 
 clean_db(Store, Name, DbId) ->
-  wpool:call(Store, {clean_db, Name, DbId}).
+  call(Store, {clean_db, Name, DbId}).
 
 all_dbs(Store) ->
-  wpool:call(Store, all_dbs).
+  call(Store, all_dbs).
 
 get_doc_info(Store, DbId, DocId) ->
-  wpool:call(Store, {get_doc_info, DbId, DocId}).
+  call(Store, {get_doc_info, DbId, DocId}).
 
 write_doc(Store, DbId, DocId, LastSeq, DocInfo, Body) ->
-  wpool:call(Store, {write_doc, DbId, DocId, LastSeq, DocInfo, Body}).
+  call(Store, {write_doc, DbId, DocId, LastSeq, DocInfo, Body}).
 
 get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
-  wpool:call(Store, {get_doc, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom}).
+  call(Store, {get_doc, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom}).
 
 
 fold_by_id(Store, DbId, Fun, AccIn, Opts) ->
-  wpool:call(Store, {fold_by_id, DbId, Fun, AccIn, Opts}).
+  call(Store, {fold_by_id, DbId, Fun, AccIn, Opts}).
 
 changes_since(Store, DbId, Since, Fun, AccIn) ->
-  wpool:call(Store, {changes_since, DbId, Since, Fun, AccIn}).
+  call(Store, {changes_since, DbId, Since, Fun, AccIn}).
 
 last_update_seq(Store, DbId) ->
-  wpool:call(Store, {last_update_seq, DbId}).
+  call(Store, {last_update_seq, DbId}).
+
+
+call(Store, Msg) ->
+  try wpool:call(Store, Msg)
+  catch
+    _:Error -> {error, {store_error, {Store, Error}}}
+  end.
 
 write_system_doc(Store, DbId, DocId, Doc) ->
   wpool:call(Store, {write_system_doc, DbId, DocId, Doc}).

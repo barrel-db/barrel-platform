@@ -84,16 +84,21 @@
 
 -spec start(binary(), atom(), db_options()) -> ok | {error, term()}.
 start(Name, Store, Options) when is_binary(Name)->
-  case gproc:where(db_key(Name)) of
+  case whereis(Store) of
     Pid when is_pid(Pid) ->
-      ok;
+      case gproc:where(db_key(Name)) of
+        Pid when is_pid(Pid) ->
+          ok;
+        undefined ->
+          case barrel_db_sup:start_db(Name, Store, Options) of
+            {ok, _Pid} -> ok;
+            {error, {already_started, _}} -> ok;
+            {error, {{error, not_found}, _}} -> {error, not_found};
+            Error -> Error
+          end
+      end;
     undefined ->
-      case barrel_db_sup:start_db(Name, Store, Options) of
-        {ok, _Pid} -> ok;
-        {error, {already_started, _}} -> ok;
-        {error, {{error, not_found}, _}} -> {error, not_found};
-        Error -> Error
-      end
+      {error, {unknown_store, Store}}
   end;
 start(_, _, _) -> erlang:error(bad_db).
 
