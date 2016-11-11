@@ -28,7 +28,10 @@
          post/3,
          fold_by_id/4,
          changes_since/4,
-         revsdiff/3
+         revsdiff/3,
+         write_system_doc/3,
+         read_system_doc/2,
+         delete_system_doc/2
         ]).
 
 -export([start_link/2]).
@@ -84,6 +87,15 @@ changes_since({?MODULE, Pid}, Since, Fun, Acc) ->
 
 revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
+
+write_system_doc({?MODULE, Pid}, DocId, Doc) ->
+  gen_server:call(Pid, {write_system_doc, DocId,  Doc}).
+
+read_system_doc({?MODULE, Pid}, DocId) ->
+  gen_server:call(Pid, {read_system_doc, DocId}).
+
+delete_system_doc({?MODULE, Pid}, DocId) ->
+  gen_server:call(Pid, {delete_system_doc, DocId}).
 
 %% ----------
 
@@ -150,6 +162,27 @@ handle_call({changes_since, Since, Fun, Acc}, _From, S) ->
   Changes = maps:get(results, Answer),
   Reply = fold_result(Fun, Acc, Changes),
   {reply, Reply, S};
+
+handle_call({write_system_doc, DocId, Doc}, _From, State) ->
+  DbUrl = State#state.dbid,
+  Sep = <<"/_system/">>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
+  {201, _} = req(put, Url, Doc),
+  {reply, ok, State};
+
+handle_call({read_system_doc, DocId}, _From, State) ->
+  DbUrl = State#state.dbid,
+  Sep = <<"/_system/">>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
+  {Code, Reply} = req(get, Url),
+  get_resp(Code, Reply, State);
+
+handle_call({delete_system_doc, DocId}, _From, State) ->
+  DbUrl = State#state.dbid,
+  Sep = <<"/_system/">>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
+  {204, _} = req(delete, Url),
+  {reply, ok, State};
 
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
@@ -274,7 +307,8 @@ req(Method, Url, Body) ->
   ParsedUrl = hackney_url:parse_url(Url),
   PoolName = pool_name(ParsedUrl),
   Options = [{timeout, 150000}, {max_connections, 20}, {pool, PoolName}],
-  {ok, Code, _Headers, Ref} = hackney:request(Method, ParsedUrl, [], Body, Options),
+  Headers = [{<<"Content-Type">>, <<"application/json">>}],
+  {ok, Code, _Headers, Ref} = hackney:request(Method, ParsedUrl, Headers, Body, Options),
   {ok, Answer} = hackney:body(Ref),
   {Code, Answer}.
 
