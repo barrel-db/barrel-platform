@@ -167,7 +167,7 @@ handle_call({write_system_doc, DocId, Doc}, _From, State) ->
   DbUrl = State#state.dbid,
   Sep = <<"/_system/">>,
   Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
-  {201, _} = req(put, Url, Doc),
+  {201, <<>>} = req(put, Url, Doc),
   {reply, ok, State};
 
 handle_call({read_system_doc, DocId}, _From, State) ->

@@ -189,10 +189,11 @@ all_docs(_Config) ->
 
 system_doc(_Config) ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = req(put, "/testdb/testdb/_system/cat", Doc),
+  {201, <<>>} = req(put, "/testdb/testdb/_system/cat", Doc),
   {200, R} = req(get, <<"/testdb/db1/cat">>),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
+  {204, <<>>} = req(put, "/testdb/testdb/_system/cat", "{}"),
   ok.
 
 
