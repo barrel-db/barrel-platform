@@ -298,16 +298,32 @@ read_last_seq(Db, RepId) ->
   end.
 
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
-  barrel_db:write_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
+  write_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
+
+write_system_doc({Mod,_Db}=DbRef, Id, Doc) ->
+  Mod:write_system_doc(DbRef, Id, Doc);
+write_system_doc(Db, Id, Doc) when is_binary(Db) ->
+  barrel_db:write_system_doc(Db, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
-  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
+  read_system_doc(Db, checkpoint_docid(RepId)).
+
+read_system_doc({Mod,_Db}=DbRef, Id) ->
+  Mod:read_system_doc(DbRef, Id);
+read_system_doc(Db, Id) when is_binary(Db) ->
+  barrel_db:read_system_doc(Db, Id).
 
 delete_checkpoint_doc(Db, RepId) ->
-  barrel_db:delete_system_doc(Db, checkpoint_docid(RepId)).
+  delete_system_doc(Db, checkpoint_docid(RepId)).
+
+delete_system_doc({Mod,_Db}=DbRef, Id) ->
+  Mod:delete_system_doc(DbRef, Id);
+delete_system_doc(Db, Id) when is_binary(Db) ->
+  barrel_db:delete_system_doc(Db, Id).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.
+
 
 %% =============================================================================
 %% Helpers
