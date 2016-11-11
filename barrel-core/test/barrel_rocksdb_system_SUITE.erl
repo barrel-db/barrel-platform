@@ -43,7 +43,7 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  erocksdb:destroy("testdb", []),
+  erocksdb:destroy("data/testdb", []),
   Config.
 
 write_and_get(Config) ->

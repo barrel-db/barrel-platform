@@ -87,6 +87,18 @@ handle_call(all_dbs, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
   Reply = Mod:all_dbs(ModState),
   {reply, Reply, State};
 
+handle_call({write_system_doc, DbId, DocId, Doc}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:write_system_doc(DbId, DocId, Doc, ModState),
+  {reply, Reply, State};
+
+handle_call({read_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:read_system_doc(DbId, DocId, ModState),
+  {reply, Reply, State};
+
+handle_call({delete_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:delete_system_doc(DbId, DocId, ModState),
+  {reply, Reply, State};
+
 
 handle_call(_Request, _From, State) ->
   io:format("request is ~p~nstate is ~p~n", [_Request, State]),
