@@ -167,8 +167,13 @@ handle_call({write_system_doc, DocId, Doc}, _From, State) ->
   DbUrl = State#state.dbid,
   Sep = <<"/_system/">>,
   Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
-  {201, <<>>} = req(put, Url, Doc),
-  {reply, ok, State};
+  {Code, _} = req(put, Url, Doc),
+  case lists:member(Code, [200,201]) of
+    true ->
+      {reply, ok, State};
+    false ->
+      {reply, {error, {bad_http_code, Code}}, State}
+  end;
 
 handle_call({read_system_doc, DocId}, _From, State) ->
   DbUrl = State#state.dbid,

@@ -134,10 +134,6 @@ resource_exists(Req, State) ->
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
   {DocId, Req4} = cowboy_req:binding(docid, Req3),
   {ok, Conn} = barrel_http_conn:peer(Store, DbId),
-  {ok, Body, _} = cowboy_req:body(Req),
-  {Method, _} = cowboy_req:method(Req),
-  ct:print("resource exists method-~p ~p ~p ~p body=~p",[Method, Store, DbId, DocId, Body]),
-  ct:print("  req=~p",[Req]),
   State2 = State#state{docid=DocId, conn=Conn},
   case barrel_db:read_system_doc(Conn, DocId) of
     {ok, Doc} ->
@@ -154,9 +150,10 @@ to_json(Req, #state{doc=Doc}=State) ->
 from_json(Req, #state{conn=Conn, docid=DocId}=State) ->
   {ok, Body, Req2} = cowboy_req:body(Req),
   Doc = jsx:decode(Body, [return_maps]),
-  ct:print("write system doc ~p",[Doc]),
   ok = barrel_db:write_system_doc(Conn, DocId, Doc),
-  {true, Req2, State}.
+  RespBody = jsx:encode(#{ok => true}),
+  Req3 = cowboy_req:set_resp_body(RespBody, Req2),
+  {true, Req3, State}.
 
 delete_resource(Req, #state{conn=Conn, docid=DocId}=State) ->
   ok = barrel_db:delete_system_doc(Conn, DocId),
