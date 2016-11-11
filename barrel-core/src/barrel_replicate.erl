@@ -18,19 +18,28 @@
 -behaviour(gen_server).
 
 %% specific API
--export([start_link/2]).
--export([start_link/3]).
--export([stop/1]).
--export([info/1]).
--export([info/2]).
--export([clean/2]).
+-export([
+  start_link/4,
+  info/1
+]).
 
 %% gen_server API
--export([init/1, handle_call/3]).
--export([handle_info/2]).
--export([terminate/2]).
--export([code_change/3]).
--export([handle_cast/2]).
+-export([
+  init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2,
+  code_change/3
+]).
+
+%% internal api
+-export([
+  repid/2,
+  replication_key/1,
+  clean/2
+]).
+
 
 -record(st, { source
             , target
@@ -43,31 +52,35 @@
             , options
             }).
 
+start_link(RepId, Source, Target, Options) ->
+  gen_server:start_link(
+    {via, gproc, replication_key(RepId)}, ?MODULE,
+    {Source, Target, Options}, []).
 
-start_link(Source, Target) ->
-  start_link(Source, Target, []).
-
-start_link(Source, Target, Options) ->
-  gen_server:start_link(?MODULE, {Source, Target, Options}, []).
-
-stop(Pid) ->
-  gen_server:call(Pid, stop).
 
 info(Pid) when is_pid(Pid)->
   gen_server:call(Pid, info).
 
-info(Source, Target) ->
-  RepId = uniqueid(Source, Target),
-  get_checkpoints(Source, Target, RepId).
-
 clean(Source, Target) ->
-  RepId = uniqueid(Source, Target),
+  RepId = repid(Source, Target),
   delete_checkpoint_doc(Source, RepId),
-  delete_checkpoint_doc(Target, RepId),
-  ok.
+  delete_checkpoint_doc(Target, RepId).
 
+%% @doc Compute a unique ID for replication
+%% function of Source, Target, and unique ID of the server
+%% TODO compute unique server ID
+repid(Source, Target) ->
+  {ok, HostName} = inet:gethostname(),
+  Term = {Source, Target, HostName},
+  H = erlang:phash2(Term),
+  Md5 = erlang:md5(integer_to_binary(H)),
+  barrel_lib:to_hex(Md5).
+
+
+replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
+  
 init({Source, Target, Options}) ->
-  RepId = uniqueid(Source, Target),
+  RepId = repid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
@@ -281,13 +294,6 @@ read_last_seq(Db, RepId) ->
       0
   end.
 
-get_checkpoints(Source, Target, RepId) ->
-  {ok, SourceCheckpoint} = read_checkpoint_doc(Source, RepId),
-  {ok, TargetCheckpoint} = read_checkpoint_doc(Target, RepId),
-  #{id => RepId,
-    source_checkpoints => SourceCheckpoint,
-    target_checkpoints => TargetCheckpoint}.
-
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
   barrel_db:write_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
 
@@ -313,15 +319,6 @@ history(Rev, RevTree, History) ->
   Parent = maps:get(parent, DocInfo),
   history(Parent, RevTree, [Rev|History]).
 
-%% @doc Compute a unique ID for replication
-%% function of Source, Target, and unique ID of the server
-%% TODO compute unique server ID
-uniqueid(Source, Target) ->
-  {ok, HostName} = inet:gethostname(),
-  Term = {Source, Target, HostName},
-  H = erlang:phash2(Term),
-  Md5 = erlang:md5(integer_to_binary(H)),
-  barrel_lib:to_hex(Md5).
 
 %% RFC3339 timestamps.
 %% Note: doesn't include the time seconds fraction (RFC3339 says it's optional).

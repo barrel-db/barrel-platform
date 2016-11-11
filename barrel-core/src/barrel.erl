@@ -44,6 +44,13 @@
   attachments/3
 ]).
 
+-export([
+  start_replication/2,
+  start_replication/3,
+  stop_replication/1,
+  replication_info/1
+]).
+
 
 all_databases() ->
   {ok, Stores} = application:get_env(barrel, stores),
@@ -117,3 +124,30 @@ delete_attachment(Db, DocId, AttId, Options) ->
 
 attachments(Db, DocId, Options) ->
   barrel_attachments:attachments(Db, DocId, Options).
+
+
+
+%% replication API
+
+start_replication(Source, Target) -> start_replication(Source, Target, []).
+
+start_replication(Source, Target, Options) ->
+  RepId = barrel_replicate:repid(Source, Target),
+  case supervisor:start_child(barrel_replicate_sup, [RepId, Source, Target, Options]) of
+    {ok, _Pid} -> {ok, RepId};
+    {error, {already_started, _Pid}} -> {ok, RepId};
+    Error -> Error
+  end.
+
+stop_replication(RepId) ->
+  case gproc:where(barrel_replicate:replication_key(RepId)) of
+    undefined -> ok;
+    Pid when is_pid(Pid) ->
+      supervisor:terminate_child(barrel_replicate_sup, Pid)
+  end.
+  
+replication_info(RepId) ->
+  case gproc:where(barrel_replicate:replication_key(RepId)) of
+    undefined -> {error, not_found};
+    Pid -> barrel_replicate:info(Pid)
+  end.
