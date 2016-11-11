@@ -77,18 +77,18 @@ target() ->
 
 one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
-  {ok, Pid} = barrel_replicate:start_link(source(), target(), Options),
+  {ok, RepId} = barrel:start_replication(source(), target(), Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   timer:sleep(200),
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
-  stopped = barrel_replicate:stop(Pid),
+  ok = barrel:stop_replication(RepId),
 
-  [Stats] = barrel_task_status:all(),
-  1 = proplists:get_value(docs_read, Stats),
-  1 = proplists:get_value(docs_written, Stats),
+  %%[Stats] = barrel_task_status:all(),
+  %%1 = proplists:get_value(docs_read, Stats),
+  %%1 = proplists:get_value(docs_written, Stats),
 
   {ok, _, _} = delete_doc("a", source()),
   {ok, _, _} = delete_doc("a", target()),
@@ -102,23 +102,23 @@ source_not_empty(_Config) ->
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, RepId} = barrel:start_replication(source(), target()),
   timer:sleep(200),
 
   {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
-  stopped = barrel_replicate:stop(Pid),
+  ok = barrel:stop_replication(RepId),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
 
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, RepId} = barrel:start_replication(source(), target()),
   barrel_db:delete(source(), <<"a">>, RevId, []),
   timer:sleep(200),
   {ok,Doc3} = barrel_db:get(target(), <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
-  stopped = barrel_replicate:stop(Pid),
+  ok = barrel:stop_replication(RepId),
   ok.
 
 %% =============================================================================
@@ -127,11 +127,11 @@ deleted_doc(_Config) ->
 
 random_activity(_Config) ->
   Scenario = scenario(),
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, RepId} = barrel:start_replication(source(), target()),
   ExpectedResults = play_scenario(Scenario, source()),
   timer:sleep(200),
   ok = check_all(ExpectedResults, source(), target()),
-  stopped = barrel_replicate:stop(Pid),
+  ok = barrel:stop_replication(RepId),
   ok = purge_scenario(ExpectedResults, source()),
   ok = purge_scenario(ExpectedResults, target()),
   ok.
@@ -150,7 +150,7 @@ checkpoints(_Config) ->
   M3 = play_checkpoint(P3, M2),
   M4 = play_checkpoint(P4, M3),
 
-  Info = barrel_replicate:info(source(), target()),
+  Info = get_checkpoints(source(), target()),
   SourceCheckpoints = maps:get(source_checkpoints, Info),
   History = maps:get(<<"history">>, SourceCheckpoints),
   4 = length(History),
@@ -162,11 +162,11 @@ checkpoints(_Config) ->
   ok.
 
 play_checkpoint(Scenario, M) ->
-  {ok, Pid} = barrel_replicate:start_link(source(), target()),
+  {ok, RepId} = barrel:start_replication(source(), target()),
   Expected = play_scenario(Scenario, source(), M),
   timer:sleep(200),
   ok = check_all(Expected, source(), target()),
-  stopped = barrel_replicate:stop(Pid),
+  ok = barrel:stop_replication(RepId),
   Expected.
 
 split(2, L) ->
@@ -252,3 +252,17 @@ scenario() ->
   , {put, "g", 1}
   , {put, "f", 4}
   ].
+
+get_checkpoints(Source, Target) ->
+  RepId = barrel_replicate:repid(Source, Target),
+  {ok, SourceCheckpoint} = read_checkpoint_doc(Source, RepId),
+  {ok, TargetCheckpoint} = read_checkpoint_doc(Target, RepId),
+  #{id => RepId,
+    source_checkpoints => SourceCheckpoint,
+    target_checkpoints => TargetCheckpoint}.
+
+read_checkpoint_doc(Db, RepId) ->
+  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
+
+checkpoint_docid(RepId) ->
+  <<"replication-checkpoint-", RepId/binary>>.
