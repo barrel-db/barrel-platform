@@ -86,9 +86,9 @@
 -spec start(binary(), atom(), db_options()) -> ok | {error, term()}.
 start(Name, Store, Options) when is_binary(Name)->
   case whereis(Store) of
-    Pid when is_pid(Pid) ->
+    PidStore when is_pid(PidStore) ->
       case gproc:where(db_key(Name)) of
-        Pid when is_pid(Pid) ->
+        PidDb when is_pid(PidDb) ->
           ok;
         undefined ->
           case barrel_db_sup:start_db(Name, Store, Options) of

@@ -91,7 +91,11 @@ open_db(_Config) ->
   {ok, Infos2} = barrel_db:infos(<<"testdb">>),
   Id = maps:get(id, Infos2),
   ok = barrel_db:clean(<<"testdb">>),
+  {error, not_found} = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, []),
   ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  %% can start it several times
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, []),
   {ok, Infos3} = barrel_db:infos(<<"testdb">>),
   true = (Id /= maps:get(id, Infos3)).
 
