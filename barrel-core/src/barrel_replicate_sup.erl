@@ -16,7 +16,7 @@ init([]) ->
     #{id => barrel_replicate,
       start => {barrel_replicate, start_link, []},
       restart => transient,
-      shutdown => brutal_kill,
+      shutdown => 2000,
       type => worker,
       modules => [barrel_replicate]},
   

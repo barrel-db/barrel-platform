@@ -80,6 +80,7 @@ repid(Source, Target) ->
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
   
 init({Source, Target, Options}) ->
+  process_flag(trap_exit, true),
   RepId = repid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
@@ -135,8 +136,10 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
   {noreply, S3}.
 
 %% default gen_server callback
-terminate(_Reason, State) ->
+terminate(_Reason, State = #st{id=RepId}) ->
   barrel_metrics:update_task(State#st.metrics),
+  
+  lager:info("replication ~p terminated", [RepId]),
   ok = write_checkpoint(State),
   ok = barrel_event:unreg(),
   ok.
