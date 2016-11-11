@@ -62,8 +62,8 @@ info(Source, Target) ->
 
 clean(Source, Target) ->
   RepId = uniqueid(Source, Target),
-  clean_checkpoint_doc(Source, RepId),
-  clean_checkpoint_doc(Target, RepId),
+  delete_checkpoint_doc(Source, RepId),
+  delete_checkpoint_doc(Target, RepId),
   ok.
 
 init({Source, Target, Options}) ->
@@ -289,33 +289,16 @@ get_checkpoints(Source, Target, RepId) ->
     target_checkpoints => TargetCheckpoint}.
 
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
-  Path = checkpoint_filename(Db, RepId),
-  file:write_file(Path, io_lib:fwrite("~p.\n",[Checkpoint])).
+  barrel_db:write_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
 
 read_checkpoint_doc(Db, RepId) ->
-  Path = checkpoint_filename(Db, RepId),
-  case file:consult(Path) of
-    {ok, [Doc]} ->
-      {ok, Doc};
-    {error, Other} ->
-      {error, Other}
-  end.
+  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
 
-clean_checkpoint_doc(Db, RepId) ->
-  Path = checkpoint_filename(Db, RepId),
-  file:delete(Path),
-  {error,_} = file:consult(Path),
-  ok.
+delete_checkpoint_doc(Db, RepId) ->
+  barrel_db:delete_system_doc(Db, checkpoint_docid(RepId)).
 
-checkpoint_filename({Mod, _Url}, RepId) ->
-  ModStr = atom_to_list(Mod),
-  DocIdStr = binary_to_list(RepId),
-  "checkpoint_" ++ ModStr ++ "_" ++ DocIdStr;
-
-checkpoint_filename(Db, RepId) when is_binary(Db) ->
-  DbStr = binary_to_list(Db),
-  DocIdStr = binary_to_list(RepId),
-  "checkpoint_" ++ DbStr ++ "_" ++ DocIdStr.
+checkpoint_docid(RepId) ->
+  <<"replication-checkpoint-", RepId/binary>>.
 
 %% =============================================================================
 %% Helpers

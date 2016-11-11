@@ -33,7 +33,10 @@
   get_doc/7,
   fold_by_id/5,
   changes_since/5,
-  last_update_seq/2
+  last_update_seq/2,
+  write_system_doc/4,
+  read_system_doc/3,
+  delete_system_doc/3
 ]).
 
 -define(VERSION, 1).
@@ -307,6 +310,22 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
 
 last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 
+%% system storage
+
+write_system_doc(DbId, DocId, Doc, #{db := Db}) ->
+  Batch = [{put, sys_key(DbId, DocId), term_to_binary(Doc)}],
+  erocksdb:write(Db, Batch, [{sync, true}]).
+
+read_system_doc(DbId, DocId, #{db := Db}) ->
+  case erocksdb:get(Db, sys_key(DbId, DocId), []) of
+    {ok, Bin} -> {ok, binary_to_term(Bin)};
+    not_found -> {error, not_found};
+    Error -> Error
+  end.
+
+delete_system_doc(DbId, DocId, #{db := Db}) ->
+  erocksdb:delete(Db, sys_key(DbId, DocId), [{sync, true}]).
+
 %% key api
 
 meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binary >>.
@@ -314,5 +333,7 @@ meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binar
 doc_key(DbId, DocId) -> << DbId/binary, 0, 0, 50, DocId/binary >>.
 
 seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, (barrel_lib:to_binary(Seq))/binary >>.
+
+sys_key(DbId, DocId) -> << DbId/binary, 0, 0, 200, DocId/binary>>.
 
 rev_key(DbId, DocId, Rev) -> << DbId/binary, DocId/binary, 1, Rev/binary >>.
