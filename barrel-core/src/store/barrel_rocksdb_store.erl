@@ -35,7 +35,8 @@
   changes_since/5,
   last_update_seq/2,
   write_system_doc/4,
-  read_system_doc/3
+  read_system_doc/3,
+  delete_system_doc/3
 ]).
 
 -define(VERSION, 1).
@@ -309,7 +310,7 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
 
 last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 
-%% _system storage
+%% system storage
 
 write_system_doc(DbId, DocId, Doc, #{db := Db}) ->
   Batch = [{put, sys_key(DbId, DocId), term_to_binary(Doc)}],
@@ -321,6 +322,9 @@ read_system_doc(DbId, DocId, #{db := Db}) ->
     not_found -> {error, not_found};
     Error -> Error
   end.
+
+delete_system_doc(DbId, DocId, #{db := Db}) ->
+  erocksdb:delete(Db, sys_key(DbId, DocId), [{sync, true}]).
 
 %% key api
 

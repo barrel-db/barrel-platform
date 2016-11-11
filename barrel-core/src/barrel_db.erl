@@ -31,7 +31,8 @@
   changes_since/4,
   revsdiff/3,
   write_system_doc/3,
-  read_system_doc/2
+  read_system_doc/2,
+  delete_system_doc/2
 ]).
 
 -export([start_link/3]).
@@ -346,6 +347,10 @@ write_system_doc(Db, DocId, Doc) ->
 read_system_doc(Db, DocId) ->
   #{store := Store, id := DbId} = call(Db, get_state),
   barrel_store:read_system_doc(Store, DbId, DocId).
+
+delete_system_doc(Db, DocId) ->
+  #{store := Store, id := DbId} = call(Db, get_state),
+  barrel_store:delete_system_doc(Store, DbId, DocId).
 
 -spec start_link(dbname(), atom(), db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->

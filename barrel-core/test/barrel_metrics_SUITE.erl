@@ -46,13 +46,13 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
   ok = barrel_db:start(target(), barrel_test_rocksdb, [{create_if_missing, true}]),
-  ok = barrel_db:start(source(), barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel_db:start(source(), barrel_source_rocksdb, [{create_if_missing, true}]),
   Config.
 
 end_per_testcase(_, _Config) ->
+  ok = barrel_replicate:clean(source(), target()),
   ok = barrel_db:clean(target()),
   ok = barrel_db:clean(source()),
-  ok = barrel_replicate:clean(source(), target()),
   ok.
 
 end_per_suite(Config) ->

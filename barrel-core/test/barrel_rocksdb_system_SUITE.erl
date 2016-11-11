@@ -51,5 +51,7 @@ write_and_get(Config) ->
   Doc = #{<<"v">> => 1},
   ok = barrel_db:write_system_doc(Db, <<"a">>, Doc),
   {ok, Doc} = barrel_db:read_system_doc(Db, <<"a">>),
+  ok = barrel_db:delete_system_doc(Db, <<"a">>),
+  {error, not_found} = barrel_db:read_system_doc(Db, <<"a">>),
   ok.
 

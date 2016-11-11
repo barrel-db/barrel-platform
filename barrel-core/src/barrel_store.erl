@@ -16,7 +16,8 @@
   changes_since/5,
   last_update_seq/2,
   write_system_doc/4,
-  read_system_doc/3
+  read_system_doc/3,
+  delete_system_doc/3
 ]).
 
 -export([start_link/3]).
@@ -121,6 +122,9 @@ write_system_doc(Store, DbId, DocId, Doc) ->
 read_system_doc(Store, DbId, DocId) ->
   wpool:call(Store, {read_system_doc, DbId, DocId}).
 
+delete_system_doc(Store, DbId, DocId) ->
+  wpool:call(Store, {delete_system_doc, DbId, DocId}).
+
 %% @doc Starts and links a new process for the given store implementation.
 -spec start_link(atom(), module(), [term()]) -> {ok, pid()}.
 start_link(Name, Module, Options) ->
@@ -195,6 +199,10 @@ handle_call({write_system_doc, DbId, DocId, Doc}, _From, State=#state{ mod=Mod, 
 
 handle_call({read_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
   Reply = Mod:read_system_doc(DbId, DocId, ModState),
+  {reply, Reply, State};
+
+handle_call({delete_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:delete_system_doc(DbId, DocId, ModState),
   {reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
