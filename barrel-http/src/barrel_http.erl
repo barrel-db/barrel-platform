@@ -46,6 +46,7 @@ init(_) ->
   Trails =
     trails:trails([ cowboy_swagger_handler
                   , barrel_http_rest_system
+                  , barrel_http_rest_replicate
                   , barrel_http_rest_db
                   , barrel_http_rest_revsdiff
                   , barrel_http_rest_putrev

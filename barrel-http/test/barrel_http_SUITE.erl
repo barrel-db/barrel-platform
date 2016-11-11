@@ -32,7 +32,8 @@
          changes_longpoll/1,
          changes_eventsource/1,
          create_database/1,
-         system_doc/1]).
+         system_doc/1,
+         create_replicate_task/1]).
 
 all() -> [ info_database
          , post
@@ -47,6 +48,7 @@ all() -> [ info_database
          , changes_eventsource
          , create_database
          , system_doc
+         , create_replicate_task
          ].
 
 init_per_suite(Config) ->
@@ -194,6 +196,26 @@ system_doc(_Config) ->
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
   {200, _} = req(put, "/testdb/testdb/_system/cat", "{}"),
+  ok.
+
+create_replicate_task(_Config) ->
+  %% create 2 databases
+  {201, _} = req(put, "/testdb/db1", []),
+  {201, _} = req(put, "/testdb/db2", []),
+
+  {404, _} = req(get, "/testdb/db2/mouse"),
+  %% create a replication task from one db to the other
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/db1">>,
+              <<"target">> => <<"http://localhost:8080/testdb/db2">>},
+  {200, _} = req(post, "/_replicate", Request),
+
+  %% put one doc in source db
+  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
+  {200, _} = req(put, "/testdb/db1/mouse", Mouse),
+  timer:sleep(500),
+  %% retrieve it replicated in target db
+  {200, _} = req(get, "/testdb/db2/mouse"),
+
   ok.
 
 

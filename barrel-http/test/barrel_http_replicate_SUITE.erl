@@ -47,7 +47,7 @@ init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"source">>, source, [{create_if_missing, true}]),
   [{source_conn, source()},{target_conn, target()}|Config].
 
-end_per_testcase(_, Config) ->
+end_per_testcase(_, _Config) ->
   ok = barrel_db:clean(<<"testdb">>),
   ok = barrel_db:clean(<<"source">>),
   %% ok = barrel_replicate:clean(source(), target()),
