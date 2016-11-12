@@ -45,15 +45,9 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
   ok = barrel_db:start(<<"source">>, source, [{create_if_missing, true}]),
-  {ok, SourceConn} = barrel_httpc:connect(source_url(), []),
-  {ok, TargetConn} = barrel_httpc:connect(target_url(), []),
-  [{source_conn, SourceConn},{target_conn, TargetConn}|Config].
+  [{source_conn, source()},{target_conn, target()}|Config].
 
-end_per_testcase(_, Config) ->
-  SourceConn = proplists:get_value(source_conn, Config),
-  TargetConn = proplists:get_value(target_conn, Config),
-  stopped = barrel_httpc:stop(SourceConn),
-  stopped = barrel_httpc:stop(TargetConn),
+end_per_testcase(_, _Config) ->
   ok = barrel_db:clean(<<"testdb">>),
   ok = barrel_db:clean(<<"source">>),
   %% ok = barrel_replicate:clean(source(), target()),

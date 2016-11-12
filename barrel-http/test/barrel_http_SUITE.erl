@@ -32,7 +32,8 @@
          changes_longpoll/1,
          changes_eventsource/1,
          create_database/1,
-         system_doc/1]).
+         system_doc/1,
+         create_replicate_task/1]).
 
 all() -> [ info_database
          , post
@@ -47,6 +48,7 @@ all() -> [ info_database
          , changes_eventsource
          , create_database
          , system_doc
+         , create_replicate_task
          ].
 
 init_per_suite(Config) ->
@@ -194,6 +196,33 @@ system_doc(_Config) ->
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
   {200, _} = req(put, "/testdb/testdb/_system/cat", "{}"),
+  ok.
+
+create_replicate_task(_Config) ->
+  %% create 2 databases
+  {201, _} = req(put, "/testdb/dba", []),
+  {201, _} = req(put, "/testdb/dbb", []),
+
+  {404, _} = req(get, "/testdb/dbb/mouse"),
+  %% create a replication task from one db to the other
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
+              <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
+  {200, R} = req(post, "/_replicate", Request),
+  #{<<"repid">> := RepIdBin} = jsx:decode(R, [return_maps]),
+  RepId = binary_to_list(RepIdBin),
+
+  %% put one doc in source db
+  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
+  {200, _} = req(put, "/testdb/dba/mouse", Mouse),
+  timer:sleep(500),
+  %% retrieve it replicated in target db
+  {200, _} = req(get, "/testdb/dbb/mouse"),
+
+  {404, _} = req(get, "/_replicate/doesnotexist"),
+  {200, R2} = req(get, "/_replicate/" ++ RepId),
+  Metrics = jsx:decode(R2, [return_maps]),
+  #{<<"docs_read">> := 1,
+    <<"docs_written">> := 1} = Metrics,
   ok.
 
 
