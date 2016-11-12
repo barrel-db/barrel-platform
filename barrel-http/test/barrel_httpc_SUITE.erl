@@ -48,12 +48,12 @@ url() ->
 
 init_per_testcase(_, Config) ->
   ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
-  {ok, HttpConn} = barrel_httpc:connect(url(), []),
+  {ok, HttpConn} = barrel_httpc:start_link(url(), []),
   [{http_conn, HttpConn}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
-  stopped = barrel_httpc:stop(HttpConn),
+  ok = barrel_httpc:disconnect(HttpConn),
   ok = barrel_db:clean(<<"testdb">>),
   ok.
 
@@ -133,19 +133,19 @@ changes_since(Config) ->
 db_updated(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
 
-  ok = barrel_event:reg(HttpConn),
+  ok = barrel_event:reg({barrel_httpc, HttpConn}),
   Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(HttpConn, <<"aa">>, Doc, []),
 
   Msg = one_msg(),
-  {'$barrel_event', HttpConn, db_updated} = Msg,
+  {'$barrel_event', {barrel_httpc, HttpConn}, db_updated} = Msg,
   true = queue_is_empty(),
 
   Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
 
   Msg = one_msg(),
-  {'$barrel_event', HttpConn, db_updated} = Msg,
+  {'$barrel_event', {barrel_httpc, HttpConn}, db_updated} = Msg,
   true = queue_is_empty(),
 
   ok = barrel_event:unreg(),

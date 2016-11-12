@@ -17,9 +17,8 @@
 
 -behaviour(gen_server).
 
--export([
-         connect/2,
-         stop/1,
+-export([connect/2,
+         disconnect/1,
          infos/1,
          put/4,
          put_rev/5,
@@ -48,53 +47,55 @@
 -record(state, {dbid, hackney_ref, hackney_acc, first_seq, buffer=[]}).
 
 connect(Url, Options) ->
-  start_link(Url, Options).
+  case start_link(Url, Options) of
+    {ok, Pid} -> {ok, {?MODULE, Pid}};
+    Error -> Error
+  end.
 
 start_link(Url, Options) ->
   case gen_server:start_link(?MODULE, [Url, Options], []) of
-    {ok, Pid} ->
-      Conn = {?MODULE, Pid},
-      {ok, Conn};
-    {error, {already_started, Pid}} -> {ok, Pid}
+    {ok, Pid} -> {ok, Pid};
+    {error, {already_started, Pid}} -> {ok, Pid};
+    Error -> Error
   end.
 
-stop({?MODULE, Pid}) ->
+disconnect(Pid) ->
   gen_server:call(Pid, stop).
 
-infos({?MODULE, Pid}) ->
+infos(Pid) ->
   gen_server:call(Pid, infos).
 
-post({?MODULE, Pid}, Doc, Options) ->
+post(Pid, Doc, Options) ->
   gen_server:call(Pid, {post, Doc, Options}).
 
-put({?MODULE, Pid}, DocId, Doc, Options) ->
+put(Pid, DocId, Doc, Options) ->
   gen_server:call(Pid, {put, DocId, Doc, Options}).
 
-put_rev({?MODULE, Pid}, DocId, Doc, History, Options) ->
+put_rev(Pid, DocId, Doc, History, Options) ->
   gen_server:call(Pid, {put_rev, DocId, Doc, History, Options}).
 
-get({?MODULE, Pid}, DocId, Options) ->
+get(Pid, DocId, Options) ->
   gen_server:call(Pid, {get, DocId, Options}).
 
-delete({?MODULE, Pid}, DocId, RevId, Options) ->
+delete(Pid, DocId, RevId, Options) ->
   gen_server:call(Pid, {delete, DocId, RevId, Options}).
 
 fold_by_id(_Db, _Fun, _Acc, _Opts) ->
   {error, not_implemented}.
 
-changes_since({?MODULE, Pid}, Since, Fun, Acc) ->
+changes_since(Pid, Since, Fun, Acc) ->
   gen_server:call(Pid, {changes_since, Since, Fun, Acc}).
 
 revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
 
-write_system_doc({?MODULE, Pid}, DocId, Doc) ->
+write_system_doc(Pid, DocId, Doc) ->
   gen_server:call(Pid, {write_system_doc, DocId,  Doc}).
 
-read_system_doc({?MODULE, Pid}, DocId) ->
+read_system_doc(Pid, DocId) ->
   gen_server:call(Pid, {read_system_doc, DocId}).
 
-delete_system_doc({?MODULE, Pid}, DocId) ->
+delete_system_doc(Pid, DocId) ->
   gen_server:call(Pid, {delete_system_doc, DocId}).
 
 %% ----------
@@ -190,7 +191,7 @@ handle_call({delete_system_doc, DocId}, _From, State) ->
   {reply, ok, State};
 
 handle_call(stop, _From, State) ->
-  {stop, normal, stopped, State}.
+  {stop, normal, ok, State}.
 
 
 handle_cast({longpoll, DbUrl, Since}, S) ->
