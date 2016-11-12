@@ -71,7 +71,6 @@ data_dir() ->
   filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
   Dir.
 
-
 parse_fold_options(Opts) ->
   parse_fold_options(Opts, ?default_fold_options).
 

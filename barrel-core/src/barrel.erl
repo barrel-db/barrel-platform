@@ -75,6 +75,8 @@ clean(Name) ->
 infos(Name) ->
   barrel_db:infos(Name).
 
+
+
 get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
