@@ -48,8 +48,6 @@
 ]).
 
 %% internal processes
--export([writer_init/4]).
-
 -define(default_timeout, 5000).
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
@@ -317,28 +315,8 @@ find_parent([], _RevTree, I) ->
   {I, <<"">>}.
 
 update_doc(Db, DocId, Fun, Options) ->
-  Async = proplists:get_value(async, Options, false),
-  Timeout = proplists:get_value(timeout, Options, ?default_timeout),
-
-  case Async of
-    true -> spawn(fun() -> update_doc1(Db, DocId, Fun, Options,Timeout) end);
-    false -> update_doc1(Db, DocId, Fun, Options, Timeout)
-  end.
-
-update_doc1(Db, DocId, Fun, Options, Timeout) ->
-  #{writer := Writer} = call(Db, get_state),
-  Mref = erlang:monitor(process, Writer),
-  Writer ! {update_doc, {self(), Mref}, DocId, Fun, Options},
-  receive
-    {Mref, Reply} ->
-      erlang:demonitor(Mref, [flush]),
-      Reply;
-    {'DOWN', Mref, _, _, Reason} ->
-      exit(Reason)
-  after Timeout ->
-    erlang:demonitor(Mref, [flush]),
-    error(timeout)
-  end.
+  #{id := DbId} = call(Db, get_state),
+  barrel_transactor:update_doc(DbId, DocId, Fun, Options).
 
 write_system_doc(Db, DocId, Doc) ->
   #{store := Store, id := DbId} = call(Db, get_state),
@@ -387,7 +365,7 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
-handle_info({update_seq, Seq}, State = #{ name := Name }) ->
+handle_info({updated, Seq}, State = #{ name := Name }) ->
   barrel_db_event:notify(Name, db_updated),
   {noreply, State#{update_seq => Seq}};
 
@@ -395,13 +373,14 @@ handle_info({'EXIT', Pid, Reason},State) ->
   #{id := DbId,
     name := Name,
     store := Store,
-    writer := WriterPid}=State,
+    writer := WriterPid,
+    options := Options}=State,
   if
     Pid =:= WriterPid ->
       lager:info("~p writer crashed: ~p~n", [Name, Reason]),
       %% the writer crashed, respawn it
       UpdateSeq = barrel_store:last_update_seq(Store, DbId),
-      NewWriter = spawn_writer(DbId, Store, UpdateSeq),
+      {ok, NewWriter} = barrel_transactor:start_link(self(), DbId, Store, Options),
       lager:info("~p new writer spawned: dbid=~p store=~p~n", [Name, DbId, Store]),
       {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
     true ->
@@ -419,6 +398,7 @@ terminate(_Reason, #{writer := Writer}) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -434,20 +414,19 @@ init_db(Name, Store, Options) ->
   case barrel_store:open_db(Store, Name, Options) of
     {ok, {DbId, UpdateSeq}} ->
       %% spawn writer actor
-      WriterPid = spawn_writer(DbId, Store, UpdateSeq),
-  
+      {ok, WriterPid} = barrel_transactor:start_link(self(), DbId, Store, UpdateSeq),
       %% return state
       {ok, #{
         id => DbId,
         store => Store,
         writer => WriterPid,
         name => Name,
-        update_seq => UpdateSeq
+        update_seq => UpdateSeq,
+        options => Options
       }};
     Error ->
       Error
   end.
-  
 
 %% TODO: retrieve status from the store
 get_infos(State) ->
@@ -457,56 +436,3 @@ get_infos(State) ->
     name => Name,
     store => Store
   }.
-
-spawn_writer(DbId, Store, UpdateSeq) ->
-  spawn_link(?MODULE, writer_init, [self(), DbId, Store, UpdateSeq]).
-
-writer_init(Parent, Dbid, Store, UpdateSeq) ->
-  State = #{
-    parent => Parent,
-    dbid => Dbid,
-    store => Store,
-    update_seq => UpdateSeq},
-  writer_loop(State).
-
-writer_loop(State = #{dbid := DbId, store := Store}) ->
-  receive
-    {update_doc, {Pid, Tag}, DocId, Fun, Options} ->
-      {Reply, NewState} = (catch write_doc(DbId, Store, DocId, Fun, Options, State)),
-      catch Pid ! {Tag, Reply},
-      writer_loop(NewState)
-  end.
-
-empty_doc_info() ->
-  #{ current_rev => <<>>, revtree => #{}}.
-
-write_doc(DbId, Store, DocId, Fun, _Options, State) ->
-  #{ parent := Parent, update_seq := Seq} = State,
-
-  DocInfo = case barrel_store:get_doc_info(Store, DbId, DocId) of
-              {ok, DI} -> DI;
-              {error, not_found} -> empty_doc_info();
-              Error -> throw(Error)
-            end,
-
-  case Fun(DocInfo) of
-    {ok, DocInfo2, Body, NewRev} ->
-      NewSeq = Seq + 1,
-      LastSeq = maps:get(update_seq, DocInfo2, undefined),
-      case barrel_store:write_doc(Store, DbId, DocId, LastSeq, DocInfo2#{update_seq => NewSeq}, Body) of
-        ok ->
-          Parent ! {update_seq, NewSeq},
-          {{ok, DocId, NewRev}, State#{update_seq => NewSeq}};
-        WriteError ->
-          lager:error("db error: error writing ~p on ~p", [DocId, DbId]),
-          %% NOTE: should we retry?
-          {WriteError, State}
-      end;
-    ok ->
-      %% NOTE: should we return a cancel message instead?
-      #{ current_rev := Rev } = DocInfo,
-      {{ok, DocId, Rev}, State};
-    Conflict ->
-      {{error, Conflict}, State}
-  end.
-
