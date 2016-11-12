@@ -79,8 +79,11 @@ repid(Source, Target) ->
 
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
   
-init({Source, Target, Options}) ->
+init({Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
+  {ok, Source} = maybe_connect(Source0),
+  {ok, Target} = maybe_connect(Target0),
+  
   RepId = repid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
@@ -136,16 +139,25 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
   {noreply, S3}.
 
 %% default gen_server callback
-terminate(_Reason, State = #st{id=RepId}) ->
+terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_metrics:update_task(State#st.metrics),
-  
   lager:info("replication ~p terminated", [RepId]),
   ok = write_checkpoint(State),
   ok = barrel_event:unreg(),
+  %% close the connections
+  [maybe_close(Conn) || Conn <- [Source, Target]],
   ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
+
+%% TODO: check if the backend is registered or the db exists
+maybe_connect({Backend, Uri}) -> Backend:connect(Uri, []);
+maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri, Options);
+maybe_connect(Db) -> {ok, Db}.
+
+maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
+maybe_close(_) -> ok.
 
 %% =============================================================================
 %% Replicate changes from source to target
@@ -208,8 +220,8 @@ changes(Source, Since) ->
   {LastSeq, #{<<"last_seq">> => LastSeq,
               <<"results">> => Changes}}.
 
-get({Mod,_Db}=DbRef, Id, Opts) ->
-  Mod:get(DbRef, Id, Opts);
+get({Mod, ModState}, Id, Opts) ->
+  Mod:get(ModState, Id, Opts);
 get(Db, Id, Opts) when is_binary(Db) ->
   barrel_db:get(Db, Id, Opts).
 
@@ -218,13 +230,13 @@ get(Db, Id, Opts) when is_binary(Db) ->
 %% put(Db, Id, Doc, Opts) when is_binary(Db) ->
 %%   barrel_db:put(Db, Id, Doc, Opts).
 
-put_rev({Mod,_Db}=DbRef, Id, Doc, History, Opts) ->
-  Mod:put_rev(DbRef, Id, Doc, History, Opts);
+put_rev({Mod, ModState}, Id, Doc, History, Opts) ->
+  Mod:put_rev(ModState, Id, Doc, History, Opts);
 put_rev(Db, Id, Doc, History, Opts) when is_binary(Db) ->
   barrel_db:put_rev(Db, Id, Doc, History, Opts).
 
-changes_since({Mod,_Db}=DbRef, Since, Fun, Acc) ->
-  Mod:changes_since(DbRef, Since, Fun, Acc);
+changes_since({Mod, ModState}, Since, Fun, Acc) ->
+  Mod:changes_since(ModState, Since, Fun, Acc);
 changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
   barrel_db:changes_since(Db, Since, Fun, Acc).
 
@@ -300,24 +312,24 @@ read_last_seq(Db, RepId) ->
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
   write_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
 
-write_system_doc({Mod,_Db}=DbRef, Id, Doc) ->
-  Mod:write_system_doc(DbRef, Id, Doc);
+write_system_doc({Mod, ModState}, Id, Doc) ->
+  Mod:write_system_doc(ModState, Id, Doc);
 write_system_doc(Db, Id, Doc) when is_binary(Db) ->
   barrel_db:write_system_doc(Db, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
   read_system_doc(Db, checkpoint_docid(RepId)).
 
-read_system_doc({Mod,_Db}=DbRef, Id) ->
-  Mod:read_system_doc(DbRef, Id);
+read_system_doc({Mod, ModState}, Id) ->
+  Mod:read_system_doc(ModState, Id);
 read_system_doc(Db, Id) when is_binary(Db) ->
   barrel_db:read_system_doc(Db, Id).
 
 delete_checkpoint_doc(Db, RepId) ->
   delete_system_doc(Db, checkpoint_docid(RepId)).
 
-delete_system_doc({Mod,_Db}=DbRef, Id) ->
-  Mod:delete_system_doc(DbRef, Id);
+delete_system_doc({Mod, ModState}, Id) ->
+  Mod:delete_system_doc(ModState, Id);
 delete_system_doc(Db, Id) when is_binary(Db) ->
   barrel_db:delete_system_doc(Db, Id).
 
