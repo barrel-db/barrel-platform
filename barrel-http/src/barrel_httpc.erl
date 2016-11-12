@@ -281,5 +281,5 @@ req(Method, Url, Body) ->
 
 pool_name(ParsedUrl) ->
   #hackney_url{netloc = NetLoc} = ParsedUrl,
-  PoolName = <<"pool-httpc-", NetLoc/binary>>,
+  PoolName = <<"barrel-httpc-", NetLoc/binary>>,
   barrel_lib:to_atom(PoolName).
