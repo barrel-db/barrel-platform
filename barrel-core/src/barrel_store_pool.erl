@@ -101,7 +101,6 @@ handle_call({delete_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_
 
 
 handle_call(_Request, _From, State) ->
-  io:format("request is ~p~nstate is ~p~n", [_Request, State]),
   {reply, bad_call, State}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
