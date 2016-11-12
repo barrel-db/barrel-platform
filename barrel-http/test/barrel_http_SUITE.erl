@@ -200,22 +200,29 @@ system_doc(_Config) ->
 
 create_replicate_task(_Config) ->
   %% create 2 databases
-  {201, _} = req(put, "/testdb/db1", []),
-  {201, _} = req(put, "/testdb/db2", []),
+  {201, _} = req(put, "/testdb/dba", []),
+  {201, _} = req(put, "/testdb/dbb", []),
 
-  {404, _} = req(get, "/testdb/db2/mouse"),
+  {404, _} = req(get, "/testdb/dbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/db1">>,
-              <<"target">> => <<"http://localhost:8080/testdb/db2">>},
-  {200, _} = req(post, "/_replicate", Request),
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
+              <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
+  {200, R} = req(post, "/_replicate", Request),
+  #{<<"repid">> := RepIdBin} = jsx:decode(R, [return_maps]),
+  RepId = binary_to_list(RepIdBin),
 
   %% put one doc in source db
   Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
-  {200, _} = req(put, "/testdb/db1/mouse", Mouse),
+  {200, _} = req(put, "/testdb/dba/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = req(get, "/testdb/db2/mouse"),
+  {200, _} = req(get, "/testdb/dbb/mouse"),
 
+  {404, _} = req(get, "/_replicate/doesnotexist"),
+  {200, R2} = req(get, "/_replicate/" ++ RepId),
+  Metrics = jsx:decode(R2, [return_maps]),
+  #{<<"docs_read">> := 1,
+    <<"docs_written">> := 1} = Metrics,
   ok.
 
 
