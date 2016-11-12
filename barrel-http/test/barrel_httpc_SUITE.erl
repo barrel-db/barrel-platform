@@ -27,6 +27,7 @@
         , put_rev/1
         , changes_since/1
         , db_updated/1
+        , system_doc/1
         ]).
 
 all() -> [ info_database
@@ -35,6 +36,7 @@ all() -> [ info_database
          , put_rev
          , changes_since
          , db_updated
+         , system_doc
          ].
 
 init_per_suite(Config) ->
@@ -101,6 +103,16 @@ put_rev(Config) ->
   Doc4 = Doc3#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
   {ok, DocId, NewRev} = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
+  ok.
+
+system_doc(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
+  DocId = <<"a">>,
+  Doc = #{<<"v">> => 1},
+  ok = barrel_httpc:write_system_doc(HttpConn, DocId, Doc),
+  {ok, Doc} = barrel_httpc:read_system_doc(HttpConn, DocId),
+  ok = barrel_httpc:delete_system_doc(HttpConn, DocId),
+  {error, not_found} = barrel_httpc:read_system_doc(HttpConn, DocId),
   ok.
 
 changes_since(Config) ->

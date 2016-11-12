@@ -31,7 +31,8 @@
          changes_normal/1,
          changes_longpoll/1,
          changes_eventsource/1,
-         create_database/1]).
+         create_database/1,
+         system_doc/1]).
 
 all() -> [ info_database
          , post
@@ -45,6 +46,7 @@ all() -> [ info_database
          , changes_longpoll
          , changes_eventsource
          , create_database
+         , system_doc
          ].
 
 init_per_suite(Config) ->
@@ -185,6 +187,16 @@ all_docs(_Config) ->
   DogRevId = binary_to_list(maps:get(rev, Row)),
   ok.
 
+system_doc(_Config) ->
+  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  {201, _} = req(put, "/testdb/testdb/_system/cat", Doc),
+  {200, R} = req(get, <<"/testdb/db1/cat">>),
+  J = jsx:decode(R, [return_maps]),
+  #{<<"name">> := <<"tom">>} = J,
+  {200, _} = req(put, "/testdb/testdb/_system/cat", "{}"),
+  ok.
+
+
 %%=======================================================================
 
 changes_normal(_Config) ->
@@ -292,6 +304,7 @@ req(Method, Route, String) when is_list(String) ->
 req(Method, Route, Body) when is_binary(Body) ->
   Server = "http://localhost:8080",
   Path = list_to_binary(Server ++ Route),
-  {ok, Code, _Headers, Ref} = hackney:request(Method, Path, [], Body, []),
+  Headers = [{<<"Content-Type">>, <<"application/json">>}],
+  {ok, Code, _Headers, Ref} = hackney:request(Method, Path, Headers, Body, []),
   {ok, Answer} = hackney:body(Ref),
   {Code, Answer}.
