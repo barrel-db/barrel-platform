@@ -63,7 +63,6 @@ update_doc(DbId, DocId, Fun, Options) ->
       gen_statem:call(find(DbId), {update_doc, DocId, Fun, Options}, Timeout)
   end.
 
-
 last_update_seq(DbId) ->
   case ets:lookup(?MODULE, DbId) of
     [] -> undefined;
@@ -125,7 +124,7 @@ wait_for_transaction(cast, {update_doc, DocId, Fun, Options}, Data) ->
 wait_for_transaction(_EventType, _Event, Data) ->
   {keep_state, Data}.
 
-%% TODO: track transaction id instead of simpy postponing events
+%% TODO: track transaction id instead of simply postponing events
 process_transaction(_EventType, {update_doc, _DocId, _Fun, _Options}, Data) ->
   {keep_state, Data, [postpone]};
 process_transaction(info, {updated, Pid, Reply, Seq}, Data = #{ parent := Parent, t := {Pid, From}}) ->
