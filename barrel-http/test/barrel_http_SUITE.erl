@@ -96,18 +96,46 @@ post(_Config) ->
 
 
 put_get_delete(_Config) ->
-  CatRevId = put_cat(),
 
+  %% create doc
+  Cat = #{<<"id">> => <<"tom">>, <<"name">> => <<"tom">>},
+  {200, _} = req(put, "/testdb/testdb/cat", Cat),
+
+  %% get last revision of the doc
   {200, R2} = req(get, "/testdb/testdb/cat"),
   A2 = jsx:decode(R2, [return_maps]),
   <<"tom">> = maps:get(<<"name">>, A2),
 
-  A3 = delete_cat(CatRevId),
+  %% update the doc
+  Cat2 = A2#{<<"name">> => <<"kitty">>},
+  {200, R3} = req(put, "/testdb/testdb/cat", Cat2),
+  A3 = jsx:decode(R3, [return_maps]),
+  %% update wrong revision
+  {409, _} = req(put, "/testdb/testdb/cat", Cat2),
+  {409, _} = req(put, "/testdb/testdb/cat", Cat),
 
-  RevId2 = binary_to_list(maps:get(<<"rev">>, A3)),
-  {200, R4} = req(get, "/testdb/testdb/cat?rev=" ++ RevId2),
+  %% update non existing doc
+  Dog = #{<<"id">> => "dog", <<"name">> => "spike", <<"_rev">> => <<"2-60680344c18400a672fb554faa1a1601">>},
+  {409, _} = req(put, "/testdb/testdb/doesnotexist", Dog),
+
+  %% get specific revs
+  FirstRev = maps:get(<<"_rev">>, A2),
+  {200, R5} = req(get, "/testdb/testdb/cat?rev=" ++ FirstRev),
+  A5 = jsx:decode(R5, [return_maps]),
+  <<"tom">> = maps:get(<<"name">>, A5),
+  {200, R6} = req(get, "/testdb/testdb/cat"),
+  A6 = jsx:decode(R6, [return_maps]),
+  <<"kitty">> = maps:get(<<"name">>, A6),
+
+  %% delete doc
+  LastRev = maps:get(<<"rev">>, A3),
+  Deleted = delete_cat(LastRev),
+
+  DeletedRev = binary_to_list(maps:get(<<"rev">>, Deleted)),
+  {200, R4} = req(get, "/testdb/testdb/cat?rev=" ++ DeletedRev),
   A4 = jsx:decode(R4, [return_maps]),
   true = maps:get(<<"_deleted">>, A4),
+
   ok.
 
 delete_require_rev_parameter(_Config)->

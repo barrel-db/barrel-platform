@@ -122,7 +122,11 @@ handle(Req, State) ->
 
 handle(<<"GET">>, Store, DbId, DocIdAsBin, Req, State) ->
   {ok, Conn} = barrel_http_conn:peer(Store, DbId),
-  case barrel_db:get(Conn, DocIdAsBin, []) of
+  Options = case cowboy_req:qs_val(<<"rev">>, Req) of
+              {undefined, _Req2} -> [];
+              {RevId, _Req2} -> [{rev, RevId}]
+            end,
+  case barrel_db:get(Conn, DocIdAsBin, Options) of
     {error, not_found} -> barrel_http_reply:code(404, Req, State);
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
@@ -166,6 +170,8 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
   case R of
     {error, not_found} ->
       barrel_http_reply:code(404, Req2, State);
+    {error, {conflict, revision_conflict}} ->
+      barrel_http_reply:code(409, Req2, State);
     {error, {conflict, doc_exists}} ->
       barrel_http_reply:code(409, Req2, State);
     {ok, DocId, RevId} ->
