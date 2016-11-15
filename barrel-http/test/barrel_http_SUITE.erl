@@ -194,7 +194,7 @@ put_rev(_Config) ->
   History = [NewRev, RevId],
   Request = #{<<"document">> => Doc,
               <<"history">> => History},
-  {200, R} = req(put, "/testdb/testdb/cat/_revs", Request),
+  {200, R} = req(put, "/testdb/testdb/cat?edit=true", Request),
   A = jsx:decode(R, [return_maps]),
   true = maps:get(<<"ok">>, A),
   ok.

@@ -161,24 +161,34 @@ post_put(Method, Store, DbId, DocIdAsBin, Req, State) ->
 
 post_put(Method, Conn, DocIdAsBin, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-  Json = jsx:decode(Body),
-  Doc = maps:from_list(Json),
-  R = case Method of
-        post -> barrel_db:post(Conn, Doc, []);
-        put ->barrel_db:put(Conn, DocIdAsBin, Doc, [])
+  Json = jsx:decode(Body, [return_maps]),
+  {Result, Req4} = case Method of
+        post ->
+          {barrel_db:post(Conn, Json, []), Req2};
+        put ->
+          {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req2),
+          Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
+          case Edit of
+            false ->
+              { barrel_db:put(Conn, DocIdAsBin, Json, []), Req3 };
+            true ->
+              Doc = maps:get(<<"document">>, Json),
+              History = maps:get(<<"history">>, Json),
+              {barrel_db:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
+          end
       end,
-  case R of
+  case Result of
     {error, not_found} ->
-      barrel_http_reply:code(404, Req2, State);
+      barrel_http_reply:code(404, Req4, State);
     {error, {conflict, revision_conflict}} ->
-      barrel_http_reply:code(409, Req2, State);
+      barrel_http_reply:code(409, Req4, State);
     {error, {conflict, doc_exists}} ->
-      barrel_http_reply:code(409, Req2, State);
+      barrel_http_reply:code(409, Req4, State);
     {ok, DocId, RevId} ->
       Reply = #{<<"ok">> => true,
                 <<"id">> => DocId,
                 <<"rev">> => RevId},
-      barrel_http_reply:doc(Reply, Req2, State)
+      barrel_http_reply:doc(Reply, Req4, State)
   end.
 
 delete(Store, DbId, DocId, RevId, Req, State) ->

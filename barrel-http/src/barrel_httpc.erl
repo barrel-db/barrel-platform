@@ -124,7 +124,7 @@ handle_call({put, DocId, Doc, _Options}, _From, State) ->
 
 handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
-  Url = <<DbUrl/binary, "/", DocId/binary, "/_revs">>,
+  Url = << DbUrl/binary, "/", DocId/binary, "?edit" >>,
   put_rev(Url, Doc, History, State);
 
 handle_call({get, DocId, _Options}, _From, State) ->
@@ -273,8 +273,8 @@ put_rev_resp(404, _, State) ->
 
 put_rev_resp(200, R, State) ->
   Answer = jsx:decode(R, [return_maps]),
-  DocId = maps:get(<<"_id">>, Answer),
-  RevId = maps:get(<<"_rev">>, Answer),
+  DocId = maps:get(<<"id">>, Answer),
+  RevId = maps:get(<<"rev">>, Answer),
   Reply = {ok, DocId, RevId},
   {reply, Reply, State}.
 
