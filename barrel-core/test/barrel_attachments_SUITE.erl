@@ -55,7 +55,7 @@ end_per_suite(Config) ->
 attachment_doc(Config) ->
   Db = proplists:get_value(db, Config),
   DocId = <<"a">>,
-  Doc = #{ <<"_id">> => DocId, <<"v">> => 1},
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   {ok, <<"a">>, R1} = barrel_db:put(Db, DocId, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
@@ -79,7 +79,7 @@ attachment_doc(Config) ->
 binary_attachment(Config) ->
   Db = proplists:get_value(db, Config),
   DocId = <<"a">>,
-  Doc = #{ <<"_id">> => DocId, <<"v">> => 1},
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   {ok, <<"a">>, R1} = barrel_db:put(Db, DocId, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{

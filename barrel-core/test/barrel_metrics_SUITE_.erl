@@ -67,7 +67,7 @@ target() ->
 replicate_ok(_Config) ->
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
@@ -91,7 +91,7 @@ replicate_read_fail(_Config) ->
 
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   timer:sleep(200),
 
@@ -106,7 +106,7 @@ replicate_read_fail(_Config) ->
   ok.
 
 replicate_write_fail(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   meck:new(barrel_db, [passthrough]),
   MeckPutRev = fun(_Db, _Id, _Doc, _History, _Options) ->

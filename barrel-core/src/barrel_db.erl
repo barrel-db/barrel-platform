@@ -229,7 +229,7 @@ put_rev(Db, DocId, Body, History, Options) ->
 -spec delete(dbname(), docid(), rev(), write_options())
     -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 delete(Db, DocId, RevId, Options) ->
-  put(Db, DocId, #{ <<"_id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
+  put(Db, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionnaly the document ID can be set in the doc.
@@ -241,7 +241,7 @@ post(Db, Doc, Options) ->
             undefined -> barrel_lib:uniqid();
             Id -> Id
           end,
-  put(Db, DocId, Doc#{<<"_id">> => DocId}, Options).
+  put(Db, DocId, Doc#{<<"id">> => DocId}, Options).
 
 %% @doc fold all docs by Id
 fold_by_id(Db, Fun, Acc, Opts) ->

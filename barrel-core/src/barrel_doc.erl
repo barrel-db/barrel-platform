@@ -103,7 +103,7 @@ compare1(RevA, RevB) when RevA < RevB -> -1;
 compare1(_, _) -> 0.
 
 -spec id(doc()) -> docid().
-id(#{<<"_id">> := Id}) -> Id;
+id(#{<<"id">> := Id}) -> Id;
 id(#{}) -> undefined;
 id(_) -> erlang:error(bad_doc).
 
@@ -112,8 +112,8 @@ rev(#{}) -> <<>>;
 rev(_) -> error(bad_doc).
 
 -spec id_rev(doc()) -> {docid(), revid()}.
-id_rev(#{<<"_id">> := Id, <<"_rev">> := Rev}) -> {Id, Rev};
-id_rev(#{<<"_id">> := Id}) -> {Id, <<>>};
+id_rev(#{<<"id">> := Id, <<"_rev">> := Rev}) -> {Id, Rev};
+id_rev(#{<<"id">> := Id}) -> {Id, <<>>};
 id_rev(#{<<"_rev">> := _Rev}) -> erlang:error(bad_doc);
 id_rev(#{}) -> {undefined, <<>>};
 id_rev(_) -> erlang:error(bad_doc).
@@ -125,7 +125,7 @@ deleted(_) -> false.
 -include_lib("eunit/include/eunit.hrl").
 
 revid_test() ->
-	Rev = revid(10, <<"9-test">>, #{<<"_id">> => <<"test">>,
+	Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
 													<<"hello">> => <<"yo">>}),
 	?assertEqual(<<"10-2f25ea96da3fed514795b0ced028d58a">>, Rev).
 

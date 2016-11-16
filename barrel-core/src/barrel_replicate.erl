@@ -78,6 +78,9 @@ repid(Source, Target) ->
 
 
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
+
+
+%% gen_server callbacks
   
 init({Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
