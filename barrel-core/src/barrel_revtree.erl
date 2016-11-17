@@ -267,7 +267,7 @@ winning_revision_test() ->
     ?assertEqual({<<"3-three-2">>, true, false},  barrel_revtree:winning_revision(NewTree2)).
 
 prune_test() ->
-  Tree = barrel_revtree:add(#{ id => <<"4-four">>, parent => <<"3-three-2">> }, ?BRANCHED_TREE),
+  Tree = barrel_revtree:add(#{ id => <<"4-four">>, parent => <<"3-three-2">> }, ?BRANCHED_TREE),
   {0, Tree} = barrel_revtree:prune(1000, <<"">>, Tree),
   {0, Tree} = barrel_revtree:prune(3, <<"">>, Tree),
   {1, Tree1} = barrel_revtree:prune(2, <<"">>, Tree),

@@ -127,7 +127,7 @@ deleted(_) -> false.
 revid_test() ->
 	Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
 													<<"hello">> => <<"yo">>}),
-	?assertEqual(<<"10-2f25ea96da3fed514795b0ced028d58a">>, Rev).
+	?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev).
 
 parse_test() ->
 	Parsed = parse_revision(<<"10-2f25ea96da3fed514795b0ced028d58a">>),
