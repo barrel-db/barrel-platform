@@ -16,7 +16,6 @@
 -author("benoitc").
 
 %% API
--export([all_databases/0]).
 
 -export([
   start/3,
@@ -32,6 +31,9 @@
   changes_since/4,
   revsdiff/3
 ]).
+
+-export([database_names/1]).
+
 
 -export([
   attach/4,
@@ -52,15 +54,18 @@
 ]).
 
 
-all_databases() ->
-  {ok, Stores} = application:get_env(barrel, stores),
-  AllDbs = lists:foldl(
-    fun({Store, _}, Acc) ->
-      Dbs = barrel_store:all_dbs(Store),
-      Dbs ++ Acc
-    end, [], Stores),
-  lists:usort(AllDbs).
+-type dbname() :: binary().
+-type store() :: atom().
 
+-export_type([
+  dbname/0,
+  store/0
+]).
+
+
+%% @doc Returns a list of database names for a store.
+-spec database_names(Store::store()) -> [Name::dbname()].
+database_names(Store) -> barrel_store:all_dbs(Store).
 
 
 start(Name, Store, Options) ->

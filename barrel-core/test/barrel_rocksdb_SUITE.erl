@@ -30,7 +30,7 @@
   store_exists/1,
   missing_db/1,
   open_db/1,
-  all_databases/1,
+  database_names/1,
   basic_op/1,
   update_doc/1,
   update_doc_lwww/1,
@@ -47,7 +47,7 @@ all() ->
     store_exists,
     missing_db,
     open_db,
-    all_databases,
+    database_names,
     basic_op,
     update_doc,
     update_doc_lwww,
@@ -99,22 +99,22 @@ open_db(_Config) ->
   {ok, Infos3} = barrel_db:infos(<<"testdb">>),
   true = (Id /= maps:get(id, Infos3)).
 
-all_databases(_Config) ->
-  [<<"testdb">>] = barrel:all_databases(),
+database_names(_Config) ->
+  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
   ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
-  [<<"testdb">>, <<"testdb1">>] = barrel:all_databases(),
+  [<<"testdb">>, <<"testdb1">>] = barrel:database_names(barrel_test_rocksdb),
   ok = barrel_db:start(<<"testdb2">>, barrel_test_rocksdb, [{create_if_missing, true}]),
-  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:all_databases(),
+  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
   ok = barrel_db:stop(<<"testdb1">>),
-  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:all_databases(),
+  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
   ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   ok =  barrel_db:clean(<<"testdb1">>),
-  [<<"testdb">>, <<"testdb2">>] = barrel:all_databases(),
+  [<<"testdb">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
   ok =  barrel_db:clean(<<"testdb2">>),
-  [<<"testdb">>] = barrel:all_databases(),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
+  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
-  [<<"testdb">>] = barrel:all_databases().
+  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb).
   
 
 

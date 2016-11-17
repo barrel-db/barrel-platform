@@ -58,7 +58,6 @@
 
 -type state() :: #{}.
 
--type dbname() :: binary() | list() | atom().
 -type doc() :: map().
 -type rev() :: binary().
 -type docid() :: binary().
@@ -68,7 +67,6 @@
 -type db_options() :: [{creat_if_missing, boolean()}].
 
 -export_type([
-  dbname/0,
   doc/0,
   rev/0,
   docid/0,
@@ -112,7 +110,7 @@ infos(Name) -> call(Name, get_infos).
 
 %% TODO: handle attachment
 %% @doc get a document from its if
--spec get(dbname(), docid(), read_options())
+-spec get(barrel:dbname(), docid(), read_options())
     -> {ok, doc()} | {error, not_found} | {error, any()}.
 get(Db, DocId, Options) ->
   Rev = proplists:get_value(rev, Options, <<"">>),
@@ -125,7 +123,7 @@ get(Db, DocId, Options) ->
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
--spec put(dbname(), docid(), doc(), write_options())
+-spec put(barrel:dbname(), docid(), doc(), write_options())
     -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 put(Db, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
@@ -194,7 +192,7 @@ put(_, _, _, _) ->
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(dbname(), docid(), doc(), [rev()], write_options())
+-spec put_rev(barrel:dbname(), docid(), doc(), [rev()], write_options())
     -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 put_rev(Db, DocId, Body, History, Options) ->
   [NewRev |_] = History,
@@ -226,14 +224,14 @@ put_rev(Db, DocId, Body, History, Options) ->
   ).
 
 %% @doc delete a document
--spec delete(dbname(), docid(), rev(), write_options())
+-spec delete(barrel:dbname(), docid(), rev(), write_options())
     -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 delete(Db, DocId, RevId, Options) ->
   put(Db, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionnaly the document ID can be set in the doc.
--spec post(dbname(),  doc(), write_options())
+-spec post(barrel:dbname(),  doc(), write_options())
     -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 post(_Db, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
 post(Db, Doc, Options) ->
@@ -330,7 +328,7 @@ delete_system_doc(Db, DocId) ->
   #{store := Store, id := DbId} = call(Db, get_state),
   barrel_store:delete_system_doc(Store, DbId, DocId).
 
--spec start_link(dbname(), atom(), db_options()) -> {ok, pid()}.
+-spec start_link(barrel:dbname(), atom(), db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->
   gen_server:start_link(via(Name), ?MODULE, [Name, Store, Options], []).
 
