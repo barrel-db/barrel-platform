@@ -112,7 +112,7 @@ all_databases(_Config) ->
   [<<"testdb">>, <<"testdb2">>] = barrel:all_databases(),
   ok =  barrel_db:clean(<<"testdb2">>),
   [<<"testdb">>] = barrel:all_databases(),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
   [<<"testdb">>] = barrel:all_databases().
   
@@ -120,7 +120,7 @@ all_databases(_Config) ->
 
 basic_op(_Config) ->
   {error, not_found} = barrel_db:get(<<"testdb">>, <<"a">>, []),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
@@ -129,7 +129,7 @@ basic_op(_Config) ->
   true = maps:get(<<"_deleted">>, DeletedDoc).
 
 update_doc(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
@@ -144,12 +144,12 @@ update_doc(_Config) ->
   {ok, <<"a">>, _RevId3} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []).
 
 update_doc_lwww(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   #{ <<"v">> := 1 } = Doc2,
   
-  Doc3 = #{ <<"_id">> => <<"a">>, <<"v">> => 2},
+  Doc3 = #{ <<"id">> => <<"a">>, <<"v">> => 2},
   {error, {conflict, doc_exists}} = barrel_db:put(<<"testdb">>, <<"a">>, Doc3, []),
   
   {ok, <<"a">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"a">>, Doc3, [{lww, true}]),
@@ -159,10 +159,10 @@ update_doc_lwww(_Config) ->
 create_doc(_Config) ->
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} =  barrel_db:post(<<"testdb">>, Doc, []),
-  CreatedDoc = Doc#{ <<"_id">> => DocId, <<"_rev">> => RevId},
+  CreatedDoc = Doc#{ <<"id">> => DocId, <<"_rev">> => RevId},
   {ok, CreatedDoc} = barrel_db:get(<<"testdb">>, DocId, []),
   {error, not_found} =  barrel_db:post(<<"testdb">>, CreatedDoc, []),
-  Doc2 = #{<<"_id">> => <<"b">>, <<"v">> => 1},
+  Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} =  barrel_db:post(<<"testdb">>, Doc2, []).
 
 get_revisions(_Config) ->
@@ -195,9 +195,9 @@ put_rev(_Config) ->
 
 
 fold_by_id(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
-  Doc2 = #{ <<"_id">> => <<"b">>, <<"v">> => 1},
+  Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"b">>, Doc2, []),
   Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
       DocId = barrel_doc:id(FoldDoc),
@@ -215,9 +215,9 @@ change_since(_Config) ->
                   {ok, [Id|Acc]}
         end,
   [] = barrel_db:changes_since(<<"testdb">>, 0, Fun, []),
-  Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_db:put(<<"testdb">>, <<"aa">>, Doc, []),
-  Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_db:put(<<"testdb">>, <<"bb">>, Doc2, []),
   [<<"bb">>, <<"aa">>] = barrel_db:changes_since(<<"testdb">>, 0, Fun, []),
   [<<"bb">>] = barrel_db:changes_since(<<"testdb">>, 1, Fun, []),
@@ -227,7 +227,7 @@ change_since(_Config) ->
   ok.
 
 revdiff(_Config) ->
-  Doc = #{ <<"_id">> => <<"revdiff">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"revdiff">>, <<"v">> => 1},
   {ok, <<"revdiff">>, RevId} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
   {ok, <<"revdiff">>, _RevId3} = barrel_db:put(<<"testdb">>, <<"revdiff">>, Doc2, []),
