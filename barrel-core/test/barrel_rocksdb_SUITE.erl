@@ -65,11 +65,11 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   Config.
 
 end_per_testcase(_, _Config) ->
-  barrel_db:clean(<<"testdb">>),
+  barrel:delete_database(<<"testdb">>),
   ok.
 
 end_per_suite(Config) ->
@@ -81,36 +81,36 @@ store_exists(_Config) ->
   ok.
 
 missing_db(_Config) ->
-  {error, not_found} = barrel_db:start(<<"testdb_unknown">>, barrel_test_rocksdb, []),
+  {error, not_found} = barrel:open_database(<<"testdb_unknown">>, barrel_test_rocksdb, []),
   ok.
 
 
 open_db(_Config) ->
-  {ok, Infos} = barrel_db:infos(<<"testdb">>),
+  {ok, Infos} = barrel:database_infos(<<"testdb">>),
   Id = maps:get(id, Infos),
-  {ok, Infos2} = barrel_db:infos(<<"testdb">>),
+  {ok, Infos2} = barrel:database_infos(<<"testdb">>),
   Id = maps:get(id, Infos2),
-  ok = barrel_db:clean(<<"testdb">>),
-  {error, not_found} = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, []),
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel:delete_database(<<"testdb">>),
+  {error, not_found} = barrel:open_database(<<"testdb">>, barrel_test_rocksdb, []),
+  ok = barrel:open_database(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   %% can start it several times
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, []),
-  {ok, Infos3} = barrel_db:infos(<<"testdb">>),
+  ok = barrel:open_database(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb">>, barrel_test_rocksdb, []),
+  {ok, Infos3} = barrel:database_infos(<<"testdb">>),
   true = (Id /= maps:get(id, Infos3)).
 
 database_names(_Config) ->
   [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
-  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   [<<"testdb">>, <<"testdb1">>] = barrel:database_names(barrel_test_rocksdb),
-  ok = barrel_db:start(<<"testdb2">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb2">>, barrel_test_rocksdb, [{create_if_missing, true}]),
   [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok = barrel_db:stop(<<"testdb1">>),
+  ok = barrel:close_database(<<"testdb1">>),
   [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok = barrel_db:start(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
-  ok =  barrel_db:clean(<<"testdb1">>),
+  ok = barrel:open_database(<<"testdb1">>, barrel_test_rocksdb, [{create_if_missing, true}]),
+  ok =  barrel:delete_database(<<"testdb1">>),
   [<<"testdb">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok =  barrel_db:clean(<<"testdb2">>),
+  ok =  barrel:delete_database(<<"testdb2">>),
   [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
@@ -145,7 +145,7 @@ update_doc(_Config) ->
 
 update_doc_lwww(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_db:put(<<"testdb">>, <<"a">>, Doc, []),
   {ok, Doc2} = barrel_db:get(<<"testdb">>, <<"a">>, []),
   #{ <<"v">> := 1 } = Doc2,
   
