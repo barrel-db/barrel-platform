@@ -20,24 +20,13 @@
 %% @doc returns the peer process for provided dbid
 peer(Store, DbId) ->
   %% TODO: remove when plugging new API
-  try barrel_db:infos(DbId) of
+  try barrel:database_infos(DbId) of
       {ok, _} -> {ok, DbId}
   catch
     exit:_ ->
-      case barrel_db:start(DbId, binary_to_atom(Store, utf8), []) of
+      case barrel:open_database(DbId, barrel_lib:to_atom(Store), []) of
         ok -> {ok, DbId};
         {error, not_found} ->
           {error, database_not_found}
       end
   end.
-  %% Key = {n, l, DbId},
-  %% case gproc:where(Key) of
-  %%   {ok, Peer} ->
-  %%     Peer;
-  %%   _ ->
-  %%     %% TODO
-  %%     %% Peer = barrel:connect(Url)
-  %%     Peer = DbId,
-  %%     true = gproc:reg(Key, Peer),
-  %%     Peer
-  %% end.

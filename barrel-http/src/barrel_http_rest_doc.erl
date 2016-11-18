@@ -126,7 +126,7 @@ handle(<<"GET">>, Store, DbId, DocIdAsBin, Req, State) ->
               {undefined, _Req2} -> [];
               {RevId, _Req2} -> [{rev, RevId}]
             end,
-  case barrel_db:get(Conn, DocIdAsBin, Options) of
+  case barrel:get(Conn, DocIdAsBin, Options) of
     {error, not_found} -> barrel_http_reply:code(404, Req, State);
     {ok, Doc} -> barrel_http_reply:doc(Doc, Req, State)
   end;
@@ -164,17 +164,17 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
   Json = jsx:decode(Body, [return_maps]),
   {Result, Req4} = case Method of
         post ->
-          {barrel_db:post(Conn, Json, []), Req2};
+          {barrel:post(Conn, Json, []), Req2};
         put ->
           {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req2),
           Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
           case Edit of
             false ->
-              { barrel_db:put(Conn, DocIdAsBin, Json, []), Req3 };
+              { barrel:put(Conn, DocIdAsBin, Json, []), Req3 };
             true ->
               Doc = maps:get(<<"document">>, Json),
               History = maps:get(<<"history">>, Json),
-              {barrel_db:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
+              {barrel:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
           end
       end,
   case Result of
@@ -193,7 +193,7 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
 
 delete(Store, DbId, DocId, RevId, Req, State) ->
   {ok, Conn} = barrel_http_conn:peer(Store, DbId),
-  {ok, DocId, RevId2} = barrel_db:delete(Conn, DocId, RevId, []),
+  {ok, DocId, RevId2} = barrel:delete(Conn, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},

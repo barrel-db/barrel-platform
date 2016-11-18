@@ -56,11 +56,11 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb">>, testdb, [{create_if_missing, true}]),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel_db:clean(<<"testdb">>),
+  ok = barrel:delete_database(<<"testdb">>),
   Config.
 
 end_per_suite(Config) ->
@@ -188,7 +188,7 @@ revsdiff(_Config) ->
 
 put_rev(_Config) ->
   RevId = put_cat(),
-  {ok, Doc} = barrel_db:get(<<"testdb">>, <<"cat">>, []),
+  {ok, Doc} = barrel:get(<<"testdb">>, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],
