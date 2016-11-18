@@ -25,7 +25,7 @@
 
 -define(SERVER, ?MODULE).
 
--export([start_db/3, stop_db/1, await_db/1]).
+-export([start_db/3, stop_db/1]).
 
 %%%===================================================================
 %%% API functions
@@ -65,13 +65,9 @@ stop_db(Name) ->
       Error
   end.
 
-await_db(Name) ->
-  _ = gproc:await({n, l, {barrel_db, Name}}, 5000),
-  ok.
-
 db_spec(Name, Store, Options) ->
   #{
-    id => Name,
+    id => {Store, Name},
     start => {barrel_db, start_link, [Name, Store, Options]},
     restart => permanent,
     shutdown => 5000,

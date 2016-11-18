@@ -35,7 +35,12 @@
   delete_system_doc/2
 ]).
 
--export([start_link/3]).
+-export([
+  start_link/3,
+  where/1,
+  get_state/1,
+  call/2
+]).
 
 %% gen_server callbacks
 -export([
@@ -65,13 +70,13 @@
 start(Name, Store, Options) when is_binary(Name)->
   case whereis(Store) of
     PidStore when is_pid(PidStore) ->
-      case gproc:where(db_key(Name)) of
-        PidDb when is_pid(PidDb) ->
-          ok;
-        undefined ->
+      case ets:lookup(?MODULE, {Store, Name}) of
+        [{{Store, Name}, DbPid}]  when is_pid(DbPid) ->
+          {false, make_conn(DbPid)};
+        [] ->
           case barrel_db_sup:start_db(Name, Store, Options) of
-            {ok, _Pid} -> ok;
-            {error, {already_started, _}} -> ok;
+            {ok, DbPid} ->  {true, make_conn(DbPid)};
+            {error, {already_started, DbPid}} ->   {false, make_conn(DbPid)};
             {error, {{error, not_found}, _}} -> {error, not_found};
             Error -> Error
           end
@@ -79,28 +84,46 @@ start(Name, Store, Options) when is_binary(Name)->
     undefined ->
       {error, {unknown_store, Store}}
   end;
-start(_, _, _) -> erlang:error(bad_db).
+start(_, _, _) ->
+  erlang:error(bad_db).
 
-stop(Name) -> barrel_db_sup:stop_db(Name).
+stop(#{ name := Name, store := Store}) ->
+  barrel_db_sup:stop_db({Store, Name}).
 
-clean(Name) ->
-  #{store := Store, id := DbId} = call(Name, get_state),
+clean(#{name := Name, store := Store, id := DbId}=Conn) ->
   barrel_store:clean_db(Store, Name, DbId),
-  stop(Name).
+  stop(Conn).
 
-infos(Name) -> call(Name, get_infos).
+infos(Conn) -> call(Conn, get_infos).
+
+get_state(Pid) when is_pid(Pid) ->
+  gen_server:call(Pid, get_state);
+get_state(Conn) when is_map(Conn) ->
+  call(where(Conn), get_state);
+get_state(_) -> erlang:error(bad_conn).
+
+make_conn(DbPid) ->
+  #{ id := DbId, name := Name, store := Store } = get_state(DbPid),
+  #{ id => DbId, name => Name, store => Store }.
+
+where(#{ store := Store, name := Name}) ->
+  case ets:lookup(?MODULE, {Store, Name}) of
+    [] -> undefined;
+    [{{Store, Name}, Pid}] -> Pid
+  end.
+
+call(Conn, Msg) -> gen_server:call(where(Conn), Msg).
 
 %% TODO: handle attachment
-get(Db, DocId, Options) ->
+get(#{store := Store, id := DbId}, DocId, Options) ->
   Rev = proplists:get_value(rev, Options, <<"">>),
   WithHistory = proplists:get_value(history, Options, false),
   MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
   Ancestors = proplists:get_value(ancestors, Options, []),
-  #{store := Store, id := DbId} = call(Db, get_state),
   barrel_store:get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, Ancestors).
 
 
-put(Db, DocId, Body, Options) when is_map(Body) ->
+put(Conn, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
@@ -108,7 +131,7 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
   Lww = proplists:get_value(lww, Options, false),
 
   update_doc(
-    Db,
+    Conn,
     DocId,
     fun(DocInfo) ->
       #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
@@ -165,11 +188,11 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
 put(_, _, _, _) ->
   error(bad_doc).
 
-put_rev(Db, DocId, Body, History, Options) ->
+put_rev(Conn, DocId, Body, History, Options) ->
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
   update_doc(
-    Db,
+    Conn,
     DocId,
     fun(DocInfo) ->
       #{revtree := RevTree} = DocInfo,
@@ -194,34 +217,30 @@ put_rev(Db, DocId, Body, History, Options) ->
     Options
   ).
 
-delete(Db, DocId, RevId, Options) ->
-  put(Db, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
+delete(Conn, DocId, RevId, Options) ->
+  put(Conn, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
 
-post(_Db, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
-post(Db, Doc, Options) ->
+post(_Conn, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
+post(Conn, Doc, Options) ->
   DocId = case barrel_doc:id(Doc) of
             undefined -> barrel_lib:uniqid();
             Id -> Id
           end,
-  put(Db, DocId, Doc#{<<"id">> => DocId}, Options).
+  put(Conn, DocId, Doc#{<<"id">> => DocId}, Options).
 
 
-fold_by_id(Db, Fun, Acc, Opts) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
+fold_by_id(#{store := Store, id := DbId}, Fun, Acc, Opts) ->
   barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
-changes_since(Db, Since0, Fun, Acc) when is_integer(Since0) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
+changes_since(#{store := Store, id := DbId}, Since0, Fun, Acc) when is_integer(Since0) ->
   Since = if
             Since0 > 0 -> Since0 + 1;
             true -> Since0
           end,
   barrel_store:changes_since(Store, DbId, Since, Fun, Acc).
 
-revsdiff(Db, DocId, RevIds) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
-
+revsdiff(#{store := Store, id := DbId}, DocId, RevIds) ->
   case barrel_store:get_doc_info(Store, DbId, DocId) of
     {ok, #{revtree := RevTree}} -> revsdiff1(RevTree, RevIds);
     {error, not_found} -> {ok, RevIds, []};
@@ -276,25 +295,21 @@ find_parent([RevId | Rest], RevTree, I) ->
 find_parent([], _RevTree, I) ->
   {I, <<"">>}.
 
-update_doc(Db, DocId, Fun, Options) ->
-  #{id := DbId} = call(Db, get_state),
+update_doc(#{id := DbId}, DocId, Fun, Options) ->
   barrel_transactor:update_doc(DbId, DocId, Fun, Options).
 
-write_system_doc(Db, DocId, Doc) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
+write_system_doc(#{store := Store, id := DbId}, DocId, Doc) ->
   barrel_store:write_system_doc(Store, DbId, DocId, Doc).
 
-read_system_doc(Db, DocId) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
+read_system_doc(#{store := Store, id := DbId}, DocId) ->
   barrel_store:read_system_doc(Store, DbId, DocId).
 
-delete_system_doc(Db, DocId) ->
-  #{store := Store, id := DbId} = call(Db, get_state),
+delete_system_doc(#{store := Store, id := DbId}, DocId) ->
   barrel_store:delete_system_doc(Store, DbId, DocId).
 
 -spec start_link(barrel:dbname(), barrel:store(), barrel:db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->
-  gen_server:start_link(via(Name), ?MODULE, [Name, Store, Options], []).
+  gen_server:start_link(?MODULE, [Name, Store, Options], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -305,6 +320,7 @@ init([Name, Store, Options]) ->
   case init_db(Name, Store, Options) of
     {ok, State} ->
       process_flag(trap_exit, true),
+      ets:insert(?MODULE, {{Store, Name}, self()}),
       {ok, State};
     Error ->
       {stop, Error}
@@ -327,8 +343,8 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
-handle_info({updated, Seq}, State = #{ name := Name }) ->
-  barrel_db_event:notify(Name, db_updated),
+handle_info({updated, Seq}, State = #{ store := Store, name := Name }) ->
+  barrel_db_event:notify({Store, Name}, db_updated),
   {noreply, State#{update_seq => Seq}};
 
 handle_info({'EXIT', Pid, Reason},State) ->
@@ -352,7 +368,8 @@ handle_info(_Info, State) ->
   {noreply, State}.
 
 -spec terminate(term(), state()) -> ok.
-terminate(_Reason, #{writer := Writer}) ->
+terminate(_Reason, #{name := Name, store := Store, writer := Writer}) ->
+  ets:delete(?MODULE, {Store, Name}),
   exit(Writer, normal),
   ok.
 
@@ -364,13 +381,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-via(Name) ->
-  {via, gproc, db_key(Name)}.
-
-db_key(Name) -> {n, l, {barrel_db, Name}}.
-
-call(Name, Req) -> gen_server:call(via(Name), Req).
 
 init_db(Name, Store, Options) ->
   case barrel_store:open_db(Store, Name, Options) of

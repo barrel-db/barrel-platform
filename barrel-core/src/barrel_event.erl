@@ -192,10 +192,14 @@ notify_listeners(DbName, DDoc, Event) ->
 
 
 do_register_dbs(Pid, DbNames) ->
-  lists:foreach(fun(DbName) ->
-      Key = {{db, DbName}, Pid},
-      ets:insert(?TAB, {Key, Pid})
-    end, DbNames),
+  lists:foreach(fun
+                  (#{ name := Name, store := Store}) ->
+                    Key = {{db, {Store, Name}}, Pid},
+                    ets:insert(?TAB, {Key, Pid});
+                  (Db) ->
+                    Key = {{db, Db}, Pid},
+                    ets:insert(?TAB, {Key, Pid})
+                end, DbNames),
   maybe_monitor(Pid).
 
 maybe_monitor(Pid) ->

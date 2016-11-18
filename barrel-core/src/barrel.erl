@@ -31,7 +31,8 @@
 %% Database API
 
 -export([
-  open_database/3,
+  create_database/2,
+  connect_database/2,
   close_database/1,
   delete_database/1,
   database_names/1,
@@ -60,7 +61,7 @@
 
 -type dbname() :: binary().
 -type store() :: atom().
--type db_options() :: [{create_if_missing, boolean()}].
+-type conn() :: map().
 
 %% TODO: to define
 -type db_infos() :: list().
@@ -110,7 +111,6 @@
 -export_type([
   dbname/0,
   store/0,
-  db_options/0,
   doc/0,
   rev/0,
   docid/0,
@@ -123,34 +123,43 @@
 ]).
 
 
-
-%% @doc open or create a database in a store.
--spec open_database(Name, Store, Options) -> Res when
-  Name :: dbname(),
+%% @doc create a database in the store. Return true if it has been created or false if it's already existed.
+-spec create_database(Store, DbName) -> Res when
   Store :: store(),
-  Options :: db_options(),
-  Res :: ok | {error, not_found} | {error, any()}.
-open_database(Name, Store, Options) ->
-  barrel_db:start(Name, Store, Options).
+  DbName :: dbname(),
+  Res :: {Created:: boolean(), Conn::conn()} | {error, any()}.
+create_database(Store, Name) ->
+  barrel_db:start(Name, Store, [{create_if_missing, true}]).
+
+%% @doc connect to a database in a store.
+-spec connect_database(Store, DbName) -> Res when
+  Store :: store(),
+  DbName :: dbname(),
+  Res :: {_, conn()} | {error, not_found} | {error, any()}.
+connect_database(Store, Name) ->
+  case barrel_db:start(Name, Store, []) of
+    {error, _Reason} = Error -> Error;
+    {OK, Conn} when is_boolean(OK) -> {ok, Conn}
+  end.
 
 %% @doc close a database
--spec close_database(Name::dbname()) -> ok.
-close_database(Name) ->
-  barrel_db:stop(Name).
+-spec close_database(Conn::conn()) -> ok.
+close_database(Conn) ->
+  barrel_db:stop(Conn).
 
 %% @doc delete a database
 -spec delete_database(Name :: dbname()) -> ok.
-delete_database(Name) ->
-  barrel_db:clean(Name).
+delete_database(Conn) ->
+  barrel_db:clean(Conn).
 
--spec database_infos(Name::dbname()) ->
+-spec database_infos(Conn::conn()) ->
   {ok, DbInfos::db_infos()} | {error, term()}.
-database_infos(Name) ->
-  barrel_db:infos(Name).
+database_infos(Conn) ->
+  barrel_db:infos(Conn).
 
 
 %% @doc Returns a list of database names for a store.
--spec database_names(Store::store()) -> [Name::dbname()].
+-spec database_names(Store::store()) -> [Conn::conn()].
 database_names(Store) ->
   barrel_store:all_dbs(Store).
 
@@ -158,117 +167,117 @@ database_names(Store) ->
 %% Database API.
 
 %% @doc retrieve a document by its key
--spec get(Db, DocId, Options) -> Res when
-  Db :: dbname(),
+-spec get(Conn, DocId, Options) -> Res when
+  Conn::conn(),
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc,
   Res :: {ok, Doc} | {error, not_found} | {error, any()}.
-get(Db, DocId, Options) ->
-  barrel_db:get(Db, DocId, Options).
+get(Conn, DocId, Options) ->
+  barrel_db:get(Conn, DocId, Options).
 
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
--spec put(Db, DocId, Body, Options) -> Res when
-  Db :: dbname(),
+-spec put(Conn, DocId, Body, Options) -> Res when
+  Conn::conn(),
   DocId :: docid(),
   Body :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put(Db, DocId, Body, Options) ->
-  barrel_db:put(Db, DocId, Body, Options).
+put(Conn, DocId, Body, Options) ->
+  barrel_db:put(Conn, DocId, Body, Options).
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Db, DocId, Body, History, Options) -> Res when
-  Db :: dbname(),
+-spec put_rev(Conn, DocId, Body, History, Options) -> Res when
+  Conn::conn(),
   DocId :: docid(),
   Body :: doc(),
   History :: [rev()],
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Db, DocId, Body, History, Options) ->
-  barrel_db:put_rev(Db, DocId, Body, History, Options).
+put_rev(Conn, DocId, Body, History, Options) ->
+  barrel_db:put_rev(Conn, DocId, Body, History, Options).
 
 %% @doc delete a document
--spec delete(Db, DocId, RevId, Options) -> Res when
-  Db :: dbname(),
+-spec delete(Conn, DocId, RevId, Options) -> Res when
+  Conn::conn(),
   DocId :: docid(),
   RevId :: rev(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-delete(Db, DocId, RevId, Options) ->
-  barrel_db:delete(Db, DocId, RevId, Options).
+delete(Conn, DocId, RevId, Options) ->
+  barrel_db:delete(Conn, DocId, RevId, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
--spec post(Db, Doc, Options) -> Res when
-  Db :: dbname(),
+-spec post(Conn, Doc, Options) -> Res when
+  Conn::conn(),
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-post(Db, Doc, Options) ->
-  barrel_db:post(Db, Doc, Options).
+post(Conn, Doc, Options) ->
+  barrel_db:post(Conn, Doc, Options).
 
 %% @doc fold all docs by Id
--spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
-  Db :: dbname(),
+-spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when
+  Conn::conn(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((DocId :: docid(), DocInfo :: docinfo(), Doc :: doc(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
-fold_by_id(Db, Fun, Acc, Options) ->
-  barrel_db:fold_by_id(Db, Fun, Acc, Options).
+fold_by_id(Conn, Fun, Acc, Options) ->
+  barrel_db:fold_by_id(Conn, Fun, Acc, Options).
 
 %% @doc fold all changes since last sequence
--spec changes_since(Db, Since, Fun, AccIn) -> AccOut when
-  Db :: dbname(),
+-spec changes_since(Conn, Since, Fun, AccIn) -> AccOut when
+  Conn::conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Seq :: non_neg_integer(), DocInfo :: docinfo(), Doc :: doc, Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
-changes_since(Db, Since, Fun, Acc) ->
-  barrel_db:changes_since(Db, Since, Fun, Acc).
+changes_since(Conn, Since, Fun, Acc) ->
+  barrel_db:changes_since(Conn, Since, Fun, Acc).
 
 
 %% @doc get all revisions ids that differ in a doc from the list given
--spec revsdiff(Db, DocId, RevIds) -> Res when
-  Db :: dbname(),
+-spec revsdiff(Conn, DocId, RevIds) -> Res when
+  Conn::conn(),
   DocId :: docid(),
   RevIds :: [revid()],
   Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
-revsdiff(Db, DocId, RevIds) ->
-  barrel_db:revsdiff(Db, DocId, RevIds).
+revsdiff(Conn, DocId, RevIds) ->
+  barrel_db:revsdiff(Conn, DocId, RevIds).
 
 
 
-attach(Db, DocId, AttDescription, Options) ->
-  barrel_attachments:attach(Db, DocId, AttDescription, Options).
+attach(Conn, DocId, AttDescription, Options) ->
+  barrel_attachments:attach(Conn, DocId, AttDescription, Options).
 
-attach(Db, DocId, AttDescription, Binary, Options) ->
-  barrel_attachments:attach(Db, DocId, AttDescription, Binary, Options).
+attach(Conn, DocId, AttDescription, Binary, Options) ->
+  barrel_attachments:attach(Conn, DocId, AttDescription, Binary, Options).
 
-get_attachment(Db, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment(Db, DocId, AttId, Options).
+get_attachment(Conn, DocId, AttId, Options) ->
+  barrel_attachments:get_attachment(Conn, DocId, AttId, Options).
 
-get_attachment_binary(Db, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment_binary(Db, DocId, AttId, Options).
+get_attachment_binary(Conn, DocId, AttId, Options) ->
+  barrel_attachments:get_attachment_binary(Conn, DocId, AttId, Options).
 
-replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
-  barrel_attachments:replace_attachment(Db, DocId, AttId, AttDescription, Options).
+replace_attachment(Conn, DocId, AttId, AttDescription, Options) ->
+  barrel_attachments:replace_attachment(Conn, DocId, AttId, AttDescription, Options).
 
-replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
-  barrel_attachments:replace_attachment_binary(Db, DocId, AttId, Binary, Options).
+replace_attachment_binary(Conn, DocId, AttId, Binary, Options) ->
+  barrel_attachments:replace_attachment_binary(Conn, DocId, AttId, Binary, Options).
 
-delete_attachment(Db, DocId, AttId, Options) ->
-  barrel_attachments:delete_attachment(Db, DocId, AttId, Options).
+delete_attachment(Conn, DocId, AttId, Options) ->
+  barrel_attachments:delete_attachment(Conn, DocId, AttId, Options).
 
-attachments(Db, DocId, Options) ->
-  barrel_attachments:attachments(Db, DocId, Options).
+attachments(Conn, DocId, Options) ->
+  barrel_attachments:attachments(Conn, DocId, Options).
 
 
 
