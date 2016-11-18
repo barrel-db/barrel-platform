@@ -62,7 +62,12 @@ init([Name, Config]) ->
   DefaultDir = filename:join(barrel_lib:data_dir(), Name),
   DbDir = maps:get(dir, Config, DefaultDir),
   filelib:ensure_dir(filename:join(DbDir, "empty")),
-  {ok, Db} = erocksdb:open(DbDir, [{create_if_missing, true}], []),
+  InMemory = maps:get(in_memory, Config, false),
+  DbOpts = case InMemory of
+             true -> [{create_if_missing, true}, {in_memory, true}];
+             false -> [{create_if_missing, true}]
+           end,
+  {ok, Db} = erocksdb:open(DbDir, DbOpts, []),
   {ok, #state{db=Db}}.
 
 -spec handle_call(term(), term(), state()) -> {reply, term(), state()}.
