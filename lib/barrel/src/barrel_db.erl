@@ -58,30 +58,10 @@
 
 -type state() :: #{}.
 
--type dbname() :: binary() | list() | atom().
--type doc() :: map().
--type rev() :: binary().
--type docid() :: binary().
--type read_options() :: [{rev, rev()} | {history, boolean()}
-  | {max_history, integer()} | {ancestors, [rev()]}].
--type write_options() :: [{async, boolean()} | {timeout, integer()}].
--type db_options() :: [{creat_if_missing, boolean()}].
-
--export_type([
-  dbname/0,
-  doc/0,
-  rev/0,
-  docid/0,
-  read_options/0,
-  write_options/0,
-  db_options/0
-]).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
 
--spec start(binary(), atom(), db_options()) -> ok | {error, term()}.
 start(Name, Store, Options) when is_binary(Name)->
   case whereis(Store) of
     PidStore when is_pid(PidStore) ->
@@ -111,9 +91,6 @@ clean(Name) ->
 infos(Name) -> call(Name, get_infos).
 
 %% TODO: handle attachment
-%% @doc get a document from its if
--spec get(dbname(), docid(), read_options())
-    -> {ok, doc()} | {error, not_found} | {error, any()}.
 get(Db, DocId, Options) ->
   Rev = proplists:get_value(rev, Options, <<"">>),
   WithHistory = proplists:get_value(history, Options, false),
@@ -123,10 +100,6 @@ get(Db, DocId, Options) ->
   barrel_store:get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, Ancestors).
 
 
-%% @doc create or update a document. Return the new created revision
-%% with the docid or a conflict.
--spec put(dbname(), docid(), doc(), write_options())
-    -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 put(Db, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
@@ -192,10 +165,6 @@ put(Db, DocId, Body, Options) when is_map(Body) ->
 put(_, _, _, _) ->
   error(bad_doc).
 
-%% @doc insert a specific revision to a a document. Useful for the replication.
-%% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(dbname(), docid(), doc(), [rev()], write_options())
-    -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 put_rev(Db, DocId, Body, History, Options) ->
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
@@ -225,30 +194,23 @@ put_rev(Db, DocId, Body, History, Options) ->
     Options
   ).
 
-%% @doc delete a document
--spec delete(dbname(), docid(), rev(), write_options())
-    -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
 delete(Db, DocId, RevId, Options) ->
-  put(Db, DocId, #{ <<"_id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
+  put(Db, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
-%% @doc create a document . Like put but only create a document without updating the old one.
-%% A doc shouldn't have revision. Optionnaly the document ID can be set in the doc.
--spec post(dbname(),  doc(), write_options())
-    -> {ok, docid(), rev()} | {error, {conflict, atom()}} | {error, any()}.
+
 post(_Db, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
 post(Db, Doc, Options) ->
   DocId = case barrel_doc:id(Doc) of
             undefined -> barrel_lib:uniqid();
             Id -> Id
           end,
-  put(Db, DocId, Doc#{<<"_id">> => DocId}, Options).
+  put(Db, DocId, Doc#{<<"id">> => DocId}, Options).
 
-%% @doc fold all docs by Id
+
 fold_by_id(Db, Fun, Acc, Opts) ->
   #{store := Store, id := DbId} = call(Db, get_state),
   barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
-%% @doc fold all changes since last sequence
 changes_since(Db, Since0, Fun, Acc) when is_integer(Since0) ->
   #{store := Store, id := DbId} = call(Db, get_state),
   Since = if
@@ -330,7 +292,7 @@ delete_system_doc(Db, DocId) ->
   #{store := Store, id := DbId} = call(Db, get_state),
   barrel_store:delete_system_doc(Store, DbId, DocId).
 
--spec start_link(dbname(), atom(), db_options()) -> {ok, pid()}.
+-spec start_link(barrel:dbname(), barrel:store(), barrel:db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->
   gen_server:start_link(via(Name), ?MODULE, [Name, Store, Options], []).
 

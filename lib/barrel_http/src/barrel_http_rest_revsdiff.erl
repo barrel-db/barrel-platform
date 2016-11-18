@@ -61,7 +61,7 @@ handle(<<"POST">>, Store, DbId, Req, State) ->
   RequestedDocs = jsx:decode(Body, [return_maps]),
   {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                         {ok, Missing, Possible} = barrel_db:revsdiff(Conn, DocId, RevIds),
+                         {ok, Missing, Possible} = barrel:revsdiff(Conn, DocId, RevIds),
                          case Possible of
                            [] -> Acc#{DocId => #{<<"missing">> => Missing}};
                            _ -> Acc#{DocId => #{<<"missing">> => Missing,

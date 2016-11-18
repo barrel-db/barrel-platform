@@ -68,11 +68,12 @@ handle(Req, State) ->
 
 handle(<<"PUT">>, StoreAsBin, Db, Req, State) ->
   Store = binary_to_atom(StoreAsBin, utf8),
-  ok = barrel_db:start(Db, Store, [{create_if_missing, true}]),
+  ok = barrel:open_database(Db, Store, [{create_if_missing, true}]),
   barrel_http_reply:code(201, Req, State);
-handle(<<"GET">>, Store, Db, Req, State) ->
+handle(<<"GET">>, StoreAsBin, Db, Req, State) ->
+  Store = barrel_lib:to_atom(StoreAsBin),
   {ok, Conn} = barrel_http_conn:peer(Store, Db),
-  All = barrel:all_databases(),
+  All = barrel:database_names(Store),
   case lists:member(Db, All) of
     false ->
       barrel_http_reply:code(404, Req, State);
@@ -92,7 +93,7 @@ terminate(_Reason, _Req, _State) ->
 %% ----------
 
 db_info(Conn, Req, State) ->
-  {ok, Infos} = barrel_db:infos(Conn),
+  {ok, Infos} = barrel:database_infos(Conn),
   [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
   DbInfo = [{<<"id">>, Id},
             {<<"name">>, Name},

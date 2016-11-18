@@ -79,7 +79,7 @@ one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),
   %% Info = barrel_replicate:info(Pid),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   timer:sleep(200),
   Doc2 = Doc#{<<"_rev">> => RevId},
@@ -98,7 +98,7 @@ one_doc(_Config) ->
   ok.
 
 source_not_empty(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
@@ -110,7 +110,7 @@ source_not_empty(_Config) ->
   ok.
 
 deleted_doc(_Config) ->
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(source(), <<"a">>, Doc, []),
 
   {ok, RepId} = barrel:start_replication(source(), target()),
@@ -228,7 +228,7 @@ put_doc(DocName, Value, Db) ->
       Doc2 = Doc#{<<"v">> => Value},
       {ok,_,_} = barrel_db:put(Db, Id, Doc2, []);
     {error, not_found} ->
-      Doc = #{<<"_id">> => Id, <<"v">> => Value},
+      Doc = #{<<"id">> => Id, <<"v">> => Value},
       {ok,_,_} = barrel_db:put(Db, Id, Doc, [])
   end.
 

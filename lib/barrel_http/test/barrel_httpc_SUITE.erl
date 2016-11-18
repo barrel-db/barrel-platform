@@ -47,14 +47,14 @@ url() ->
   <<"http://localhost:8080/testdb/testdb">>.
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, testdb, [{create_if_missing, true}]),
+  ok = barrel:open_database(<<"testdb">>, testdb, [{create_if_missing, true}]),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
   [{http_conn, HttpConn}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   ok = barrel_httpc:disconnect(HttpConn),
-  ok = barrel_db:clean(<<"testdb">>),
+  ok = barrel:delete_database(<<"testdb">>),
   ok.
 
 end_per_suite(Config) ->
@@ -73,17 +73,17 @@ create_doc(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} =  barrel_httpc:post(HttpConn, Doc, []),
-  CreatedDoc = Doc#{ <<"_id">> => DocId, <<"_rev">> => RevId},
+  CreatedDoc = Doc#{ <<"id">> => DocId, <<"_rev">> => RevId},
   {ok, CreatedDoc} = barrel_httpc:get(HttpConn, DocId, []),
   {error, not_found} =  barrel_httpc:post(HttpConn, CreatedDoc, []),
-  Doc2 = #{<<"_id">> => <<"b">>, <<"v">> => 1},
+  Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} =  barrel_httpc:post(HttpConn, Doc2, []).
 
 
 put_get_delete(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   {error, not_found} = barrel_httpc:get(HttpConn, <<"a">>, []),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_httpc:put(HttpConn, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_httpc:get(HttpConn, <<"a">>, []),
@@ -94,7 +94,7 @@ put_get_delete(Config) ->
 put_rev(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   DocId = <<"a">>,
-  Doc = #{ <<"_id">> => DocId, <<"v">> => 1},
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_httpc:put(HttpConn, DocId, Doc, []),
   {ok, Doc2} = barrel_httpc:get(HttpConn, DocId, []),
   Doc3 = Doc2#{ v => 2 },
@@ -117,9 +117,9 @@ system_doc(Config) ->
 
 changes_since(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
-  Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(HttpConn, <<"aa">>, Doc, []),
-  Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
 
   [{2, <<"bb">>}, {1, <<"aa">>}] = since(HttpConn, 0),
@@ -134,14 +134,14 @@ db_updated(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
 
   ok = barrel_event:reg({barrel_httpc, HttpConn}),
-  Doc = #{ <<"_id">> => <<"aa">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:put(HttpConn, <<"aa">>, Doc, []),
 
   Msg = one_msg(),
   {'$barrel_event', {barrel_httpc, HttpConn}, db_updated} = Msg,
   true = queue_is_empty(),
 
-  Doc2 = #{ <<"_id">> => <<"bb">>, <<"v">> => 1},
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
 
   Msg = one_msg(),
