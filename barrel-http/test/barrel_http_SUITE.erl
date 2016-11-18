@@ -56,11 +56,12 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_database(<<"testdb">>, testdb, [{create_if_missing, true}]),
-  Config.
+  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
+  [{conn, Conn} |Config].
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_database(<<"testdb">>),
+  Conn = proplists:get_value(conn, Config),
+  ok = barrel:delete_database(Conn),
   Config.
 
 end_per_suite(Config) ->
@@ -186,9 +187,10 @@ revsdiff(_Config) ->
   true = lists:member(<<"2-missing">>, Missing),
   ok.
 
-put_rev(_Config) ->
+put_rev(Config) ->
+  Conn = proplists:get_value(conn, Config),
   RevId = put_cat(),
-  {ok, Doc} = barrel:get(<<"testdb">>, <<"cat">>, []),
+  {ok, Doc} = barrel:get(Conn, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],

@@ -43,14 +43,14 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_database(<<"testdb">>, testdb, [{create_if_missing, true}]),
-  ok = barrel:open_database(<<"source">>, source, [{create_if_missing, true}]),
-  [{source_conn, source()},{target_conn, target()}|Config].
+  {true, Target} = barrel:create_database(testdb, <<"testdb">>),
+  {true, Source} = barrel:create_database(source, <<"source">>),
+  [{source_conn, source()},{target_conn, target()}, {source, Source}, {target, Target}|Config].
 
-end_per_testcase(_, _Config) ->
-  ok = barrel:delete_database(<<"testdb">>),
-  ok = barrel:delete_database(<<"source">>),
-  %% ok = barrel_replicate:clean(source(), target()),
+end_per_testcase(_, Config) ->
+  {Source, Target} = repctx(Config),
+  ok = barrel:delete_database(Target),
+  ok = barrel:delete_database(Source),
   ok.
 
 end_per_suite(Config) ->
@@ -61,6 +61,11 @@ end_per_suite(Config) ->
   %% ok = erocksdb:destroy("testdb", []),
   %% ok = erocksdb:destroy("source", []),
   Config.
+
+
+repctx(Config) ->
+  {proplists:get_value(source, Config), proplists:get_value(target, Config)}.
+
 
 source_url() ->
   <<"http://localhost:8080/source/source">>.
@@ -75,49 +80,52 @@ target() ->
   {barrel_httpc, target_url()}.
 
 one_doc(Config) ->
+  {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(<<"source">>, <<"a">>, Doc, []),
-  {1, [_]} = changes(<<"source">>, 0),
-  {ok, _} = barrel:get(<<"source">>, <<"a">>, []),
+  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  {1, [_]} = changes(Source, 0),
+  {ok, _} = barrel:get(Source, <<"a">>, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
-  {ok, Doc2} = barrel:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2} = barrel:get(Target, <<"a">>, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
-changes(DbId, Since) ->
+changes(Conn, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  barrel:changes_since(DbId, Since, Fun, {Since, []}).
+  barrel:changes_since(Conn, Since, Fun, {Since, []}).
 
 target_not_empty(Config) ->
+  {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   timer:sleep(200),
 
-  {ok, Doc2} = barrel:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2} = barrel:get(Target, <<"a">>, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
 deleted_doc(Config) ->
+  {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(<<"source">>, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
-  barrel:delete(<<"source">>, <<"a">>, RevId, []),
+  barrel:delete(Source, <<"a">>, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc3} = barrel:get(Target, <<"a">>, []),
 
   %% TODO bug to be fixed
   %% https://gitlab.com/barrel-db/barrel-http/issues/1
@@ -131,34 +139,35 @@ random_activity(Config) ->
   TargetConn = proplists:get_value(target_conn, Config),
   Scenario = generate_scenario(),
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
-  ExpectedResults = play_scenario(Scenario),
+  ExpectedResults = play_scenario(Scenario, Config),
   timer:sleep(200),
-  ok = check_all(ExpectedResults),
+  ok = check_all(ExpectedResults, Config),
   ok = barrel:stop_replication(Pid),
   ok.
 
-play_scenario(Scenario) ->
+play_scenario(Scenario, Config) ->
   Map = maps:new(),
   lists:foldl(fun(C, Acc) ->
-                  play(C, Acc)
+                  play(C, Acc, Config)
               end, Map, Scenario).
 
-play({put, DocName, Value}, Map)->
-  put_doc(DocName,Value),
+play({put, DocName, Value}, Map, Config)->
+  put_doc(DocName,Value, Config),
   Map#{DocName => Value};
-play({del, DocName}, Map) ->
-  delete_doc(DocName),
+play({del, DocName}, Map, Config) ->
+  delete_doc(DocName, Config),
   Map#{DocName => deleted}.
 
-check_all(Map) ->
+check_all(Map, Config) ->
  Keys = maps:keys(Map),
-  [ ok = check(K, Map) || K <- Keys ],
+  [ ok = check(K, Map, Config) || K <- Keys ],
   ok.
 
-check(DocName, Map) ->
+check(DocName, Map, Config) ->
+  {Source, Target} =  repctx(Config),
   Id = list_to_binary(DocName),
-  {ok, DocSource} = barrel:get(<<"source">>, Id, []),
-  {ok, DocTarget} = barrel:get(<<"testdb">>, Id, []),
+  {ok, DocSource} = barrel:get(Source, Id, []),
+  {ok, DocTarget} = barrel:get(Target, Id, []),
   case maps:get(DocName, Map) of
     deleted ->
       true = maps:get(<<"_deleted">>, DocSource),
@@ -169,22 +178,24 @@ check(DocName, Map) ->
   end,
   ok.
 
-put_doc(DocName, Value) ->
+put_doc(DocName, Value, Config) ->
+  {Source, _Target} = repctx(Config),
   Id = list_to_binary(DocName),
-  case barrel:get(<<"source">>, Id, []) of
+  case barrel:get(Source, Id, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel:put(<<"source">>, Id, Doc2, []);
+      {ok,_,_} = barrel:put(Source, Id, Doc2, []);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel:put(<<"source">>, Id, Doc, [])
+      {ok,_,_} = barrel:put(Source, Id, Doc, [])
   end.
 
-delete_doc(DocName) ->
+delete_doc(DocName, Config) ->
+  {Source, _Target} = repctx(Config),
   Id = list_to_binary(DocName),
-  {ok, Doc} = barrel:get(<<"source">>, Id, []),
+  {ok, Doc} = barrel:get(Source, Id, []),
   RevId = maps:get(<<"_rev">>, Doc),
-  barrel:delete(<<"source">>, Id, RevId, []).
+  barrel:delete(Source, Id, RevId, []).
 
 generate_scenario() ->
   [ {put, "a", 1}

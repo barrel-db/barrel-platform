@@ -66,7 +66,7 @@ to_json(Req, State) ->
                     <<"rev">> => Rev},
             {ok, [Row | Acc1]}
         end,
-  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
   Rows = barrel:fold_by_id(Conn, Fun, [], []),
   OffSet = 0,
   TotalRows = length(Rows),
