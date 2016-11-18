@@ -62,7 +62,7 @@ trails() ->
 
 
 
--record(state, {store, dbid, changes, last_seq, feed, subscribed}).
+-record(state, {conn, changes, last_seq, feed, subscribed}).
 
 init(_Type, Req, []) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
@@ -71,29 +71,34 @@ init(_Type, Req, []) ->
   Feed = binary_to_atom(FeedBin, utf8),
   {SinceBin, Req5} = cowboy_req:qs_val(<<"since">>, Req4, <<"0">>),
   Since = binary_to_integer(SinceBin),
-  {LastSeq, Changes} = changes(Store, DbId, Since),
-  S = #state{store=Store, dbid=DbId, changes=Changes, last_seq=LastSeq, feed=Feed},
-  init_feed(Req5, S).
-
-
+  
+  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
+    {ok, Conn} ->
+      {LastSeq, Changes} = changes(Conn, Since),
+      S = #state{conn=Conn, changes=Changes, last_seq=LastSeq, feed=Feed},
+      init_feed(Req5, S);
+    _Error ->
+      {ok, Req2, State} = barrel_http_reply:code(404, Req, []),
+      {shutdown, Req2, State}
+  end.
 
 init_feed(Req, #state{feed=normal}=S) ->
   {ok, Req, S};
 
 init_feed(Req, #state{feed=longpoll, changes=[]}=S) ->
-  DbId = S#state.dbid,
-  ok = barrel_event:reg(DbId),
-  info({'$barrel_event', DbId, db_updated}, Req, S#state{subscribed=true});
+  ok = barrel_event:reg(S#state.conn),
+  #{ store := Store, name := Name} = S#state.conn,
+  info({'$barrel_event', {Store, Name}, db_updated}, Req, S#state{subscribed=true});
 
 init_feed(Req, #state{feed=longpoll}=S) ->
   {ok, Req, S};
 
 init_feed(Req, #state{feed=eventsource}=S) ->
-  DbId = S#state.dbid,
-  ok = barrel_event:reg(DbId),
+  ok = barrel_event:reg(S#state.conn),
+  #{ store := Store, name := Name} = S#state.conn,
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
   {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
-  info({'$barrel_event', DbId, db_updated}, Req2, S#state{subscribed=true}).
+  info({'$barrel_event', {Store, Name}, db_updated}, Req2, S#state{subscribed=true}).
 
 
 
@@ -113,10 +118,7 @@ handle(_, Req, S) ->
 
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
-  Store = S#state.store,
-  DbId = S#state.dbid,
-  Since = S#state.last_seq,
-  {LastSeq, Changes} = changes(Store, DbId, Since),
+  {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq),
   db_updated(Changes, LastSeq, Req, S).
 
 db_updated([], LastSeq, Req, #state{feed=longpoll}=S) ->
@@ -149,11 +151,10 @@ terminate(_Reason, _Req, _S) ->
 
 %% ----------
 
-changes(Store, DbId, Since) ->
+changes(Conn, Since) ->
   Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
             {ok, {Seq, [DocInfo|DocInfos]}}
         end,
-  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
   barrel:changes_since(Conn, Since, Fun, {Since, []}).
 
 to_json(LastSeq, Changes) ->

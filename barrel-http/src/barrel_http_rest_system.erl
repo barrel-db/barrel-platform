@@ -133,7 +133,7 @@ resource_exists(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
   {DocId, Req4} = cowboy_req:binding(docid, Req3),
-  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
   State2 = State#state{docid=DocId, conn=Conn},
   case barrel_db:read_system_doc(Conn, DocId) of
     {ok, Doc} ->
