@@ -30,6 +30,7 @@
          all_docs/1,
          changes_normal/1,
          changes_longpoll/1,
+         changes_longpoll_heartbeat/1,
          changes_eventsource/1,
          create_database/1,
          system_doc/1,
@@ -45,6 +46,7 @@ all() -> [ info_database
          , all_docs
          , changes_normal
          , changes_longpoll
+         , changes_longpoll_heartbeat
          , changes_eventsource
          , create_database
          , system_doc
@@ -279,10 +281,7 @@ changes_normal(_Config) ->
 
 changes_longpoll(_Config) ->
   Url = <<"http://localhost:8080/testdb/testdb/_changes?feed=longpoll">>,
-  Opts = [async, once],
-  {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
-  CatRevId = put_cat(),
-  delete_cat(CatRevId),
+  Opts = [async, {recv_timeout, infinity}],
   LoopFun = fun(Loop, Ref) ->
                 receive
                   {hackney_response, Ref, {status, StatusInt, _Reason}} ->
@@ -300,15 +299,56 @@ changes_longpoll(_Config) ->
                     [_OnlyOneChange] = Results,
                     Loop(Loop, Ref);
 
-                  _Else ->
+                  Else ->
+                    ct:fail("Unexpected answer from longpoll: ~p", [Else]),
                     ok
                 after 2000 ->
                     {error, timeout}
                 end
             end,
+  {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
+  CatRevId = put_cat(),
+  delete_cat(CatRevId),
   ok = LoopFun(LoopFun, ClientRef),
   {ok, ClientRef2} = hackney:get(Url, [], <<>>, Opts),
   ok=  LoopFun(LoopFun, ClientRef2).
+
+changes_longpoll_heartbeat(_Config) ->
+  {ok, Socket} = gen_tcp:connect({127,0,0,1}, 8080, [binary, {active,true}]),
+  Request = ["GET /testdb/testdb/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
+             "Host:localhost:8080\r\n",
+             "Accept: application/json\r\n",
+             "\r\n"],
+  [ok = gen_tcp:send(Socket, L) || L <- Request],
+  timer:sleep(100),
+  CatRevId = put_cat(),
+  delete_cat(CatRevId),
+  LoopFun = fun(Loop,Acc) ->
+                receive
+                  {tcp,_,<<"HTTP/1.1", _/binary>>} ->
+                    Loop(Loop, Acc);
+                  {tcp,_,Data} ->
+                    case Data of
+                      <<"0\r\n\r\n">> ->
+                        Loop(Loop, [heartbeat|Acc]);
+                      Other ->
+                        {ok, [Other|Acc]}
+                    end;
+                  {tcp_closed,_} ->
+                    %% cowboy does not close connection
+                    %% we dont expect to receive this one
+                    {error, unexpected_connection_close};
+                  Other ->
+                    {error, {tcp, Other}}
+                after 2000 ->
+                    {error, timeout}
+                end
+            end,
+  {ok, Data} = LoopFun(LoopFun, []),
+  HeartBeats = tl(Data),
+  true = length(HeartBeats) > 1,
+  [heartbeat = H || H <- HeartBeats],
+  ok.
 
 %%=======================================================================
 
