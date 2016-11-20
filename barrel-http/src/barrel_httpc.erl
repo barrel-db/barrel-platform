@@ -198,7 +198,7 @@ handle_cast({longpoll, DbUrl, Since}, S) ->
   ChangesSince = <<"/_changes?feed=longpoll&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
-  Opts = [async, once],
+  Opts = [async, once, {recv_timeout, infinity}],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
   {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
@@ -253,6 +253,8 @@ post_put_resp(404, _, State) ->
   {reply, {error, not_found}, State};
 
 post_put_resp(200, R, State) ->
+  post_put_resp(201, R, State);
+post_put_resp(201, R, State) ->
   Answer = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
   DocId = maps:get(id, Answer),
   RevId = maps:get(rev, Answer),
@@ -271,7 +273,7 @@ put_rev(Url, Doc, History, State) ->
 put_rev_resp(404, _, State) ->
   {reply, {error, not_found}, State};
 
-put_rev_resp(200, R, State) ->
+put_rev_resp(201, R, State) ->
   Answer = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, Answer),
   RevId = maps:get(<<"rev">>, Answer),

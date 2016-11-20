@@ -36,8 +36,8 @@
          system_doc/1,
          create_replicate_task/1]).
 
-all() -> [ info_database
-         , post
+all() -> [ %info_database
+          post
          , put_get_delete
          , delete_require_rev_parameter
          , two_databases_on_same_store
@@ -81,9 +81,9 @@ info_database(_Config) ->
 
 create_database(_Config) ->
   Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {404, _} = req(put, "/testdb/newdb/cat", Cat),
+  {400, _} = req(put, "/testdb/newdb/cat", Cat),
   {201, _} = req(put, "/testdb/newdb", []),
-  {200, _} = req(put, "/testdb/newdb/cat", Cat),
+  {201, _} = req(put, "/testdb/newdb/cat", Cat),
   ok.
 
 post(_Config) ->
@@ -102,7 +102,7 @@ put_get_delete(_Config) ->
 
   %% create doc
   Cat = #{<<"id">> => <<"tom">>, <<"name">> => <<"tom">>},
-  {200, _} = req(put, "/testdb/testdb/cat", Cat),
+  {201, _} = req(put, "/testdb/testdb/cat", Cat),
 
   %% get last revision of the doc
   {200, R2} = req(get, "/testdb/testdb/cat"),
@@ -111,7 +111,7 @@ put_get_delete(_Config) ->
 
   %% update the doc
   Cat2 = A2#{<<"name">> => <<"kitty">>},
-  {200, R3} = req(put, "/testdb/testdb/cat", Cat2),
+  {201, R3} = req(put, "/testdb/testdb/cat", Cat2),
   A3 = jsx:decode(R3, [return_maps]),
   %% update wrong revision
   {409, _} = req(put, "/testdb/testdb/cat", Cat2),
@@ -149,7 +149,7 @@ delete_require_rev_parameter(_Config)->
 
 put_cat() ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {200, R} = req(put, "/testdb/testdb/cat", Doc),
+  {201, R} = req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
@@ -162,7 +162,7 @@ delete_cat(CatRevId) ->
 
 put_dog() ->
   Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
-  {200, R} = req(put, "/testdb/testdb/dog", Doc),
+  {201, R} = req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
@@ -171,8 +171,8 @@ two_databases_on_same_store(_Config) ->
   Dog = "{\"_id\": \"dog\", \"name\": \"spike\"}",
   {201, _} = req(put, "/testdb/db1", []),
   {201, _} = req(put, "/testdb/db2", []),
-  {200, _} = req(put, "/testdb/db1/cat", Cat),
-  {200, _} = req(put, "/testdb/db2/dog", Dog),
+  {201, _} = req(put, "/testdb/db1/cat", Cat),
+  {201, _} = req(put, "/testdb/db2/dog", Dog),
   {200, _} = req(get, <<"/testdb/db1/cat">>),
   {404, _} = req(get, <<"/testdb/db2/cat">>),
   {200, _} = req(get, <<"/testdb/db2/dog">>),
@@ -198,7 +198,7 @@ put_rev(Config) ->
   History = [NewRev, RevId],
   Request = #{<<"document">> => Doc,
               <<"history">> => History},
-  {200, R} = req(put, "/testdb/testdb/cat?edit=true", Request),
+  {201, R} = req(put, "/testdb/testdb/cat?edit=true", Request),
   A = jsx:decode(R, [return_maps]),
   true = maps:get(<<"ok">>, A),
   ok.
@@ -245,7 +245,7 @@ create_replicate_task(_Config) ->
 
   %% put one doc in source db
   Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
-  {200, _} = req(put, "/testdb/dba/mouse", Mouse),
+  {201, _} = req(put, "/testdb/dba/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
   {200, _} = req(get, "/testdb/dbb/mouse"),
