@@ -90,7 +90,7 @@ init_feed(Req, #state{feed=longpoll, changes=[]}=S) ->
   ok = barrel_event:reg(S#state.conn),
   #{ store := Store, name := Name} = S#state.conn,
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
-  {loop, Req2, S2#state{subscribed=true}, 30000};
+  {loop, Req2, S2#state{subscribed=true}};
   %%info({'$barrel_event', {Store, Name}, db_updated}, Req2, S2#state{subscribed=true});
 
 init_feed(Req, #state{feed=longpoll}=S) ->
@@ -107,10 +107,9 @@ init_feed(Req, #state{feed=eventsource}=S) ->
 init_chunked_reply_with_hearbeat(Headers, Req, State) ->
   {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
   HeartBeat = binary_to_integer(HeartBeatBin),
-  erlang:start_timer(HeartBeat, self(), heartbeat),
+  timer:send_interval(HeartBeat, self(), heartbeat),
   {ok, Req3} = cowboy_req:chunked_reply(200, Headers, Req2),
   {ok, Req3, State#state{heartbeat=HeartBeat}}.
-
 
 
 handle(Req, S) ->
@@ -126,14 +125,15 @@ handle(<<"GET">>, Req, S) ->
 handle(_, Req, S) ->
   barrel_http_reply:code(405, Req, S).
 
-info({timeout, _, heartbeat}, Req, #state{heartbeat=HeartBeat}=S) ->
-  ok = cowboy_req:chunk(<<>>, Req),
-  erlang:start_timer(HeartBeat, self(), heartbeat),
+info(heartbeat, Req, S) ->
+  Res = (catch cowboy_req:chunk(<<"\n">>, Req)),
   {loop, Req, S};
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
   {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq),
-  db_updated(Changes, LastSeq, Req, S).
+  db_updated(Changes, LastSeq, Req, S);
+info(_Info, Req, S) ->
+  {loop, Req, S}.
 
 db_updated([], LastSeq, Req, #state{feed=longpoll}=S) ->
   {loop, Req, S#state{last_seq=LastSeq, changes=[]}};

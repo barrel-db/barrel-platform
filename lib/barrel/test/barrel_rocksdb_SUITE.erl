@@ -37,6 +37,7 @@
   create_doc/1,
   fold_by_id/1,
   change_since/1,
+  change_since_many/1,
   revdiff/1,
   get_revisions/1,
   put_rev/1
@@ -55,6 +56,7 @@ all() ->
     get_revisions,
     fold_by_id,
     change_since,
+    change_since_many,
     revdiff,
     put_rev
   ].
@@ -117,7 +119,7 @@ database_names(Config) ->
   Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
   [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb).
-  
+
 
 
 basic_op(Config) ->
@@ -153,10 +155,10 @@ update_doc_lwww(Config) ->
   {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
   {ok, Doc2} = barrel_db:get(Conn, <<"a">>, []),
   #{ <<"v">> := 1 } = Doc2,
-  
+
   Doc3 = #{ <<"id">> => <<"a">>, <<"v">> => 2},
   {error, {conflict, doc_exists}} = barrel_db:put(Conn, <<"a">>, Doc3, []),
-  
+
   {ok, <<"a">>, _RevId2} = barrel_db:put(Conn, <<"a">>, Doc3, [{lww, true}]),
   {ok, Doc4} = barrel_db:get(Conn, <<"a">>, []),
   #{ <<"v">> := 2 } = Doc4.
@@ -234,6 +236,27 @@ change_since(Config) ->
   [] = barrel_db:changes_since(Conn, 2, Fun, []),
   {ok, <<"cc">>, _RevId2} = barrel_db:put(Conn, <<"cc">>, Doc2, []),
   [<<"cc">>] = barrel_db:changes_since(Conn, 2, Fun, []),
+  ok.
+
+change_since_many(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  Fun = fun(_Seq, DocInfo, _Doc, Acc) ->
+            Id = maps:get(id, DocInfo),
+            {ok, [Id|Acc]}
+        end,
+  [] = barrel_db:changes_since(Conn, 0, Fun, []),
+  AddDoc = fun(N) ->
+               K = integer_to_binary(N),
+               Key = <<"doc", K/binary>>,
+               Doc = #{ <<"id">> => Key, <<"v">> => 1},
+               {ok, Key, _RevId} = barrel_db:put(Conn, Key, Doc, [])
+           end,
+  [AddDoc(N) || N <- lists:seq(1,20)],
+
+  20 = length(barrel_db:changes_since(Conn, 0, Fun, [])),
+  [<<"doc20">>, <<"doc19">>] = barrel_db:changes_since(Conn, 18, Fun, []),
+  [<<"doc20">>] = barrel_db:changes_since(Conn, 19, Fun, []),
+  [] = barrel_db:changes_since(Conn, 20, Fun, []),
   ok.
 
 revdiff(Config) ->

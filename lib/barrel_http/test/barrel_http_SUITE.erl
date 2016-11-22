@@ -329,7 +329,7 @@ changes_longpoll_heartbeat(_Config) ->
                     Loop(Loop, Acc);
                   {tcp,_,Data} ->
                     case Data of
-                      <<"0\r\n\r\n">> ->
+                      <<"1\r\n\n\r\n">> ->
                         Loop(Loop, [heartbeat|Acc]);
                       Other ->
                         {ok, [Other|Acc]}
