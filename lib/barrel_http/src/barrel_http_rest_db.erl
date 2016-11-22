@@ -66,13 +66,15 @@ handle(Req, State) ->
   {Db, Req4} = cowboy_req:binding(dbid, Req3),
   handle(Method, Store, Db, Req4, State).
 
-handle(<<"PUT">>, StoreAsBin, Db, Req, State) ->
-  Store = binary_to_atom(StoreAsBin, utf8),
-  ok = barrel:open_database(Db, Store, [{create_if_missing, true}]),
-  barrel_http_reply:code(201, Req, State);
-handle(<<"GET">>, StoreAsBin, Db, Req, State) ->
-  Store = barrel_lib:to_atom(StoreAsBin),
-  {ok, Conn} = barrel_http_conn:peer(Store, Db),
+handle(<<"PUT">>, Store, Db, Req, State) ->
+  case barrel:create_database(barrel_lib:to_atom(Store), Db) of
+    {true, _} -> barrel_http_reply:json(201, #{ ok => true}, Req, State);
+    {false, _} -> barrel_http_reply:json(412, #{ error => <<"db_exists">> }, Req, State);
+    {error, Reason} -> barrel_http_reply:json(400, #{ error => Reason}, Req, State)
+  end;
+handle(<<"GET">>, StoreBin, Db, Req, State) ->
+  Store = barrel_lib:to_atom(StoreBin),
+  {ok, Conn} = barrel:connect_database(Store, Db),
   All = barrel:database_names(Store),
   case lists:member(Db, All) of
     false ->

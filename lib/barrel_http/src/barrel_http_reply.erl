@@ -16,7 +16,7 @@
 -author("Bernard Notarianni").
 
 -export([doc/3]).
--export([json/3]).
+-export([json/3, json/4]).
 -export([code/3]).
 
 doc(Doc, Req, State ) ->
@@ -24,8 +24,14 @@ doc(Doc, Req, State ) ->
   json(Json, Req, State).
 
 json(Json, Req, State) ->
+  json(200, Json, Req, State).
+
+json(Code, Obj, Req, State) when is_map(Obj) ->
+  json(Code, jsx:encode(Obj), Req, State);
+json(Code, Json, Req, State) when is_binary(Json) ->
   Headers = [{<<"content-type">>, <<"application/json">>}],
-  reply(200, Headers, Json, Req, State).
+  reply(Code, Headers, Json, Req, State);
+json(_, _, _, _) -> erlang:error(badarg).
 
 code(HttpCode, Req, State ) ->
   reply(HttpCode, [], [], Req, State).

@@ -27,28 +27,28 @@
 
 -define(ATTTAG, <<"_attachments">>).
 
-attach(Db, DocId, AttDescription, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+attach(Conn, DocId, AttDescription, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   AttId = maps:get(<<"id">>, AttDescription),
   case find_att_doc(AttId, Attachments) of
     {ok, _} -> {error, attachment_conflict};
     {error, not_found} ->
       Attachments2 = [AttDescription|Attachments],
-      barrel_db:put(Db, DocId, Doc#{?ATTTAG => Attachments2}, Options)
+      barrel_db:put(Conn, DocId, Doc#{?ATTTAG => Attachments2}, Options)
   end.
 
-attach(Db, DocId, AttDescription, Binary, Options) ->
+attach(Conn, DocId, AttDescription, Binary, Options) ->
   Data = base64:encode(Binary),
-  attach(Db, DocId, AttDescription#{<<"_data">> => Data}, Options).
+  attach(Conn, DocId, AttDescription#{<<"_data">> => Data}, Options).
 
-get_attachment(Db, DocId, AttId, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+get_attachment(Conn, DocId, AttId, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   find_att_doc(AttId, Attachments).
 
-get_attachment_binary(Db, DocId, AttId, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+get_attachment_binary(Conn, DocId, AttId, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   case find_att_doc(AttId, Attachments) of
     {error, not_found} -> {error, not_found};
@@ -57,32 +57,32 @@ get_attachment_binary(Db, DocId, AttId, Options) ->
       {ok, base64:decode(Data)}
   end.
 
-replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+replace_attachment(Conn, DocId, AttId, AttDescription, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   AttId = maps:get(<<"id">>, AttDescription),
   NewAttachments = replace_att_doc(AttId, AttDescription, Attachments),
-  barrel_db:put(Db, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
+  barrel_db:put(Conn, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
 
-replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+replace_attachment_binary(Conn, DocId, AttId, Binary, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   case find_att_doc(AttId, Attachments) of
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
       NewData = base64:encode(Binary),
       NewAttachment = Attachment#{<<"_data">> => NewData},
-      replace_attachment(Db, DocId, AttId, NewAttachment, Options)
+      replace_attachment(Conn, DocId, AttId, NewAttachment, Options)
   end.
 
-delete_attachment(Db, DocId, AttId, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+delete_attachment(Conn, DocId, AttId, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   NewAttachments = delete_att_doc(AttId, Attachments),
-  barrel_db:put(Db, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
+  barrel_db:put(Conn, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
 
-attachments(Db, DocId, Options) ->
-  {ok, Doc} = barrel_db:get(Db, DocId, Options),
+attachments(Conn, DocId, Options) ->
+  {ok, Doc} = barrel_db:get(Conn, DocId, Options),
   maps:get(?ATTTAG, Doc, []).
 
 

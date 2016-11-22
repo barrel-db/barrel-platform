@@ -121,7 +121,7 @@ handle(Req, State) ->
   handle(Method, Store, DbId, DocIdAsBin, Req5, State).
 
 handle(<<"GET">>, Store, DbId, DocIdAsBin, Req, State) ->
-  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
   Options = case cowboy_req:qs_val(<<"rev">>, Req) of
               {undefined, _Req2} -> [];
               {RevId, _Req2} -> [{rev, RevId}]
@@ -152,10 +152,10 @@ handle(_, _, _, _, Req, State) ->
 %% ---------
 
 post_put(Method, Store, DbId, DocIdAsBin, Req, State) ->
-  case barrel_http_conn:peer(Store, DbId) of
+  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
     {ok, Conn} ->
       post_put(Method, Conn, DocIdAsBin, Req, State);
-    {error, database_not_found} ->
+    {error, not_found} ->
       barrel_http_reply:code(404, Req, State)
   end.
 
@@ -192,7 +192,7 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
   end.
 
 delete(Store, DbId, DocId, RevId, Req, State) ->
-  {ok, Conn} = barrel_http_conn:peer(Store, DbId),
+  {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
   {ok, DocId, RevId2} = barrel:delete(Conn, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,

@@ -44,6 +44,7 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
+  _ = ets:new(barrel_db, [set, named_table, public]),
   _ = ets:new(barrel_transactor, [ordered_set, named_table, public]),
   
   Specs =[

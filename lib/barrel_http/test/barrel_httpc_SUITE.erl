@@ -47,14 +47,15 @@ url() ->
   <<"http://localhost:8080/testdb/testdb">>.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_database(<<"testdb">>, testdb, [{create_if_missing, true}]),
+  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
-  [{http_conn, HttpConn}|Config].
+  [{http_conn, HttpConn}, {conn, Conn}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
+  Conn = proplists:get_value(conn, Config),
   ok = barrel_httpc:disconnect(HttpConn),
-  ok = barrel:delete_database(<<"testdb">>),
+  ok = barrel:delete_database(Conn),
   ok.
 
 end_per_suite(Config) ->

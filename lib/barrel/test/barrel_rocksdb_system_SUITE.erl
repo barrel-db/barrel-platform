@@ -35,11 +35,12 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  ok = barrel_db:start(<<"testdb">>, barrel_test_rocksdb, [{create_if_missing, true}]),
-  [{db, <<"testdb">>}|Config].
+  {true, Conn} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
+  [{conn, Conn}|Config].
 
-end_per_testcase(_, _Config) ->
-  barrel_db:clean(<<"testdb">>),
+end_per_testcase(_, Config) ->
+  Conn = proplists:get_value(conn, Config),
+  barrel_db:clean(Conn),
   ok.
 
 end_per_suite(Config) ->
@@ -47,11 +48,11 @@ end_per_suite(Config) ->
   Config.
 
 write_and_get(Config) ->
-  Db = proplists:get_value(db, Config),
+  Conn = proplists:get_value(conn, Config),
   Doc = #{<<"v">> => 1},
-  ok = barrel_db:write_system_doc(Db, <<"a">>, Doc),
-  {ok, Doc} = barrel_db:read_system_doc(Db, <<"a">>),
-  ok = barrel_db:delete_system_doc(Db, <<"a">>),
-  {error, not_found} = barrel_db:read_system_doc(Db, <<"a">>),
+  ok = barrel_db:write_system_doc(Conn, <<"a">>, Doc),
+  {ok, Doc} = barrel_db:read_system_doc(Conn, <<"a">>),
+  ok = barrel_db:delete_system_doc(Conn, <<"a">>),
+  {error, not_found} = barrel_db:read_system_doc(Conn, <<"a">>),
   ok.
 
