@@ -46,13 +46,13 @@ start_link() ->
 init([]) ->
   _ = ets:new(barrel_db, [set, named_table, public]),
   _ = ets:new(barrel_transactor, [ordered_set, named_table, public]),
-  
+  EventAdapter = application:get_env(barrel, barrel_event_adapter, barrel_event_pg2),
   Specs =[
       ?sup(barrel_store_sup)
     , ?sup(barrel_db_sup)
-    , ?sup(barrel_event)
     , ?sup(barrel_task_status)
+    , ?sup(barrel_event_local_sup)
+    , ?sup(EventAdapter)
     , ?sup(barrel_replicate_sup)
   ],
-  
   {ok, { {one_for_one, 5, 10}, Specs} }.

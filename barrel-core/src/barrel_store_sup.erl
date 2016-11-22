@@ -42,12 +42,11 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  {ok, Stores} = application:get_env(barrel, stores),
+  Stores = application:get_env(barrel, stores, []),
   Children = lists:map(
     fun({Name, Config}) ->
       storage_spec(Name, Config)
     end, Stores),
-  
   {ok, {{one_for_one, 5, 10}, Children}}.
 
 %%%===================================================================

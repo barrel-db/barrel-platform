@@ -344,9 +344,10 @@ handle_cast(_Msg, State) ->
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
 handle_info({updated, Seq}, State = #{ store := Store, name := Name }) ->
-  barrel_db_event:notify({Store, Name}, db_updated),
+  barrel_event:broadcast({db, Store, Name}, db_updated),
   {noreply, State#{update_seq => Seq}};
 
+%% TODO: handle restart window
 handle_info({'EXIT', Pid, Reason},State) ->
   #{id := DbId,
     name := Name,

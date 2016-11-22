@@ -91,7 +91,7 @@ init({Source0, Target0, Options}) ->
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
-  ok = barrel_event:reg(Source),
+  ok = subscribe_changes(Source),
   State = #st{source=Source,
               target=Target,
               id=RepId,
@@ -130,7 +130,7 @@ handle_call(stop, _From, State) ->
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
-handle_info({'$barrel_event', _, db_updated}, S) ->
+handle_info({barrel_db_event, {db_updated, _Store, _DbName}}, S) ->
   Source = S#st.source,
   Target = S#st.target,
   From = S#st.last_seq,
@@ -146,7 +146,7 @@ terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_metrics:update_task(State#st.metrics),
   lager:info("replication ~p terminated", [RepId]),
   ok = write_checkpoint(State),
-  ok = barrel_event:unreg(),
+  unsubscribe_changes(Source),
   %% close the connections
   [maybe_close(Conn) || Conn <- [Source, Target]],
   ok.
@@ -339,6 +339,12 @@ delete_system_doc(Conn, Id) when is_map(Conn) ->
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.
 
+
+subscribe_changes(#{ store := Store, name := Db}) ->
+  barrel:subscribe({db, Store, Db}).
+
+unsubscribe_changes(#{ store := Store, name := Db}) ->
+  barrel:unsubscribe({db, Store, Db}).
 
 %% =============================================================================
 %% Helpers
