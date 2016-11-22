@@ -276,7 +276,7 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
   Opts = [
-           {start_key, integer_to_binary(Since)},
+           {start_key, <<Since:32>>},
            {read_options, ReadOptions}
          ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
@@ -284,7 +284,7 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
   WrapperFun = fun(Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
       [_, SeqBin] = binary:split(Key, Prefix),
-      Seq = binary_to_integer(SeqBin),
+      <<Seq:32>> = SeqBin,
       RevId = maps:get(current_rev, DocInfo),
       DocId = maps:get(id, DocInfo),
 
@@ -325,7 +325,7 @@ meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binar
 
 doc_key(DbId, DocId) -> << DbId/binary, 0, 0, 50, DocId/binary >>.
 
-seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, (barrel_lib:to_binary(Seq))/binary >>.
+seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, Seq:32>>.
 
 sys_key(DbId, DocId) -> << DbId/binary, 0, 0, 200, DocId/binary>>.
 
