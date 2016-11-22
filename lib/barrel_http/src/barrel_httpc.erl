@@ -198,7 +198,7 @@ handle_cast({longpoll, DbUrl, Since}, S) ->
   ChangesSince = <<"/_changes?feed=longpoll&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
-  Opts = [async, once],
+  Opts = [{async, once}, {recv_timeout, 300000}],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
   {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
