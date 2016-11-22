@@ -36,10 +36,9 @@
   close_database/1,
   delete_database/1,
   database_names/1,
-  database_infos/1,
-  subscribe/1,
-  unsubscribe/1
+  database_infos/1
 ]).
+
 
 -export([
   attach/4,
@@ -244,13 +243,6 @@ fold_by_id(Conn, Fun, Acc, Options) ->
 changes_since(Conn, Since, Fun, Acc) ->
   barrel_db:changes_since(Conn, Since, Fun, Acc).
 
--spec subscribe(Topic::barrel_event:topic()) -> ok.
-subscribe(Topic) ->
-  barrel_event:subscribe(self(), Topic).
-
--spec unsubscribe(Topic::barrel_event:topic()) -> ok.
-unsubscribe(Topic) ->
-  barrel_event:unsubscribe(self(), Topic).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when
@@ -260,6 +252,8 @@ unsubscribe(Topic) ->
   Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
 revsdiff(Conn, DocId, RevIds) ->
   barrel_db:revsdiff(Conn, DocId, RevIds).
+
+
 
 attach(Conn, DocId, AttDescription, Options) ->
   barrel_attachments:attach(Conn, DocId, AttDescription, Options).
