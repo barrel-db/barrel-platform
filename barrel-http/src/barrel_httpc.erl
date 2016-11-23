@@ -195,10 +195,10 @@ handle_call(stop, _From, State) ->
 
 
 handle_cast({longpoll, DbUrl, Since}, S) ->
-  ChangesSince = <<"/_changes?feed=longpoll&since=">>,
+  ChangesSince = <<"/_changes?feed=longpoll&heartbeat=5000&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
-  Opts = [async, once, {recv_timeout, infinity}],
+  Opts = [async, {recv_timeout, 300000}],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
   {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
@@ -212,7 +212,7 @@ handle_info({hackney_response, _Ref, {status, 200, _Reason}}, State) ->
   {noreply, State};
 handle_info({hackney_response, _Ref, {headers, _Headers}}, State) ->
   {noreply, State};
-handle_info({hackney_response, _Ref, <<>>}, State) ->
+handle_info({hackney_response, _Ref, <<"\n">>}, State) ->
   {noreply, State};
 handle_info({hackney_response,_Ref, Bin}, S) when is_binary(Bin) ->
   Acc = S#state.hackney_acc,
