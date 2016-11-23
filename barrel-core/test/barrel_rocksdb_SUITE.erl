@@ -244,10 +244,10 @@ change_since_include_doc(Config) ->
   Conn = proplists:get_value(conn, Config),
   Fun =
     fun(Seq, _DocInfo, Doc, Acc) ->
-      {ok, [{Seq, Doc}]}
+      {ok, [{Seq, Doc} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
   {ok, Doc1} = barrel_db:get(Conn, <<"aa">>, []),
   [Change] = barrel:changes_since(Conn, 0, Fun, [], [{include_doc, true}]),
   {1, {ok, Doc1}} = Change,
