@@ -21,12 +21,6 @@
          init_per_testcase/2]).
 
 -export([info_database/1,
-         post/1,
-         put_get_delete/1,
-         delete_require_rev_parameter/1,
-         two_databases_on_same_store/1,
-         revsdiff/1,
-         put_rev/1,
          all_docs/1,
          changes_normal/1,
          changes_longpoll/1,
@@ -36,13 +30,7 @@
          system_doc/1,
          create_replicate_task/1]).
 
-all() -> [ %info_database
-          post
-         , put_get_delete
-         , delete_require_rev_parameter
-         , two_databases_on_same_store
-         , revsdiff
-         , put_rev
+all() -> [ info_database
          , all_docs
          , changes_normal
          , changes_longpoll
@@ -86,67 +74,6 @@ create_database(_Config) ->
   {201, _} = req(put, "/testdb/newdb/cat", Cat),
   ok.
 
-post(_Config) ->
-  D1 = "{\"name\" : \"tom\"}",
-  {200, R} = req(post, "/testdb/testdb", D1),
-  J = jsx:decode(R, [return_maps]),
-  DocId = maps:get(<<"id">>, J),
-  Url = <<"/testdb/testdb/", DocId/binary>>,
-  {200, R2} = req(get, Url),
-  D2 = jsx:decode(R2, [return_maps]),
-  <<"tom">> = maps:get(<<"name">>, D2),
-  ok.
-
-
-put_get_delete(_Config) ->
-
-  %% create doc
-  Cat = #{<<"id">> => <<"tom">>, <<"name">> => <<"tom">>},
-  {201, _} = req(put, "/testdb/testdb/cat", Cat),
-
-  %% get last revision of the doc
-  {200, R2} = req(get, "/testdb/testdb/cat"),
-  A2 = jsx:decode(R2, [return_maps]),
-  <<"tom">> = maps:get(<<"name">>, A2),
-
-  %% update the doc
-  Cat2 = A2#{<<"name">> => <<"kitty">>},
-  {201, R3} = req(put, "/testdb/testdb/cat", Cat2),
-  A3 = jsx:decode(R3, [return_maps]),
-  %% update wrong revision
-  {409, _} = req(put, "/testdb/testdb/cat", Cat2),
-  {409, _} = req(put, "/testdb/testdb/cat", Cat),
-
-  %% update non existing doc
-  Dog = #{<<"id">> => "dog", <<"name">> => "spike", <<"_rev">> => <<"2-60680344c18400a672fb554faa1a1601">>},
-  {409, _} = req(put, "/testdb/testdb/doesnotexist", Dog),
-
-  %% get specific revs
-  FirstRev = maps:get(<<"_rev">>, A2),
-  {200, R5} = req(get, "/testdb/testdb/cat?rev=" ++ FirstRev),
-  A5 = jsx:decode(R5, [return_maps]),
-  <<"tom">> = maps:get(<<"name">>, A5),
-  {200, R6} = req(get, "/testdb/testdb/cat"),
-  A6 = jsx:decode(R6, [return_maps]),
-  <<"kitty">> = maps:get(<<"name">>, A6),
-
-  %% delete doc
-  LastRev = maps:get(<<"rev">>, A3),
-  Deleted = delete_cat(LastRev),
-
-  DeletedRev = binary_to_list(maps:get(<<"rev">>, Deleted)),
-  {200, R4} = req(get, "/testdb/testdb/cat?rev=" ++ DeletedRev),
-  A4 = jsx:decode(R4, [return_maps]),
-  true = maps:get(<<"_deleted">>, A4),
-
-  ok.
-
-delete_require_rev_parameter(_Config)->
-  put_cat(),
-  {400, _} = req(delete, "/testdb/testdb/cat?badparametername=42"),
-  ok.
-
-
 put_cat() ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
   {201, R} = req(put, "/testdb/testdb/cat", Doc),
@@ -165,43 +92,6 @@ put_dog() ->
   {201, R} = req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
-
-two_databases_on_same_store(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  Dog = "{\"_id\": \"dog\", \"name\": \"spike\"}",
-  {201, _} = req(put, "/testdb/db1", []),
-  {201, _} = req(put, "/testdb/db2", []),
-  {201, _} = req(put, "/testdb/db1/cat", Cat),
-  {201, _} = req(put, "/testdb/db2/dog", Dog),
-  {200, _} = req(get, <<"/testdb/db1/cat">>),
-  {404, _} = req(get, <<"/testdb/db2/cat">>),
-  {200, _} = req(get, <<"/testdb/db2/dog">>),
-  {404, _} = req(get, <<"/testdb/db1/dog">>),
-  ok.
-
-revsdiff(_Config) ->
-  CatRevId = put_cat(),
-  Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = req(post, "/testdb/testdb/_revs_diff", Request),
-  A = jsx:decode(R, [return_maps]),
-  CatDiffs = maps:get(<<"cat">>, A),
-  Missing = maps:get(<<"missing">>, CatDiffs),
-  true = lists:member(<<"2-missing">>, Missing),
-  ok.
-
-put_rev(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  RevId = put_cat(),
-  {ok, Doc} = barrel:get(Conn, <<"cat">>, []),
-  {Pos, _} = barrel_doc:parse_revision(RevId),
-  NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
-  History = [NewRev, RevId],
-  Request = #{<<"document">> => Doc,
-              <<"history">> => History},
-  {201, R} = req(put, "/testdb/testdb/cat?edit=true", Request),
-  A = jsx:decode(R, [return_maps]),
-  true = maps:get(<<"ok">>, A),
-  ok.
 
 all_docs(_Config) ->
   {200, R1} = req(get, "/testdb/testdb/_all_docs"),
@@ -224,7 +114,7 @@ all_docs(_Config) ->
 system_doc(_Config) ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
   {201, _} = req(put, "/testdb/testdb/_system/cat", Doc),
-  {200, R} = req(get, <<"/testdb/db1/cat">>),
+  {200, R} = req(get, <<"/testdb/testdb/_system/cat">>),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
   {200, _} = req(put, "/testdb/testdb/_system/cat", "{}"),

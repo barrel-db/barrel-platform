@@ -115,7 +115,7 @@ trails() ->
   [trails:trail("/:store/:dbid/", ?MODULE, [], Post),
    trails:trail("/:store/:dbid/:docid", ?MODULE, [], GetPut)].
 
--record(state, {method, store, dbid, docid, revid, doc, conn, options}).
+-record(state, {method, store, dbid, docid, revid, edit, body, doc, conn, options}).
 
 init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 
@@ -137,40 +137,73 @@ content_types_provided(Req, State) ->
 
 
 malformed_request(Req, S) ->
+  {Params, Req2} = cowboy_req:qs_vals(Req),
+  case parse_params(Params, S) of
+    {error, {unknown_param, _}} ->
+      {true, Req2, S};
+    {ok, S2} ->
+      {Method, Req3} = cowboy_req:method(Req2),
+      {ok, Body, Req4} = cowboy_req:body(Req3),
+      malformed_request_revid(Req4, S2#state{method=Method, body=Body})
+  end.
+
+parse_params([], State) ->
+  {ok, State};
+parse_params([{<<"rev">>, RevId}|Tail], State) ->
+  parse_params(Tail, State#state{revid=RevId});
+parse_params([{<<"edit">>, Edit}|Tail], State) ->
+  parse_params(Tail, State#state{edit=Edit});
+parse_params([{Param, __Value}|_], _State) ->
+  {error, {unknown_param, Param}}.
+
+malformed_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
+  {true, Req, S};
+malformed_request_revid(Req, S) ->
+  Body = S#state.body,
+  malformed_request_store_dbid(Req, S#state{body=Body}).
+
+malformed_request_store_dbid(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
-  malformed_request_store(Req2, S#state{store=Store}).
-
-malformed_request_store(Req, #state{store=undefined}=S) ->
-  {true, Req, S};
-malformed_request_store(Req, S) ->
-  {DbId, Req2} = cowboy_req:binding(dbid, Req),
-  malformed_request_dbid(Req2, S#state{dbid=DbId}).
-
-malformed_request_dbid(Req, #state{dbid=undefined}=S) ->
-  {true, Req, S};
-malformed_request_dbid(Req, #state{store=Store, dbid=DbId}=S) ->
+  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
   case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
+    {error, {unknown_store, _}} ->
+      {true, Req3, State};
+    {error, not_found} ->
+      {true, Req3, State};
     {ok, Conn} ->
-      {Method, Req2} = cowboy_req:method(Req),
-      {DocId, Req3} = cowboy_req:binding(docid, Req2),
-      {RevId, Req4} = cowboy_req:qs_val(<<"rev">>, Req3),
+      {DocId, Req2} = cowboy_req:binding(docid, Req),
+      RevId = State#state.revid,
       Options = case RevId of
                   undefined -> [];
                   _ -> [{rev, RevId}]
                 end,
-      malformed_request_revid(Req4, S#state{method=Method, docid=DocId, conn=Conn,
-                                            revid=RevId, options=Options});
-    {error, not_found} ->
+      State2 = State#state{store=Store, dbid=DbId, docid=DocId,
+                           conn=Conn, revid=RevId, options=Options},
+      malformed_request_body(Req3, State2)
+  end.
+
+malformed_request_body(Req, #state{body= <<>>, method= <<"GET">>}=S) ->
+  {false, Req, S};
+malformed_request_body(Req, #state{body= <<>>, method= <<"DELETE">>}=S) ->
+  {false, Req, S};
+malformed_request_body(Req, #state{body= <<>>, method= <<"POST">>}=S) ->
+  {true, Req, S};
+malformed_request_body(Req, #state{body= <<>>, method= <<"PUT">>}=S) ->
+  {true, Req, S};
+malformed_request_body(Req, #state{body=Body}=S) ->
+  try jsx:decode(Body, [return_maps]) of
+      Json -> {false, Req, S#state{body=Json}}
+  catch
+    _:_ ->
       {true, Req, S}
   end.
 
-malformed_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
-  {true, Req, S};
-malformed_request_revid(Res, S) ->
-  {false, Res, S}.
 
 
-resource_exists(Req, #state{method= <<"GET">>}=S) ->
+resource_exists(Req, State) ->
+  resource_exists_doc(Req, State).
+
+resource_exists_doc(Req, #state{method= <<"GET">>}=S) ->
   Conn = S#state.conn,
   DocId = S#state.docid,
   Options = S#state.options,
@@ -179,35 +212,34 @@ resource_exists(Req, #state{method= <<"GET">>}=S) ->
     {ok, Doc} -> {true, Req, S#state{doc=Doc}}
   end;
 
-resource_exists(Req, #state{method= <<"DELETE">>}=S) ->
+resource_exists_doc(Req, #state{method= <<"DELETE">>}=S) ->
   {true, Req, S};
 
-resource_exists(Req, State) ->
+resource_exists_doc(Req, State) ->
   {false, Req, State}.
 
+
 allow_missing_post(Req, State) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
-  Json = jsx:decode(Body, [return_maps]),
+  Json = State#state.body,
   Conn = State#state.conn,
   {ok, DocId, RevId} = barrel:post(Conn, Json, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId},
   RespBody = jsx:encode(Reply),
-  Req5 = cowboy_req:set_resp_body(RespBody, Req2),
-  {true, Req5, State#state{docid=DocId}}.
+  Req2 = cowboy_req:set_resp_body(RespBody, Req),
+  {true, Req2, State#state{docid=DocId}}.
 
 is_conflict(Req, State) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
-  Json = jsx:decode(Body, [return_maps]),
+  Json = State#state.body,
   Conn = State#state.conn,
   DocId = State#state.docid,
   Method = State#state.method,
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel:post(Conn, Json, []), Req2};
+                       {barrel:post(Conn, Json, []), Req};
                      <<"PUT">> ->
-                       {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req2),
+                       {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
@@ -230,7 +262,7 @@ is_conflict(Req, State) ->
                 <<"id">> => DocId,
                 <<"rev">> => RevId},
       RespBody = jsx:encode(Reply),
-      Req5 = cowboy_req:set_resp_body(RespBody, Req2),
+      Req5 = cowboy_req:set_resp_body(RespBody, Req),
       {false, Req5, State}
   end.
 
