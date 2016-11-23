@@ -31,7 +31,7 @@
   write_doc/6,
   get_doc/7,
   fold_by_id/5,
-  changes_since/5,
+  changes_since/6,
   last_update_seq/2,
   write_system_doc/4,
   read_system_doc/3,
@@ -271,14 +271,14 @@ fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
   after erocksdb:release_snapshot(Snapshot)
   end.
 
-changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
+changes_since(DbId, Since, Fun, AccIn, Opts, #{ db := Db}) ->
   Prefix = << DbId/binary, 0, 0, 100 >>,
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
-  Opts = [
-           {start_key, <<Since:32>>},
-           {read_options, ReadOptions}
-         ],
+  FoldOpts = [
+    {start_key, <<Since:32>>},
+    {read_options, ReadOptions}
+  ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
 
   WrapperFun = fun(Key, BinDocInfo, Acc) ->
@@ -297,7 +297,7 @@ changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
       Fun(Seq, DocInfo, Doc, Acc)
     end,
 
-  try fold_prefix(Db, Prefix, WrapperFun, AccIn, Opts)
+  try fold_prefix(Db, Prefix, WrapperFun, AccIn, FoldOpts)
   after erocksdb:release_snapshot(Snapshot)
   end.
 

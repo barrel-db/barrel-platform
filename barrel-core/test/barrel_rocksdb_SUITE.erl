@@ -38,6 +38,7 @@
   fold_by_id/1,
   change_since/1,
   change_since_many/1,
+  change_since_include_doc/1,
   revdiff/1,
   get_revisions/1,
   put_rev/1
@@ -57,6 +58,7 @@ all() ->
     fold_by_id,
     change_since,
     change_since_many,
+    change_since_include_doc,
     revdiff,
     put_rev
   ].
@@ -226,16 +228,29 @@ change_since(Config) ->
                   Id = maps:get(id, DocInfo),
                   {ok, [Id|Acc]}
         end,
-  [] = barrel_db:changes_since(Conn, 0, Fun, []),
+  [] = barrel:changes_since(Conn, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_db:put(Conn, <<"bb">>, Doc2, []),
-  [<<"bb">>, <<"aa">>] = barrel_db:changes_since(Conn, 0, Fun, []),
-  [<<"bb">>] = barrel_db:changes_since(Conn, 1, Fun, []),
-  [] = barrel_db:changes_since(Conn, 2, Fun, []),
+  [<<"bb">>, <<"aa">>] = barrel:changes_since(Conn, 0, Fun, []),
+  [<<"bb">>] = barrel:changes_since(Conn, 1, Fun, []),
+  [] = barrel:changes_since(Conn, 2, Fun, []),
   {ok, <<"cc">>, _RevId2} = barrel_db:put(Conn, <<"cc">>, Doc2, []),
-  [<<"cc">>] = barrel_db:changes_since(Conn, 2, Fun, []),
+  [<<"cc">>] = barrel:changes_since(Conn, 2, Fun, []),
+  ok.
+
+change_since_include_doc(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  Fun =
+    fun(Seq, _DocInfo, Doc, Acc) ->
+      {ok, [{Seq, Doc}]}
+    end,
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
+  {ok, Doc1} = barrel_db:get(Conn, <<"aa">>, []),
+  [Change] = barrel:changes_since(Conn, 0, Fun, [], [{include_doc, true}]),
+  {1, {ok, Doc1}} = Change,
   ok.
 
 change_since_many(Config) ->
@@ -244,7 +259,7 @@ change_since_many(Config) ->
             Id = maps:get(id, DocInfo),
             {ok, [Id|Acc]}
         end,
-  [] = barrel_db:changes_since(Conn, 0, Fun, []),
+  [] = barrel:changes_since(Conn, 0, Fun, []),
   AddDoc = fun(N) ->
                K = integer_to_binary(N),
                Key = <<"doc", K/binary>>,
@@ -253,10 +268,10 @@ change_since_many(Config) ->
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
 
-  20 = length(barrel_db:changes_since(Conn, 0, Fun, [])),
-  [<<"doc20">>, <<"doc19">>] = barrel_db:changes_since(Conn, 18, Fun, []),
-  [<<"doc20">>] = barrel_db:changes_since(Conn, 19, Fun, []),
-  [] = barrel_db:changes_since(Conn, 20, Fun, []),
+  20 = length(barrel:changes_since(Conn, 0, Fun, [])),
+  [<<"doc20">>, <<"doc19">>] = barrel:changes_since(Conn, 18, Fun, []),
+  [<<"doc20">>] = barrel:changes_since(Conn, 19, Fun, []),
+  [] = barrel:changes_since(Conn, 20, Fun, []),
   ok.
 
 revdiff(Config) ->

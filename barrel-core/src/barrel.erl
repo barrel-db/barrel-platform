@@ -25,6 +25,7 @@
   post/3,
   fold_by_id/4,
   changes_since/4,
+  changes_since/5,
   revsdiff/3
 ]).
 
@@ -241,7 +242,19 @@ fold_by_id(Conn, Fun, Acc, Options) ->
   AccIn :: any(),
   AccOut :: any().
 changes_since(Conn, Since, Fun, Acc) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc).
+  barrel_db:changes_since(Conn, Since, Fun, Acc, []).
+
+%% @doc fold all changes since last sequence
+-spec changes_since(Conn, Since, Fun, AccIn, Opts) -> AccOut when
+  Conn::conn(),
+  Since :: non_neg_integer(),
+  FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
+  Fun :: fun((Seq :: non_neg_integer(), DocInfo :: docinfo(), Doc :: doc, Acc :: any()) -> FunRes),
+  AccIn :: any(),
+  AccOut :: any(),
+  Opts :: list().
+changes_since(Conn, Since, Fun, Acc, Opts) ->
+  barrel_db:changes_since(Conn, Since, Fun, Acc, Opts).
 
 
 %% @doc get all revisions ids that differ in a doc from the list given

@@ -241,7 +241,7 @@ put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc);
 changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc).
+  barrel_db:changes_since(Conn, Since, Fun, Acc, []).
 
 %% =============================================================================
 %% Checkpoints management: when, where and what

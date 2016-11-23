@@ -28,7 +28,7 @@
   delete/4,
   post/3,
   fold_by_id/4,
-  changes_since/4,
+  changes_since/5,
   revsdiff/3,
   write_system_doc/3,
   read_system_doc/2,
@@ -233,12 +233,12 @@ post(Conn, Doc, Options) ->
 fold_by_id(#{store := Store, id := DbId}, Fun, Acc, Opts) ->
   barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
-changes_since(#{store := Store, id := DbId}, Since0, Fun, Acc) when is_integer(Since0) ->
+changes_since(#{store := Store, id := DbId}, Since0, Fun, Acc, Opts) when is_integer(Since0) ->
   Since = if
             Since0 > 0 -> Since0 + 1;
             true -> Since0
           end,
-  barrel_store:changes_since(Store, DbId, Since, Fun, Acc).
+  barrel_store:changes_since(Store, DbId, Since, Fun, Acc, Opts).
 
 revsdiff(#{store := Store, id := DbId}, DocId, RevIds) ->
   case barrel_store:get_doc_info(Store, DbId, DocId) of
