@@ -81,7 +81,7 @@ check_json(Req, State) ->
       check_source(Req, State#state{body=Json})
   catch
     _:_ ->
-      barrel_http_reply:code(400, Req2, State)
+      barrel_http_reply:error(400, "json malformed", Req2, State)
   end.
 
 
@@ -89,7 +89,7 @@ check_source(Req, State) ->
   Body = State#state.body,
   case maps:get(<<"source">>, Body, undefined) of
     undefined ->
-      barrel_http_reply:code(400, Req, State);
+      barrel_http_reply:error(400, "source property missing", Req, State);
     Source ->
       check_target(Req, State#state{source=Source})
   end.
@@ -98,7 +98,7 @@ check_target(Req, State) ->
   Body = State#state.body,
   case maps:get(<<"target">>, Body, undefined) of
     undefined ->
-      barrel_http_reply:code(400, Req, State);
+      barrel_http_reply:error(400, "target property missing", Req, State);
     Source ->
       check_db_exists(Req, State#state{target=Source})
   end.
@@ -112,7 +112,7 @@ check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
     {200, _} ->
       check_target_db_exist(Req, State);
     _ ->
-      barrel_http_reply:code(400, Req, State)
+      barrel_http_reply:error(400, "source database not found", Req, State)
   end.
 
 check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
@@ -120,7 +120,7 @@ check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
     {200, _} ->
       create_resource(Req, State);
     _ ->
-      barrel_http_reply:code(400, Req, State)
+      barrel_http_reply:error(400, "target database not found", Req, State)
   end.
 
 
@@ -129,7 +129,7 @@ get_resource(Req, State) ->
   {RepId, Req2} = cowboy_req:binding(repid, Req),
   case barrel:replication_info(RepId) of
     {error, not_found} ->
-      barrel_http_reply:code(404, Req2, State);
+      barrel_http_reply:error(404, "replication task not found", Req2, State);
     Infos ->
       #{metrics := Metrics} = Infos,
       barrel_http_reply:doc(Metrics, Req2, State)

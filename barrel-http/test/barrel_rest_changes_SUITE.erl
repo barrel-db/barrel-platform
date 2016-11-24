@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_SUITE).
+-module(barrel_rest_changes_SUITE).
 
 -export([all/0,
          end_per_suite/1,
@@ -20,23 +20,20 @@
          init_per_suite/1,
          init_per_testcase/2]).
 
--export([info_database/1,
-         all_docs/1,
-         changes_normal/1,
-         changes_longpoll/1,
-         changes_longpoll_heartbeat/1,
-         changes_eventsource/1,
-         create_database/1,
-         system_doc/1]).
+-export([ accept_get_normal/1
+        , accept_get_longpoll/1
+        , accept_get_longpoll_heartbeat/1
+        , accept_get_eventsource/1
+        , reject_store_or_db_unknown/1
+        , reject_bad_params/1
+        ]).
 
-all() -> [ info_database
-         , all_docs
-         , changes_normal
-         , changes_longpoll
-         , changes_longpoll_heartbeat
-         , changes_eventsource
-         , create_database
-         , system_doc
+all() -> [ accept_get_normal
+         , accept_get_longpoll
+         , accept_get_longpoll_heartbeat
+         , accept_get_eventsource
+         , reject_store_or_db_unknown
+         , reject_bad_params
          ].
 
 init_per_suite(Config) ->
@@ -55,83 +52,40 @@ end_per_testcase(_, Config) ->
 end_per_suite(Config) ->
   catch erocksdb:destroy(<<"testdb">>), Config.
 
-%% ----------
-
-info_database(_Config) ->
-  {200, R1} = req(get, "/testdb/testdb"),
-  A1 = jsx:decode(R1, [return_maps]),
-  <<"testdb">> = maps:get(<<"name">>, A1),
-  %% TODO refactor
-  %% {404, _} = req(get, "/unknwondb"),
-  ok.
-
-create_database(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {400, _} = req(put, "/testdb/newdb/cat", Cat),
-  {201, _} = req(put, "/testdb/newdb", []),
-  {201, _} = req(put, "/testdb/newdb/cat", Cat),
-  ok.
 
 put_cat() ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = req(put, "/testdb/testdb/cat", Doc),
+  {201, R} = test_lib:req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 
 delete_cat(CatRevId) ->
-  {200, R3} = req(delete, "/testdb/testdb/cat?rev=" ++ CatRevId),
+  {200, R3} = test_lib:req(delete, "/testdb/testdb/cat?rev=" ++ CatRevId),
   A3 = jsx:decode(R3, [return_maps]),
   true = maps:get(<<"ok">>, A3),
   A3.
 
 put_dog() ->
   Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
-  {201, R} = req(put, "/testdb/testdb/dog", Doc),
+  {201, R} = test_lib:req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
-
-all_docs(_Config) ->
-  {200, R1} = req(get, "/testdb/testdb/_all_docs"),
-  A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
-  Rows1 = maps:get(rows, A1),
-  0 = length(Rows1),
-
-  put_cat(),
-  DogRevId = put_dog(),
-
-  {200, R2} = req(get, "/testdb/testdb/_all_docs"),
-  A2 = jsx:decode(R2, [return_maps, {labels, attempt_atom}]),
-  Rows2 = maps:get(rows, A2),
-  2 = length(Rows2),
-  Row = hd(Rows2),
-  <<"dog">> = maps:get(id, Row),
-  DogRevId = binary_to_list(maps:get(rev, Row)),
-  ok.
-
-system_doc(_Config) ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = req(put, "/testdb/testdb/_system/cat", Doc),
-  {200, R} = req(get, <<"/testdb/testdb/_system/cat">>),
-  J = jsx:decode(R, [return_maps]),
-  #{<<"name">> := <<"tom">>} = J,
-  {200, _} = req(put, "/testdb/testdb/_system/cat", "{}"),
-  ok.
 
 
 %%=======================================================================
 
-changes_normal(_Config) ->
+accept_get_normal(_Config) ->
   put_cat(),
   put_dog(),
 
-  {200, R1} = req(get, "/testdb/testdb/_changes"),
+  {200, R1} = test_lib:req(get, "/testdb/testdb/_changes"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
   2 = length(Results1),
 
-  {200, R2} = req(get, "/testdb/testdb/_changes?since=1"),
+  {200, R2} = test_lib:req(get, "/testdb/testdb/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   2 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -140,7 +94,7 @@ changes_normal(_Config) ->
 
 %%=======================================================================
 
-changes_longpoll(_Config) ->
+accept_get_longpoll(_Config) ->
   Url = <<"http://localhost:8080/testdb/testdb/_changes?feed=longpoll">>,
   Opts = [async, {recv_timeout, infinity}],
   LoopFun = fun(Loop, Ref) ->
@@ -174,7 +128,7 @@ changes_longpoll(_Config) ->
   {ok, ClientRef2} = hackney:get(Url, [], <<>>, Opts),
   ok=  LoopFun(LoopFun, ClientRef2).
 
-changes_longpoll_heartbeat(_Config) ->
+accept_get_longpoll_heartbeat(_Config) ->
   {ok, Socket} = gen_tcp:connect({127,0,0,1}, 8080, [binary, {active,true}]),
   Request = ["GET /testdb/testdb/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
              "Host:localhost:8080\r\n",
@@ -213,7 +167,7 @@ changes_longpoll_heartbeat(_Config) ->
 
 %%=======================================================================
 
-changes_eventsource(_Config) ->
+accept_get_eventsource(_Config) ->
   Self = self(),
   Pid = spawn(fun () -> wait_response([], 4, Self) end),
   Url = <<"http://localhost:8080/testdb/testdb/_changes?feed=eventsource">>,
@@ -250,21 +204,11 @@ wait_response(Msgs, Expected, Parent) ->
 
 %%=======================================================================
 
-req(Method, Route) ->
-  req(Method,Route,[]).
+reject_store_or_db_unknown(_Config) ->
+  {400, _} = test_lib:req(get, "/badstore/testdb/_changes"),
+  {400, _} = test_lib:req(get, "/testdb/baddb/_changes"),
+  ok.
 
-req(Method, Route, Map) when is_map(Map) ->
-  Body = jsx:encode(Map),
-  req(Method, Route, Body);
-
-req(Method, Route, String) when is_list(String) ->
-  Body = list_to_binary(String),
-  req(Method, Route, Body);
-
-req(Method, Route, Body) when is_binary(Body) ->
-  Server = "http://localhost:8080",
-  Path = list_to_binary(Server ++ Route),
-  Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  {ok, Code, _Headers, Ref} = hackney:request(Method, Path, Headers, Body, []),
-  {ok, Answer} = hackney:body(Ref),
-  {Code, Answer}.
+reject_bad_params(_Config) ->
+  {400, _} = test_lib:req(get, "/testdb/testdb/_changes?badparam=whatever"),
+  ok.

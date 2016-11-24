@@ -295,7 +295,7 @@ post_put(Method, Store, DbId, DocIdAsBin, Req, State) ->
     {ok, Conn} ->
       post_put(Method, Conn, DocIdAsBin, Req, State);
     {error, not_found} ->
-      barrel_http_reply:code(404, Req, State)
+      barrel_http_reply:error(404, Req, State)
   end.
 post_put(Method, Conn, DocIdAsBin, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
