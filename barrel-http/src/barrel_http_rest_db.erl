@@ -75,7 +75,7 @@ check_store(Req, State) ->
   Store = barrel_lib:to_atom(StoreBin),
   case barrel:database_names(Store) of
     {error, _} ->
-      barrel_http_reply:code(400, Req, State);
+      barrel_http_reply:error(400, "store not found", Req, State);
     List ->
       route(Req4, State#state{method=Method, store=Store, databases=List, dbid=DbId})
   end.
@@ -105,7 +105,7 @@ check_db_exists(Fun, Req, #state{databases=List, dbid=Db}=State) ->
     true ->
       Fun(Req, State);
     false ->
-      barrel_http_reply:code(404, Req, State)
+      barrel_http_reply:error(404, "database not found", Req, State)
   end.
 
 get_resource(Req, #state{store=Store, dbid=Db}=State) ->

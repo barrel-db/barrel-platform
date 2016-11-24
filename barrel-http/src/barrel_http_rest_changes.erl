@@ -71,7 +71,7 @@ init(_Type, Req, []) ->
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_db(Req, State);
 route(Req, State) ->
-  {ok, Req2, State} = barrel_http_reply:code(405, Req, []),
+  {ok, Req2, State} = barrel_http_reply:error(405, Req, []),
   {shutdown, Req2, State}.
 
 check_store_db(Req, State) ->
@@ -82,8 +82,8 @@ check_store_db(Req, State) ->
       State2 = State#state{store=Store, dbid=DbId, conn=Conn},
       check_params(Req3, State2);
     _Error ->
-      {ok, Req2, State} = barrel_http_reply:code(400, Req, []),
-      {shutdown, Req2, State}
+      {ok, Req4, S} = barrel_http_reply:error(400, "db or database not found", Req, State),
+      {shutdown, Req4, S}
   end.
 
 check_params(Req, State) ->
@@ -91,8 +91,8 @@ check_params(Req, State) ->
   {Params, Req2} = cowboy_req:qs_vals(Req),
   case parse_params(Params, StateDefault) of
     {error, {unknown_param, _}} ->
-      {ok, Req3, State} = barrel_http_reply:code(400, Req2, []),
-      {shutdown, Req3, State};
+      {ok, Req3, S} = barrel_http_reply:error(400, "unknown parameter", Req2, State),
+      {shutdown, Req3, S};
     {ok, State2} ->
       init_feed(Req2, State2)
   end.

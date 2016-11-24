@@ -59,7 +59,7 @@ terminate(_Reason, _Req, _State) ->
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_db(Req, State);
 route(Req, State) ->
-  barrel_http_reply:code(405, Req, State).
+  barrel_http_reply:error(405, "method not allowed", Req, State).
 
 
 check_store_db(Req, State) ->
@@ -67,9 +67,9 @@ check_store_db(Req, State) ->
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
   case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
     {error, {unknown_store, _}} ->
-      barrel_http_reply:code(400, Req, State);
+      barrel_http_reply:error(400, "store not found", Req, State);
     {error, not_found} ->
-      barrel_http_reply:code(400, Req, State);
+      barrel_http_reply:error(400, "database not found", Req, State);
     {ok, Conn} ->
       State2 = State#state{store=Store, dbid=DbId, conn=Conn},
       get_resource(Req3, State2)
