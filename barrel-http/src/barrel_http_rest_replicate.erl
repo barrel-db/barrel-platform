@@ -18,12 +18,8 @@
 
 %% API
 -export([init/3]).
--export([rest_init/2]).
-
--export([allowed_methods/2,
-         content_types_accepted/2, content_types_provided/2,
-         resource_exists/2,
-         from_json/2, to_json/2]).
+-export([handle/2]).
+-export([terminate/3]).
 
 -export([trails/0]).
 
@@ -55,45 +51,93 @@ trails() ->
   [trails:trail("/_replicate", ?MODULE, [], Post),
    trails:trail("/_replicate/:repid", ?MODULE, [], Get)].
 
--record(state, {infos}).
+-record(state, {method, body, source, target}).
 
-init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
+init(_Type, Req, []) ->
+  {ok, Req, #state{}}.
 
-rest_init(Req, _) -> {ok, Req, #state{}}.
+handle(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  route(Req2, State#state{method=Method}).
 
-allowed_methods(Req, State) ->
-  Methods = [<<"HEAD">>, <<"OPTIONS">>, <<"POST">>, <<"GET">>],
-  {Methods, Req, State}.
+terminate(_Reason, _Req, _State) ->
+  ok.
 
-content_types_accepted(Req, State) ->
-	{[{{<<"application">>, <<"json">>, []}, from_json}],
-   Req, State}.
 
-content_types_provided(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, []}, to_json}],
-  {CTypes, Req, State}.
 
-resource_exists(Req, State) ->
+route(Req, #state{method= <<"GET">>}=State) ->
+  get_resource(Req, State);
+route(Req, #state{method= <<"POST">>}=State) ->
+  check_body(Req, State).
+
+check_body(Req, State) ->
+  check_json(Req, State).
+
+
+check_json(Req, State) ->
+  {ok, Body, Req2} = cowboy_req:body(Req),
+  try jsx:decode(Body, [return_maps]) of
+      Json ->
+      check_source(Req, State#state{body=Json})
+  catch
+    _:_ ->
+      barrel_http_reply:code(400, Req2, State)
+  end.
+
+
+check_source(Req, State) ->
+  Body = State#state.body,
+  case maps:get(<<"source">>, Body, undefined) of
+    undefined ->
+      barrel_http_reply:code(400, Req, State);
+    Source ->
+      check_target(Req, State#state{source=Source})
+  end.
+
+check_target(Req, State) ->
+  Body = State#state.body,
+  case maps:get(<<"target">>, Body, undefined) of
+    undefined ->
+      barrel_http_reply:code(400, Req, State);
+    Source ->
+      check_db_exists(Req, State#state{target=Source})
+  end.
+
+
+check_db_exists(Req, State) ->
+  check_source_db_exist(Req, State).
+
+check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
+  case barrel_http_lib:req(get, SourceUrl) of
+    {200, _} ->
+      check_target_db_exist(Req, State);
+    _ ->
+      barrel_http_reply:code(400, Req, State)
+  end.
+
+check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
+  case barrel_http_lib:req(get, TargetUrl) of
+    {200, _} ->
+      create_resource(Req, State);
+    _ ->
+      barrel_http_reply:code(400, Req, State)
+  end.
+
+
+
+get_resource(Req, State) ->
   {RepId, Req2} = cowboy_req:binding(repid, Req),
   case barrel:replication_info(RepId) of
     {error, not_found} ->
-      {false, Req2, State};
+      barrel_http_reply:code(404, Req2, State);
     Infos ->
-      {true, Req2, State#state{infos=Infos}}
+      #{metrics := Metrics} = Infos,
+      barrel_http_reply:doc(Metrics, Req2, State)
   end.
 
-from_json(Req, State) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
-  #{<<"source">> := SourceUrl,
-    <<"target">> := TargetUrl} = jsx:decode(Body, [return_maps]),
+create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
   SourceConn = {barrel_httpc, SourceUrl},
   TargetConn = {barrel_httpc, TargetUrl},
   {ok, RepId} = barrel:start_replication(SourceConn, TargetConn, []),
-  RespBody = jsx:encode(#{repid => RepId}),
-  Req3 = cowboy_req:set_resp_body(RespBody, Req2),
-  {true, Req3, State}.
-
-to_json(Req, #state{infos=Infos}=State) ->
-  #{metrics := Metrics} = Infos,
-  Json = jsx:encode(Metrics),
-  {Json, Req, State}.
+  Doc = #{repid => RepId},
+  barrel_http_reply:doc(Doc, Req, State).
