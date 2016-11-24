@@ -88,10 +88,8 @@ init_feed(Req, #state{feed=normal}=S) ->
 init_feed(Req, #state{feed=longpoll, changes=[]}=S) ->
   %% No changes available for reply. We register for db_updated events.
   ok = barrel_event:reg(S#state.conn),
-  #{ store := Store, name := Name} = S#state.conn,
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
   {loop, Req2, S2#state{subscribed=true}};
-  %%info({'$barrel_event', {Store, Name}, db_updated}, Req2, S2#state{subscribed=true});
 
 init_feed(Req, #state{feed=longpoll}=S) ->
   %% Changes available. We return them immediatly.

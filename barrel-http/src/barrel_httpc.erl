@@ -253,6 +253,8 @@ post_put_resp(404, _, State) ->
   {reply, {error, not_found}, State};
 
 post_put_resp(200, R, State) ->
+  post_put_resp(201, R, State);
+post_put_resp(201, R, State) ->
   Answer = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
   DocId = maps:get(id, Answer),
   RevId = maps:get(rev, Answer),
@@ -271,7 +273,7 @@ put_rev(Url, Doc, History, State) ->
 put_rev_resp(404, _, State) ->
   {reply, {error, not_found}, State};
 
-put_rev_resp(200, R, State) ->
+put_rev_resp(201, R, State) ->
   Answer = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, Answer),
   RevId = maps:get(<<"rev">>, Answer),
