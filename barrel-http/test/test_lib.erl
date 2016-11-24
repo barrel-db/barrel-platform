@@ -30,7 +30,4 @@ req(Method, Route, String) when is_list(String) ->
 req(Method, Route, Body) when is_binary(Body) ->
   Server = "http://localhost:8080",
   Path = list_to_binary(Server ++ Route),
-  Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  {ok, Code, _Headers, Ref} = hackney:request(Method, Path, Headers, Body, []),
-  {ok, Answer} = hackney:body(Ref),
-  {Code, Answer}.
+  barrel_http_lib:req(Method, Path, Body).

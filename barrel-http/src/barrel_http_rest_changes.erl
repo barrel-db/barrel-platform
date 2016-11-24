@@ -62,40 +62,75 @@ trails() ->
 
 
 
--record(state, {conn, changes, last_seq, feed, subscribed, heartbeat}).
+-record(state, {method, conn, store, dbid, feed, since, changes, last_seq, subscribed, heartbeat}).
 
 init(_Type, Req, []) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  route(Req2, #state{method=Method}).
+
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_store_db(Req, State);
+route(Req, State) ->
+  {ok, Req2, State} = barrel_http_reply:code(405, Req, []),
+  {shutdown, Req2, State}.
+
+check_store_db(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  {FeedBin, Req4} = cowboy_req:qs_val(<<"feed">>, Req3, <<"normal">>),
-  Feed = binary_to_atom(FeedBin, utf8),
-  {SinceBin, Req5} = cowboy_req:qs_val(<<"since">>, Req4, <<"0">>),
-  Since = binary_to_integer(SinceBin),
-
   case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
     {ok, Conn} ->
-      {LastSeq, Changes} = changes(Conn, Since),
-      S = #state{conn=Conn, changes=Changes, last_seq=LastSeq, feed=Feed},
-      init_feed(Req5, S);
+      State2 = State#state{store=Store, dbid=DbId, conn=Conn},
+      check_params(Req3, State2);
     _Error ->
-      {ok, Req2, State} = barrel_http_reply:code(404, Req, []),
+      {ok, Req2, State} = barrel_http_reply:code(400, Req, []),
       {shutdown, Req2, State}
   end.
 
-init_feed(Req, #state{feed=normal}=S) ->
+check_params(Req, State) ->
+  StateDefault = State#state{feed=normal, since=0},
+  {Params, Req2} = cowboy_req:qs_vals(Req),
+  case parse_params(Params, StateDefault) of
+    {error, {unknown_param, _}} ->
+      {ok, Req3, State} = barrel_http_reply:code(400, Req2, []),
+      {shutdown, Req3, State};
+    {ok, State2} ->
+      init_feed(Req2, State2)
+  end.
+
+parse_params([], State) ->
+  {ok, State};
+parse_params([{<<"feed">>, FeedBin}|Tail], State) ->
+  Feed = binary_to_atom(FeedBin, utf8),
+  parse_params(Tail, State#state{feed=Feed});
+parse_params([{<<"since">>, SinceBin}|Tail], State) ->
+  Since = binary_to_integer(SinceBin),
+  parse_params(Tail, State#state{since=Since});
+parse_params([{<<"heartbeat">>, HeartBeatBin}|Tail], State) ->
+  HeartBeat = binary_to_integer(HeartBeatBin),
+  parse_params(Tail, State#state{heartbeat=HeartBeat});
+parse_params([{Param, _Value}|_], _State) ->
+  {error, {unknown_param, Param}}.
+
+
+
+init_feed(Req, #state{conn=Conn, since=Since}=State) ->
+  {LastSeq, Changes} = changes(Conn, Since),
+  init_feed_changes(Req, State#state{changes=Changes, last_seq=LastSeq}).
+
+init_feed_changes(Req, #state{feed=normal}=S) ->
   {ok, Req, S};
 
-init_feed(Req, #state{feed=longpoll, changes=[]}=S) ->
+init_feed_changes(Req, #state{feed=longpoll, changes=[]}=S) ->
   %% No changes available for reply. We register for db_updated events.
   ok = barrel_event:reg(S#state.conn),
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
   {loop, Req2, S2#state{subscribed=true}};
 
-init_feed(Req, #state{feed=longpoll}=S) ->
+init_feed_changes(Req, #state{feed=longpoll}=S) ->
   %% Changes available. We return them immediatly.
   {ok, Req, S};
 
-init_feed(Req, #state{feed=eventsource}=S) ->
+init_feed_changes(Req, #state{feed=eventsource}=S) ->
   ok = barrel_event:reg(S#state.conn),
   #{ store := Store, name := Name} = S#state.conn,
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
@@ -111,20 +146,13 @@ init_chunked_reply_with_hearbeat(Headers, Req, State) ->
 
 
 handle(Req, S) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  handle(Method, Req2, S).
-
-handle(<<"GET">>, Req, S) ->
   LastSeq = S#state.last_seq,
   Changes = S#state.changes,
   Json = to_json(LastSeq, Changes),
-  barrel_http_reply:json(Json, Req, S);
-
-handle(_, Req, S) ->
-  barrel_http_reply:code(405, Req, S).
+  barrel_http_reply:json(Json, Req, S).
 
 info(heartbeat, Req, S) ->
-  Res = (catch cowboy_req:chunk(<<"\n">>, Req)),
+  ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->

@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_SUITE).
+-module(barrel_rest_all_docs_SUITE).
 
 -export([all/0,
          end_per_suite/1,
@@ -20,13 +20,12 @@
          init_per_suite/1,
          init_per_testcase/2]).
 
--export([info_database/1,
-         create_database/1,
-         system_doc/1]).
+-export([ accept_get/1
+        , reject_store_or_db_unknown/1
+        ]).
 
-all() -> [ info_database
-         , create_database
-         , system_doc
+all() -> [ accept_get
+         , reject_store_or_db_unknown
          ].
 
 init_per_suite(Config) ->
@@ -45,31 +44,29 @@ end_per_testcase(_, Config) ->
 end_per_suite(Config) ->
   catch erocksdb:destroy(<<"testdb">>), Config.
 
-%% ----------
 
-info_database(_Config) ->
-  {200, R1} = test_lib:req(get, "/testdb/testdb"),
-  A1 = jsx:decode(R1, [return_maps]),
-  <<"testdb">> = maps:get(<<"name">>, A1),
-  %% TODO refactor
-  %% {404, _} = test_lib:req(get, "/unknwondb"),
+accept_get(Config) ->
+  Conn = proplists:get_value(conn, Config),
+
+  {200, R1} = test_lib:req(get, "/testdb/testdb/_all_docs"),
+  A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
+  Rows1 = maps:get(rows, A1),
+  0 = length(Rows1),
+
+  D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
+  {ok, _, _} = barrel:put(Conn, <<"cat">>, D1, []),
+  D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
+  {ok, _, DogRevId} = barrel:put(Conn, <<"dog">>, D2, []),
+
+  {200, R2} = test_lib:req(get, "/testdb/testdb/_all_docs"),
+  A2 = jsx:decode(R2, [return_maps]),
+  Rows2 = maps:get(<<"rows">>, A2),
+  2 = length(Rows2),
+  Row = hd(Rows2),
+  #{<<"id">> := <<"dog">>, <<"rev">> := DogRevId} = Row,
   ok.
 
-create_database(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {400, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
-  {201, _} = test_lib:req(put, "/testdb/newdb", []),
-  {201, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
+reject_store_or_db_unknown(_Config) ->
+  {400, _} = test_lib:req(get, "/badstore/testdb/_all_docs"),
+  {400, _} = test_lib:req(get, "/testdb/baddb/_all_docs"),
   ok.
-
-system_doc(_Config) ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/testdb/testdb/_system/cat", Doc),
-  {200, R} = test_lib:req(get, <<"/testdb/testdb/_system/cat">>),
-  J = jsx:decode(R, [return_maps]),
-  #{<<"name">> := <<"tom">>} = J,
-  {200, _} = test_lib:req(put, "/testdb/testdb/_system/cat", "{}"),
-  {204, _} = test_lib:req(delete, "/testdb/testdb/_system/cat"),
-  {404, _} = test_lib:req(get, <<"/testdb/testdb/_system/cat">>),
-  ok.
-
