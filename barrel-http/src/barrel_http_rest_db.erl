@@ -80,12 +80,14 @@ check_store(Req, State) ->
       route(Req4, State#state{method=Method, store=Store, databases=List, dbid=DbId})
   end.
 
-route(Req, #state{method= <<"GET">>}=State) ->
-  check_db_exists(Req, State);
-route(Req, #state{method= <<"PUT">>}=State) ->
-  create_resource(Req, State);
 route(Req, #state{method= <<"POST">>, store=Store, dbid=Db}=State) ->
   barrel_http_rest_doc:post_put(post, Store, Db, undefined, Req, State);
+route(Req, #state{method= <<"PUT">>}=State) ->
+  create_resource(Req, State);
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_db_exists(fun get_resource/2, Req, State);
+route(Req, #state{method= <<"DELETE">>}=State) ->
+  check_db_exists(fun delete_resource/2, Req, State);
 route(Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
@@ -98,10 +100,10 @@ create_resource(Req, #state{store=Store, dbid=Db}=State) ->
   end.
 
 
-check_db_exists(Req, #state{databases=List, dbid=Db}=State) ->
+check_db_exists(Fun, Req, #state{databases=List, dbid=Db}=State) ->
   case lists:member(Db, List) of
     true ->
-      get_resource(Req, State);
+      Fun(Req, State);
     false ->
       barrel_http_reply:code(404, Req, State)
   end.
@@ -114,3 +116,8 @@ get_resource(Req, #state{store=Store, dbid=Db}=State) ->
             {<<"name">>, Name},
             {<<"store">>, Store}],
   barrel_http_reply:doc(DbInfo, Req, State).
+
+delete_resource(Req, #state{store=Store, dbid=Db}=State) ->
+  {ok, Conn} = barrel:connect_database(Store, Db),
+  ok = barrel:delete_database(Conn),
+  barrel_http_reply:code(200, Req, State).

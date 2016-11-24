@@ -22,12 +22,14 @@
 
 -export([ accept_get/1
         , accept_put/1
+        , accept_delete/1
         , reject_store_unknown/1
         , reject_db_unknown/1
         ]).
 
 all() -> [ accept_get
          , accept_put
+         , accept_delete
          , reject_store_unknown
          , reject_db_unknown
          ].
@@ -62,6 +64,14 @@ accept_put(_Config) ->
   {400, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
   {201, _} = test_lib:req(put, "/testdb/newdb", []),
   {201, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
+  ok.
+
+accept_delete(_Config) ->
+  false = lists:member(<<"tobedeleted">>, barrel:database_names(testdb)),
+  {true, _} = barrel:create_database(testdb, <<"tobedeleted">>),
+  true = lists:member(<<"tobedeleted">>, barrel:database_names(testdb)),
+  {200, _} = test_lib:req(delete, "/testdb/tobedeleted"),
+  false = lists:member(<<"tobedeleted">>, barrel:database_names(testdb)),
   ok.
 
 reject_store_unknown(_Config) ->
