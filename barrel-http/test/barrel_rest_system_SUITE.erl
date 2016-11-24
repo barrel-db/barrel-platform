@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_SUITE).
+-module(barrel_rest_system_SUITE).
 
 -export([all/0,
          end_per_suite/1,
@@ -20,14 +20,9 @@
          init_per_suite/1,
          init_per_testcase/2]).
 
--export([info_database/1,
-         create_database/1,
-         system_doc/1]).
+-export([system_doc/1]).
 
-all() -> [ info_database
-         , create_database
-         , system_doc
-         ].
+all() -> [system_doc].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
@@ -47,20 +42,6 @@ end_per_suite(Config) ->
 
 %% ----------
 
-info_database(_Config) ->
-  {200, R1} = test_lib:req(get, "/testdb/testdb"),
-  A1 = jsx:decode(R1, [return_maps]),
-  <<"testdb">> = maps:get(<<"name">>, A1),
-  %% TODO refactor
-  %% {404, _} = test_lib:req(get, "/unknwondb"),
-  ok.
-
-create_database(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {400, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
-  {201, _} = test_lib:req(put, "/testdb/newdb", []),
-  {201, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
-  ok.
 
 system_doc(_Config) ->
   Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",

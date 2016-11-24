@@ -56,45 +56,58 @@ trails() ->
      },
   [trails:trail("/:store/:dbid", ?MODULE, [], Metadata)].
 
+-record(state, {method, store, databases, dbid}).
 
 init(_Type, Req, []) ->
-  {ok, Req, undefined}.
+  {ok, Req, #state{}}.
 
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  {Store, Req3} = cowboy_req:binding(store, Req2),
-  {Db, Req4} = cowboy_req:binding(dbid, Req3),
-  handle(Method, Store, Db, Req4, State).
-
-handle(<<"PUT">>, Store, Db, Req, State) ->
-  case barrel:create_database(barrel_lib:to_atom(Store), Db) of
-    {true, _} -> barrel_http_reply:json(201, #{ ok => true}, Req, State);
-    {false, _} -> barrel_http_reply:json(412, #{ error => <<"db_exists">> }, Req, State);
-    {error, Reason} -> barrel_http_reply:json(400, #{ error => Reason}, Req, State)
-  end;
-handle(<<"GET">>, StoreBin, Db, Req, State) ->
-  Store = barrel_lib:to_atom(StoreBin),
-  {ok, Conn} = barrel:connect_database(Store, Db),
-  All = barrel:database_names(Store),
-  case lists:member(Db, All) of
-    false ->
-      barrel_http_reply:code(404, Req, State);
-    true ->
-      db_info(Conn, Req, State)
-  end;
-
-handle(<<"POST">>, Store, Db, Req, State) ->
-  barrel_http_rest_doc:post_put(post, Store, Db, undefined, Req, State);
-
-handle(_, _, _, Req, State) ->
-  barrel_http_reply:code(405, Req, State).
+  check_store(Req2, State#state{method=Method}).
 
 terminate(_Reason, _Req, _State) ->
   ok.
 
-%% ----------
+check_store(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  {StoreBin, Req3} = cowboy_req:binding(store, Req2),
+  {DbId, Req4} = cowboy_req:binding(dbid, Req3),
+  Store = barrel_lib:to_atom(StoreBin),
+  case barrel:database_names(Store) of
+    {error, _} ->
+      barrel_http_reply:code(400, Req, State);
+    List ->
+      route(Req4, State#state{method=Method, store=Store, databases=List, dbid=DbId})
+  end.
 
-db_info(Conn, Req, State) ->
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_db_exists(Req, State);
+route(Req, #state{method= <<"PUT">>}=State) ->
+  create_resource(Req, State);
+route(Req, #state{method= <<"POST">>, store=Store, dbid=Db}=State) ->
+  barrel_http_rest_doc:post_put(post, Store, Db, undefined, Req, State);
+route(Req, State) ->
+  barrel_http_reply:code(405, Req, State).
+
+
+create_resource(Req, #state{store=Store, dbid=Db}=State) ->
+  case barrel:create_database(Store, Db) of
+    {true, _} -> barrel_http_reply:json(201, #{ ok => true}, Req, State);
+    {false, _} -> barrel_http_reply:json(412, #{ error => <<"db_exists">> }, Req, State);
+    {error, Reason} -> barrel_http_reply:json(400, #{ error => Reason}, Req, State)
+  end.
+
+
+check_db_exists(Req, #state{databases=List, dbid=Db}=State) ->
+  case lists:member(Db, List) of
+    true ->
+      get_resource(Req, State);
+    false ->
+      barrel_http_reply:code(404, Req, State)
+  end.
+
+get_resource(Req, #state{store=Store, dbid=Db}=State) ->
+  {ok, Conn} = barrel:connect_database(Store, Db),
   {ok, Infos} = barrel:database_infos(Conn),
   [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
   DbInfo = [{<<"id">>, Id},
