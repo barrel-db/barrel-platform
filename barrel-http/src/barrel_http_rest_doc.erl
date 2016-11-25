@@ -32,7 +32,7 @@
 -export([trails/0]).
 
 trails() ->
-  GetPut =
+  GetPutDel =
     #{ get => #{ summary => "Get a document"
                , description => "Get a document."
                , produces => ["application/json"]
@@ -86,6 +86,34 @@ trails() ->
                      , type => <<"string">>}
                    ]
                }
+     , delete => #{ summary => "Delete a document."
+                  , produces => ["application/json"]
+                  , responses =>
+                      #{ <<"200">> => #{ description => "Document deleted." }
+                       }
+                  , parameters =>
+                      [#{ name => <<"rev">>
+                         , description => <<"Last document revision">>
+                         , in => <<"query">>
+                         , required => true
+                         , type => <<"string">>}
+                      , #{ name => <<"docid">>
+                        , description => <<"Document ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      ,#{ name => <<"dbid">>
+                        , description => <<"Database ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      ,#{ name => <<"store">>
+                        , description => <<"Store ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      ]
+                  }
      },
   Post =
     #{post => #{ summary => "Add a new document."
@@ -113,7 +141,7 @@ trails() ->
                }
      },
   [trails:trail("/:store/:dbid/", ?MODULE, [], Post),
-   trails:trail("/:store/:dbid/:docid", ?MODULE, [], GetPut)].
+   trails:trail("/:store/:dbid/:docid", ?MODULE, [], GetPutDel)].
 
 -record(state, {method, store, dbid, docid, revid, edit, body, doc, conn, options}).
 
