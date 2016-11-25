@@ -36,12 +36,12 @@ end_per_suite(Config) ->
 
 
 accept_get(_Config) ->
-  {201, _} = test_lib:req(put, "/testdb/db1"),
+  {201, _} = test_lib:req(put, "/testdb/newdb1"),
   {200, R1} = test_lib:req(get, "/_store/testdb"),
-  A1 = jsx:decode(R1, [return_maps]),
-  [Db1] = A1,
-  #{<<"name">> := <<"db1">>,
-   <<"store">> := <<"testdb">>} = Db1,
+  Databases = jsx:decode(R1, [return_maps]),
+  true = (length(Databases) >= 1),
+  #{<<"name">> := _,
+    <<"store">> := _} = hd(Databases),
   ok.
 
 reject_unknown_store(_Config) ->
