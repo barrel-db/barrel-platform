@@ -177,10 +177,7 @@ replicate_change(Source, Target, StartSeq, Metrics) ->
 
 sync_change(Source, Target, Change, Metrics) ->
   Id = maps:get(id, Change),
-  RevTree = maps:get(revtree, Change),
-  CurrentRev = maps:get(current_rev, Change),
-  History = history(CurrentRev, RevTree),
-
+  History =  maps:get(changes, Change),
   {Doc, Metrics2} = read_doc(Source, Id, Metrics),
   Metrics3 = write_doc(Target, Id, Doc, History, Metrics2),
 
@@ -215,9 +212,9 @@ write_doc(Target, Id, Doc, History, Metrics) ->
   end.
 
 changes(Source, Since) ->
-  Fun = fun(Seq, DocInfo, _Doc, {PreviousLastSeq, DocInfos}) ->
+  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
             LastSeq = max(Seq, PreviousLastSeq),
-            {ok, {LastSeq, [DocInfo|DocInfos]}}
+            {ok, {LastSeq, [Change|Changes1]}}
         end,
   {LastSeq, Changes} = changes_since(Source, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
@@ -241,7 +238,7 @@ put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc);
 changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc, []).
+  barrel_db:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
 
 %% =============================================================================
 %% Checkpoints management: when, where and what
@@ -343,16 +340,6 @@ checkpoint_docid(RepId) ->
 %% =============================================================================
 %% Helpers
 %% =============================================================================
-
-history(Id, RevTree) ->
-  history(Id, RevTree, []).
-history(<<>>, _RevTree, History) ->
-  lists:reverse(History);
-history(Rev, RevTree, History) ->
-  DocInfo = maps:get(Rev, RevTree),
-  Parent = maps:get(parent, DocInfo),
-  history(Parent, RevTree, [Rev|History]).
-
 
 %% RFC3339 timestamps.
 %% Note: doesn't include the time seconds fraction (RFC3339 says it's optional).

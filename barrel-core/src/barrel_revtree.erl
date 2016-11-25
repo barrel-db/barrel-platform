@@ -76,7 +76,9 @@ history(RevId, Tree) ->
 history1(nil, _Tree, History) ->
   lists:reverse(History);
 history1(#{id := Id, parent := Parent}, Tree, History) ->
-  history1(maps:get(Parent, Tree, nil), Tree, [Id | History]).
+  history1(maps:get(Parent, Tree, nil), Tree, [Id | History]);
+history1(#{id := Id}, _Tree, History) ->
+  lists:reverse([Id | History]).
 
 fold_leafs(Fun, AccIn, Tree) ->
   Parents = maps:fold(fun
@@ -258,6 +260,9 @@ leafs_test() ->
     ?assertEqual([<<"3-three-2">>, <<"4-four">>], lists:sort(barrel_revtree:leaves(NewTree))),
     NewTree2 = barrel_revtree:add(#{ id => <<"5-five">>, parent => <<"4-four">>, deleted => true }, NewTree),
     ?assertEqual([<<"3-three-2">>, <<"5-five">>],  lists:sort(barrel_revtree:leaves(NewTree2))).
+
+history_test() ->
+  ?assertEqual([<<"3-three">>, <<"2-two">>, <<"1-one">>],  barrel_revtree:history(<<"3-three">>, ?FLAT_TREE)).
 
 winning_revision_test() ->
     ?assertEqual({<<"3-three-2">>, true, true}, barrel_revtree:winning_revision(?BRANCHED_TREE)),

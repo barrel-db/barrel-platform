@@ -108,6 +108,14 @@
 %% TODO: to define
 -type fold_options() :: list().
 
+-type change() :: #{
+  id := docid(),
+  seq := non_neg_integer(),
+  changes := [revid()],
+  revtree => revtree(),
+  doc => doc()
+}.
+
 
 -export_type([
   dbname/0,
@@ -238,7 +246,7 @@ fold_by_id(Conn, Fun, Acc, Options) ->
   Conn::conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), DocInfo :: docinfo(), Doc :: doc, Acc :: any()) -> FunRes),
+  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
 changes_since(Conn, Since, Fun, Acc) ->
@@ -249,7 +257,7 @@ changes_since(Conn, Since, Fun, Acc) ->
   Conn::conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), DocInfo :: docinfo(), Doc :: doc, Acc :: any()) -> FunRes),
+  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any(),
   Opts :: list().

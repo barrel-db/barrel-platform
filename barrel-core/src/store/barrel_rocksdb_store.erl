@@ -280,26 +280,57 @@ changes_since(DbId, Since, Fun, AccIn, Opts, #{ db := Db}) ->
     {read_options, ReadOptions}
   ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
+  WithHistory = proplists:get_value(history, Opts, last) =:= all,
+  WithRevtree =  proplists:get_value(revtree, Opts, false) =:= true,
 
-  WrapperFun = fun(Key, BinDocInfo, Acc) ->
+  WrapperFun =
+    fun(Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
       [_, SeqBin] = binary:split(Key, Prefix),
       <<Seq:32>> = SeqBin,
       RevId = maps:get(current_rev, DocInfo),
       DocId = maps:get(id, DocInfo),
+      RevTree = maps:get(revtree, DocInfo),
 
-      Doc = case IncludeDoc of
-              true ->
-                get_doc_rev(Db, DbId, DocId, RevId, ReadOptions);
-              false -> {ok, nil}
-            end,
+      Changes = case WithHistory of
+                  false -> [RevId];
+                  true ->  barrel_revtree:history(RevId, RevTree)
+                end,
 
-      Fun(Seq, DocInfo, Doc, Acc)
-    end,
+      %% create change
+      Change = change_with_revtree(
+        change_with_doc(
+          changes_with_deleted(
+            #{ id => DocId, seq => Seq, changes => Changes}, RevId, RevTree
+          ),
+          DocId, RevId, DbId, Db, ReadOptions, IncludeDoc
+        ),
+        RevTree,
+        WithRevtree
+      ),
+      Fun(Seq, Change, Acc)
+   end,
 
   try fold_prefix(Db, Prefix, WrapperFun, AccIn, FoldOpts)
   after erocksdb:release_snapshot(Snapshot)
   end.
+
+change_with_revtree(Change, DocInfo, true) -> Change#{revtree => maps:get(revtree, DocInfo)};
+change_with_revtree(Change, _DocInfo, false) -> Change.
+
+change_with_doc(Change, DocId, RevId, DbId, Db, ReadOptions, true) ->
+  Doc = get_doc_rev(Db, DbId, DocId, RevId, ReadOptions),
+  Change#{ doc => Doc };
+change_with_doc(Change, _DocId, _RevId, _DbId, _Db, _ReadOptions, false) ->
+  Change.
+
+changes_with_deleted(Change, RevId, RevTree) ->
+  {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
+  case RevInfo of
+    #{ deleted := true} -> Change#{deleted => true};
+    _ -> Change
+  end.
+
 
 last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 

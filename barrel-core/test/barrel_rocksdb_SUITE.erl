@@ -224,8 +224,8 @@ fold_by_id(Config) ->
 
 change_since(Config) ->
   Conn = proplists:get_value(conn, Config),
-  Fun = fun(_Seq, DocInfo, _Doc, Acc) ->
-                  Id = maps:get(id, DocInfo),
+  Fun = fun(_Seq, Change, Acc) ->
+                  Id = maps:get(id, Change),
                   {ok, [Id|Acc]}
         end,
   [] = barrel:changes_since(Conn, 0, Fun, []),
@@ -243,8 +243,8 @@ change_since(Config) ->
 change_since_include_doc(Config) ->
   Conn = proplists:get_value(conn, Config),
   Fun =
-    fun(Seq, _DocInfo, Doc, Acc) ->
-      {ok, [{Seq, Doc} |Acc]}
+    fun(Seq, Change, Acc) ->
+      {ok, [{Seq, maps:get(doc, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
@@ -255,8 +255,8 @@ change_since_include_doc(Config) ->
 
 change_since_many(Config) ->
   Conn = proplists:get_value(conn, Config),
-  Fun = fun(_Seq, DocInfo, _Doc, Acc) ->
-            Id = maps:get(id, DocInfo),
+  Fun = fun(_Seq, Change, Acc) ->
+            Id = maps:get(id, Change),
             {ok, [Id|Acc]}
         end,
   [] = barrel:changes_since(Conn, 0, Fun, []),
