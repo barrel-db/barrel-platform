@@ -22,7 +22,8 @@
   report_overrun/1,
   uniqid/0, uniqid/1,
   parse_fold_options/1,
-  data_dir/0
+  data_dir/0,
+  ts/0
 ]).
 
 -include("barrel.hrl").
@@ -98,3 +99,8 @@ parse_fold_options([{max, Max} | Rest], Options) ->
   parse_fold_options(Rest, Options#{max => Max});
 parse_fold_options([_ | Rest], Options) ->
   parse_fold_options(Rest, Options).
+
+-spec ts() -> integer().
+ts()->
+  {Mega, Secs, Micro} = erlang:timestamp(),
+  (Mega*1000000 + Secs)*1000000 + Micro.

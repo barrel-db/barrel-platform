@@ -169,7 +169,7 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
           NewRev = barrel_doc:revid(NewGen, Rev, Body),
           RevInfo = #{  id => NewRev,  parent => ParentRev,  deleted => Deleted},
           RevTree2 = barrel_revtree:add(RevInfo, RevTree),
-          Body2 = Body#{<<"_rev">> => NewRev},
+          Body2 = Body#{<<"_rev">> => NewRev, <<"_ts">> => barrel_lib:ts() },
           %% update the doc infos
           {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
           DocInfo2 = DocInfo#{
