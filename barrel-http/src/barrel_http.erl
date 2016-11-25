@@ -52,6 +52,7 @@ init(_) ->
                   , barrel_http_rest_all_docs
                   , barrel_http_rest_db
                   , barrel_http_rest_doc
+                  , barrel_http_rest_root
                   ]),
   trails:store(Trails),
   Dispatch = trails:single_host_compile(Trails),
