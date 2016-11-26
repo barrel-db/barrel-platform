@@ -212,15 +212,27 @@ fold_by_id(Config) ->
   {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} = barrel_db:put(Conn, <<"b">>, Doc2, []),
+  Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
+  {ok, <<"c">>, _RevId3} = barrel_db:put(Conn, <<"c">>, Doc3, []),
   Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
       DocId = barrel_doc:id(FoldDoc),
       {ok, [DocId | Acc1]}
     end,
   Acc = barrel_db:fold_by_id(Conn, Fun, [], [{include_doc, true}]),
-  [<<"b">>, <<"a">>] = Acc,
+  [<<"c">>, <<"b">>, <<"a">>] = Acc,
   Acc2 = barrel_db:fold_by_id(Conn, Fun, [],
-                              [{include_doc, true}, {start_key, <<"b">>}]),
-  [<<"b">>] = Acc2.
+                              [{include_doc, true}, {lt, <<"b">>}]),
+  [<<"a">>] = Acc2,
+  Acc3 = barrel_db:fold_by_id(Conn, Fun, [],
+                              [{include_doc, true}, {lte, <<"b">>}]),
+  [<<"b">>, <<"a">>] = Acc3,
+  Acc4 = barrel_db:fold_by_id(Conn, Fun, [],
+                              [{include_doc, true}, {gte, <<"b">>}]),
+  [<<"c">>, <<"b">>] = Acc4,
+  Acc5 = barrel_db:fold_by_id(Conn, Fun, [],
+                              [{include_doc, true}, {gt, <<"b">>}]),
+  [<<"c">>] = Acc5,
+  ok.
 
 change_since(Config) ->
   Conn = proplists:get_value(conn, Config),

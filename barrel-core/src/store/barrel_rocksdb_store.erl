@@ -121,7 +121,7 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
                        end,
   Opts2 = Opts#{prefix => Prefix},
   case erocksdb:iterator_move(Itr, Start) of
-    {ok, {Start, _V}} when Inclusive /= true ->
+    {ok, Start, _V} when Inclusive /= true ->
       fold_prefix_loop(erocksdb:iterator_move(Itr, next), Itr, Fun, AccIn, 0, Opts2);
     Next ->
       fold_prefix_loop(Next, Itr, Fun, AccIn, 0, Opts2)
@@ -131,11 +131,13 @@ fold_prefix_loop({error, iterator_closed}, _Itr, _Fun, Acc, _N, _Opts) ->
   throw({iterator_closed, Acc});
 fold_prefix_loop({error, invalid_iterator}, _Itr, _Fun, Acc, _N, _Opts) ->
   Acc;
-fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0, Opts = #{ lt := End})
-    when End /= nil orelse K < End ->
+fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0,
+                 Opts = #{ lt := Lt, lte := nil, prefix := Prefix})
+  when Lt =:= nil orelse K < <<Prefix/binary, Lt/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N0, Opts);
-fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N, Opts = #{ lte := End})
-    when End =:= nil orelse K < End ->
+fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N,
+                 Opts = #{ lt := nil, lte := Lte, prefix := Prefix})
+  when Lte =:= nil orelse K =< <<Prefix/binary, Lte/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N, Opts);
 fold_prefix_loop({ok, K, V}, _Itr, Fun, Acc, _N,  #{ lt := nil, lte := K, prefix := P}) ->
   case match_prefix(K, P) of
