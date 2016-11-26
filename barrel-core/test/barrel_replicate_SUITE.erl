@@ -85,9 +85,9 @@ one_doc(Config) ->
   {ok, RepId} = barrel:start_replication(Source, Target, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
   timer:sleep(200),
-  Doc2 = Doc#{<<"_rev">> => RevId},
+  {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
   {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
   ok = barrel:stop_replication(RepId),
 
@@ -105,12 +105,10 @@ one_doc(Config) ->
 source_not_empty(Config) ->
   {Source, Target} = repctx(Config),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
-  Doc2 = Doc#{<<"_rev">> => RevId},
-
+  {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
+  {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
   {ok, RepId} = barrel:start_replication(Source, Target),
   timer:sleep(200),
-
   {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
   ok = barrel:stop_replication(RepId),
   ok.
