@@ -124,6 +124,7 @@ get(#{store := Store, id := DbId}, DocId, Options) ->
 
 
 put(Conn, DocId, Body, Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
@@ -186,9 +187,10 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
     end,
     Options);
 put(_, _, _, _) ->
-  error(bad_doc).
+  erlang:error(badarg).
 
-put_rev(Conn, DocId, Body, History, Options) ->
+put_rev(Conn, DocId, Body, History, Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
   update_doc(
@@ -215,7 +217,9 @@ put_rev(Conn, DocId, Body, History, Options) ->
       end
     end,
     Options
-  ).
+  );
+put_rev(_, _, _, _, _) ->
+  erlang:error(badarg).
 
 delete(Conn, DocId, RevId, Options) ->
   put(Conn, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
@@ -408,3 +412,6 @@ get_infos(State) ->
     name => Name,
     store => Store
   }.
+
+check_docid(DocId, #{ <<"id">> := DocId }) -> ok;
+check_docid(_, _) -> erlang:error({bad_doc, invalid_docid}).

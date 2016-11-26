@@ -34,6 +34,7 @@
   basic_op/1,
   update_doc/1,
   update_doc_lwww/1,
+  bad_doc/1,
   create_doc/1,
   fold_by_id/1,
   change_since/1,
@@ -53,6 +54,7 @@ all() ->
     basic_op,
     update_doc,
     update_doc_lwww,
+    bad_doc,
     create_doc,
     get_revisions,
     fold_by_id,
@@ -118,7 +120,7 @@ database_names(Config) ->
   [<<"testdb">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
   ok =  barrel:delete_database(Conn2),
   [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
-  Doc = #{ <<"_id">> => <<"a">>, <<"v">> => 1},
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
   [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb).
 
@@ -164,6 +166,14 @@ update_doc_lwww(Config) ->
   {ok, <<"a">>, _RevId2} = barrel_db:put(Conn, <<"a">>, Doc3, [{lww, true}]),
   {ok, Doc4} = barrel_db:get(Conn, <<"a">>, []),
   #{ <<"v">> := 2 } = Doc4.
+
+bad_doc(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  Doc = #{ <<"v">> => 1},
+  try barrel_db:put(Conn, <<"a">>, Doc, [])
+  catch
+    error:{bad_doc, invalid_docid} -> ok
+  end.
 
 create_doc(Config) ->
   Conn = proplists:get_value(conn, Config),
@@ -248,7 +258,8 @@ change_since(Config) ->
   [<<"bb">>, <<"aa">>] = barrel:changes_since(Conn, 0, Fun, []),
   [<<"bb">>] = barrel:changes_since(Conn, 1, Fun, []),
   [] = barrel:changes_since(Conn, 2, Fun, []),
-  {ok, <<"cc">>, _RevId2} = barrel_db:put(Conn, <<"cc">>, Doc2, []),
+  Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
+  {ok, <<"cc">>, _RevId3} = barrel_db:put(Conn, <<"cc">>, Doc3, []),
   [<<"cc">>] = barrel:changes_since(Conn, 2, Fun, []),
   ok.
 
