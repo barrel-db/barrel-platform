@@ -35,6 +35,7 @@ revid(Pos, Parent, Body0) ->
   Ctx0 = crypto:hash_init(md5),
   Body = maps:filter(fun
                        (<<"">>, _) -> false;
+                       (<<"_deleted">> , _) -> true;
                        (<<"_", _/binary>>, _) -> false;
                        (_, _) -> true
                      end, Body0),
@@ -127,7 +128,13 @@ deleted(_) -> false.
 revid_test() ->
 	Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
 													<<"hello">> => <<"yo">>}),
-	?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev).
+	?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev),
+  Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
+    <<"hello">> => <<"yo">>, <<"_hello">> => ok}),
+  ?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev),
+  Rev2 = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
+    <<"hello">> => <<"yo">>, <<"_deleted">> => true }),
+  ?assertEqual(<<"10-0a824dd48f4e552ba168a8dd6a2cc98c">>, Rev2).
 
 parse_test() ->
 	Parsed = parse_revision(<<"10-2f25ea96da3fed514795b0ced028d58a">>),
