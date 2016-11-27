@@ -61,7 +61,7 @@ accept_post_get(_Config) ->
   RepId = binary_to_list(RepIdBin),
 
   %% put one doc in source db
-  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
+  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
   {201, _} = test_lib:req(put, "/testdb/dba/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db

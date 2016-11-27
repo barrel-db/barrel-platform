@@ -127,9 +127,9 @@ changes_since(Config) ->
                  [{2, <<"bb">>}] = since(HttpConn, 1),
                               [] = since(HttpConn, 2),
 
-  {ok, <<"cc">>, _RevId2} = barrel_httpc:put(HttpConn, <<"cc">>, Doc2, []),
-
-                 [{3, <<"cc">>}] = since(HttpConn, 2).
+  Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
+  {ok, <<"cc">>, _RevId3} = barrel_httpc:put(HttpConn, <<"cc">>, Doc3, []),
+  [{3, <<"cc">>}] = since(HttpConn, 2).
 
 db_updated(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
@@ -154,9 +154,8 @@ db_updated(Config) ->
 
 
 since(HttpConn, Since) ->
-  Fun = fun(Seq, DocInfo, Doc, Acc) ->
-            {error, doc_not_fetched} = Doc,
-            Id = maps:get(id, DocInfo),
+  Fun = fun(Seq, Change, Acc) ->
+            Id = maps:get(id, Change),
             {ok, [{Seq, Id}|Acc]}
         end,
   barrel_httpc:changes_since(HttpConn, Since, Fun, []).

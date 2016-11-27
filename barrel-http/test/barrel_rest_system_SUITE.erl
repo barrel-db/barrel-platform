@@ -44,7 +44,7 @@ end_per_suite(Config) ->
 
 
 system_doc(_Config) ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
   {201, _} = test_lib:req(put, "/testdb/testdb/_system/cat", Doc),
   {200, R} = test_lib:req(get, <<"/testdb/testdb/_system/cat">>),
   J = jsx:decode(R, [return_maps]),

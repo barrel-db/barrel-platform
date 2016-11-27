@@ -60,7 +60,7 @@ accept_get(_Config) ->
   ok.
 
 accept_put(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
   {400, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),
   {201, _} = test_lib:req(put, "/testdb/newdb", []),
   {201, _} = test_lib:req(put, "/testdb/newdb/cat", Cat),

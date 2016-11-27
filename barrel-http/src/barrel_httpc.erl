@@ -251,7 +251,6 @@ post_put(Method, Url, Doc, State) ->
 
 post_put_resp(404, _, State) ->
   {reply, {error, not_found}, State};
-
 post_put_resp(200, R, State) ->
   post_put_resp(201, R, State);
 post_put_resp(201, R, State) ->
@@ -260,7 +259,9 @@ post_put_resp(201, R, State) ->
   RevId = maps:get(rev, Answer),
   true = maps:get(ok, Answer),
   Reply = {ok, DocId, RevId},
-  {reply, Reply, State}.
+  {reply, Reply, State};
+post_put_resp(Code, _, State) ->
+  {reply, {error, {unexepected_http_code, Code}}, State}.
 
 %% -----------------------------------------------------------------------------
 
@@ -292,10 +293,9 @@ get_resp(200, Reply, State) ->
 %% -----------------------------------------------------------------------------
 
 fold_result(Fun, Acc, Results) ->
-  Folder = fun(DocInfo, A) ->
-               Seq = maps:get(update_seq, DocInfo),
-               Doc = {error, doc_not_fetched},
-               {ok, FunResult} = Fun(Seq, DocInfo, Doc, A),
+  Folder = fun(Change, A) ->
+               Seq = maps:get(seq, Change),
+               {ok, FunResult} = Fun(Seq, Change, A),
                FunResult
            end,
  lists:foldr(Folder, Acc, Results).

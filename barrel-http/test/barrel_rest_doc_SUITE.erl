@@ -64,7 +64,7 @@ end_per_suite(Config) ->
 
 accept_get(Config) ->
   Conn = proplists:get_value(conn, Config),
-  Doc = #{<<"name">> => <<"tom">>},
+  Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
   {ok, _, _} = barrel:put(Conn, <<"acceptget">>, Doc, []),
 
   {200, R} = test_lib:req(get, "/testdb/testdb/acceptget"),
@@ -85,7 +85,7 @@ accept_post(Config) ->
 
 accept_put(Config) ->
   Conn = proplists:get_value(conn, Config),
-  D1 = #{<<"id">> => <<"tom">>, <<"name">> => <<"tom">>},
+  D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
   {201, R} = test_lib:req(put, "/testdb/testdb/cat", D1),
 
   J = jsx:decode(R, [return_maps]),
@@ -96,7 +96,7 @@ accept_put(Config) ->
 
 accept_delete(Config) ->
   Conn = proplists:get_value(conn, Config),
-  Doc = #{<<"name">> => <<"tom">>},
+  Doc = #{<<"id">> => <<"acceptdelete">>, <<"name">> => <<"tom">>},
   {ok, _, RevIdBin} = barrel:put(Conn, <<"acceptdelete">>, Doc, []),
   RevId = binary_to_list(RevIdBin),
 
@@ -136,14 +136,14 @@ reject_bad_json(_) ->
 
 
 put_cat() ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
   {201, R} = test_lib:req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 two_databases_on_same_store(_Config) ->
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  Dog = "{\"_id\": \"dog\", \"name\": \"spike\"}",
+  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
+  Dog = "{\"id\": \"dog\", \"name\": \"spike\"}",
   {201, _} = test_lib:req(put, "/testdb/db1", []),
   {201, _} = test_lib:req(put, "/testdb/db2", []),
   {201, _} = test_lib:req(put, "/testdb/db1/cat", Cat),

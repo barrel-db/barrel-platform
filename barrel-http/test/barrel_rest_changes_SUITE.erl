@@ -54,7 +54,7 @@ end_per_suite(Config) ->
 
 
 put_cat() ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
   {201, R} = test_lib:req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
@@ -67,7 +67,7 @@ delete_cat(CatRevId) ->
   A3.
 
 put_dog() ->
-  Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
+  Doc = "{\"id\": \"dog\", \"name\": \"spike\"}",
   {201, R} = test_lib:req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
