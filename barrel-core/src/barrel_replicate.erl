@@ -236,7 +236,7 @@ put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
   barrel_db:put_rev(Conn, Id, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
-  Mod:changes_since(ModState, Since, Fun, Acc);
+  Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
 changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
   barrel_db:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
 

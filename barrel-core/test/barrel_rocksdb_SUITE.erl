@@ -278,11 +278,15 @@ change_since_include_doc(Config) ->
 
 change_since_many(Config) ->
   Conn = proplists:get_value(conn, Config),
-  Fun = fun(_Seq, Change, Acc) ->
-            Id = maps:get(id, Change),
-            {ok, [Id|Acc]}
+
+  Fun = fun(Seq, Change, Acc) ->
+            {ok, [{Seq, Change}|Acc]}
         end,
+
+  %% No changes. Database is empty.
   [] = barrel:changes_since(Conn, 0, Fun, []),
+
+  %% Add 20 docs (doc1 to doc20).
   AddDoc = fun(N) ->
                K = integer_to_binary(N),
                Key = <<"doc", K/binary>>,
@@ -291,10 +295,24 @@ change_since_many(Config) ->
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
 
-  20 = length(barrel:changes_since(Conn, 0, Fun, [])),
-  [<<"doc20">>, <<"doc19">>] = barrel:changes_since(Conn, 18, Fun, []),
-  [<<"doc20">>] = barrel:changes_since(Conn, 19, Fun, []),
-  [] = barrel:changes_since(Conn, 20, Fun, []),
+  %% Delete doc1
+  {ok, Doc1} = barrel_db:get(Conn, <<"doc1">>, []),
+  #{<<"_rev">> := RevId} = Doc1,
+  {ok, <<"doc1">>, _} = barrel_db:delete(Conn, <<"doc1">>, RevId, []),
+
+  %% 20 changes (for doc1 to doc20)
+  All = barrel:changes_since(Conn, 0, Fun, [], [{history, all}]),
+  20 = length(All),
+  %% History for doc1 includes creation and deletion
+  {21, #{changes := HistoryDoc1}} = hd(All),
+  2 = length(HistoryDoc1),
+
+  [{21, #{id := <<"doc1">>}},
+   {20, #{id := <<"doc20">>}},
+   {19, #{id := <<"doc19">>}}] = barrel:changes_since(Conn, 18, Fun, []),
+  [{21, #{id := <<"doc1">>}},
+   {20, #{id := <<"doc20">>}}] = barrel:changes_since(Conn, 19, Fun, []),
+  [] = barrel:changes_since(Conn, 21, Fun, []),
   ok.
 
 revdiff(Config) ->
