@@ -62,7 +62,9 @@ trails() ->
 
 
 
--record(state, {method, conn, store, dbid, feed, since, changes, last_seq, subscribed, heartbeat}).
+-record(state, {method, conn, store, dbid,
+                feed, since, heartbeat, options=[],
+                changes, last_seq, subscribed}).
 
 init(_Type, Req, []) ->
   {Method, Req2} = cowboy_req:method(Req),
@@ -108,13 +110,15 @@ parse_params([{<<"since">>, SinceBin}|Tail], State) ->
 parse_params([{<<"heartbeat">>, HeartBeatBin}|Tail], State) ->
   HeartBeat = binary_to_integer(HeartBeatBin),
   parse_params(Tail, State#state{heartbeat=HeartBeat});
+parse_params([{<<"history">>, <<"all">>}|Tail], State) ->
+  parse_params(Tail, State#state{options=[{history, all}]});
 parse_params([{Param, _Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
 
 
-init_feed(Req, #state{conn=Conn, since=Since}=State) ->
-  {LastSeq, Changes} = changes(Conn, Since),
+init_feed(Req, #state{conn=Conn, since=Since, options=Options}=State) ->
+  {LastSeq, Changes} = changes(Conn, Since, Options),
   init_feed_changes(Req, State#state{changes=Changes, last_seq=LastSeq}).
 
 init_feed_changes(Req, #state{feed=normal}=S) ->
@@ -156,7 +160,7 @@ info(heartbeat, Req, S) ->
   {loop, Req, S};
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
-  {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq),
+  {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq, S#state.options),
   db_updated(Changes, LastSeq, Req, S);
 info(_Info, Req, S) ->
   {loop, Req, S}.
@@ -192,12 +196,12 @@ terminate(_Reason, _Req, _S) ->
 
 %% ----------
 
-changes(Conn, Since) ->
+changes(Conn, Since, Options) ->
   Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  barrel:changes_since(Conn, Since, Fun, {Since, []}).
+  barrel:changes_since(Conn, Since, Fun, {Since, []}, Options).
 
 to_json(LastSeq, Changes) ->
   Map = #{<<"last_seq">> => LastSeq,

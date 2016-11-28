@@ -34,8 +34,8 @@
 all() ->
   [ one_doc
   , target_not_empty
-  %% , deleted_doc
-  %% , random_activity
+  , deleted_doc
+  , random_activity
   ].
 
 init_per_suite(Config) ->

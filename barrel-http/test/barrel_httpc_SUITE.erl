@@ -26,6 +26,7 @@
         , put_get_delete/1
         , put_rev/1
         , changes_since/1
+        , changes_since_history/1
         , db_updated/1
         , system_doc/1
         ]).
@@ -35,6 +36,7 @@ all() -> [ info_database
          , put_get_delete
          , put_rev
          , changes_since
+         , changes_since_history
          , db_updated
          , system_doc
          ].
@@ -123,13 +125,31 @@ changes_since(Config) ->
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
 
-  [{2, <<"bb">>}, {1, <<"aa">>}] = since(HttpConn, 0),
-                 [{2, <<"bb">>}] = since(HttpConn, 1),
-                              [] = since(HttpConn, 2),
+  [{2, #{id := <<"bb">>}}, {1, #{id := <<"aa">>}}] = since(HttpConn, 0),
+  [{2, #{id := <<"bb">>}}] = since(HttpConn, 1),
+  [] = since(HttpConn, 2),
 
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
   {ok, <<"cc">>, _RevId3} = barrel_httpc:put(HttpConn, <<"cc">>, Doc3, []),
-  [{3, <<"cc">>}] = since(HttpConn, 2).
+  [{3, #{id := <<"cc">>}},{2, #{id := <<"bb">>}}] = since(HttpConn, 1),
+  ok.
+
+changes_since_history(Config) ->
+  HttpConn = proplists:get_value(http_conn, Config),
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, AARevId} = barrel_httpc:put(HttpConn, <<"aa">>, Doc, []),
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
+  {ok, <<"bb">>, BBRevId} = barrel_httpc:put(HttpConn, <<"bb">>, Doc2, []),
+  {ok, <<"aa">>, DeleteAARevid} = barrel_httpc:delete(HttpConn, <<"aa">>, AARevId, []),
+  [{3,
+    #{changes := [DeleteAARevid, AARevId],
+      deleted := true,
+      id := <<"aa">>,
+      seq := 3}},
+   {2,
+    #{changes := [BBRevId],
+      id := <<"bb">>,
+      seq := 2}}] = since(HttpConn, 0, [{history, all}]).
 
 db_updated(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
@@ -154,11 +174,13 @@ db_updated(Config) ->
 
 
 since(HttpConn, Since) ->
+  since(HttpConn, Since, []).
+
+since(HttpConn, Since, Options) ->
   Fun = fun(Seq, Change, Acc) ->
-            Id = maps:get(id, Change),
-            {ok, [{Seq, Id}|Acc]}
+            {ok, [{Seq, Change}|Acc]}
         end,
-  barrel_httpc:changes_since(HttpConn, Since, Fun, []).
+  barrel_httpc:changes_since(HttpConn, Since, Fun, [], Options).
 
 
 one_msg() ->

@@ -27,6 +27,7 @@
          post/3,
          fold_by_id/4,
          changes_since/4,
+         changes_since/5,
          revsdiff/3,
          write_system_doc/3,
          read_system_doc/2,
@@ -84,7 +85,11 @@ fold_by_id(_Db, _Fun, _Acc, _Opts) ->
   {error, not_implemented}.
 
 changes_since(Pid, Since, Fun, Acc) ->
-  gen_server:call(Pid, {changes_since, Since, Fun, Acc}).
+  gen_server:call(Pid, {changes_since, Since, Fun, Acc, []}).
+
+
+changes_since(Pid, Since, Fun, Acc, Options) ->
+  gen_server:call(Pid, {changes_since, Since, Fun, Acc, Options}).
 
 revsdiff(_Db, _DocId, _RevIds) ->
   {error, not_implemented}.
@@ -146,17 +151,21 @@ handle_call({delete, DocId, RevId, _Options}, _From, State) ->
   true = maps:get(ok, Reply),
   {reply, {ok, DocId, NewRevId}, State};
 
-handle_call({changes_since, Since, Fun, Acc}, _From,
+handle_call({changes_since, Since, Fun, Acc, _Options}, _From,
             #state{first_seq=Since}=S) ->
   Buf = S#state.buffer,
   Reply = fold_result(Fun, Acc, Buf),
   {reply, Reply, S#state{buffer=[]}};
 
-handle_call({changes_since, Since, Fun, Acc}, _From, S) ->
+handle_call({changes_since, Since, Fun, Acc, Options}, _From, S) ->
   DbUrl = S#state.dbid,
+  History = case Options of
+              [{history, all}] -> <<"&history=all">>;
+              _ -> <<>>
+            end,
   ChangesSince = <<"/_changes?feed=normal&since=">>,
   SinceBin = integer_to_binary(Since),
-  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
+  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary, History/binary>>,
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
   {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
@@ -195,7 +204,7 @@ handle_call(stop, _From, State) ->
 
 
 handle_cast({longpoll, DbUrl, Since}, S) ->
-  ChangesSince = <<"/_changes?feed=longpoll&heartbeat=5000&since=">>,
+  ChangesSince = <<"/_changes?feed=longpoll&heartbeat=5000&history=all&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   Opts = [async, {recv_timeout, 300000}],
