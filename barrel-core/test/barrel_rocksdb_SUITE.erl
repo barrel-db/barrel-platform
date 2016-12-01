@@ -134,8 +134,7 @@ basic_op(Config) ->
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_db:get(Conn, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_db:delete(Conn, <<"a">>, RevId, []),
-  {ok, DeletedDoc} = barrel_db:get(Conn, <<"a">>, []),
-  true = maps:get(<<"_deleted">>, DeletedDoc).
+  {error, not_found} = barrel_db:get(Conn, <<"a">>, []).
 
 update_doc(Config) ->
   Conn = proplists:get_value(conn, Config),
@@ -149,8 +148,7 @@ update_doc(Config) ->
   Doc4 = Doc3#{<<"_rev">> => RevId2},
   {ok, Doc4} = barrel_db:get(Conn, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_db:delete(Conn, <<"a">>, RevId2, []),
-  {ok, DeletedDoc} = barrel_db:get(Conn, <<"a">>, []),
-  true = maps:get(<<"_deleted">>, DeletedDoc),
+  {error, not_found} = barrel_db:get(Conn, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_db:put(Conn, <<"a">>, Doc, []).
 
 update_doc_lwww(Config) ->
@@ -210,7 +208,7 @@ put_rev(Config) ->
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
  
-  {ok, DocId, _RevId3} = barrel_db:put_rev(Conn, DocId, Doc4, History, []),
+  ok = barrel_db:put_rev(Conn, DocId, Doc4, History, []),
   {ok, Doc5} = barrel_db:get(Conn, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].

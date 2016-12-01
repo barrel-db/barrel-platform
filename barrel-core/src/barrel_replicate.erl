@@ -206,12 +206,15 @@ write_doc(_, _, undefined, _, Metrics) ->
 write_doc(Target, Id, Doc, History, Metrics) ->
   PutRev = fun() -> put_rev(Target, Id, Doc, History, []) end,
   case timer:tc(PutRev) of
-    {Time, {ok, _, _}} ->
+    {Time, ok} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
-    _ ->
-      lager:error("replicate write error on dbid=~p for docid=~p", [Target, Id]),
+    {_, Error} ->
+      lager:error(
+        "replicate write error on dbid=~p for docid=~p: ~w",
+        [Target, Id, Error]
+      ),
       barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
 

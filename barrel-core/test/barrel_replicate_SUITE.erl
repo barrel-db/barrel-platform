@@ -119,10 +119,11 @@ deleted_doc(Config) ->
   {ok, <<"a">>, RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
 
   {ok, RepId} = barrel:start_replication(Source, Target),
-  barrel_db:delete(Source, <<"a">>, RevId, []),
   timer:sleep(200),
-  {ok,Doc3} = barrel_db:get(Target, <<"a">>, []),
-  true = maps:get(<<"_deleted">>, Doc3),
+  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel_db:get(Target, <<"a">>, []),
+  barrel_db:delete(Source, <<"a">>, RevId, []),
+  timer:sleep(400),
+  {error, not_found} = barrel_db:get(Target, <<"a">>, []),
   ok = barrel:stop_replication(RepId),
   ok.
 
@@ -212,13 +213,13 @@ check_all(Map, Db1, Db2) ->
 
 check(DocName, Map, Db1, Db2) ->
   Id = list_to_binary(DocName),
-  {ok, DocSource} = barrel_db:get(Db1, Id, []),
-  {ok, DocTarget} = barrel_db:get(Db2, Id, []),
   case maps:get(DocName, Map) of
     deleted ->
-      true = maps:get(<<"_deleted">>, DocSource),
-      true = maps:get(<<"_deleted">>, DocTarget);
+      {error, not_found} = barrel_db:get(Db1, Id, []),
+      {error, not_found} = barrel_db:get(Db2, Id, []);
     Expected ->
+      {ok, DocSource} = barrel_db:get(Db1, Id, []),
+      {ok, DocTarget} = barrel_db:get(Db2, Id, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,

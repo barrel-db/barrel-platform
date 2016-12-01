@@ -128,7 +128,6 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
-
   Lww = proplists:get_value(lww, Options, false),
 
   update_doc(
@@ -164,7 +163,6 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
                   false -> {conflict, revision_conflict}
                 end
             end,
-
       case Res of
         {ok, NewGen, ParentRev} ->
           NewRev = barrel_doc:revid(NewGen, Rev, Body),
@@ -193,7 +191,7 @@ put_rev(Conn, DocId, Body, History, Options) when is_map(Body) ->
   ok = check_docid(DocId, Body),
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
-  update_doc(
+  Res = update_doc(
     Conn,
     DocId,
     fun(DocInfo) ->
@@ -217,7 +215,11 @@ put_rev(Conn, DocId, Body, History, Options) when is_map(Body) ->
       end
     end,
     Options
-  );
+  ),
+  case Res of
+    {ok, _, _} -> ok;
+    Error -> Error
+  end;
 put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 

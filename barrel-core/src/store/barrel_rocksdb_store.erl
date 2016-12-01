@@ -226,6 +226,8 @@ get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) 
             end,
 
       case get_doc_rev(Db, DbId, DocId, RevId, ReadOptions) of
+        {ok, #{ <<"_deleted">> := true }} when Rev =:= <<"">> ->
+          {error, not_found};
         {ok, Doc} ->
           case WithHistory of
             true ->
@@ -238,7 +240,7 @@ get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) 
           end;
         Error -> Error
       end;
-    Error -> Error
+    Error ->  Error
   end.
 
 
