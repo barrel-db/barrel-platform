@@ -32,10 +32,10 @@
    ]).
 
 all() ->
-  [ one_doc
-  , target_not_empty
-  , deleted_doc
-  , random_activity
+  [% one_doc
+  %% , target_not_empty
+   %% deleted_doc
+   random_activity
   ].
 
 init_per_suite(Config) ->
@@ -105,14 +105,14 @@ target_not_empty(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  Doc = #{ <<"id">> => <<"targetnotempty">>, <<"v">> => 1},
+  {ok, <<"targetnotempty">>, RevId} = barrel:put(Source, <<"targetnotempty">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   timer:sleep(200),
 
-  {ok, Doc2} = barrel:get(Target, <<"a">>, []),
+  {ok, Doc2} = barrel:get(Target, <<"targetnotempty">>, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
@@ -120,13 +120,13 @@ deleted_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  Doc = #{ <<"id">> => <<"tobedeleted">>, <<"v">> => 1},
+  {ok, <<"tobedeleted">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
-  barrel:delete(Source, <<"a">>, RevId, []),
+  barrel:delete(Source, <<"tobedeleted">>, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel:get(Target, <<"a">>, []),
+  {ok, Doc3} = barrel:get(Target, <<"tobedeleted">>, []),
 
   %% TODO bug to be fixed
   %% https://gitlab.com/barrel-db/barrel-http/issues/1
@@ -141,7 +141,7 @@ random_activity(Config) ->
   Scenario = generate_scenario(),
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   ExpectedResults = play_scenario(Scenario, Config),
-  timer:sleep(200),
+  timer:sleep(1000),
   ok = check_all(ExpectedResults, Config),
   ok = barrel:stop_replication(Pid),
   ok.
@@ -149,6 +149,7 @@ random_activity(Config) ->
 play_scenario(Scenario, Config) ->
   Map = maps:new(),
   lists:foldl(fun(C, Acc) ->
+                  test_lib:log("play ~p~n",[C]),
                   play(C, Acc, Config)
               end, Map, Scenario).
 
@@ -160,7 +161,14 @@ play({del, DocName}, Map, Config) ->
   Map#{DocName => deleted}.
 
 check_all(Map, Config) ->
- Keys = maps:keys(Map),
+  {_, Target} =  repctx(Config),
+  ct:print("check a = ~p",[barrel:get(Target, <<"a">>, [])]),
+  ct:print("check b = ~p",[barrel:get(Target, <<"b">>, [])]),
+  ct:print("check c = ~p",[barrel:get(Target, <<"c">>, [])]),
+  ct:print("check d = ~p",[barrel:get(Target, <<"d">>, [])]),
+  ct:print("check e = ~p",[barrel:get(Target, <<"e">>, [])]),
+  ct:print("check f = ~p",[barrel:get(Target, <<"f">>, [])]),
+  Keys = maps:keys(Map),
   [ ok = check(K, Map, Config) || K <- Keys ],
   ok.
 
@@ -168,7 +176,11 @@ check(DocName, Map, Config) ->
   {Source, Target} =  repctx(Config),
   Id = list_to_binary(DocName),
   {ok, DocSource} = barrel:get(Source, Id, []),
-  {ok, DocTarget} = barrel:get(Target, Id, []),
+  DocTarget = case barrel:get(Target, Id, []) of
+                {ok, Doc} -> Doc;
+                {error, not_found} ->
+                  ct:fail("Doc not found in target=~p id=~p",[Target, Id])
+              end,
   case maps:get(DocName, Map) of
     deleted ->
       true = maps:get(<<"_deleted">>, DocSource),
@@ -208,5 +220,7 @@ generate_scenario() ->
   , {put, "f", 1}
   , {put, "f", 2}
   , {del, "a"}
-  , {put, "f", 3}
+  %% , {put, "a", 3}
+  %% , {put, "f", 3}
+  , {del, "f"}
   ].

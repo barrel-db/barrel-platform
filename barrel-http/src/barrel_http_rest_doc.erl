@@ -143,7 +143,7 @@ trails() ->
   [trails:trail("/:store/:dbid/", ?MODULE, [], Post),
    trails:trail("/:store/:dbid/:docid", ?MODULE, [], GetPutDel)].
 
--record(state, {method, store, dbid, docid, revid, edit, body, doc, conn, options}).
+-record(state, {method, store, dbid, docid, revid, edit, history, body, doc, conn, options}).
 
 init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 
@@ -181,6 +181,8 @@ parse_params([{<<"rev">>, RevId}|Tail], State) ->
   parse_params(Tail, State#state{revid=RevId});
 parse_params([{<<"edit">>, Edit}|Tail], State) ->
   parse_params(Tail, State#state{edit=Edit});
+parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
+  parse_params(Tail, State#state{history=true});
 parse_params([{Param, __Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
@@ -201,12 +203,16 @@ malformed_request_store_dbid(Req, State) ->
     {ok, Conn} ->
       {DocId, Req2} = cowboy_req:binding(docid, Req),
       RevId = State#state.revid,
-      Options = case RevId of
-                  undefined -> [];
-                  _ -> [{rev, RevId}]
-                end,
+      Opts1 = case RevId of
+                undefined -> [];
+                _ -> [{rev, RevId}]
+              end,
+      Opts2 = case State#state.history of
+                true -> [{history, true}|Opts1];
+                _ -> Opts1
+              end,
       State2 = State#state{store=Store, dbid=DbId, docid=DocId,
-                           conn=Conn, revid=RevId, options=Options},
+                           conn=Conn, revid=RevId, options=Opts2},
       malformed_request_body(Req3, State2)
   end.
 
@@ -269,12 +275,14 @@ is_conflict(Req, State) ->
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
+                       ct:print("edit=~p ~p",[EditStr, Req]),
                        case Edit of
                          false ->
                            { barrel:put(Conn, DocId, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
+                           test_lib:log("~p;put_rev doc;~512p~n",[?MODULE, Doc]),
                            {barrel:put_rev(Conn, DocId, Doc, History, []), Req3}
                        end
                    end,
@@ -311,6 +319,7 @@ from_json(Req, State) ->
 
 to_json(Req, State) ->
   Doc = State#state.doc,
+  test_lib:log("~p;get;~512p~n",[?MODULE, Doc]),
   Json = jsx:encode(Doc),
   {Json, Req, State}.
 
@@ -340,6 +349,7 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
             true ->
               Doc = maps:get(<<"document">>, Json),
               History = maps:get(<<"history">>, Json),
+              test_lib:log("~p;put_rev doc;~512p~n",[?MODULE, Doc]),
               {barrel:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
           end
       end,

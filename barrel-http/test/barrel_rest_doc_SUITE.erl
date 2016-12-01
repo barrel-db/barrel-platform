@@ -22,6 +22,8 @@
         ]).
 
 -export([ accept_get/1
+        , accept_get_with_rev/1
+        , accept_get_with_history/1
         , accept_post/1
         , accept_put/1
         , accept_delete/1
@@ -34,6 +36,8 @@
         ]).
 
 all() -> [ accept_get
+         , accept_get_with_rev
+         , accept_get_with_history
          , accept_post
          , accept_put
          , accept_delete
@@ -70,6 +74,35 @@ accept_get(Config) ->
   {200, R} = test_lib:req(get, "/testdb/testdb/acceptget"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
+  ok.
+
+accept_get_with_rev(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  DocId = <<"acceptgetrev">>,
+  Doc1 = #{<<"id">> => DocId, <<"v">> => 1},
+  {ok, _, RevId1} = barrel:put(Conn, DocId, Doc1, []),
+  Doc2 = #{<<"id">> => DocId, <<"v">> => 2, <<"_rev">> => RevId1},
+  {ok, _, RevId2} = barrel:put(Conn, DocId, Doc2, []),
+  {ok, _, _RevId3} = barrel:delete(Conn, DocId, RevId2, []),
+
+  {200, R1} = test_lib:req(get, "/testdb/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
+  J1 = jsx:decode(R1, [return_maps]),
+  #{<<"v">> := 1} = J1,
+  {200, R2} = test_lib:req(get, "/testdb/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
+  J2 = jsx:decode(R2, [return_maps]),
+  #{<<"v">> := 2} = J2,
+  ok.
+
+accept_get_with_history(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  Doc = #{<<"id">> => <<"acceptgethist">>, <<"name">> => <<"tom">>},
+  {ok, _, _} = barrel:put(Conn, <<"acceptgethist">>, Doc, []),
+
+  {200, R} = test_lib:req(get, "/testdb/testdb/acceptgethist?history=true"),
+  J = jsx:decode(R, [return_maps]),
+  #{<<"name">> := <<"tom">>,
+    <<"_revisions">> := Revisions} = J,
+  #{<<"ids">> := [_], <<"start">> := 1} = Revisions,
   ok.
 
 accept_post(Config) ->

@@ -126,6 +126,7 @@ init_feed_changes(Req, #state{feed=normal}=S) ->
 
 init_feed_changes(Req, #state{feed=longpoll, changes=[]}=S) ->
   %% No changes available for reply. We register for db_updated events.
+  test_lib:log("~p;longpoll reg;~512p~n", [?MODULE,  S#state.conn]),
   ok = barrel_event:reg(S#state.conn),
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
   {loop, Req2, S2#state{subscribed=true}};
@@ -135,6 +136,7 @@ init_feed_changes(Req, #state{feed=longpoll}=S) ->
   {ok, Req, S};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
+  test_lib:log("~p;eventsource reg;~512p~n", [?MODULE, S#state.conn]),
   ok = barrel_event:reg(S#state.conn),
   #{ store := Store, name := Name} = S#state.conn,
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
@@ -153,13 +155,15 @@ handle(Req, S) ->
   LastSeq = S#state.last_seq,
   Changes = S#state.changes,
   Json = to_json(LastSeq, Changes),
+  test_lib:log("~p;reply normal;~512p~n", [?MODULE, Json]),
   barrel_http_reply:json(Json, Req, S).
 
 info(heartbeat, Req, S) ->
   ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
 
-info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
+info({'$barrel_event', FromDbId, db_updated}, Req, S) ->
+  test_lib:log("~p;db_updated received from;~512p~n",[?MODULE, FromDbId]),
   {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq, S#state.options),
   db_updated(Changes, LastSeq, Req, S);
 info(_Info, Req, S) ->
@@ -171,6 +175,7 @@ db_updated([], LastSeq, Req, #state{feed=longpoll}=S) ->
 db_updated(Changes, LastSeq, Req, #state{feed=longpoll}=S) ->
   Json = to_json(LastSeq, Changes),
   ok = cowboy_req:chunk(Json, Req),
+  test_lib:log("~p;reply longpoll;~512p~n", [?MODULE, Json]),
   {ok, Req, S};
 
 db_updated(Changes, LastSeq, Req, #state{feed=eventsource}=S) ->

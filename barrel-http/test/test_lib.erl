@@ -15,6 +15,8 @@
 -module(test_lib).
 
 -export([req/2, req/3]).
+-export([log/2]).
+
 
 req(Method, Route) ->
   req(Method,Route,[]).
@@ -31,3 +33,12 @@ req(Method, Route, Body) when is_binary(Body) ->
   Server = "http://localhost:8080",
   Path = list_to_binary(Server ++ Route),
   barrel_http_lib:req(Method, Path, Body).
+
+
+log(String, Params) ->
+  Line = io_lib:fwrite(String, Params),
+  Pid = io_lib:fwrite("~p",[self()]),
+  {ok, File} = file:open("/tmp/test.txt", [append]),
+  ok = file:write(File, Pid ++ ";" ++ Line),
+  ok = file:close(File),
+  ok.

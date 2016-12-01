@@ -91,8 +91,8 @@ changes_since(Pid, Since, Fun, Acc) ->
 changes_since(Pid, Since, Fun, Acc, Options) ->
   gen_server:call(Pid, {changes_since, Since, Fun, Acc, Options}).
 
-revsdiff(_Db, _DocId, _RevIds) ->
-  {error, not_implemented}.
+revsdiff(Pid, DocId, RevIds) ->
+  gen_server:call(Pid, {revsdiff, DocId, RevIds}).
 
 write_system_doc(Pid, DocId, Doc) ->
   gen_server:call(Pid, {write_system_doc, DocId,  Doc}).
@@ -132,11 +132,13 @@ handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
   Url = << DbUrl/binary, "/", DocId/binary, "?edit" >>,
   put_rev(Url, Doc, History, State);
 
-handle_call({get, DocId, _Options}, _From, State) ->
+handle_call({get, DocId, Options}, _From, State) ->
   DbUrl = State#state.dbid,
   Sep = <<"/">>,
-  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
+  Url = <<DbUrl/binary, Sep/binary, DocId/binary, (parse_get_options(Options))/binary>>,
+  ct:print("httpc get url=~p",[Url]),
   {Code, Reply} = req(get, Url),
+  ct:print("httpc reply=~p",[Reply]),
   get_resp(Code, Reply, State);
 
 handle_call({delete, DocId, RevId, _Options}, _From, State) ->
@@ -150,6 +152,17 @@ handle_call({delete, DocId, RevId, _Options}, _From, State) ->
   NewRevId = maps:get(rev, Reply),
   true = maps:get(ok, Reply),
   {reply, {ok, DocId, NewRevId}, State};
+
+handle_call({revsdiff, DocId, RevIds}, _From, State) ->
+  DbUrl = State#state.dbid,
+  RevsDiff = <<"/_revs_diff">>,
+  Url = <<DbUrl/binary, RevsDiff/binary>>,
+  Request = #{DocId => RevIds},
+  {200, R} = req(post, Url, Request),
+  Reply = jsx:decode(R, [return_maps]),
+  #{DocId := #{<<"missing">> := Missing, <<"possible_ancestors">> := Possible}} =  Reply,
+  %% ct:print("reply=~p",[Reply]),
+  {reply, {ok, Missing, Possible}, State};
 
 handle_call({changes_since, Since, Fun, Acc, _Options}, _From,
             #state{first_seq=Since}=S) ->
@@ -166,6 +179,7 @@ handle_call({changes_since, Since, Fun, Acc, Options}, _From, S) ->
   ChangesSince = <<"/_changes?feed=normal&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary, History/binary>>,
+  test_lib:log("~p;change_since call changes for url;~512p~n",[?MODULE, Url]),
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
   {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
@@ -208,6 +222,7 @@ handle_cast({longpoll, DbUrl, Since}, S) ->
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   Opts = [async, {recv_timeout, 300000}],
+  test_lib:log("~p;longpoll call changes for url;~512p~n",[?MODULE, Url]),
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
   {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};
@@ -308,6 +323,31 @@ fold_result(Fun, Acc, Results) ->
                FunResult
            end,
  lists:foldr(Folder, Acc, Results).
+
+%% -----------------------------------------------------------------------------
+
+parse_get_options([]) ->
+  <<>>;
+parse_get_options(Options) ->
+  HttpParams = [parse_get_options2(O) || O <- Options],
+  <<"?", (binary_join(HttpParams, <<"&">>))/binary>>.
+
+parse_get_options2({rev, RevId}) ->
+  <<"rev=", RevId/binary>>;
+parse_get_options2({history, true}) ->
+  <<"history=true">>.
+
+binary_join([], _Sep) ->
+  <<>>;
+binary_join([Part], _Sep) ->
+  Part;
+binary_join(List, Sep) ->
+  lists:foldr(fun (A, B) ->
+                  if
+                    bit_size(B) > 0 -> <<A/binary, Sep/binary, B/binary>>;
+                    true -> A
+                  end
+              end, <<>>, List).
 
 %% =============================================================================
 %% Internal helpers
