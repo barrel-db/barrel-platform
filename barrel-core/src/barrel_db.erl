@@ -223,6 +223,27 @@ put_rev(Conn, DocId, Body, History, Options) when is_map(Body) ->
 put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 
+edit_revtree([RevId], Parent, Deleted, Tree) ->
+  case Deleted of
+    true ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
+    false ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
+  end;
+edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
+  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
+  edit_revtree(Rest, Parent, Deleted, Tree2);
+edit_revtree([], _Parent, _Deleted, Tree) ->
+  Tree.
+
+find_parent([RevId | Rest], RevTree, I) ->
+  case barrel_revtree:contains(RevId, RevTree) of
+    true -> {I, RevId};
+    false -> find_parent(Rest, RevTree, I+1)
+  end;
+find_parent([], _RevTree, I) ->
+  {I, <<"">>}.
+
 delete(Conn, DocId, RevId, Options) ->
   put(Conn, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
@@ -280,26 +301,7 @@ revsdiff1(RevTree, RevIds) ->
     end, {[], []}, RevIds),
   {ok, lists:reverse(Missing), lists:usort(PossibleAncestors)}.
 
-edit_revtree([RevId], Parent, Deleted, Tree) ->
-  case Deleted of
-    true ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
-    false ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
-  end;
-edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
-  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
-  edit_revtree(Rest, Parent, Deleted, Tree2);
-edit_revtree([], _Parent, _Deleted, Tree) ->
-  Tree.
 
-find_parent([RevId | Rest], RevTree, I) ->
-  case barrel_revtree:contains(RevId, RevTree) of
-    true -> {I, RevId};
-    false -> find_parent(Rest, RevTree, I+1)
-  end;
-find_parent([], _RevTree, I) ->
-  {I, <<"">>}.
 
 update_doc(#{id := DbId}, DocId, Fun, Options) ->
   barrel_transactor:update_doc(DbId, DocId, Fun, Options).

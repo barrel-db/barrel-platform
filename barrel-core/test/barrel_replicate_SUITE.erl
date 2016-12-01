@@ -95,8 +95,8 @@ one_doc(Config) ->
   %%1 = proplists:get_value(docs_read, Stats),
   %%1 = proplists:get_value(docs_written, Stats),
 
-  {ok, _, _} = delete_doc("a", Source),
-  {ok, _, _} = delete_doc("a", Target),
+  ok = delete_doc("a", Source),
+  ok = delete_doc("a", Target),
   %% Id = maps:get(id, Info),
   %% {ok, _Checkpoint} = barrel_db:get(source(), <<"_replication_", Id/binary>>, []),
   %% {ok, _Checkpoint} = barrel_db:get(target(), <<"_replication_", Id/binary>>, []),
@@ -227,7 +227,7 @@ check(DocName, Map, Db1, Db2) ->
 
 purge_scenario(Map, Db) ->
   Keys = maps:keys(Map),
-  [{ok, _,_} = delete_doc(K, Db) || K <- Keys],
+  [ok= delete_doc(K, Db) || K <- Keys],
   ok.
 
 put_doc(DocName, Value, Db) ->
@@ -243,9 +243,13 @@ put_doc(DocName, Value, Db) ->
 
 delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
-  {ok, Doc} = barrel_db:get(Db, Id, []),
-  RevId = maps:get(<<"_rev">>, Doc),
-  barrel_db:delete(Db, Id, RevId, []).
+  case barrel_db:get(Db, Id, []) of
+    {error, not_found} -> ok;
+    {ok, Doc} ->
+      RevId = maps:get(<<"_rev">>, Doc),
+      {ok, _, _} = barrel_db:delete(Db, Id, RevId, []),
+      ok
+  end.
 
 scenario() ->
   [ {put, "a", 1}
