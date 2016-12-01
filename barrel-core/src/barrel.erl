@@ -205,7 +205,7 @@ put(Conn, DocId, Body, Options) ->
   Body :: doc(),
   History :: [rev()],
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
+  Res :: ok | {error, conflict()} | {error, any()}.
 put_rev(Conn, DocId, Body, History, Options) ->
   barrel_db:put_rev(Conn, DocId, Body, History, Options).
 
