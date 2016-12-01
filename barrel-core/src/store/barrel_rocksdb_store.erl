@@ -52,7 +52,7 @@ open_db(#{ db := Db }, Name, Options) ->
       UpdateSeq = get_update_seq(Db, DbId),
       {ok, {DbId, UpdateSeq}};
     not_found when CreateIfMissing /= false  ->
-      DbId = barrel_lib:uniqid(),
+      DbId = << (barrel_lib:uniqid())/binary, "-", Name/binary >>,
       Batch =  [
                  {put, << 0, 0, 0, 0 >>, integer_to_binary(?VERSION)},
                  {put, DbKey, DbId},
