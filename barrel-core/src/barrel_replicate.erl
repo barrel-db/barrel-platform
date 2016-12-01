@@ -19,6 +19,7 @@
 
 %% specific API
 -export([
+  start_link/3,
   start_link/4,
   info/1
 ]).
@@ -41,7 +42,8 @@
 ]).
 
 
--record(st, { source
+-record(st, { name
+            , source
             , target
             , id          ::binary()  % replication id
             , session_id  ::binary()  % replication session (history) id
@@ -52,10 +54,14 @@
             , options
             }).
 
-start_link(RepId, Source, Target, Options) ->
+start_link(Source, Target, Options) ->
+  Name = repid(Source, Target),
+  start_link(Name, Source, Target, Options).
+
+start_link(Name, Source, Target, Options) ->
   gen_server:start_link(
-    {via, gproc, replication_key(RepId)}, ?MODULE,
-    {Source, Target, Options}, []).
+    {via, gproc, replication_key(Name)}, ?MODULE,
+    {Name, Source, Target, Options}, []).
 
 
 info(Pid) when is_pid(Pid)->
@@ -77,22 +83,23 @@ repid(Source, Target) ->
   barrel_lib:to_hex(Md5).
 
 
-replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
+replication_key(Name) -> {n, l, {barrel_replicate, Name}}.
 
 
 %% gen_server callbacks
-  
-init({Source0, Target0, Options}) ->
+
+init({Name, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
   {ok, Source} = maybe_connect(Source0),
   {ok, Target} = maybe_connect(Target0),
-  
+
   RepId = repid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
   ok = barrel_event:reg(Source),
-  State = #st{source=Source,
+  State = #st{name=Name,
+              source=Source,
               target=Target,
               id=RepId,
               session_id = barrel_lib:uniqid(binary),
@@ -114,7 +121,8 @@ handle_call(info, _From, State) ->
               _Other ->
                 []
             end,
-  Info = #{ id => State#st.id
+  Info = #{ name => State#st.name
+          , id => State#st.id
           , source => State#st.source
           , target => State#st.target
           , last_seq => State#st.last_seq

@@ -81,15 +81,16 @@ repctx(Config) ->
 
 one_doc(Config) ->
   {Source, Target} = repctx(Config),
+  Name = <<"onedoc">>,
   Options = [{metrics_freq, 100}],
-  {ok, RepId} = barrel:start_replication(Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
   {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
-  ok = barrel:stop_replication(RepId),
+  ok = barrel:stop_replication(Name),
 
   %%[Stats] = barrel_task_status:all(),
   %%1 = proplists:get_value(docs_read, Stats),
@@ -104,26 +105,28 @@ one_doc(Config) ->
 
 source_not_empty(Config) ->
   {Source, Target} = repctx(Config),
+  Name = <<"sourcenotempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
   {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
-  {ok, RepId} = barrel:start_replication(Source, Target),
+  {ok, Name} = barrel:start_replication(Name, Source, Target),
   timer:sleep(200),
   {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
-  ok = barrel:stop_replication(RepId),
+  ok = barrel:stop_replication(Name),
   ok.
 
 deleted_doc(Config) ->
   {Source, Target} = repctx(Config),
+  Name = <<"deleteddoc">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
 
-  {ok, RepId} = barrel:start_replication(Source, Target),
+  {ok, Name} = barrel:start_replication(Name, Source, Target),
   barrel_db:delete(Source, <<"a">>, RevId, []),
   timer:sleep(200),
   {ok,Doc3} = barrel_db:get(Target, <<"a">>, []),
   true = maps:get(<<"_deleted">>, Doc3),
-  ok = barrel:stop_replication(RepId),
+  ok = barrel:stop_replication(Name),
   ok.
 
 %% =============================================================================
@@ -132,12 +135,13 @@ deleted_doc(Config) ->
 
 random_activity(Config) ->
   {Source, Target} = repctx(Config),
+  Name = <<"random">>,
   Scenario = scenario(),
-  {ok, RepId} = barrel:start_replication(Source, Target),
+  {ok, Name} = barrel:start_replication(Name, Source, Target),
   ExpectedResults = play_scenario(Scenario, Source),
   timer:sleep(200),
   ok = check_all(ExpectedResults, Source, Target),
-  ok = barrel:stop_replication(RepId),
+  ok = barrel:stop_replication(Name),
   ok = purge_scenario(ExpectedResults, Source),
   ok = purge_scenario(ExpectedResults, Target),
   ok.
@@ -170,11 +174,12 @@ checkpoints(Config) ->
 
 play_checkpoint(Scenario, M, Config) ->
   {Source, Target} = repctx(Config),
-  {ok, RepId} = barrel:start_replication(Source, Target),
+  Name = <<"checkpoints">>,
+  {ok, Name} = barrel:start_replication(Name, Source, Target),
   Expected = play_scenario(Scenario, Source, M),
   timer:sleep(200),
   ok = check_all(Expected, Source, Target),
-  ok = barrel:stop_replication(RepId),
+  ok = barrel:stop_replication(Name),
   Expected.
 
 split(2, L) ->
