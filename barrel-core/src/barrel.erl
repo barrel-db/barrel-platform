@@ -55,7 +55,9 @@
 -export([
   start_replication/2,
   start_replication/3,
+  start_replication/4,
   stop_replication/1,
+  delete_replication/1,
   replication_info/1
 ]).
 
@@ -303,26 +305,33 @@ attachments(Conn, DocId, Options) ->
 
 
 %% replication API
+start_replication(Source, Target) ->
+  start_replication(Source, Target, []).
 
-start_replication(Source, Target) -> start_replication(Source, Target, []).
+%% TODO: maybe we should pass the calculated replication id in options?
+start_replication(Source, Target, Options) when is_list(Options) ->
+  Name = barrel_replicate:repid(Source, Target),
+  start_replication(Name, Source, Target, Options);
 
-start_replication(Source, Target, Options) ->
-  RepId = barrel_replicate:repid(Source, Target),
-  case supervisor:start_child(barrel_replicate_sup, [RepId, Source, Target, Options]) of
-    {ok, _Pid} -> {ok, RepId};
-    {error, {already_started, _Pid}} -> {ok, RepId};
+start_replication(Name, Source, Target) ->
+  start_replication(Name, Source, Target, []).
+
+start_replication(Name, Source, Target, Options) ->
+  Config = #{source => Source, target => Target, options => Options},
+  case barrel_replicate_manager:start_replication(Name, Config) of
+    ok -> {ok, Name};
     Error -> Error
   end.
 
-stop_replication(RepId) ->
-  case gproc:where(barrel_replicate:replication_key(RepId)) of
-    undefined -> ok;
-    Pid when is_pid(Pid) ->
-      supervisor:terminate_child(barrel_replicate_sup, Pid)
-  end.
+stop_replication(Name) ->
+  barrel_replicate_manager:stop_replication(Name).
+
+delete_replication(Name) ->
+  barrel_replicate_manager:delete_replication(Name).
+
   
-replication_info(RepId) ->
-  case gproc:where(barrel_replicate:replication_key(RepId)) of
-    undefined -> {error, not_found};
-    Pid -> barrel_replicate:info(Pid)
+replication_info(Name) ->
+  case barrel_replicate_manager:where(Name) of
+    Pid when is_pid(Pid) -> barrel_replicate:info(Pid);
+    undefined -> {error, not_found}
   end.
