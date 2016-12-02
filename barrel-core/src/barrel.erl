@@ -309,6 +309,7 @@ attachments(Conn, DocId, Options) ->
 start_replication(Source, Target) ->
   start_replication(Source, Target, []).
 
+%% TODO: maybe we should pass the calculated replication id in options?
 start_replication(Source, Target, Options) when is_list(Options) ->
   Name = barrel_replicate:repid(Source, Target),
   start_replication(Name, Source, Target, Options);
@@ -324,14 +325,16 @@ start_replication(Name, Source, Target, Options) ->
   end.
 
 stop_replication(Name) ->
-  case gproc:where(barrel_replicate:replication_key(Name)) of
-    undefined -> ok;
+  case barrel_replicate_manager:where(Name) of
     Pid when is_pid(Pid) ->
-      supervisor:terminate_child(barrel_replicate_sup, Pid)
+      supervisor:terminate_child(barrel_replicate_sup, Pid);
+    undefined ->
+      ok
   end.
+
   
 replication_info(Name) ->
-  case gproc:where(barrel_replicate:replication_key(Name)) of
-    undefined -> {error, not_found};
-    Pid -> barrel_replicate:info(Pid)
+  case barrel_replicate_manager:where(Name) of
+    Pid when is_pid(Pid) -> barrel_replicate:info(Pid);
+    undefined -> {error, not_found}
   end.

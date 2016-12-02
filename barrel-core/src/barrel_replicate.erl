@@ -19,7 +19,6 @@
 
 %% specific API
 -export([
-  start_link/3,
   start_link/4,
   info/1
 ]).
@@ -54,14 +53,10 @@
             , options
             }).
 
-start_link(Source, Target, Options) ->
-  Name = repid(Source, Target),
-  start_link(Name, Source, Target, Options).
+
 
 start_link(Name, Source, Target, Options) ->
-  gen_server:start_link(
-    {via, gproc, replication_key(Name)}, ?MODULE,
-    {Name, Source, Target, Options}, []).
+  gen_server:start_link(?MODULE, {Name, Source, Target, Options}, []).
 
 
 info(Pid) when is_pid(Pid)->
@@ -90,10 +85,12 @@ replication_key(Name) -> {n, l, {barrel_replicate, Name}}.
 
 init({Name, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
+  RepId = repid(Source0, Target0),
+  ok = barrel_replicate_manager:register_task(Name, RepId),
+
   {ok, Source} = maybe_connect(Source0),
   {ok, Target} = maybe_connect(Target0),
 
-  RepId = repid(Source, Target),
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
@@ -150,7 +147,8 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
   {noreply, S3}.
 
 %% default gen_server callback
-terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
+terminate(_Reason, State = #st{name=Name, id=RepId, source=Source, target=Target}) ->
+  ok = barrel_replicate_manager:unregister_task(Name),
   barrel_metrics:update_task(State#st.metrics),
   lager:info("replication ~p terminated", [RepId]),
   ok = write_checkpoint(State),
