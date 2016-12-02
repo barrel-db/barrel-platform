@@ -57,6 +57,7 @@
   start_replication/3,
   start_replication/4,
   stop_replication/1,
+  delete_replication/1,
   replication_info/1
 ]).
 
@@ -304,8 +305,6 @@ attachments(Conn, DocId, Options) ->
 
 
 %% replication API
-
-
 start_replication(Source, Target) ->
   start_replication(Source, Target, []).
 
@@ -318,19 +317,17 @@ start_replication(Name, Source, Target) ->
   start_replication(Name, Source, Target, []).
 
 start_replication(Name, Source, Target, Options) ->
-  case supervisor:start_child(barrel_replicate_sup, [Name, Source, Target, Options]) of
-    {ok, _Pid} -> {ok, Name};
-    {error, {already_started, _Pid}} -> {ok, Name};
+  Config = #{source => Source, target => Target, options => Options},
+  case barrel_replicate_manager:start_replication(Name, Config) of
+    ok -> {ok, Name};
     Error -> Error
   end.
 
 stop_replication(Name) ->
-  case barrel_replicate_manager:where(Name) of
-    Pid when is_pid(Pid) ->
-      supervisor:terminate_child(barrel_replicate_sup, Pid);
-    undefined ->
-      ok
-  end.
+  barrel_replicate_manager:stop_replication(Name).
+
+delete_replication(Name) ->
+  barrel_replicate_manager:delete_replication(Name).
 
   
 replication_info(Name) ->

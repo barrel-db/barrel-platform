@@ -28,6 +28,10 @@
    [ one_doc/1
    , source_not_empty/1
    , deleted_doc/1
+   , persistent_replication/1
+   , restart_persistent_replication/1
+   , start_duplicate_replication/1
+   , start_replication_error/1
    , random_activity/1
    , checkpoints/1
    ]).
@@ -36,6 +40,10 @@ all() ->
   [ one_doc
   , source_not_empty
   , deleted_doc
+  , persistent_replication
+  , restart_persistent_replication
+  , start_duplicate_replication
+  , start_replication_error
   , random_activity
   , checkpoints
   ].
@@ -128,6 +136,87 @@ deleted_doc(Config) ->
   true = maps:get(<<"_deleted">>, Doc3),
   ok = barrel:stop_replication(Name),
   ok.
+
+
+persistent_replication(Config) ->
+  {Source, Target} = repctx(Config),
+  Name = <<"a">>,
+  Options = [{metrics_freq, 100}, {persist, true}],
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, [AllConfig]} = file:consult("data/replication.config"),
+  RepConfig = maps:get(<<"a">>, AllConfig),
+  #{ source := Source, target := Target, options := Options} = RepConfig,
+  RepId = barrel_replicate:repid(Source, Target),
+  [{<<"a">>, {RepId, Pid, true}}] = ets:lookup(replication_names, <<"a">>),
+  true = is_pid(Pid),
+  [{RepId, {Name, true, Pid, _}}] = ets:lookup(replication_ids, RepId),
+  [{Pid, {Name, true, RepId}}] = ets:lookup(replication_ids, Pid),
+  ok = barrel:stop_replication(<<"a">>),
+  [{<<"a">>, {RepId, nil, true}}] = ets:lookup(replication_names, <<"a">>),
+  [{RepId, {Name, true, nil, nil}}] = ets:lookup(replication_ids, RepId),
+  [] = ets:lookup(replication_ids, Pid),
+  {ok, [AllConfig2]} = file:consult("data/replication.config"),
+  RepConfig2 = maps:get(<<"a">>, AllConfig2),
+  #{ source := Source, target := Target, options := Options} = RepConfig2,
+  ok = barrel:delete_replication(<<"a">>),
+  {ok, [AllConfig3]} = file:consult("data/replication.config"),
+  undefined = maps:get(<<"a">>, AllConfig3, undefined),
+  [] = ets:lookup(replication_names, <<"a">>),
+  [] = ets:lookup(replication_ids, RepId),
+  ok.
+
+restart_persistent_replication(Config) ->
+  {Source, Target} = repctx(Config),
+  Name = <<"a">>,
+  Options = [{metrics_freq, 100}, {persist, true}],
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, [AllConfig]} = file:consult("data/replication.config"),
+  RepConfig = maps:get(<<"a">>, AllConfig),
+  #{ source := Source, target := Target, options := Options} = RepConfig,
+  Manager = whereis(barrel_replicate_manager),
+  MRef = erlang:monitor(process, Manager),
+  try
+    catch unlink(Manager),
+    catch exit(Manager, shutdown),
+    receive
+      {'DOWN', MRef, _, _, _} -> ok
+    end
+  after
+    erlang:demonitor(MRef, [flush])
+  end,
+  {'EXIT', {badarg, _}} = (catch ets:lookup(replication_names, <<"a">>)),
+  timer:sleep(200),
+  RepId = barrel_replicate:repid(Source, Target),
+  [{<<"a">>, {RepId, Pid, true}}] = ets:lookup(replication_names, <<"a">>),
+  true = is_pid(Pid),
+  ok = barrel:delete_replication(<<"a">>),
+  {ok, [AllConfig3]} = file:consult("data/replication.config"),
+  undefined = maps:get(<<"a">>, AllConfig3, undefined),
+  [] = ets:lookup(replication_names, <<"a">>),
+  [] = ets:lookup(replication_ids, RepId),
+  ok.
+
+
+start_duplicate_replication(Config) ->
+  {Source, Target} = repctx(Config),
+  Name = <<"a">>,
+  Options = [{metrics_freq, 100}, {persist, true}],
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  ok = barrel:delete_replication(<<"a">>),
+  ok.
+
+start_replication_error(Config) ->
+  {Source, Target} = repctx(Config),
+  Name = <<"a">>,
+  Options = [{metrics_freq, 100}, {persist, true}],
+  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, Source, Target, Options),
+  ok = barrel:stop_replication(<<"a">>),
+  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, Source, Target, Options),
+  ok = barrel:delete_replication(<<"a">>),
+  ok.
+
 
 %% =============================================================================
 %% Complex scenarios
