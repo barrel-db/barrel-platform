@@ -149,7 +149,6 @@ random_activity(Config) ->
 play_scenario(Scenario, Config) ->
   Map = maps:new(),
   lists:foldl(fun(C, Acc) ->
-                  test_lib:log("play ~p~n",[C]),
                   play(C, Acc, Config)
               end, Map, Scenario).
 
@@ -161,13 +160,6 @@ play({del, DocName}, Map, Config) ->
   Map#{DocName => deleted}.
 
 check_all(Map, Config) ->
-  {_, Target} =  repctx(Config),
-  ct:print("check a = ~p",[barrel:get(Target, <<"a">>, [])]),
-  ct:print("check b = ~p",[barrel:get(Target, <<"b">>, [])]),
-  ct:print("check c = ~p",[barrel:get(Target, <<"c">>, [])]),
-  ct:print("check d = ~p",[barrel:get(Target, <<"d">>, [])]),
-  ct:print("check e = ~p",[barrel:get(Target, <<"e">>, [])]),
-  ct:print("check f = ~p",[barrel:get(Target, <<"f">>, [])]),
   Keys = maps:keys(Map),
   [ ok = check(K, Map, Config) || K <- Keys ],
   ok.

@@ -136,9 +136,7 @@ handle_call({get, DocId, Options}, _From, State) ->
   DbUrl = State#state.dbid,
   Sep = <<"/">>,
   Url = <<DbUrl/binary, Sep/binary, DocId/binary, (parse_get_options(Options))/binary>>,
-  ct:print("httpc get url=~p",[Url]),
   {Code, Reply} = req(get, Url),
-  ct:print("httpc reply=~p",[Reply]),
   get_resp(Code, Reply, State);
 
 handle_call({delete, DocId, RevId, _Options}, _From, State) ->
@@ -161,7 +159,6 @@ handle_call({revsdiff, DocId, RevIds}, _From, State) ->
   {200, R} = req(post, Url, Request),
   Reply = jsx:decode(R, [return_maps]),
   #{DocId := #{<<"missing">> := Missing, <<"possible_ancestors">> := Possible}} =  Reply,
-  %% ct:print("reply=~p",[Reply]),
   {reply, {ok, Missing, Possible}, State};
 
 handle_call({changes_since, Since, Fun, Acc, _Options}, _From,
@@ -179,7 +176,6 @@ handle_call({changes_since, Since, Fun, Acc, Options}, _From, S) ->
   ChangesSince = <<"/_changes?feed=normal&since=">>,
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary, History/binary>>,
-  test_lib:log("~p;change_since call changes for url;~512p~n",[?MODULE, Url]),
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
   {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
@@ -222,7 +218,6 @@ handle_cast({longpoll, DbUrl, Since}, S) ->
   SinceBin = integer_to_binary(Since),
   Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
   Opts = [async, {recv_timeout, 300000}],
-  test_lib:log("~p;longpoll call changes for url;~512p~n",[?MODULE, Url]),
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
   {noreply, S#state{dbid=DbUrl, hackney_ref=ClientRef, hackney_acc=EmptyAcc}};

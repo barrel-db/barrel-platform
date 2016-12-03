@@ -275,14 +275,12 @@ is_conflict(Req, State) ->
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
-                       ct:print("edit=~p ~p",[EditStr, Req]),
                        case Edit of
                          false ->
                            { barrel:put(Conn, DocId, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           test_lib:log("~p;put_rev doc;~512p~n",[?MODULE, Doc]),
                            {barrel:put_rev(Conn, DocId, Doc, History, []), Req3}
                        end
                    end,
@@ -319,7 +317,6 @@ from_json(Req, State) ->
 
 to_json(Req, State) ->
   Doc = State#state.doc,
-  test_lib:log("~p;get;~512p~n",[?MODULE, Doc]),
   Json = jsx:encode(Doc),
   {Json, Req, State}.
 
@@ -349,7 +346,6 @@ post_put(Method, Conn, DocIdAsBin, Req, State) ->
             true ->
               Doc = maps:get(<<"document">>, Json),
               History = maps:get(<<"history">>, Json),
-              test_lib:log("~p;put_rev doc;~512p~n",[?MODULE, Doc]),
               {barrel:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
           end
       end,

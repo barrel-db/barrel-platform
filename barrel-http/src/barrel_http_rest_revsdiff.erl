@@ -65,7 +65,6 @@ handle(<<"POST">>, Store, DbId, Req, State) ->
                          Acc#{DocId => #{<<"missing">> => Missing,
                                          <<"possible_ancestors">> => Possible}}
                      end,#{}, RequestedDocs),
-  test_lib:log("~p;reply;~512p~n",[?MODULE, Result]),
   barrel_http_reply:doc(Result, Req2, State);
 
 
