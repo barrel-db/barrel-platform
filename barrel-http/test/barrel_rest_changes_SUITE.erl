@@ -21,6 +21,7 @@
          init_per_testcase/2]).
 
 -export([ accept_get_normal/1
+        , accept_get_history_all/1
         , accept_get_longpoll/1
         , accept_get_longpoll_heartbeat/1
         , accept_get_eventsource/1
@@ -29,6 +30,7 @@
         ]).
 
 all() -> [ accept_get_normal
+         , accept_get_history_all
          , accept_get_longpoll
          , accept_get_longpoll_heartbeat
          , accept_get_eventsource
@@ -54,7 +56,7 @@ end_per_suite(Config) ->
 
 
 put_cat() ->
-  Doc = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
+  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
   {201, R} = test_lib:req(put, "/testdb/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
@@ -64,10 +66,10 @@ delete_cat(CatRevId) ->
   {200, R3} = test_lib:req(delete, "/testdb/testdb/cat?rev=" ++ CatRevId),
   A3 = jsx:decode(R3, [return_maps]),
   true = maps:get(<<"ok">>, A3),
-  A3.
+  binary_to_list(maps:get(<<"rev">>, A3)).
 
 put_dog() ->
-  Doc = "{\"_id\": \"dog\", \"name\": \"spike\"}",
+  Doc = "{\"id\": \"dog\", \"name\": \"spike\"}",
   {201, R} = test_lib:req(put, "/testdb/testdb/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
@@ -90,6 +92,27 @@ accept_get_normal(_Config) ->
   2 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
   1 = length(Results2),
+  ok.
+
+accept_get_history_all(_Config) ->
+  CreateRevId = put_cat(),
+  put_dog(),
+  DeleteRevId = delete_cat(CreateRevId),
+
+  {200, R1} = test_lib:req(get, "/testdb/testdb/_changes?history=all"),
+  A1 = jsx:decode(R1, [return_maps]),
+  3 = maps:get(<<"last_seq">>, A1),
+  Results1 = maps:get(<<"results">>, A1),
+  2 = length(Results1),
+  #{<<"id">> := <<"cat">>,
+    <<"changes">> := CatHistory} = hd(Results1),
+  [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
+
+  {200, R2} = test_lib:req(get, "/testdb/testdb/_changes?since=1"),
+  A2 = jsx:decode(R2, [return_maps]),
+  3 = maps:get(<<"last_seq">>, A2),
+  Results2 = maps:get(<<"results">>, A2),
+  2 = length(Results2),
   ok.
 
 %%=======================================================================
