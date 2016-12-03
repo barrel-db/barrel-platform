@@ -32,10 +32,10 @@
    ]).
 
 all() ->
-  [% one_doc
-  %% , target_not_empty
-   %% deleted_doc
-   random_activity
+  [ one_doc
+  , target_not_empty
+  , deleted_doc
+  , random_activity
   ].
 
 init_per_suite(Config) ->
@@ -120,18 +120,14 @@ deleted_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  Doc = #{ <<"id">> => <<"tobedeleted">>, <<"v">> => 1},
-  {ok, <<"tobedeleted">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  DocId = <<"tobedeleted">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  {ok, DocId, RevId} = barrel:put(Source, DocId, Doc, []),
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
-  barrel:delete(Source, <<"tobedeleted">>, RevId, []),
+  barrel:delete(Source, DocId, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel:get(Target, <<"tobedeleted">>, []),
-
-  %% TODO bug to be fixed
-  %% https://gitlab.com/barrel-db/barrel-http/issues/1
-  true = maps:get(<<"_deleted">>, Doc3),
-
+  {error, not_found} = barrel:get(Target, DocId, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
@@ -166,18 +162,14 @@ check_all(Map, Config) ->
 
 check(DocName, Map, Config) ->
   {Source, Target} =  repctx(Config),
-  Id = list_to_binary(DocName),
-  {ok, DocSource} = barrel:get(Source, Id, []),
-  DocTarget = case barrel:get(Target, Id, []) of
-                {ok, Doc} -> Doc;
-                {error, not_found} ->
-                  ct:fail("Doc not found in target=~p id=~p",[Target, Id])
-              end,
+  DocId = list_to_binary(DocName),
   case maps:get(DocName, Map) of
     deleted ->
-      true = maps:get(<<"_deleted">>, DocSource),
-      true = maps:get(<<"_deleted">>, DocTarget);
+      {error, not_found} = barrel:get(Source, DocId, []),
+      {error, not_found} = barrel:get(Target, DocId, []);
     Expected ->
+      {ok, DocSource} = barrel:get(Source, DocId, []),
+      {ok, DocTarget} = barrel:get(Target, DocId, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -185,14 +177,14 @@ check(DocName, Map, Config) ->
 
 put_doc(DocName, Value, Config) ->
   {Source, _Target} = repctx(Config),
-  Id = list_to_binary(DocName),
-  case barrel:get(Source, Id, []) of
+  DocId = list_to_binary(DocName),
+  case barrel:get(Source, DocId, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, Id, Doc2, []);
+      {ok,_,_} = barrel:put(Source, DocId, Doc2, []);
     {error, not_found} ->
-      Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, Id, Doc, [])
+      Doc = #{<<"id">> => DocId, <<"v">> => Value},
+      {ok,_,_} = barrel:put(Source, DocId, Doc, [])
   end.
 
 delete_doc(DocName, Config) ->

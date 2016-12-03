@@ -91,8 +91,8 @@ put_get_delete(Config) ->
   Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel_httpc:get(HttpConn, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_httpc:delete(HttpConn, <<"a">>, RevId, []),
-  {ok, DeletedDoc} = barrel_httpc:get(HttpConn, <<"a">>, []),
-  true = maps:get(<<"_deleted">>, DeletedDoc).
+  {error, not_found} = barrel_httpc:get(HttpConn, <<"a">>, []),
+  ok.
 
 put_rev(Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
@@ -105,7 +105,7 @@ put_rev(Config) ->
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc3),
   Doc4 = Doc3#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
-  {ok, DocId, NewRev} = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
+  ok = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
   ok.
 
 system_doc(Config) ->

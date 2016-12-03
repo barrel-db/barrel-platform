@@ -136,8 +136,7 @@ accept_delete(Config) ->
   Url = "/testdb/testdb/acceptdelete?rev=" ++ RevId,
   {200, _} = test_lib:req(delete, Url),
 
-  {ok, DeletedDoc} = barrel:get(Conn, <<"acceptdelete">>, []),
-  #{<<"_deleted">> := true} = DeletedDoc,
+  {error, not_found} = barrel:get(Conn, <<"acceptdelete">>, []),
   ok.
 
 reject_store_or_db_unknown(_) ->

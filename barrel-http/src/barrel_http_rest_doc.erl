@@ -281,12 +281,15 @@ is_conflict(Req, State) ->
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           {barrel:put_rev(Conn, DocId, Doc, History, []), Req3}
+                           case barrel:put_rev(Conn, DocId, Doc, History, []) of
+                             ok ->
+                               {ok, #{<<"_rev">> := Rev}} = barrel:get(Conn, DocId, []),
+                               {{ok, DocId, Rev}, Req3};
+                             Error -> {Error, Req3}
+                           end
                        end
                    end,
   case Result of
-    %% {error, not_found} ->
-    %%   barrel_http_reply:code(404, Req4, State);
     {error, {conflict, revision_conflict}} ->
       {true, Req4, State};
     {error, {conflict, doc_exists}} ->
