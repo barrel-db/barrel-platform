@@ -180,7 +180,7 @@ replicate_change(Source, Target, StartSeq, Metrics) ->
 
 sync_change(Source, Target, Change, Metrics) ->
   #{id := DocId, changes := History} = Change,
-  {ok, MissingRevisions, _PossibleAncestors} = barrel:revsdiff(Target, DocId, History),
+  {ok, MissingRevisions, _PossibleAncestors} = revsdiff(Target, DocId, History),
   Metrics2 = lists:foldr(fun(Revision, Acc) ->
                              sync_revision(Source, Target, DocId, Revision, Acc)
                          end, Metrics, MissingRevisions),
@@ -245,6 +245,11 @@ changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
 changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
   barrel_db:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
+
+revsdiff({Mod, ModState}, DocId, History) ->
+  Mod:revsdiff(ModState, DocId, History);
+revsdiff(Conn, DocId, History) ->
+  barrel:revsdiff(Conn, DocId, History).
 
 %% =============================================================================
 %% Checkpoints management: when, where and what
