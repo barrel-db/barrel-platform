@@ -21,10 +21,16 @@
          init_per_testcase/2]).
 
 -export([ accept_get/1
+        , accept_start_key/1
+        , accept_end_key/1
+        , accept_max/1
         , reject_store_or_db_unknown/1
         ]).
 
 all() -> [ accept_get
+         , accept_start_key
+         , accept_end_key
+         , accept_max
          , reject_store_or_db_unknown
          ].
 
@@ -65,6 +71,41 @@ accept_get(Config) ->
   Row = hd(Rows2),
   #{<<"id">> := <<"dog">>, <<"rev">> := DogRevId} = Row,
   ok.
+
+accept_start_key(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  ok = create_docs(<<"startkey">>, 10, Conn),
+
+  {200, R} = test_lib:req(get, "/testdb/testdb/_all_docs?start_key=startkey0004"),
+  A = jsx:decode(R, [return_maps]),
+  #{<<"rows">> := Rows} = A,
+  7 = length(Rows),
+  ok.
+
+accept_end_key(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  ok = create_docs(<<"endkey">>, 10, Conn),
+
+  {200, R} = test_lib:req(get, "/testdb/testdb/_all_docs?end_key=endkey0004"),
+  A = jsx:decode(R, [return_maps]),
+  #{<<"rows">> := Rows} = A,
+  4 = length(Rows),
+  ok.
+
+accept_max(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  ok.
+
+create_docs(_Prefix, 0, _Conn) ->
+  ok;
+create_docs(Prefix, N, Conn) ->
+  S = lists:flatten(io_lib:format("~4..0B",[N])),
+  B = list_to_binary(S),
+  Key = <<Prefix/binary, B/binary>>,
+  Doc = #{<<"id">> => Key, <<"v">> => 1},
+  {ok, _, _} = barrel:put(Conn, Key, Doc, []),
+  create_docs(Prefix, N-1, Conn).
+
 
 reject_store_or_db_unknown(_Config) ->
   {400, _} = test_lib:req(get, "/badstore/testdb/_all_docs"),
