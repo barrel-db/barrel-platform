@@ -42,9 +42,12 @@ code(HttpCode, Req, State ) ->
 error(HttpCode, Req, State) ->
   error(HttpCode, message(HttpCode), Req, State).
 
-error(HttpCode, Message, Req, State) ->
+error(HttpCode, Message, Req, State) when is_list(Message) ->
+  error(HttpCode, list_to_binary(Message), Req, State);
+
+error(HttpCode, Message, Req, State) when is_binary(Message) ->
   Headers = [{<<"content-type">>, <<"application/json">>}],
-  Doc = #{message => list_to_binary(Message)},
+  Doc = #{message => Message},
   Json = jsx:encode(Doc),
   reply(HttpCode, Headers, Json, Req, State).
 

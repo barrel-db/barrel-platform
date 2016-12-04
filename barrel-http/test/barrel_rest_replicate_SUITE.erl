@@ -23,7 +23,7 @@
 -export([ accept_post_get/1
         , accept_put_get/1
         , accept_delete/1
-        , accept_start/1
+        , accept_patch/1
         , reject_replication_name_unknown/1
         , reject_store_or_db_unknown/1
         , reject_bad_json /1
@@ -32,7 +32,7 @@
 all() -> [ accept_post_get
          , accept_put_get
          , accept_delete
-         , accept_start
+         , accept_patch
          , reject_replication_name_unknown
          , reject_store_or_db_unknown
          , reject_bad_json
@@ -65,8 +65,8 @@ accept_post_get(_Config) ->
   Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
               <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
   {200, R} = test_lib:req(post, "/_replicate", Request),
-  #{<<"repid">> := RepIdBin} = jsx:decode(R, [return_maps]),
-  RepId = binary_to_list(RepIdBin),
+  #{<<"name">> := NameBin} = jsx:decode(R, [return_maps]),
+  Name = binary_to_list(NameBin),
 
   %% put one doc in source db
   Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
@@ -76,7 +76,7 @@ accept_post_get(_Config) ->
   {200, _} = test_lib:req(get, "/testdb/dbb/mouse"),
 
   {404, _} = test_lib:req(get, "/_replicate/doesnotexist"),
-  {200, R2} = test_lib:req(get, "/_replicate/" ++ RepId),
+  {200, R2} = test_lib:req(get, "/_replicate/" ++ Name),
   Metrics = jsx:decode(R2, [return_maps]),
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
@@ -84,24 +84,23 @@ accept_post_get(_Config) ->
 
 accept_put_get(_Config) ->
   %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dba", []),
-  {201, _} = test_lib:req(put, "/testdb/dbb", []),
+  {201, _} = test_lib:req(put, "/testdb/dbaa", []),
+  {201, _} = test_lib:req(put, "/testdb/dbbb", []),
 
-  {404, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {404, _} = test_lib:req(get, "/testdb/dbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbb">>,
-              <<"persist">> => true,
-              <<"start">> => true},
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaa">>,
+              <<"target">> => <<"http://localhost:8080/testdb/dbbb">>,
+              <<"persisted">> => true},
   {200, R} = test_lib:req(put, "/_replicate/myreplication", Request),
   #{<<"name">> := <<"myreplication">>} = jsx:decode(R, [return_maps]),
 
   %% put one doc in source db
-  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/mouse", Mouse),
+  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
+  {201, _} = test_lib:req(put, "/testdb/dbaa/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {200, _} = test_lib:req(get, "/testdb/dbbb/mouse"),
 
   {200, R2} = test_lib:req(get, "/_replicate/myreplication"),
   Metrics = jsx:decode(R2, [return_maps]),
@@ -111,79 +110,76 @@ accept_put_get(_Config) ->
 
 accept_delete(_Config) ->
   %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dba", []),
-  {201, _} = test_lib:req(put, "/testdb/dbb", []),
+  {201, _} = test_lib:req(put, "/testdb/dbaaa", []),
+  {201, _} = test_lib:req(put, "/testdb/dbbbb", []),
 
-  {404, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {404, _} = test_lib:req(get, "/testdb/dbbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbb">>,
-              <<"persist">> => true,
-              <<"start">> => true},
-  {200, R} = test_lib:req(put, "/_replicate/myreplication", Request),
-  #{<<"name">> := <<"myreplication">>} = jsx:decode(R, [return_maps]),
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaaa">>,
+              <<"target">> => <<"http://localhost:8080/testdb/dbbbb">>,
+              <<"persisted">> => true},
+  {200, R} = test_lib:req(put, "/_replicate/tasktobedeleted", Request),
+  #{<<"name">> := <<"tasktobedeleted">>} = jsx:decode(R, [return_maps]),
 
   %% put one doc in source db
-  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/mouse", Mouse),
+  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
+  {201, _} = test_lib:req(put, "/testdb/dbaaa/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {200, _} = test_lib:req(get, "/testdb/dbbbb/mouse"),
 
   %% delete the replication task
-  {200, _} = test_lib:req(get, "/_replicate/myreplication"),
-  {200, _} = test_lib:req(delete, "/_replicate/myreplication"),
-  {404, _} = test_lib:req(get, "/_replicate/myreplication"),
+  {200, _} = test_lib:req(get, "/_replicate/tasktobedeleted"),
+  {200, _} = test_lib:req(delete, "/_replicate/tasktobedeleted"),
+  {404, _} = test_lib:req(get, "/_replicate/tasktobedeleted"),
 
   %% put another doc in source db
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/cat", Cat),
+  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
+  {201, _} = test_lib:req(put, "/testdb/dbaaa/cat", Cat),
   timer:sleep(500),
 
   %% it has not been replicated
-  {404, _} = test_lib:req(get, "/testdb/dbb/cat"),
+  {404, _} = test_lib:req(get, "/testdb/dbbbb/cat"),
   ok.
 
-accept_start(_Config) ->
+accept_patch(_Config) ->
   %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dba", []),
-  {201, _} = test_lib:req(put, "/testdb/dbb", []),
+  {201, _} = test_lib:req(put, "/testdb/dbaaaa", []),
+  {201, _} = test_lib:req(put, "/testdb/dbbbbb", []),
 
-  {404, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {404, _} = test_lib:req(get, "/testdb/dbbbbb/mouse"),
   %% create a replication task from one db to the other
   %% but do not start yet
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbb">>,
-              <<"persist">> => true,
-              <<"start">> => false},
-  {200, R} = test_lib:req(put, "/_replicate/myreplication", Request),
-  #{<<"name">> := <<"myreplication">>} = jsx:decode(R, [return_maps]),
+  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaaaa">>,
+              <<"target">> => <<"http://localhost:8080/testdb/dbbbbb">>,
+              <<"persisted">> => true},
+  {200, R} = test_lib:req(put, "/_replicate/tasktobestartedlater", Request),
+  #{<<"name">> := <<"tasktobestartedlater">>} = jsx:decode(R, [return_maps]),
 
   %% put one doc in source db
-  Mouse = "{\"_id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/mouse", Mouse),
+  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
+  {201, _} = test_lib:req(put, "/testdb/dbaaaa/mouse", Mouse),
   timer:sleep(500),
-  %% not yet in target db
-  {404, _} = test_lib:req(get, "/testdb/dbb/mouse"),
-
-  %% start the replication task
-  Start = #{<<"start">> => true},
-  {200, _} = test_lib:req(patch, "/_replicate/myreplication", Start),
-
-  %% the doc has been replicated
-  {200, _} = test_lib:req(get, "/testdb/dbb/cat"),
+  {200, _} = test_lib:req(get, "/testdb/dbbbbb/mouse"),
 
   %% stop the replication task
-  Stop = #{<<"start">> => false},
-  {200, _} = test_lib:req(patch, "/_replicate/myreplication", Stop),
+  Stop = #{<<"started">> => false},
+  {200, _} = test_lib:req(patch, "/_replicate/tasktobestartedlater", Stop),
 
   %% put another doc in source db
-  Cat = "{\"_id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/cat", Cat),
+  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
+  {201, _} = test_lib:req(put, "/testdb/dbaaaa/cat", Cat),
   timer:sleep(500),
 
   %% it has not been replicated
-  {404, _} = test_lib:req(get, "/testdb/dbb/cat"),
+  {404, _} = test_lib:req(get, "/testdb/dbbbbb/cat"),
+
+  %% restart the replication task
+  Start = #{<<"started">> => true},
+  {405, _} = test_lib:req(patch, "/_replicate/tasktobestartedlater", Start),
+
+  %% it has not been replicated
+  %% {200, _} = test_lib:req(get, "/testdb/dbbbbb/cat"),
   ok.
 
 
@@ -195,8 +191,7 @@ reject_replication_name_unknown(_Config) ->
   ok.
 
 reject_store_or_db_unknown(_Config) ->
-  M = #{<<"persist">> => true,
-        <<"start">> => true},
+  M = #{<<"persisted">> => true},
   NoStoreSource = M#{<<"source">> => <<"http://localhost:8080/nostore/dba">>,
                     <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
   NoStoreTarget = M#{<<"source">> => <<"http://localhost:8080/testdb/dba">>,

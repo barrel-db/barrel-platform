@@ -98,17 +98,21 @@ terminate(_Reason, _Req, _State) ->
 route(Req, #state{method= <<"POST">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
-  check_name(Req, State);
+  check_body(Req, State);
 route(Req, #state{method= <<"GET">>}=State) ->
   check_name(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  check_name(Req, State).
+  check_name(Req, State);
+route(Req, #state{method= <<"PATCH">>}=State) ->
+  check_body(Req, State);
+route(Req, State) ->
+  barrel_http_reply:error(405, Req, State).
 
 check_name(Req, State) ->
   {Name, Req2} = cowboy_req:binding(name, Req),
   case barrel:replication_info(Name) of
     {error, not_found} ->
-      barrel_http_reply:error(404, "unknown replication task", Req2, State);
+      barrel_http_reply:error(404, <<"unknown replication task: ", Name/binary>>, Req2, State);
     _ ->
       check_body(Req2, State#state{name=Name})
   end.
@@ -116,6 +120,8 @@ check_name(Req, State) ->
 check_body(Req, #state{method= <<"POST">>}=State) ->
   check_json_is_valid(Req, State);
 check_body(Req, #state{method= <<"PUT">>}=State) ->
+  check_json_is_valid(Req, State);
+check_body(Req, #state{method= <<"PATCH">>}=State) ->
   check_json_is_valid(Req, State);
 check_body(Req, #state{method= <<"GET">>}=State) ->
   get_resource(Req, State);
@@ -184,18 +190,18 @@ get_resource(Req, State) ->
       barrel_http_reply:doc(Metrics, Req2, State)
   end.
 
-create_resource(Req, #state{method=Method, source=SourceUrl, target=TargetUrl}=State) ->
+create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
+  {ReqName, Req2} = cowboy_req:binding(name, Req),
   SourceConn = {barrel_httpc, SourceUrl},
   TargetConn = {barrel_httpc, TargetUrl},
-  {ok, Name} = case Method of
-                 <<"POST">> ->
+  {ok, Name} = case ReqName of
+                 undefined ->
                    barrel:start_replication(SourceConn, TargetConn, []);
-                 <<"PUT">> ->
-                   N = State#state.name,
-                   barrel:start_replication(N, SourceConn, TargetConn, [])
+                 _ ->
+                   barrel:start_replication(ReqName, SourceConn, TargetConn, [])
                end,
   Doc = #{name => Name},
-  barrel_http_reply:doc(Doc, Req, State).
+  barrel_http_reply:doc(Doc, Req2, State).
 
 delete_resource(Req, #state{name=Name}=State) ->
   ok = barrel:delete_replication(Name),
@@ -203,10 +209,12 @@ delete_resource(Req, #state{name=Name}=State) ->
 
 
 patch_resource(Req, #state{started=true}=State) ->
-  barrel_http_reply:code(200, Req, State);
+  barrel_http_reply:error(405, <<"function not implemented yet">>, Req, State);
 
 patch_resource(Req, #state{started=false}=State) ->
-  barrel_http_reply:code(200, Req, State).
+  {ReqName, Req2} = cowboy_req:binding(name, Req),
+  ok = barrel:stop_replication(ReqName),
+  barrel_http_reply:code(200, Req2, State).
 
 %% =============================================================================
 %% Check posted JSON properties
@@ -216,12 +224,12 @@ params() ->
   #{<<"POST">> =>
       #{<<"source">> => mandatory,
         <<"target">> => mandatory,
-        <<"persited">> => {default, true}},
+        <<"persisted">> => optional},
     <<"PUT">> =>
       #{<<"source">> => mandatory,
         <<"target">> => mandatory,
-        <<"persited">> => {default, true}},
-    <<"PACH">> =>
+        <<"persisted">> => optional},
+    <<"PATCH">> =>
       #{<<"started">> => optional,
         <<"persisted">> => optional}
    }.
@@ -230,41 +238,54 @@ check_body_properties(OkFun, FailFun, Req, #state{method=Method, body=Body}=Stat
   Map = params(),
   #{Method := Params} = Map,
   case check_params(Body, Params) of
-    ok ->
+    {ok, _} ->
       OkFun(Req, State);
     {error, {missing, Missing}} ->
       FailFun(<<"missing requirement property ", Missing/binary>>, Req, State);
     {error, {unknown, List}} ->
-      Unknown = hd(List),
+      {Unknown,_} = hd(List),
       FailFun(<<"unknown property ", Unknown/binary>>, Req, State)
   end.
 
 check_params(Json, Params) ->
+  JsonKeys = maps:keys(Json),
+  Props = maps:from_list([{K, unknown} || K <- JsonKeys]),
   Accepted = maps:to_list(Params),
-  {Mandatories, Optionals} = lists:filter(fun({_,mandatory}) -> true;
-                                             ({_,_}) -> false
-                                          end, Accepted),
-  Props = maps:keys(Json),
-  case check_mandatories(Props, Mandatories) of
-    {ok, Other} ->
-      check_optionals(Other, Optionals);
-    Error -> Error
+  {Mandatories, Optionals} = lists:partition(fun({_,mandatory}) -> true;
+                                                ({_,_}) -> false
+                                             end, Accepted),
+  case check_mandatories(Mandatories, Props) of
+    {ok, Props2} ->
+      check_optionals(Optionals, Props2);
+    {error, E} ->
+      {error, E}
   end.
 
-check_mandatories(Props, Mandatories) ->
-  case lists:dropwhile(fun(M) ->
-                          maps:get(M, Props, undefined) =/= undefined
-                       end, Mandatories) of
-    true -> ok;
-    Missings -> {error, {missing, hd(Missings)}}
+check_mandatories([], Props) ->
+  {ok, Props};
+check_mandatories([{M,mandatory}|Tail], Props) ->
+  case maps:is_key(M, Props) of
+    true ->
+      check_mandatories(Tail, Props#{M => mandatory});
+    false ->
+      {error, {missing, M}}
   end.
 
-check_optionals(Props, Optionals) ->
-  case lists:filter(fun(P) ->
-                        not lists:member(P, Optionals)
-                    end, Props) of
+check_optionals([], Props) ->
+  Unknown = lists:filter(fun({_,unknown}) -> true;
+                            (_) -> false
+                         end, maps:to_list(Props)),
+  case Unknown of
     [] ->
-      ok;
-    Unknowns -> {error, {unknown, Unknowns}}
+      {ok, Props};
+    L ->
+      {error, {unknown, L}}
+  end;
+check_optionals([{O, optional}|Tail], Props) ->
+  case maps:is_key(O, Props) of
+    true ->
+      check_optionals(Tail, Props#{O => optional});
+    false ->
+      check_optionals(Tail, Props)
   end.
 
