@@ -226,13 +226,28 @@ malformed_request_body(Req, #state{body= <<>>, method= <<"PUT">>}=S) ->
   {true, Req, S};
 malformed_request_body(Req, #state{body=Body}=S) ->
   try jsx:decode(Body, [return_maps]) of
-      Json -> {false, Req, S#state{body=Json}}
+      Json ->
+      malformed_json_properties(Req, S#state{body=Json})
   catch
     _:_ ->
       {true, Req, S}
   end.
 
+malformed_json_properties(Req, #state{method= <<"POST">>}=State) ->
+  missing_id_property(Req, State);
+malformed_json_properties(Req, #state{method= <<"PUT">>, edit=undefined}=State) ->
+  missing_id_property(Req, State);
+malformed_json_properties(Req, State) ->
+  {false, Req, State}.
 
+
+missing_id_property(Req, #state{body=Json}=State) ->
+  case maps:is_key(<<"id">>, Json) of
+    true ->
+      {false, Req, State};
+    false ->
+      {true, Req, State}
+  end.
 
 resource_exists(Req, State) ->
   resource_exists_doc(Req, State).

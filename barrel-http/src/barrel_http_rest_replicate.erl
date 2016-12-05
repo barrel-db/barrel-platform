@@ -38,7 +38,12 @@ trails() ->
        put => #{ summary => "Create a replication task"
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"name">>
+                   [#{ name => <<"body">>
+                     , description => <<"Parameters for the replication task">>
+                     , in => <<"body">>
+                     , required => true
+                     , type => <<"json">>},
+                    #{ name => <<"name">>
                      , description => <<"Replication task name">>
                      , in => <<"path">>
                      , required => true
