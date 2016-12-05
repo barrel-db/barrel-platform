@@ -161,9 +161,10 @@ reject_unknown_query_parameters(_) ->
   ok.
 
 reject_bad_json(_) ->
-  Doc = "{\"name\": \"badjson",
-  {400, _} = test_lib:req(put, "/testdb/testdb/docid", Doc),
-  %% {400, _} = test_lib:req(post, "/testdb/testdb", Doc),
+  BadJson = "{\"name\": \"badjson",
+  {400, _} = test_lib:req(put, "/testdb/testdb/docid", BadJson),
+  NoId = "{\"name\": \"whatever\"}",
+  {400, _} = test_lib:req(put, "/testdb/testdb/docid", NoId),
   ok.
 
 
@@ -203,7 +204,8 @@ put_rev(Config) ->
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],
-  Request = #{<<"document">> => Doc,
+  Request = #{<<"id">> => cat,
+              <<"document">> => Doc,
               <<"history">> => History},
   {201, R} = test_lib:req(put, "/testdb/testdb/cat?edit=true", Request),
   A = jsx:decode(R, [return_maps]),
