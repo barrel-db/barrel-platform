@@ -14,7 +14,7 @@
   write_doc/6,
   get_doc/7,
   fold_by_id/5,
-  changes_since/5,
+  changes_since/6,
   last_update_seq/2,
   write_system_doc/4,
   read_system_doc/3,
@@ -55,7 +55,7 @@
   AccIn::any(), FoldOpts :: list(), State::any()) -> AccOut :: any().
 
 -callback changes_since(DbId :: binary(), Since :: integer(), Fun :: fun(),
-  AccIn::any(), State::any()) -> AccOut :: any().
+  AccIn::any(), Opts::list(), State::any()) -> AccOut :: any().
 
 -callback last_update_seq(DbId :: binary(), State :: any()) ->
   Seq :: integer | {error, term()}.
@@ -86,8 +86,8 @@ get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
 fold_by_id(Store, DbId, Fun, AccIn, Opts) ->
   call(Store, {fold_by_id, DbId, Fun, AccIn, Opts}).
 
-changes_since(Store, DbId, Since, Fun, AccIn) ->
-  call(Store, {changes_since, DbId, Since, Fun, AccIn}).
+changes_since(Store, DbId, Since, Fun, AccIn, Opts) ->
+  call(Store, {changes_since, DbId, Since, Fun, AccIn, Opts}).
 
 last_update_seq(Store, DbId) ->
   call(Store, {last_update_seq, DbId}).

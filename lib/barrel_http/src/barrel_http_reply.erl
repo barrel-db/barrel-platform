@@ -18,6 +18,9 @@
 -export([doc/3]).
 -export([json/3, json/4]).
 -export([code/3]).
+-export([error/3]).
+-export([error/4]).
+
 
 doc(Doc, Req, State ) ->
   Json = jsx:encode(Doc),
@@ -36,7 +39,25 @@ json(_, _, _, _) -> erlang:error(badarg).
 code(HttpCode, Req, State ) ->
   reply(HttpCode, [], [], Req, State).
 
+error(HttpCode, Req, State) ->
+  error(HttpCode, message(HttpCode), Req, State).
+
+error(HttpCode, Message, Req, State) when is_list(Message) ->
+  error(HttpCode, list_to_binary(Message), Req, State);
+
+error(HttpCode, Message, Req, State) when is_binary(Message) ->
+  Headers = [{<<"content-type">>, <<"application/json">>}],
+  Doc = #{message => Message},
+  Json = jsx:encode(Doc),
+  reply(HttpCode, Headers, Json, Req, State).
+
 reply(HttpCode, Headers, Content, Req, State) ->
   H = [{<<"server">>, <<"BarrelDB (Erlang/OTP)">>} | Headers],
   {ok, Req2} = cowboy_req:reply(HttpCode, H, Content, Req),
   {ok, Req2, State}.
+
+
+message(404) ->
+  "not found";
+message(405) ->
+  "method not allowed".

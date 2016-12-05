@@ -95,8 +95,9 @@ one_doc(Config) ->
   ok.
 
 changes(Conn, Since) ->
-  Fun = fun(Seq, DocInfo, _Doc, {_LastSeq, DocInfos}) ->
-            {ok, {Seq, [DocInfo|DocInfos]}}
+  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
+            LastSeq = max(Seq, PreviousLastSeq),
+            {ok, {LastSeq, [Change|Changes1]}}
         end,
   barrel:changes_since(Conn, Since, Fun, {Since, []}).
 
@@ -104,14 +105,14 @@ target_not_empty(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  Doc = #{ <<"id">> => <<"targetnotempty">>, <<"v">> => 1},
+  {ok, <<"targetnotempty">>, RevId} = barrel:put(Source, <<"targetnotempty">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   timer:sleep(200),
 
-  {ok, Doc2} = barrel:get(Target, <<"a">>, []),
+  {ok, Doc2} = barrel:get(Target, <<"targetnotempty">>, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
@@ -119,18 +120,14 @@ deleted_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  DocId = <<"tobedeleted">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  {ok, DocId, RevId} = barrel:put(Source, DocId, Doc, []),
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
-  barrel:delete(Source, <<"a">>, RevId, []),
+  barrel:delete(Source, DocId, RevId, []),
   timer:sleep(200),
-  {ok, Doc3} = barrel:get(Target, <<"a">>, []),
-
-  %% TODO bug to be fixed
-  %% https://gitlab.com/barrel-db/barrel-http/issues/1
-  true = maps:get(<<"_deleted">>, Doc3),
-
+  {error, not_found} = barrel:get(Target, DocId, []),
   ok = barrel:stop_replication(Pid),
   ok.
 
@@ -140,7 +137,7 @@ random_activity(Config) ->
   Scenario = generate_scenario(),
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   ExpectedResults = play_scenario(Scenario, Config),
-  timer:sleep(200),
+  timer:sleep(1000),
   ok = check_all(ExpectedResults, Config),
   ok = barrel:stop_replication(Pid),
   ok.
@@ -159,20 +156,20 @@ play({del, DocName}, Map, Config) ->
   Map#{DocName => deleted}.
 
 check_all(Map, Config) ->
- Keys = maps:keys(Map),
+  Keys = maps:keys(Map),
   [ ok = check(K, Map, Config) || K <- Keys ],
   ok.
 
 check(DocName, Map, Config) ->
   {Source, Target} =  repctx(Config),
-  Id = list_to_binary(DocName),
-  {ok, DocSource} = barrel:get(Source, Id, []),
-  {ok, DocTarget} = barrel:get(Target, Id, []),
+  DocId = list_to_binary(DocName),
   case maps:get(DocName, Map) of
     deleted ->
-      true = maps:get(<<"_deleted">>, DocSource),
-      true = maps:get(<<"_deleted">>, DocTarget);
+      {error, not_found} = barrel:get(Source, DocId, []),
+      {error, not_found} = barrel:get(Target, DocId, []);
     Expected ->
+      {ok, DocSource} = barrel:get(Source, DocId, []),
+      {ok, DocTarget} = barrel:get(Target, DocId, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -180,14 +177,14 @@ check(DocName, Map, Config) ->
 
 put_doc(DocName, Value, Config) ->
   {Source, _Target} = repctx(Config),
-  Id = list_to_binary(DocName),
-  case barrel:get(Source, Id, []) of
+  DocId = list_to_binary(DocName),
+  case barrel:get(Source, DocId, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, Id, Doc2, []);
+      {ok,_,_} = barrel:put(Source, DocId, Doc2, []);
     {error, not_found} ->
-      Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, Id, Doc, [])
+      Doc = #{<<"id">> => DocId, <<"v">> => Value},
+      {ok,_,_} = barrel:put(Source, DocId, Doc, [])
   end.
 
 delete_doc(DocName, Config) ->
@@ -207,5 +204,7 @@ generate_scenario() ->
   , {put, "f", 1}
   , {put, "f", 2}
   , {del, "a"}
-  , {put, "f", 3}
+  %% , {put, "a", 3}
+  %% , {put, "f", 3}
+  , {del, "f"}
   ].

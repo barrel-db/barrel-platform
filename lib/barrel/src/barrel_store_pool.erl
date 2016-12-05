@@ -74,9 +74,9 @@ handle_call({fold_by_id, DbId, Fun, AccIn, Opts}, _From,  State=#state{ mod=Mod,
   Reply = Mod:fold_by_id(DbId, Fun, AccIn, Opts, ModState),
   {reply, Reply, State};
 
-handle_call({changes_since, DbId, Since, Fun, AccIn}, _From,
+handle_call({changes_since, DbId, Since, Fun, AccIn, Opts}, _From,
   State=#state{ mod=Mod, mod_state=ModState}) ->
-  Reply = Mod:changes_since(DbId, Since, Fun, AccIn, ModState),
+  Reply = Mod:changes_since(DbId, Since, Fun, AccIn, Opts, ModState),
   {reply, Reply, State};
 
 handle_call({last_update_seq, DbId}, _From, State) ->

@@ -25,6 +25,7 @@
   post/3,
   fold_by_id/4,
   changes_since/4,
+  changes_since/5,
   revsdiff/3
 ]).
 
@@ -54,7 +55,9 @@
 -export([
   start_replication/2,
   start_replication/3,
+  start_replication/4,
   stop_replication/1,
+  delete_replication/1,
   replication_info/1
 ]).
 
@@ -106,6 +109,14 @@
 
 %% TODO: to define
 -type fold_options() :: list().
+
+-type change() :: #{
+  id := docid(),
+  seq := non_neg_integer(),
+  changes := [revid()],
+  revtree => revtree(),
+  doc => doc()
+}.
 
 
 -export_type([
@@ -196,7 +207,7 @@ put(Conn, DocId, Body, Options) ->
   Body :: doc(),
   History :: [rev()],
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
+  Res :: ok | {error, conflict()} | {error, any()}.
 put_rev(Conn, DocId, Body, History, Options) ->
   barrel_db:put_rev(Conn, DocId, Body, History, Options).
 
@@ -237,11 +248,23 @@ fold_by_id(Conn, Fun, Acc, Options) ->
   Conn::conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), DocInfo :: docinfo(), Doc :: doc, Acc :: any()) -> FunRes),
+  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
 changes_since(Conn, Since, Fun, Acc) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc).
+  barrel_db:changes_since(Conn, Since, Fun, Acc, []).
+
+%% @doc fold all changes since last sequence
+-spec changes_since(Conn, Since, Fun, AccIn, Opts) -> AccOut when
+  Conn::conn(),
+  Since :: non_neg_integer(),
+  FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
+  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  AccIn :: any(),
+  AccOut :: any(),
+  Opts :: list().
+changes_since(Conn, Since, Fun, Acc, Opts) ->
+  barrel_db:changes_since(Conn, Since, Fun, Acc, Opts).
 
 
 %% @doc get all revisions ids that differ in a doc from the list given
@@ -282,26 +305,33 @@ attachments(Conn, DocId, Options) ->
 
 
 %% replication API
+start_replication(Source, Target) ->
+  start_replication(Source, Target, []).
 
-start_replication(Source, Target) -> start_replication(Source, Target, []).
+%% TODO: maybe we should pass the calculated replication id in options?
+start_replication(Source, Target, Options) when is_list(Options) ->
+  Name = barrel_replicate:repid(Source, Target),
+  start_replication(Name, Source, Target, Options);
 
-start_replication(Source, Target, Options) ->
-  RepId = barrel_replicate:repid(Source, Target),
-  case supervisor:start_child(barrel_replicate_sup, [RepId, Source, Target, Options]) of
-    {ok, _Pid} -> {ok, RepId};
-    {error, {already_started, _Pid}} -> {ok, RepId};
+start_replication(Name, Source, Target) ->
+  start_replication(Name, Source, Target, []).
+
+start_replication(Name, Source, Target, Options) ->
+  Config = #{source => Source, target => Target, options => Options},
+  case barrel_replicate_manager:start_replication(Name, Config) of
+    ok -> {ok, Name};
     Error -> Error
   end.
 
-stop_replication(RepId) ->
-  case gproc:where(barrel_replicate:replication_key(RepId)) of
-    undefined -> ok;
-    Pid when is_pid(Pid) ->
-      supervisor:terminate_child(barrel_replicate_sup, Pid)
-  end.
+stop_replication(Name) ->
+  barrel_replicate_manager:stop_replication(Name).
+
+delete_replication(Name) ->
+  barrel_replicate_manager:delete_replication(Name).
+
   
-replication_info(RepId) ->
-  case gproc:where(barrel_replicate:replication_key(RepId)) of
-    undefined -> {error, not_found};
-    Pid -> barrel_replicate:info(Pid)
+replication_info(Name) ->
+  case barrel_replicate_manager:where(Name) of
+    Pid when is_pid(Pid) -> barrel_replicate:info(Pid);
+    undefined -> {error, not_found}
   end.

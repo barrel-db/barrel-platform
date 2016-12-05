@@ -62,11 +62,8 @@ handle(<<"POST">>, Store, DbId, Req, State) ->
   {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
                          {ok, Missing, Possible} = barrel:revsdiff(Conn, DocId, RevIds),
-                         case Possible of
-                           [] -> Acc#{DocId => #{<<"missing">> => Missing}};
-                           _ -> Acc#{DocId => #{<<"missing">> => Missing,
-                                                <<"possible_ancestors">> => Possible}}
-                         end
+                         Acc#{DocId => #{<<"missing">> => Missing,
+                                         <<"possible_ancestors">> => Possible}}
                      end,#{}, RequestedDocs),
   barrel_http_reply:doc(Result, Req2, State);
 

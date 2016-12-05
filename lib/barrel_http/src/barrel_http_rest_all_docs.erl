@@ -18,9 +18,8 @@
 
 %% API
 -export([init/3]).
--export([rest_init/2]).
-
--export([allowed_methods/2, content_types_provided/2, to_json/2]).
+-export([handle/2]).
+-export([terminate/3]).
 
 -export([trails/0]).
 
@@ -44,22 +43,43 @@ trails() ->
      },
   [trails:trail("/:store/:dbid/_all_docs", ?MODULE, [], Metadata)].
 
+-record(state, {method, store, dbid, start_seq, end_seq, max, conn}).
 
-init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
+init(_Type, Req, []) ->
+  {ok, Req, #state{}}.
 
-rest_init(Req, _) -> {ok, Req, #{}}.
+handle(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  route(Req2, State#state{method=Method}).
 
-allowed_methods(Req, State) ->
-  Methods = [<<"HEAD">>, <<"OPTIONS">>, <<"GET">>],
-  {Methods, Req, State}.
+terminate(_Reason, _Req, _State) ->
+  ok.
 
-content_types_provided(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, []}, to_json}],
-  {CTypes, Req, State}.
 
-to_json(Req, State) ->
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_store_db(Req, State);
+route(Req, State) ->
+  barrel_http_reply:error(405, "method not allowed", Req, State).
+
+
+check_store_db(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
+    {error, {unknown_store, _}} ->
+      barrel_http_reply:error(400, "store not found", Req, State);
+    {error, not_found} ->
+      barrel_http_reply:error(400, "database not found", Req, State);
+    {ok, Conn} ->
+      State2 = State#state{store=Store, dbid=DbId, conn=Conn},
+      get_resource(Req3, State2)
+  end.
+
+
+get_resource(Req, State) ->
+  {Store, Req2} = cowboy_req:binding(store, Req),
+  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+  {Options, Req4} = parse_params(Req3),
   Fun = fun(DocId, DocInfo, _Doc, Acc1) ->
             Rev = maps:get(current_rev, DocInfo),
             Row = #{<<"id">> => DocId,
@@ -67,11 +87,25 @@ to_json(Req, State) ->
             {ok, [Row | Acc1]}
         end,
   {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
-  Rows = barrel:fold_by_id(Conn, Fun, [], []),
+  Rows = barrel:fold_by_id(Conn, Fun, [], Options),
   OffSet = 0,
   TotalRows = length(Rows),
   Reply = #{<<"offset">> => OffSet,
             <<"rows">> => Rows,
             <<"total_rows">> => TotalRows},
-  Json = jsx:encode(Reply),
-  {Json, Req3, State}.
+  barrel_http_reply:doc(Reply, Req4, State).
+
+
+parse_params(Req) ->
+  {Params, Req2} = cowboy_req:qs_vals(Req),
+  Options = lists:foldl(fun({Param, Value}, Acc) ->
+                            [param(Param, Value)|Acc]
+                        end, [], Params),
+  {Options, Req2}.
+
+param(<<"start_key">>, StartKey) ->
+  {start_key, StartKey};
+param(<<"end_key">>, EndKey) ->
+  {end_key, EndKey};
+param(<<"max">>, MaxBin) ->
+  {max, binary_to_integer(MaxBin)}.

@@ -41,7 +41,8 @@
 ]).
 
 
--record(st, { source
+-record(st, { name
+            , source
             , target
             , id          ::binary()  % replication id
             , session_id  ::binary()  % replication session (history) id
@@ -52,10 +53,10 @@
             , options
             }).
 
-start_link(RepId, Source, Target, Options) ->
-  gen_server:start_link(
-    {via, gproc, replication_key(RepId)}, ?MODULE,
-    {Source, Target, Options}, []).
+
+
+start_link(Name, Source, Target, Options) ->
+  gen_server:start_link(?MODULE, {Name, Source, Target, Options}, []).
 
 
 info(Pid) when is_pid(Pid)->
@@ -77,22 +78,24 @@ repid(Source, Target) ->
   barrel_lib:to_hex(Md5).
 
 
-replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
+replication_key(Name) -> {n, l, {barrel_replicate, Name}}.
 
 
 %% gen_server callbacks
-  
-init({Source0, Target0, Options}) ->
+
+init({Name, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
+  RepId = repid(Source0, Target0),
+
   {ok, Source} = maybe_connect(Source0),
   {ok, Target} = maybe_connect(Target0),
-  
-  RepId = repid(Source, Target),
+
   Metrics = barrel_metrics:new(),
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
   ok = barrel_event:reg(Source),
-  State = #st{source=Source,
+  State = #st{name=Name,
+              source=Source,
               target=Target,
               id=RepId,
               session_id = barrel_lib:uniqid(binary),
@@ -114,7 +117,8 @@ handle_call(info, _From, State) ->
               _Other ->
                 []
             end,
-  Info = #{ id => State#st.id
+  Info = #{ name => State#st.name
+          , id => State#st.id
           , source => State#st.source
           , target => State#st.target
           , last_seq => State#st.last_seq
@@ -168,7 +172,6 @@ maybe_close(_) -> ok.
 
 replicate_change(Source, Target, StartSeq, Metrics) ->
   {LastSeq, Changes} = changes(Source, StartSeq),
-  Results = maps:get(<<"results">>, Changes),
   Results = maps:get(<<"results">>, Changes) ,
   {ok, Metrics2} = lists:foldl(fun(C, {ok, Acc}) ->
                            sync_change(Source, Target, C, Acc)
@@ -176,48 +179,53 @@ replicate_change(Source, Target, StartSeq, Metrics) ->
   {ok, LastSeq, Metrics2}.
 
 sync_change(Source, Target, Change, Metrics) ->
-  Id = maps:get(id, Change),
-  RevTree = maps:get(revtree, Change),
-  CurrentRev = maps:get(current_rev, Change),
-  History = history(CurrentRev, RevTree),
+  #{id := DocId, changes := History} = Change,
+  {ok, MissingRevisions, _PossibleAncestors} = revsdiff(Target, DocId, History),
+  Metrics2 = lists:foldr(fun(Revision, Acc) ->
+                             sync_revision(Source, Target, DocId, Revision, Acc)
+                         end, Metrics, MissingRevisions),
+  {ok, Metrics2}.
 
-  {Doc, Metrics2} = read_doc(Source, Id, Metrics),
-  Metrics3 = write_doc(Target, Id, Doc, History, Metrics2),
+sync_revision(Source, Target, DocId, Revision, Metrics) ->
+  {Doc, Metrics2} = read_doc_with_history(Source, DocId, Revision, Metrics),
+  History = barrel_doc:parse_revisions(Doc),
+  DocWithoutRevisions = maps:remove(<<"_revisions">>, Doc),
+  Metrics3 = write_doc(Target, DocId, DocWithoutRevisions, History, Metrics2),
+  Metrics3.
 
-  {ok, Metrics3}.
-
-
-read_doc(Source, Id, Metrics) ->
-  Get = fun() -> get(Source, Id, []) end,
+read_doc_with_history(Source, Id, Rev, Metrics) ->
+  Get = fun() -> get(Source, Id, [{rev, Rev}, {history, true}]) end,
   case timer:tc(Get) of
     {Time, {ok, Doc}} ->
       Metrics2 = barrel_metrics:inc(docs_read, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_read_times, Time, Metrics2),
       {Doc, Metrics3};
     _ ->
-      lager:error("replicate read error on dbid=~p for docid=~p", [Source, Id]),
       Metrics2 = barrel_metrics:inc(doc_read_failures, Metrics, 1),
       {undefined, Metrics2}
-    end.
+  end.
 
 write_doc(_, _, undefined, _, Metrics) ->
   Metrics;
 write_doc(Target, Id, Doc, History, Metrics) ->
   PutRev = fun() -> put_rev(Target, Id, Doc, History, []) end,
   case timer:tc(PutRev) of
-    {Time, {ok, _, _}} ->
+    {Time, ok} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
-    _ ->
-      lager:error("replicate write error on dbid=~p for docid=~p", [Target, Id]),
+    {_, Error} ->
+      lager:error(
+        "replicate write error on dbid=~p for docid=~p: ~w",
+        [Target, Id, Error]
+      ),
       barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
 
 changes(Source, Since) ->
-  Fun = fun(Seq, DocInfo, _Doc, {PreviousLastSeq, DocInfos}) ->
+  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
             LastSeq = max(Seq, PreviousLastSeq),
-            {ok, {LastSeq, [DocInfo|DocInfos]}}
+            {ok, {LastSeq, [Change|Changes1]}}
         end,
   {LastSeq, Changes} = changes_since(Source, Since, Fun, {Since, []}),
   {LastSeq, #{<<"last_seq">> => LastSeq,
@@ -228,20 +236,20 @@ get({Mod, ModState}, Id, Opts) ->
 get(Conn, Id, Opts) when is_map(Conn) ->
   barrel_db:get(Conn, Id, Opts).
 
-%% put({Mod,_Db}=DbRef, Id, Doc, Opts) ->
-%%   Mod:put(DbRef, Id, Doc, Opts);
-%% put(Db, Id, Doc, Opts) when is_binary(Db) ->
-%%   barrel_db:put(Db, Id, Doc, Opts).
-
 put_rev({Mod, ModState}, Id, Doc, History, Opts) ->
   Mod:put_rev(ModState, Id, Doc, History, Opts);
 put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
   barrel_db:put_rev(Conn, Id, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
-  Mod:changes_since(ModState, Since, Fun, Acc);
+  Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
 changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc).
+  barrel_db:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
+
+revsdiff({Mod, ModState}, DocId, History) ->
+  Mod:revsdiff(ModState, DocId, History);
+revsdiff(Conn, DocId, History) ->
+  barrel:revsdiff(Conn, DocId, History).
 
 %% =============================================================================
 %% Checkpoints management: when, where and what
@@ -343,16 +351,6 @@ checkpoint_docid(RepId) ->
 %% =============================================================================
 %% Helpers
 %% =============================================================================
-
-history(Id, RevTree) ->
-  history(Id, RevTree, []).
-history(<<>>, _RevTree, History) ->
-  lists:reverse(History);
-history(Rev, RevTree, History) ->
-  DocInfo = maps:get(Rev, RevTree),
-  Parent = maps:get(parent, DocInfo),
-  history(Parent, RevTree, [Rev|History]).
-
 
 %% RFC3339 timestamps.
 %% Note: doesn't include the time seconds fraction (RFC3339 says it's optional).

@@ -31,7 +31,7 @@
   write_doc/6,
   get_doc/7,
   fold_by_id/5,
-  changes_since/5,
+  changes_since/6,
   last_update_seq/2,
   write_system_doc/4,
   read_system_doc/3,
@@ -52,7 +52,7 @@ open_db(#{ db := Db }, Name, Options) ->
       UpdateSeq = get_update_seq(Db, DbId),
       {ok, {DbId, UpdateSeq}};
     not_found when CreateIfMissing /= false  ->
-      DbId = barrel_lib:uniqid(),
+      DbId = << (barrel_lib:uniqid())/binary, "-", Name/binary >>,
       Batch =  [
                  {put, << 0, 0, 0, 0 >>, integer_to_binary(?VERSION)},
                  {put, DbKey, DbId},
@@ -121,7 +121,7 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
                        end,
   Opts2 = Opts#{prefix => Prefix},
   case erocksdb:iterator_move(Itr, Start) of
-    {ok, {Start, _V}} when Inclusive /= true ->
+    {ok, Start, _V} when Inclusive /= true ->
       fold_prefix_loop(erocksdb:iterator_move(Itr, next), Itr, Fun, AccIn, 0, Opts2);
     Next ->
       fold_prefix_loop(Next, Itr, Fun, AccIn, 0, Opts2)
@@ -131,11 +131,13 @@ fold_prefix_loop({error, iterator_closed}, _Itr, _Fun, Acc, _N, _Opts) ->
   throw({iterator_closed, Acc});
 fold_prefix_loop({error, invalid_iterator}, _Itr, _Fun, Acc, _N, _Opts) ->
   Acc;
-fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0, Opts = #{ lt := End})
-    when End /= nil orelse K < End ->
+fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0,
+                 Opts = #{ lt := Lt, lte := nil, prefix := Prefix})
+  when Lt =:= nil orelse K < <<Prefix/binary, Lt/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N0, Opts);
-fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N, Opts = #{ lte := End})
-    when End =:= nil orelse K < End ->
+fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N,
+                 Opts = #{ lt := nil, lte := Lte, prefix := Prefix})
+  when Lte =:= nil orelse K =< <<Prefix/binary, Lte/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N, Opts);
 fold_prefix_loop({ok, K, V}, _Itr, Fun, Acc, _N,  #{ lt := nil, lte := K, prefix := P}) ->
   case match_prefix(K, P) of
@@ -224,6 +226,8 @@ get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) 
             end,
 
       case get_doc_rev(Db, DbId, DocId, RevId, ReadOptions) of
+        {ok, #{ <<"_deleted">> := true }} when Rev =:= <<"">> ->
+          {error, not_found};
         {ok, Doc} ->
           case WithHistory of
             true ->
@@ -236,7 +240,7 @@ get_doc1(DbId, DocId, Db, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) 
           end;
         Error -> Error
       end;
-    Error -> Error
+    Error ->  Error
   end.
 
 
@@ -271,35 +275,66 @@ fold_by_id(DbId, Fun, AccIn, Opts, #{ db := Db}) ->
   after erocksdb:release_snapshot(Snapshot)
   end.
 
-changes_since(DbId, Since, Fun, AccIn, #{ db := Db}) ->
+changes_since(DbId, Since, Fun, AccIn, Opts, #{ db := Db}) ->
   Prefix = << DbId/binary, 0, 0, 100 >>,
   {ok, Snapshot} = erocksdb:snapshot(Db),
   ReadOptions = [{snapshot, Snapshot}],
-  Opts = [
-           {start_key, <<Since:32>>},
-           {read_options, ReadOptions}
-         ],
+  FoldOpts = [
+    {start_key, <<Since:32>>},
+    {read_options, ReadOptions}
+  ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
+  WithHistory = proplists:get_value(history, Opts, last) =:= all,
+  WithRevtree =  proplists:get_value(revtree, Opts, false) =:= true,
 
-  WrapperFun = fun(Key, BinDocInfo, Acc) ->
+  WrapperFun =
+    fun(Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
       [_, SeqBin] = binary:split(Key, Prefix),
       <<Seq:32>> = SeqBin,
       RevId = maps:get(current_rev, DocInfo),
       DocId = maps:get(id, DocInfo),
+      RevTree = maps:get(revtree, DocInfo),
 
-      Doc = case IncludeDoc of
-              true ->
-                get_doc_rev(Db, DbId, DocId, RevId, ReadOptions);
-              false -> {ok, nil}
-            end,
+      Changes = case WithHistory of
+                  false -> [RevId];
+                  true ->  barrel_revtree:history(RevId, RevTree)
+                end,
 
-      Fun(Seq, DocInfo, Doc, Acc)
-    end,
+      %% create change
+      Change = change_with_revtree(
+        change_with_doc(
+          changes_with_deleted(
+            #{ id => DocId, seq => Seq, changes => Changes}, RevId, RevTree
+          ),
+          DocId, RevId, DbId, Db, ReadOptions, IncludeDoc
+        ),
+        RevTree,
+        WithRevtree
+      ),
+      Fun(Seq, Change, Acc)
+   end,
 
-  try fold_prefix(Db, Prefix, WrapperFun, AccIn, Opts)
+  try fold_prefix(Db, Prefix, WrapperFun, AccIn, FoldOpts)
   after erocksdb:release_snapshot(Snapshot)
   end.
+
+change_with_revtree(Change, DocInfo, true) -> Change#{revtree => maps:get(revtree, DocInfo)};
+change_with_revtree(Change, _DocInfo, false) -> Change.
+
+change_with_doc(Change, DocId, RevId, DbId, Db, ReadOptions, true) ->
+  Doc = get_doc_rev(Db, DbId, DocId, RevId, ReadOptions),
+  Change#{ doc => Doc };
+change_with_doc(Change, _DocId, _RevId, _DbId, _Db, _ReadOptions, false) ->
+  Change.
+
+changes_with_deleted(Change, RevId, RevTree) ->
+  {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
+  case RevInfo of
+    #{ deleted := true} -> Change#{deleted => true};
+    _ -> Change
+  end.
+
 
 last_update_seq(DbId, #{db := Db}) -> get_update_seq(Db, DbId).
 

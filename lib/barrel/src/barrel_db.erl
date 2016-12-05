@@ -28,7 +28,7 @@
   delete/4,
   post/3,
   fold_by_id/4,
-  changes_since/4,
+  changes_since/5,
   revsdiff/3,
   write_system_doc/3,
   read_system_doc/2,
@@ -124,10 +124,10 @@ get(#{store := Store, id := DbId}, DocId, Options) ->
 
 
 put(Conn, DocId, Body, Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
   Rev = barrel_doc:rev(Body),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Body),
-
   Lww = proplists:get_value(lww, Options, false),
 
   update_doc(
@@ -163,7 +163,6 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
                   false -> {conflict, revision_conflict}
                 end
             end,
-
       case Res of
         {ok, NewGen, ParentRev} ->
           NewRev = barrel_doc:revid(NewGen, Rev, Body),
@@ -186,12 +185,13 @@ put(Conn, DocId, Body, Options) when is_map(Body) ->
     end,
     Options);
 put(_, _, _, _) ->
-  error(bad_doc).
+  erlang:error(badarg).
 
-put_rev(Conn, DocId, Body, History, Options) ->
+put_rev(Conn, DocId, Body, History, Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
-  update_doc(
+  Res = update_doc(
     Conn,
     DocId,
     fun(DocInfo) ->
@@ -215,7 +215,34 @@ put_rev(Conn, DocId, Body, History, Options) ->
       end
     end,
     Options
-  ).
+  ),
+  case Res of
+    {ok, _, _} -> ok;
+    Error -> Error
+  end;
+put_rev(_, _, _, _, _) ->
+  erlang:error(badarg).
+
+edit_revtree([RevId], Parent, Deleted, Tree) ->
+  case Deleted of
+    true ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
+    false ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
+  end;
+edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
+  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
+  edit_revtree(Rest, Parent, Deleted, Tree2);
+edit_revtree([], _Parent, _Deleted, Tree) ->
+  Tree.
+
+find_parent([RevId | Rest], RevTree, I) ->
+  case barrel_revtree:contains(RevId, RevTree) of
+    true -> {I, RevId};
+    false -> find_parent(Rest, RevTree, I+1)
+  end;
+find_parent([], _RevTree, I) ->
+  {I, <<"">>}.
 
 delete(Conn, DocId, RevId, Options) ->
   put(Conn, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
@@ -233,12 +260,12 @@ post(Conn, Doc, Options) ->
 fold_by_id(#{store := Store, id := DbId}, Fun, Acc, Opts) ->
   barrel_store:fold_by_id(Store, DbId, Fun, Acc, Opts).
 
-changes_since(#{store := Store, id := DbId}, Since0, Fun, Acc) when is_integer(Since0) ->
+changes_since(#{store := Store, id := DbId}, Since0, Fun, Acc, Opts) when is_integer(Since0) ->
   Since = if
             Since0 > 0 -> Since0 + 1;
             true -> Since0
           end,
-  barrel_store:changes_since(Store, DbId, Since, Fun, Acc).
+  barrel_store:changes_since(Store, DbId, Since, Fun, Acc, Opts).
 
 revsdiff(#{store := Store, id := DbId}, DocId, RevIds) ->
   case barrel_store:get_doc_info(Store, DbId, DocId) of
@@ -274,26 +301,7 @@ revsdiff1(RevTree, RevIds) ->
     end, {[], []}, RevIds),
   {ok, lists:reverse(Missing), lists:usort(PossibleAncestors)}.
 
-edit_revtree([RevId], Parent, Deleted, Tree) ->
-  case Deleted of
-    true ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
-    false ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
-  end;
-edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
-  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
-  edit_revtree(Rest, Parent, Deleted, Tree2);
-edit_revtree([], _Parent, _Deleted, Tree) ->
-  Tree.
 
-find_parent([RevId | Rest], RevTree, I) ->
-  case barrel_revtree:contains(RevId, RevTree) of
-    true -> {I, RevId};
-    false -> find_parent(Rest, RevTree, I+1)
-  end;
-find_parent([], _RevTree, I) ->
-  {I, <<"">>}.
 
 update_doc(#{id := DbId}, DocId, Fun, Options) ->
   barrel_transactor:update_doc(DbId, DocId, Fun, Options).
@@ -408,3 +416,6 @@ get_infos(State) ->
     name => Name,
     store => Store
   }.
+
+check_docid(DocId, #{ <<"id">> := DocId }) -> ok;
+check_docid(_, _) -> erlang:error({bad_doc, invalid_docid}).
