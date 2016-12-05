@@ -23,7 +23,6 @@
 -export([ accept_post_get/1
         , accept_put_get/1
         , accept_delete/1
-        , accept_patch/1
         , reject_replication_name_unknown/1
         , reject_store_or_db_unknown/1
         , reject_bad_json /1
@@ -32,7 +31,6 @@
 all() -> [ accept_post_get
          , accept_put_get
          , accept_delete
-         , accept_patch
          , reject_replication_name_unknown
          , reject_store_or_db_unknown
          , reject_bad_json
@@ -141,48 +139,6 @@ accept_delete(_Config) ->
   %% it has not been replicated
   {404, _} = test_lib:req(get, "/testdb/dbbbb/cat"),
   ok.
-
-accept_patch(_Config) ->
-  %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dbaaaa", []),
-  {201, _} = test_lib:req(put, "/testdb/dbbbbb", []),
-
-  {404, _} = test_lib:req(get, "/testdb/dbbbbb/mouse"),
-  %% create a replication task from one db to the other
-  %% but do not start yet
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaaaa">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbbbbb">>,
-              <<"persisted">> => true},
-  {200, R} = test_lib:req(put, "/_replicate/tasktobestartedlater", Request),
-  #{<<"name">> := <<"tasktobestartedlater">>} = jsx:decode(R, [return_maps]),
-
-  %% put one doc in source db
-  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dbaaaa/mouse", Mouse),
-  timer:sleep(500),
-  {200, _} = test_lib:req(get, "/testdb/dbbbbb/mouse"),
-
-  %% stop the replication task
-  Stop = #{<<"started">> => false},
-  {200, _} = test_lib:req(patch, "/_replicate/tasktobestartedlater", Stop),
-
-  %% put another doc in source db
-  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/testdb/dbaaaa/cat", Cat),
-  timer:sleep(500),
-
-  %% it has not been replicated
-  {404, _} = test_lib:req(get, "/testdb/dbbbbb/cat"),
-
-  %% restart the replication task
-  Start = #{<<"started">> => true},
-  {405, _} = test_lib:req(patch, "/_replicate/tasktobestartedlater", Start),
-
-  %% it has not been replicated
-  %% {200, _} = test_lib:req(get, "/testdb/dbbbbb/cat"),
-  ok.
-
-
 
 
 reject_replication_name_unknown(_Config) ->

@@ -54,17 +54,7 @@ trails() ->
                         , required => true
                         , type => <<"string">>}
                       ]
-                  },
-       patch => #{ summary => "Change replication tasks status and config"
-                 , produces => ["application/json"]
-                 , parameters =>
-                     [#{ name => <<"name">>
-                       , description => <<"Replication task name">>
-                       , in => <<"path">>
-                       , required => true
-                       , type => <<"string">>}
-                     ]
-                 }
+                  }
      },
   Post =
     #{ post => #{ summary => "Create a replication tasks"
@@ -103,8 +93,6 @@ route(Req, #state{method= <<"GET">>}=State) ->
   check_name(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_name(Req, State);
-route(Req, #state{method= <<"PATCH">>}=State) ->
-  check_body(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
@@ -120,8 +108,6 @@ check_name(Req, State) ->
 check_body(Req, #state{method= <<"POST">>}=State) ->
   check_json_is_valid(Req, State);
 check_body(Req, #state{method= <<"PUT">>}=State) ->
-  check_json_is_valid(Req, State);
-check_body(Req, #state{method= <<"PATCH">>}=State) ->
   check_json_is_valid(Req, State);
 check_body(Req, #state{method= <<"GET">>}=State) ->
   get_resource(Req, State);
@@ -157,9 +143,7 @@ read_json_properties(Req, State) ->
 route2(Req, #state{method= <<"POST">>}=State) ->
   check_source_db_exist(Req, State);
 route2(Req, #state{method= <<"PUT">>}=State) ->
-  check_source_db_exist(Req, State);
-route2(Req, #state{method= <<"PATCH">>}=State) ->
-  patch_resource(Req, State).
+  check_source_db_exist(Req, State).
 
 
 check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
@@ -207,15 +191,6 @@ delete_resource(Req, #state{name=Name}=State) ->
   ok = barrel:delete_replication(Name),
   barrel_http_reply:code(200, Req, State).
 
-
-patch_resource(Req, #state{started=true}=State) ->
-  barrel_http_reply:error(405, <<"function not implemented yet">>, Req, State);
-
-patch_resource(Req, #state{started=false}=State) ->
-  {ReqName, Req2} = cowboy_req:binding(name, Req),
-  ok = barrel:stop_replication(ReqName),
-  barrel_http_reply:code(200, Req2, State).
-
 %% =============================================================================
 %% Check posted JSON properties
 %% =============================================================================
@@ -228,9 +203,6 @@ params() ->
     <<"PUT">> =>
       #{<<"source">> => mandatory,
         <<"target">> => mandatory,
-        <<"persisted">> => optional},
-    <<"PATCH">> =>
-      #{<<"started">> => optional,
         <<"persisted">> => optional}
    }.
 
