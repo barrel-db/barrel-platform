@@ -15,19 +15,9 @@
 -module(barrel_http_rest_system).
 -author("Bernard Notarianni").
 
-
-%% API
 -export([init/3]).
--export([rest_init/2]).
-
--export([allowed_methods/2]).
--export([content_types_provided/2]).
--export([content_types_accepted/2]).
--export([resource_exists/2]).
--export([delete_resource/2]).
-
--export([to_json/2]).
--export([from_json/2]).
+-export([handle/2]).
+-export([terminate/3]).
 
 -export([trails/0]).
 
@@ -111,25 +101,44 @@ trails() ->
   [trails:trail("/:store/:dbid/_system/:docid", ?MODULE, [], GetPutDelete)].
 
 
--record(state, {conn, docid, doc}).
+-record(state, {conn, method, store, dbid, docid, doc}).
 
-init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
+init(_Type, Req, []) ->
+  {ok, Req, #state{}}.
 
-rest_init(Req, _) -> {ok, Req, #state{}}.
+handle(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  check_store_db(Req2, State#state{method=Method}).
 
-allowed_methods(Req, State) ->
-  Methods = [<<"HEAD">>, <<"OPTIONS">>, <<"GET">> , <<"PUT">>, <<"DELETE">>],
-  {Methods, Req, State}.
+terminate(_Reason, _Req, _State) ->
+  ok.
 
-content_types_provided(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, []}, to_json}],
-  {CTypes, Req, State}.
 
-content_types_accepted(Req, State) ->
-	{[{{<<"application">>, <<"json">>, []}, from_json}],
-   Req, State}.
+check_store_db(Req, State) ->
+    {Store, Req2} = cowboy_req:binding(store, Req),
+    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+    case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
+      {error, {unknown_store, _}} ->
+        barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req3, State);
+      {error, not_found} ->
+        barrel_http_reply:error(400, <<"database not found: ", DbId/binary>>, Req3, State);
+      {ok, Conn} ->
+        {DocId, Req2} = cowboy_req:binding(docid, Req),
+        State2 = State#state{store=Store, dbid=DbId, docid=DocId, conn=Conn},
+        route(Req3, State2)
+    end.
 
-resource_exists(Req, State) ->
+
+route(Req, #state{method= <<"PUT">>}=State) ->
+  create_resource(Req, State);
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, #state{method= <<"DELETE">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, State) ->
+  barrel_http_reply:code(405, Req, State).
+
+check_resource_exists(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
   {DbId, Req3} = cowboy_req:binding(dbid, Req2),
   {DocId, Req4} = cowboy_req:binding(docid, Req3),
@@ -137,26 +146,25 @@ resource_exists(Req, State) ->
   State2 = State#state{docid=DocId, conn=Conn},
   case barrel_db:read_system_doc(Conn, DocId) of
     {ok, Doc} ->
-      {true, Req4, State2#state{doc=Doc}};
+      route2(Req4, State2#state{doc=Doc});
     {error, not_found} ->
-      {false, Req4, State2}
+      barrel_http_reply:error(404, Req, State)
   end.
 
+route2(Req, #state{method= <<"GET">>}=State) ->
+  get_resource(Req, State);
+route2(Req, #state{method= <<"DELETE">>}=State) ->
+  delete_resource(Req, State).
 
-to_json(Req, #state{doc=Doc}=State) ->
-  Json = jsx:encode(Doc),
-  {Json, Req, State}.
+get_resource(Req, #state{doc=Doc}=State) ->
+  barrel_http_reply:doc(Doc, Req, State).
 
-from_json(Req, #state{conn=Conn, docid=DocId}=State) ->
+create_resource(Req, #state{conn=Conn, docid=DocId}=State) ->
   {ok, Body, Req2} = cowboy_req:body(Req),
   Doc = jsx:decode(Body, [return_maps]),
   ok = barrel_db:write_system_doc(Conn, DocId, Doc),
-  RespBody = jsx:encode(#{ok => true}),
-  Req3 = cowboy_req:set_resp_body(RespBody, Req2),
-  {true, Req3, State}.
+  barrel_http_reply:doc(#{ok => true}, Req2, State).
 
 delete_resource(Req, #state{conn=Conn, docid=DocId}=State) ->
   ok = barrel_db:delete_system_doc(Conn, DocId),
-  {true, Req, State}.
-
-
+  barrel_http_reply:doc(#{ok => true}, Req, State).

@@ -154,8 +154,8 @@ terminate(_Reason, _Req, _State) ->
 check_params(Req, State) ->
   {Params, Req2} = cowboy_req:qs_vals(Req),
   case parse_params(Params, State) of
-    {error, {unknown_param, _}} ->
-      barrel_http_reply:error(400, <<"unknown query parameter">>, Req2, State);
+    {error, {unknown_param, Unknown}} ->
+      barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req2, State);
     {ok, S2} ->
       {Method, Req3} = cowboy_req:method(Req2),
       {ok, Body, Req4} = cowboy_req:body(Req3),

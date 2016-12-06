@@ -143,12 +143,12 @@ reject_store_or_db_unknown(_) ->
   Doc = #{<<"name">> => <<"tom">>},
   {400, _} = test_lib:req(get, "/bad/testdb/docid"),
   {400, _} = test_lib:req(put, "/bad/testdb/docid", Doc),
-  %% {400, _} = test_lib:req(post, "/bad/testdb", Doc),
+  {400, _} = test_lib:req(post, "/bad/testdb", Doc),
   {400, _} = test_lib:req(delete, "/bad/testdb/docid"),
 
   {400, _} = test_lib:req(get, "/testdb/bad/docid"),
   {400, _} = test_lib:req(put, "/testdb/bad/docid", Doc),
-  %% {400, _} = test_lib:req(post, "/testdb/bad", Doc),
+  {400, _} = test_lib:req(post, "/testdb/bad", Doc),
   {400, _} = test_lib:req(delete, "/testdb/bad/docid"),
   ok.
 
@@ -156,7 +156,7 @@ reject_unknown_query_parameters(_) ->
   Doc = #{<<"name">> => <<"tom">>},
   {400, _} = test_lib:req(get, "/testdb/testdb/docid?badparam=whatever"),
   {400, _} = test_lib:req(put, "/testdb/testdb/docid?badparam=whatever", Doc),
-  %% {400, _} = test_lib:req(post, "/testdb/testdb?badparam=whatever", Doc),
+  {400, _} = test_lib:req(post, "/testdb/testdb?badparam=whatever", Doc),
   {400, _} = test_lib:req(delete, "/testdb/testdb/docid?badparam=whatever"),
   ok.
 
