@@ -15,7 +15,7 @@
 -module(barrel_http_reply).
 -author("Bernard Notarianni").
 
--export([doc/3]).
+-export([doc/3, doc/4]).
 -export([json/3, json/4]).
 -export([code/3]).
 -export([error/3]).
@@ -23,18 +23,22 @@
 
 
 doc(Doc, Req, State ) ->
-  Json = jsx:encode(Doc),
-  json(Json, Req, State).
+  json(200, Doc, Req, State).
+
+doc(Code, Doc, Req, State ) ->
+  json(Code, Doc, Req, State).
 
 json(Json, Req, State) ->
   json(200, Json, Req, State).
 
 json(Code, Obj, Req, State) when is_map(Obj) ->
   json(Code, jsx:encode(Obj), Req, State);
+json(Code, Obj, Req, State) when is_list(Obj) ->
+  json(Code, jsx:encode(Obj), Req, State);
 json(Code, Json, Req, State) when is_binary(Json) ->
   Headers = [{<<"content-type">>, <<"application/json">>}],
   reply(Code, Headers, Json, Req, State);
-json(_, _, _, _) -> erlang:error(badarg).
+json(Code, Json, _, _) -> erlang:error({badarg, {Code, Json}}).
 
 code(HttpCode, Req, State ) ->
   reply(HttpCode, [], [], Req, State).

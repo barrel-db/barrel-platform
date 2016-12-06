@@ -108,7 +108,7 @@ accept_get_with_history(Config) ->
 accept_post(Config) ->
   Conn = proplists:get_value(conn, Config),
   D1 = #{<<"name">> => <<"tom">>},
-  {200, R} = test_lib:req(post, "/testdb/testdb", D1),
+  {201, R} = test_lib:req(post, "/testdb/testdb", D1),
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),

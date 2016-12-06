@@ -15,21 +15,14 @@
 -module(barrel_http_rest_doc).
 -author("Bernard Notarianni").
 
+%% API
 -export([init/3]).
--export([rest_init/2]).
-
--export([allowed_methods/2,
-         malformed_request/2,
-         content_types_accepted/2, content_types_provided/2,
-         resource_exists/2,
-         delete_resource/2,
-         allow_missing_post/2,
-         is_conflict/2,
-         from_json/2, to_json/2]).
-
--export([post_put/6]).
+-export([handle/2]).
+-export([terminate/3]).
 
 -export([trails/0]).
+
+-export([handle_post/1]).
 
 trails() ->
   GetPutDel =
@@ -136,7 +129,7 @@ trails() ->
                      , description => <<"Store ID">>
                      , in => <<"path">>
                      , required => true
-                      , type => <<"string">>}
+                     , type => <<"string">>}
                    ]
                }
      },
@@ -145,34 +138,28 @@ trails() ->
 
 -record(state, {method, store, dbid, docid, revid, edit, history, body, doc, conn, options}).
 
-init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
+init(_Type, Req, []) ->
+  {ok, Req, #state{}}.
 
-rest_init(Req, _) -> {ok, Req, #state{}}.
+handle_post(Req) ->
+  handle(Req, #state{}).
 
+handle(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  check_params(Req2, State#state{method=Method}).
 
-allowed_methods(Req, State) ->
-  Methods = [<<"HEAD">>, <<"OPTIONS">>,
-             <<"POST">>, <<"GET">>, <<"PUT">>, <<"DELETE">>],
-  {Methods, Req, State}.
+terminate(_Reason, _Req, _State) ->
+  ok.
 
-content_types_accepted(Req, State) ->
-	{[{{<<"application">>, <<"json">>, []}, from_json}],
-   Req, State}.
-
-content_types_provided(Req, State) ->
-  CTypes = [{{<<"application">>, <<"json">>, []}, to_json}],
-  {CTypes, Req, State}.
-
-
-malformed_request(Req, S) ->
+check_params(Req, State) ->
   {Params, Req2} = cowboy_req:qs_vals(Req),
-  case parse_params(Params, S) of
+  case parse_params(Params, State) of
     {error, {unknown_param, _}} ->
-      {true, Req2, S};
+      barrel_http_reply:error(400, <<"unknown query parameter">>, Req2, State);
     {ok, S2} ->
       {Method, Req3} = cowboy_req:method(Req2),
       {ok, Body, Req4} = cowboy_req:body(Req3),
-      malformed_request_revid(Req4, S2#state{method=Method, body=Body})
+      check_request_revid(Req4, S2#state{method=Method, body=Body})
   end.
 
 parse_params([], State) ->
@@ -186,100 +173,102 @@ parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
 parse_params([{Param, __Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
-malformed_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
-  {true, Req, S};
-malformed_request_revid(Req, S) ->
+check_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
+  barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
+check_request_revid(Req, S) ->
   Body = S#state.body,
-  malformed_request_store_dbid(Req, S#state{body=Body}).
+  check_store_db(Req, S#state{body=Body}).
 
-malformed_request_store_dbid(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
-    {error, {unknown_store, _}} ->
-      {true, Req3, State};
-    {error, not_found} ->
-      {true, Req3, State};
-    {ok, Conn} ->
-      {DocId, Req2} = cowboy_req:binding(docid, Req),
-      RevId = State#state.revid,
-      Opts1 = case RevId of
-                undefined -> [];
-                _ -> [{rev, RevId}]
-              end,
-      Opts2 = case State#state.history of
-                true -> [{history, true}|Opts1];
-                _ -> Opts1
-              end,
-      State2 = State#state{store=Store, dbid=DbId, docid=DocId,
-                           conn=Conn, revid=RevId, options=Opts2},
-      malformed_request_body(Req3, State2)
-  end.
+check_store_db(Req, State) ->
+    {Store, Req2} = cowboy_req:binding(store, Req),
+    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
+    case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
+      {error, {unknown_store, _}} ->
+        barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req3, State);
+      {error, not_found} ->
+        barrel_http_reply:error(400, <<"database not found: ", DbId/binary>>, Req3, State);
+      {ok, Conn} ->
+        {DocId, Req2} = cowboy_req:binding(docid, Req),
+        RevId = State#state.revid,
+        Opts1 = case RevId of
+                  undefined -> [];
+                  _ -> [{rev, RevId}]
+                end,
+        Opts2 = case State#state.history of
+                  true -> [{history, true}|Opts1];
+                  _ -> Opts1
+                end,
+        State2 = State#state{store=Store, dbid=DbId, docid=DocId,
+                             conn=Conn, revid=RevId, options=Opts2},
+        route(Req3, State2)
+    end.
 
-malformed_request_body(Req, #state{body= <<>>, method= <<"GET">>}=S) ->
-  {false, Req, S};
-malformed_request_body(Req, #state{body= <<>>, method= <<"DELETE">>}=S) ->
-  {false, Req, S};
-malformed_request_body(Req, #state{body= <<>>, method= <<"POST">>}=S) ->
-  {true, Req, S};
-malformed_request_body(Req, #state{body= <<>>, method= <<"PUT">>}=S) ->
-  {true, Req, S};
-malformed_request_body(Req, #state{body=Body}=S) ->
+
+
+
+route(Req, #state{method= <<"POST">>}=State) ->
+  check_body(Req, State);
+route(Req, #state{method= <<"PUT">>}=State) ->
+  check_body(Req, State);
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, #state{method= <<"DELETE">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, State) ->
+  barrel_http_reply:error(405, Req, State).
+
+
+check_body(Req, #state{body= <<>>}=S) ->
+  barrel_http_reply:error(400, <<"empty body">>, Req, S);
+check_body(Req, #state{body=Body}=S) ->
   try jsx:decode(Body, [return_maps]) of
       Json ->
-      malformed_json_properties(Req, S#state{body=Json})
+      check_json_properties(Req, S#state{body=Json})
   catch
     _:_ ->
-      {true, Req, S}
+      barrel_http_reply:error(400, <<"malformed json document">>, Req, S)
   end.
 
-malformed_json_properties(Req, #state{method= <<"POST">>}=State) ->
-  missing_id_property(Req, State);
-malformed_json_properties(Req, #state{method= <<"PUT">>, edit=undefined}=State) ->
-  missing_id_property(Req, State);
-malformed_json_properties(Req, State) ->
-  {false, Req, State}.
+check_json_properties(Req, #state{method= <<"PUT">>, edit=undefined}=State) ->
+  check_id_property(Req, State);
+check_json_properties(Req, State) ->
+  check_resource_exists(Req, State).
 
 
-missing_id_property(Req, #state{body=Json}=State) ->
+check_id_property(Req, #state{body=Json}=State) ->
   case maps:is_key(<<"id">>, Json) of
     true ->
-      {false, Req, State};
+      route2(Req, State);
     false ->
-      {true, Req, State}
+      barrel_http_reply:error(400, <<"missing property id in document">>, Req, State)
   end.
 
-resource_exists(Req, State) ->
-  resource_exists_doc(Req, State).
 
-resource_exists_doc(Req, #state{method= <<"GET">>}=S) ->
+check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
   Conn = S#state.conn,
   DocId = S#state.docid,
   Options = S#state.options,
   case barrel:get(Conn, DocId, Options) of
-    {error, not_found} -> {false, Req, S};
-    {ok, Doc} -> {true, Req, S#state{doc=Doc}}
+    {error, not_found} ->
+      barrel_http_reply:error(404, Req, S);
+    {ok, Doc} ->
+      route2(Req, S#state{doc=Doc})
   end;
-
-resource_exists_doc(Req, #state{method= <<"DELETE">>}=S) ->
-  {true, Req, S};
-
-resource_exists_doc(Req, State) ->
-  {false, Req, State}.
+check_resource_exists(Req, State) ->
+  route2(Req, State).
 
 
-allow_missing_post(Req, State) ->
-  Json = State#state.body,
-  Conn = State#state.conn,
-  {ok, DocId, RevId} = barrel:post(Conn, Json, []),
-  Reply = #{<<"ok">> => true,
-            <<"id">> => DocId,
-            <<"rev">> => RevId},
-  RespBody = jsx:encode(Reply),
-  Req2 = cowboy_req:set_resp_body(RespBody, Req),
-  {true, Req2, State#state{docid=DocId}}.
+route2(Req, #state{method= <<"POST">>}=State) ->
+  create_resource(Req, State);
+route2(Req, #state{method= <<"PUT">>}=State) ->
+  create_resource(Req, State);
+route2(Req, #state{method= <<"GET">>}=State) ->
+  get_resource(Req, State);
+route2(Req, #state{method= <<"DELETE">>}=State) ->
+  delete_resource(Req, State).
 
-is_conflict(Req, State) ->
+
+create_resource(Req, State) ->
   Json = State#state.body,
   Conn = State#state.conn,
   DocId = State#state.docid,
@@ -305,17 +294,17 @@ is_conflict(Req, State) ->
                        end
                    end,
   case Result of
+    {error, not_found} ->
+      barrel_http_reply:error(404, Req4, State);
     {error, {conflict, revision_conflict}} ->
-      {true, Req4, State};
+      barrel_http_reply:error(409, <<"revision conflict">>, Req4, State);
     {error, {conflict, doc_exists}} ->
-      {true, Req4, State};
-    {ok, _DocId, RevId} ->
+      barrel_http_reply:error(409, <<"document exists">>, Req4, State);
+    {ok, CreatedDocId, RevId} ->
       Reply = #{<<"ok">> => true,
-                <<"id">> => DocId,
+                <<"id">> => CreatedDocId,
                 <<"rev">> => RevId},
-      RespBody = jsx:encode(Reply),
-      Req5 = cowboy_req:set_resp_body(RespBody, Req),
-      {false, Req5, State}
+      barrel_http_reply:doc(201, Reply, Req4, State)
   end.
 
 delete_resource(Req, State) ->
@@ -326,57 +315,9 @@ delete_resource(Req, State) ->
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},
-  RespBody = jsx:encode(Reply),
-  Req2 = cowboy_req:set_resp_body(RespBody, Req),
-  {true, Req2, State}.
+  barrel_http_reply:doc(Reply, Req, State).
 
-from_json(Req, State) ->
-  {true, Req, State}.
 
-to_json(Req, State) ->
+get_resource(Req, State) ->
   Doc = State#state.doc,
-  Json = jsx:encode(Doc),
-  {Json, Req, State}.
-
-
-%% ------
-%% Legacy
-
-post_put(Method, Store, DbId, DocIdAsBin, Req, State) ->
-  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
-    {ok, Conn} ->
-      post_put(Method, Conn, DocIdAsBin, Req, State);
-    {error, not_found} ->
-      barrel_http_reply:error(404, Req, State)
-  end.
-post_put(Method, Conn, DocIdAsBin, Req, State) ->
-  {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
-  Json = jsx:decode(Body, [return_maps]),
-  {Result, Req4} = case Method of
-        post ->
-          {barrel:post(Conn, Json, []), Req2};
-        put ->
-          {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req2),
-          Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
-          case Edit of
-            false ->
-              { barrel:put(Conn, DocIdAsBin, Json, []), Req3 };
-            true ->
-              Doc = maps:get(<<"document">>, Json),
-              History = maps:get(<<"history">>, Json),
-              {barrel:put_rev(Conn, DocIdAsBin, Doc, History, []), Req3}
-          end
-      end,
-  case Result of
-    {error, not_found} ->
-      barrel_http_reply:code(404, Req4, State);
-    {error, {conflict, revision_conflict}} ->
-      barrel_http_reply:code(409, Req4, State);
-    {error, {conflict, doc_exists}} ->
-      barrel_http_reply:code(409, Req4, State);
-    {ok, DocId, RevId} ->
-      Reply = #{<<"ok">> => true,
-                <<"id">> => DocId,
-                <<"rev">> => RevId},
-      barrel_http_reply:doc(Reply, Req4, State)
-  end.
+  barrel_http_reply:doc(Doc, Req, State).
