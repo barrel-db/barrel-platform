@@ -206,7 +206,7 @@ handle_call({delete_system_doc, DocId}, _From, State) ->
   DbUrl = State#state.dbid,
   Sep = <<"/_system/">>,
   Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
-  {204, _} = req(delete, Url),
+  {200, _} = req(delete, Url),
   {reply, ok, State};
 
 handle_call(stop, _From, State) ->

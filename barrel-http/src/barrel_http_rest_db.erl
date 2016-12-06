@@ -80,8 +80,8 @@ check_store(Req, State) ->
       route(Req4, State#state{method=Method, store=Store, databases=List, dbid=DbId})
   end.
 
-route(Req, #state{method= <<"POST">>, store=Store, dbid=Db}=State) ->
-  barrel_http_rest_doc:post_put(post, Store, Db, undefined, Req, State);
+route(Req, #state{method= <<"POST">>}) ->
+  barrel_http_rest_doc:handle_post(Req);
 route(Req, #state{method= <<"PUT">>}=State) ->
   create_resource(Req, State);
 route(Req, #state{method= <<"GET">>}=State) ->
@@ -112,9 +112,9 @@ get_resource(Req, #state{store=Store, dbid=Db}=State) ->
   {ok, Conn} = barrel:connect_database(Store, Db),
   {ok, Infos} = barrel:database_infos(Conn),
   [Id, Name, Store] = [maps:get(K, Infos) || K <- [id, name, store]],
-  DbInfo = [{<<"id">>, Id},
-            {<<"name">>, Name},
-            {<<"store">>, Store}],
+  DbInfo = #{<<"id">> => Id,
+             <<"name">> => Name,
+             <<"store">> => Store},
   barrel_http_reply:doc(DbInfo, Req, State).
 
 delete_resource(Req, #state{store=Store, dbid=Db}=State) ->
