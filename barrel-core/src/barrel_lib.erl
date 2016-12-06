@@ -22,7 +22,8 @@
   report_overrun/1,
   uniqid/0, uniqid/1,
   parse_fold_options/1,
-  data_dir/0
+  data_dir/0,
+  join/2
 ]).
 
 -include("barrel.hrl").
@@ -98,3 +99,17 @@ parse_fold_options([{max, Max} | Rest], Options) ->
   parse_fold_options(Rest, Options#{max => Max});
 parse_fold_options([_ | Rest], Options) ->
   parse_fold_options(Rest, Options).
+
+
+join([], _Separator) ->
+  <<>>;
+join([S], _separator) ->
+  S;
+join(L, Separator) ->
+  iolist_to_binary(join(lists:reverse(L), Separator, [])).
+join([], _Separator, Acc) ->
+  Acc;
+join([S | Rest], Separator, []) ->
+  join(Rest, Separator, [S]);
+join([S | Rest], Separator, Acc) ->
+  join(Rest, Separator, [S, Separator | Acc]).

@@ -38,6 +38,15 @@
   delete_system_doc/3
 ]).
 
+
+-export([
+  index_seq/2,
+  index_get_forward_path/3,
+  index_get_reverse_path/3,
+  index_get_last_doc/3,
+  update_index/7
+]).
+
 -define(VERSION, 1).
 
 init(_Name, #{ store_backend := Backend }) ->
@@ -354,6 +363,57 @@ read_system_doc(DbId, DocId, #{db := Db}) ->
 delete_system_doc(DbId, DocId, #{db := Db}) ->
   erocksdb:delete(Db, sys_key(DbId, DocId), [{sync, true}]).
 
+
+%% index functions
+
+index_seq(DbId, #{ db := Db}) ->
+  case erocksdb:get(Db, meta_key(DbId, index_seq), []) of
+    {ok, BinVal} -> binary_to_term(BinVal);
+    not_found -> 0;
+    Error -> Error
+  end.
+
+index_get_last_doc(DbId, DocId, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_last_doc_key(DbId, DocId), []) of
+    {ok, BinVal} ->binary_to_term(BinVal);
+    Error -> Error
+  end.
+
+index_get_reverse_path(DbId, Path, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_reverse_path_key(DbId, Path), []) of
+    {ok, BinVal} ->binary_to_term(BinVal);
+    Error -> Error
+  end.
+
+index_get_forward_path(DbId, Path, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_forward_path_key(DbId, Path), []) of
+    {ok, BinVal} ->binary_to_term(BinVal);
+    Error -> Error
+  end.
+
+update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, #{ db := Db}) ->
+  Ops = prepare_index(
+    ForwardOps, DbId, idx_forward_path_key,
+    prepare_index(
+      ReverseOps, DbId, idx_reverse_path_key,
+      []
+    )
+  ),
+  
+  Batch = [
+    {put, meta_key(DbId, index_seq), term_to_binary(Seq)},
+    {put, idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)} | Ops
+  ],
+  erocksdb:write(Db, Batch, [{sync, true}]).
+  
+prepare_index([{Op, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
+  Key = KeyFun(DbId, Path),
+  Acc2 = [{Op, Key, term_to_binary(Entries)} | Acc],
+  prepare_index(Rest, DbId, KeyFun, Acc2);
+prepare_index([], _DbId, _KeyFun, Acc) ->
+  Acc.
+
+
 %% key api
 
 meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binary >>.
@@ -365,3 +425,8 @@ seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, Seq:32>>.
 sys_key(DbId, DocId) -> << DbId/binary, 0, 0, 200, DocId/binary>>.
 
 rev_key(DbId, DocId, Rev) -> << DbId/binary, DocId/binary, 1, Rev/binary >>.
+
+
+idx_last_doc_key(DbId, DocId) -> << DbId/binary, 0, 0, 400, DocId/binary >>.
+idx_forward_path_key(DbId, Path) -> << DbId/binary, 0, 0, 410, Path/binary >>.
+idx_reverse_path_key(DbId, Path) -> << DbId/binary, 0, 0, 420, Path/binary >>.

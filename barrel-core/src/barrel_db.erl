@@ -315,6 +315,7 @@ read_system_doc(#{store := Store, id := DbId}, DocId) ->
 delete_system_doc(#{store := Store, id := DbId}, DocId) ->
   barrel_store:delete_system_doc(Store, DbId, DocId).
 
+
 -spec start_link(barrel:dbname(), barrel:store(), barrel:db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->
   gen_server:start_link(?MODULE, [Name, Store, Options], []).
