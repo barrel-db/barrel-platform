@@ -3,14 +3,17 @@
 
 %% API
 -export([
-  init/3,
-  change_worker/3
+  start_link/3,
+  init/3
 ]).
 
 -define(DEFAULT_CHANGES_SIZE, 10).
 
 -define(n, 3). %% partial depth
 
+
+start_link(Parent, DbId, Store) ->
+  proc_lib:spawn_link(?MODULE, init, [Parent, DbId, Store]).
 
 init(Parent, DbId, Store) ->
   process_flag(trap_exit, true),
@@ -102,11 +105,11 @@ merge_forward_paths(ToAdd, ToDel, DocId, St) ->
 
 merge_reverse_paths(ToAdd, ToDel, DocId, St) ->
   Ops0 = merge(
-    partial_forward_paths(ToAdd, []), DocId, add, index_get_forward_path, St, []
+    partial_reverse_paths(ToAdd, []), DocId, add, index_get_forward_path, St, []
   ),
   
   merge(
-    partial_forward_paths(ToDel, []), DocId, del, index_get_forward_path, St, Ops0
+    partial_reverse_paths(ToDel, []), DocId, del, index_get_forward_path, St, Ops0
   ).
 
 

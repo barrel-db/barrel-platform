@@ -28,7 +28,7 @@
   index_get_last_doc/3,
   index_seq/2,
   update_index/7
-])
+]).
 
 %% supervisor callback
 -export([init/1]).

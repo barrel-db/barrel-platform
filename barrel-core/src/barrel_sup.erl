@@ -57,7 +57,7 @@ init([]) ->
   
   ObjectCache =
     #{id => object_cache,
-      start => {lru, start_link, [{local, object_cache}]},
+      start => {lru, start_link, [{local, object_cache}, []]},
       restart => permanent,
       shutdown => infinity,
       type => worker,
@@ -68,7 +68,7 @@ init([]) ->
       ?sup(barrel_store_sup)
     , ?sup(barrel_db_sup)
     , ?sup(barrel_event)
-    , ?sup(barrel_task_status),
+    , ?sup(barrel_task_status)
     , ObjectCache
     , ?sup(barrel_replicate_sup)
     , ReplicateManager
