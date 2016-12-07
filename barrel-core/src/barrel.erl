@@ -29,6 +29,10 @@
   revsdiff/3
 ]).
 
+-export([
+  find_by_key/5
+]).
+
 %% Database API
 
 -export([
@@ -266,6 +270,18 @@ changes_since(Conn, Since, Fun, Acc) ->
 changes_since(Conn, Since, Fun, Acc, Opts) ->
   barrel_db:changes_since(Conn, Since, Fun, Acc, Opts).
 
+%% @doc find in the index a document by its path
+-spec find_by_key(Conn, Path, Fun, AccIn, Options) -> AccOut | Error when
+  Conn::conn(),
+  Path :: binary(),
+  FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
+  Fun :: fun((DocId :: docid(), DocInfo :: docinfo(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Options :: fold_options(),
+  AccIn :: any(),
+  AccOut :: any(),
+  Error :: {error, term()}.
+find_by_key(#{store := Store, id := DbId}, Path, Fun, AccIn, Opts) ->
+  barrel_store:find_by_key(Store, DbId, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when

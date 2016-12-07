@@ -27,7 +27,8 @@
   index_get_reverse_path/3,
   index_get_last_doc/3,
   index_seq/2,
-  update_index/7
+  update_index/7,
+  find_by_key/6
 ]).
 
 %% supervisor callback
@@ -124,6 +125,10 @@ index_get_reverse_path(Store, DbId, Path) ->
 
 index_get_forward_path(Store, DbId, Path) ->
   call(Store, {index_get_forward_path, DbId, Path}).
+
+
+find_by_key(Store, DbId, Path, Fun, AccIn, Opts) ->
+  call(Store, {update_index, DbId, Path, Fun, AccIn, Opts}).
 
 call(Store, Msg) ->
   try wpool:call(Store, Msg)

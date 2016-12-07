@@ -23,7 +23,7 @@
   uniqid/0, uniqid/1,
   parse_fold_options/1,
   data_dir/0,
-  join/2
+  binary_join/2
 ]).
 
 -include("barrel.hrl").
@@ -101,15 +101,10 @@ parse_fold_options([_ | Rest], Options) ->
   parse_fold_options(Rest, Options).
 
 
-join([], _Separator) ->
+-spec binary_join([binary()], binary()) -> binary().
+binary_join([], _Sep) ->
   <<>>;
-join([S], _separator) ->
-  S;
-join(L, Separator) ->
-  iolist_to_binary(join(lists:reverse(L), Separator, [])).
-join([], _Separator, Acc) ->
-  Acc;
-join([S | Rest], Separator, []) ->
-  join(Rest, Separator, [S]);
-join([S | Rest], Separator, Acc) ->
-  join(Rest, Separator, [S, Separator | Acc]).
+binary_join([Part], _Sep) ->
+  Part;
+binary_join([Head|Tail], Sep) ->
+  lists:foldl(fun (Value, Acc) -> <<Acc/binary, Sep/binary, (to_binary(Value))/binary>> end, Head, Tail).

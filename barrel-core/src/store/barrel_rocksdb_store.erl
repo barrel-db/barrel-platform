@@ -44,7 +44,8 @@
   index_get_forward_path/3,
   index_get_reverse_path/3,
   index_get_last_doc/3,
-  update_index/7
+  update_index/7,
+  find_by_key/6
 ]).
 
 -define(VERSION, 1).
@@ -412,6 +413,46 @@ prepare_index([{Op, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
   prepare_index(Rest, DbId, KeyFun, Acc2);
 prepare_index([], _DbId, _KeyFun, Acc) ->
   Acc.
+
+find_by_key(DbId, Path0, Fun, AccIn, Options, #{ db := Db} ) ->
+  Path1 = case Path0 of
+    <<>> -> <<"$">>;
+    <<"/">> -> <<"$">>;
+    _ ->
+      PathParts = [<<"$">> | parse_path(Path0)],
+      barrel_lib:binary_join(PathParts, <<"/">>)
+  end,
+  StartKey = case proplists:get_value(start_at, Options) of
+               undefined -> Path1;
+               Start -> << Path1/binary, "/", (barrel_lib:to_binary(Start))/binary >>
+             end,
+  EndKey = case proplists:get_value(end_at, Options) of
+             undefined -> nil;
+             End -> << Path1/binary, "/", (barrel_lib:to_binary(End))/binary >>
+           end,
+  Max = proplists:get_value(limit_to_last, Options, 0),
+  Prefix = << DbId/binary, 0, 0, 410 >>,
+
+  {ok, Snapshot} = erocksdb:snapshot(Db),
+  ReadOptions = [{snapshot, Snapshot}],
+  FoldOptions = [{gte, StartKey}, {lte, EndKey}, {max, Max}, {read_options, ReadOptions}],
+
+  WrapperFun =
+    fun(_Key, BinDocInfo, Acc) ->
+      DocInfo = binary_to_term(BinDocInfo),
+      RevId = maps:get(current_rev, DocInfo),
+      DocId = maps:get(id, DocInfo),
+      {ok, Doc} = get_doc_rev(Db, DbId, DocId, RevId, ReadOptions),
+      Fun(DocId, Doc, Acc)
+    end,
+
+  try fold_prefix(Db, Prefix, WrapperFun, AccIn, FoldOptions)
+  after erocksdb:release_snapshot(Snapshot)
+  end.
+
+parse_path(Path) ->
+  Split = binary:split(Path, [<<".">>,<<"[">>,<<"]">>], [global]),
+  lists:filter(fun(X) -> X =/= <<>> end, Split).
 
 
 %% key api

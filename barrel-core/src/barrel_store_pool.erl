@@ -123,6 +123,9 @@ handle_call(
   Reply = Mod:update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, ModState),
   {reply, Reply, State};
 
+handle_call({find_by_key, DbId, Path, Fun, AccIn, Opts}, _From,  State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:find_by_key(DbId, Path, Fun, AccIn, Opts, ModState),
+  {reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
   {reply, bad_call, State}.
