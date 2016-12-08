@@ -100,6 +100,33 @@ handle_call({delete_system_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_
   {reply, Reply, State};
 
 
+handle_call({index_seq, DbId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:index_seq(DbId, ModState),
+  {reply, Reply, State};
+
+handle_call({index_get_last_doc, DbId, DocId}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:index_get_last_doc(DbId, DocId, ModState),
+  {reply, Reply, State};
+
+handle_call({index_get_reverse_path, DbId, Path}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:index_get_reverse_path(DbId, Path, ModState),
+  {reply, Reply, State};
+
+handle_call({index_get_forward_path, DbId, Path}, _From, State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:index_get_forward_path(DbId, Path, ModState),
+  {reply, Reply, State};
+
+handle_call(
+  {update_index, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths}, _From,
+  State=#state{ mod=Mod, mod_state=ModState}
+) ->
+  Reply = Mod:update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, ModState),
+  {reply, Reply, State};
+
+handle_call({find_by_key, DbId, Path, Fun, AccIn, Opts}, _From,  State=#state{ mod=Mod, mod_state=ModState}) ->
+  Reply = Mod:find_by_key(DbId, Path, Fun, AccIn, Opts, ModState),
+  {reply, Reply, State};
+
 handle_call(_Request, _From, State) ->
   {reply, bad_call, State}.
 

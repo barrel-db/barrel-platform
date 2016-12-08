@@ -22,6 +22,15 @@
   start_link/2
 ]).
 
+-export([
+  index_get_forward_path/3,
+  index_get_reverse_path/3,
+  index_get_last_doc/3,
+  index_seq/2,
+  update_index/7,
+  find_by_key/6
+]).
+
 %% supervisor callback
 -export([init/1]).
 
@@ -101,6 +110,25 @@ read_system_doc(Store, DbId, DocId) ->
 delete_system_doc(Store, DbId, DocId) ->
   call(Store, {delete_system_doc, DbId, DocId}).
 
+index_get_last_doc(Store, DbId, DocId) ->
+  call(Store, {index_get_last_doc, DbId, DocId}).
+
+index_seq(Store, DbId) ->
+  call(Store, {index_seq, DbId}).
+
+update_index(Store, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths) ->
+  call(Store, {update_index, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths}).
+
+
+index_get_reverse_path(Store, DbId, Path) ->
+  call(Store, {index_get_reverse_path, DbId, Path}).
+
+index_get_forward_path(Store, DbId, Path) ->
+  call(Store, {index_get_forward_path, DbId, Path}).
+
+
+find_by_key(Store, DbId, Path, Fun, AccIn, Opts) ->
+  call(Store, {find_by_key, DbId, Path, Fun, AccIn, Opts}).
 
 call(Store, Msg) ->
   try wpool:call(Store, Msg)

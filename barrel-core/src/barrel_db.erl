@@ -315,6 +315,7 @@ read_system_doc(#{store := Store, id := DbId}, DocId) ->
 delete_system_doc(#{store := Store, id := DbId}, DocId) ->
   barrel_store:delete_system_doc(Store, DbId, DocId).
 
+
 -spec start_link(barrel:dbname(), barrel:store(), barrel:db_options()) -> {ok, pid()}.
 start_link(Name, Store, Options) ->
   gen_server:start_link(?MODULE, [Name, Store, Options], []).
@@ -351,15 +352,28 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
-handle_info({updated, Seq}, State = #{ store := Store, name := Name }) ->
+handle_info({updated, Seq}, State = #{ store := Store, name := Name, waiters := Waiters }) ->
   barrel_db_event:notify({Store, Name}, db_updated),
-  {noreply, State#{update_seq => Seq}};
+  Waiters2 = process_waiters(Waiters, Seq),
+  {noreply, State#{ waiters => Waiters2 }};
+
+handle_info({wait_changes, Pid, Since}, State = #{ waiters := Waiters, update_seq := Seq}) ->
+  State2 = if
+    Seq > Since ->
+      Pid ! {updated, Since},
+      State;
+    true ->
+      Waiters2 = queue:in({Pid, Since}, Waiters),
+      State#{ waiters => Waiters2 }
+  end,
+  {noreply, State2};
 
 handle_info({'EXIT', Pid, Reason},State) ->
   #{id := DbId,
     name := Name,
     store := Store,
     writer := WriterPid,
+    indexer := Indexer,
     options := Options}=State,
   if
     Pid =:= WriterPid ->
@@ -369,6 +383,10 @@ handle_info({'EXIT', Pid, Reason},State) ->
       {ok, NewWriter} = barrel_transactor:start_link(self(), DbId, Store, Options),
       lager:info("~p new writer spawned: dbid=~p store=~p~n", [Name, DbId, Store]),
       {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
+    Pid =:= Indexer ->
+      lager:info("~p Indexer crashed: ~p~n", [Name, Reason]),
+      Indexer = barrel_indexer:start_link(DbId, Store),
+      {noreply, State#{ indexer => Indexer }};
     true ->
       {noreply, State}
   end;
@@ -395,17 +413,35 @@ init_db(Name, Store, Options) ->
     {ok, {DbId, UpdateSeq}} ->
       %% spawn writer actor
       {ok, WriterPid} = barrel_transactor:start_link(self(), DbId, Store, UpdateSeq),
+      %% spawn indexer
+      {ok, Indexer} = barrel_indexer:start_link(DbId, Store),
       %% return state
       {ok, #{
         id => DbId,
         store => Store,
         writer => WriterPid,
+        indexer => Indexer,
         name => Name,
         update_seq => UpdateSeq,
-        options => Options
+        options => Options,
+        waiters => queue:new()
       }};
     Error ->
       Error
+  end.
+
+process_waiters(W, Seq) -> process_waiters_1(W, Seq, queue:new()).
+
+process_waiters_1(Waiters, Seq, NW) ->
+  lager:info("process waiters ~p~n", [Waiters]),
+  case queue:out(Waiters) of
+    {{value, {Pid, Since}}, Waiters2} when Seq > Since ->
+      catch Pid ! {updated, Since},
+      process_waiters_1(Waiters2, Seq, NW);
+    {{value, Waiter}, Waiters2} ->
+      process_waiters_1(Waiters2, Seq, queue:in(Waiter, NW));
+    {empty, _} ->
+      NW
   end.
 
 %% TODO: retrieve status from the store

@@ -64,14 +64,15 @@ update_doc(DbId, DocId, Fun, Options) ->
   end.
 
 last_update_seq(DbId) ->
-  case ets:lookup(?MODULE, DbId) of
+  lager:info("~p tab is ~p~n", [DbId, ets:tab2list(?MODULE)]),
+  case ets:lookup(barrel_transactor, DbId) of
     [] -> undefined;
     [{DbId, _Transactor, Seq}] -> Seq
   end.
 
 
 find(DbId) ->
-  case ets:lookup(?MODULE, DbId) of
+  case ets:lookup(barrel_transactor, DbId) of
     [] -> undefined;
     [{DbId, Transactor, _Seq}] -> Transactor
   end.
@@ -94,11 +95,12 @@ init([Parent, DbId, Store, UpdateSeq]) ->
     store => Store,
     update_seq => UpdateSeq
   },
-  true = ets:insert_new(?MODULE, {DbId, self(), UpdateSeq}),
+  true = ets:insert_new(barrel_transactor, {DbId, self(), UpdateSeq}),
   {ok, wait_for_transaction, Data}.
 
 
 terminate(_Reason, _State, #{ dbid := DbId}) ->
+  lager:info("terminated ~p~n", [[_Reason, _State]]),
   ets:delete(?MODULE, DbId),
   ok.
 
@@ -153,7 +155,8 @@ handle_write_doc(Parent, DocId, Fun, _Options, #{ dbid := DbId, store := Store, 
       LastSeq = maps:get(update_seq, DocInfo2, undefined),
       case barrel_store:write_doc(Store, DbId, DocId, LastSeq, DocInfo2#{update_seq => NewSeq}, Body) of
         ok ->
-          _ = ets:update_counter(?MODULE, DbId, {3, 1}),
+          N = ets:update_counter(barrel_transactor, DbId, {3, 1}),
+          lager:info("dbupdated ~p at ~p", [DbId, N]),
           Parent ! {updated, self(), {ok, DocId, NewRev}, NewSeq};
         WriteError ->
           lager:error("db error: error writing ~p on ~p", [DocId, DbId]),

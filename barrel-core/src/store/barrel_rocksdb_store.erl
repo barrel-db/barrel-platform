@@ -38,6 +38,16 @@
   delete_system_doc/3
 ]).
 
+
+-export([
+  index_seq/2,
+  index_get_forward_path/3,
+  index_get_reverse_path/3,
+  index_get_last_doc/3,
+  update_index/7,
+  find_by_key/6
+]).
+
 -define(VERSION, 1).
 
 init(_Name, #{ store_backend := Backend }) ->
@@ -116,7 +126,6 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
                            FirstKey = << Prefix/binary, K/binary >>,
                            {FirstKey, false};
                          _ ->
-                           lager:error("folding: error: opts are ~p~n", [Opts]),
                            error(badarg)
                        end,
   Opts2 = Opts#{prefix => Prefix},
@@ -131,14 +140,21 @@ fold_prefix_loop({error, iterator_closed}, _Itr, _Fun, Acc, _N, _Opts) ->
   throw({iterator_closed, Acc});
 fold_prefix_loop({error, invalid_iterator}, _Itr, _Fun, Acc, _N, _Opts) ->
   Acc;
+
+
+
 fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0,
                  Opts = #{ lt := Lt, lte := nil, prefix := Prefix})
   when Lt =:= nil orelse K < <<Prefix/binary, Lt/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N0, Opts);
+
+
 fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N,
                  Opts = #{ lt := nil, lte := Lte, prefix := Prefix})
   when Lte =:= nil orelse K =< <<Prefix/binary, Lte/binary>> ->
   fold_prefix_loop1(KV, Itr, Fun, Acc, N, Opts);
+
+
 fold_prefix_loop({ok, K, V}, _Itr, Fun, Acc, _N,  #{ lt := nil, lte := K, prefix := P}) ->
   case match_prefix(K, P) of
     true ->
@@ -323,8 +339,11 @@ change_with_revtree(Change, DocInfo, true) -> Change#{revtree => maps:get(revtre
 change_with_revtree(Change, _DocInfo, false) -> Change.
 
 change_with_doc(Change, DocId, RevId, DbId, Db, ReadOptions, true) ->
-  Doc = get_doc_rev(Db, DbId, DocId, RevId, ReadOptions),
-  Change#{ doc => Doc };
+  case get_doc_rev(Db, DbId, DocId, RevId, ReadOptions) of
+    {ok, Doc} -> Change#{ doc => Doc };
+    not_found -> Change#{ doc => {error, missing} }
+  end;
+
 change_with_doc(Change, _DocId, _RevId, _DbId, _Db, _ReadOptions, false) ->
   Change.
 
@@ -354,6 +373,131 @@ read_system_doc(DbId, DocId, #{db := Db}) ->
 delete_system_doc(DbId, DocId, #{db := Db}) ->
   erocksdb:delete(Db, sys_key(DbId, DocId), [{sync, true}]).
 
+
+%% index functions
+
+index_seq(DbId, #{ db := Db}) ->
+  case erocksdb:get(Db, meta_key(DbId, index_seq), []) of
+    {ok, BinVal} -> binary_to_term(BinVal);
+    not_found -> 0;
+    Error -> Error
+  end.
+
+index_get_last_doc(DbId, DocId, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_last_doc_key(DbId, DocId), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
+index_get_reverse_path(DbId, Path, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_reverse_path_key(DbId, Path), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
+index_get_forward_path(DbId, Path, #{ db := Db}) ->
+  case erocksdb:get(Db, idx_forward_path_key(DbId, Path), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
+update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, #{ db := Db}) ->
+  Ops = prepare_index(
+    ForwardOps, DbId, fun idx_forward_path_key/2,
+    prepare_index(
+      ReverseOps, DbId, fun idx_reverse_path_key/2, []
+    )
+  ),
+  
+  Batch = [
+    {put, meta_key(DbId, index_seq), term_to_binary(Seq)},
+    {put, idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)}
+  ] ++ Ops,
+  
+  erocksdb:write(Db, Batch, [{sync, true}]).
+  
+prepare_index([{Op, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
+  Key = KeyFun(DbId, Path),
+  Acc2 = [{Op, Key, term_to_binary(Entries)} | Acc],
+  prepare_index(Rest, DbId, KeyFun, Acc2);
+prepare_index([], _DbId, _KeyFun, Acc) ->
+  Acc.
+
+find_by_key(DbId, Path, Fun, AccIn, Options, #{ db := Db} ) ->
+  {Key, Offset, Sel} = case Path of
+    <<>> -> {<<"$">>, 0, []};
+    <<"/">> -> {<<"$">>, 0, []};
+    _ ->
+      find_key(<< "$.", Path/binary >>)
+  end,
+  StartKey = case proplists:get_value(start_at, Options) of
+               undefined -> nil;
+               Start -> << "/", (barrel_lib:to_binary(Start))/binary >>
+             end,
+  EndKey = case proplists:get_value(end_at, Options) of
+             undefined -> nil;
+             End -> << "/", (barrel_lib:to_binary(End))/binary >>
+           end,
+  Max = proplists:get_value(limit_to_last, Options, 0),
+  Prefix = idx_forward_path_key(DbId, Key),
+
+  {ok, Snapshot} = erocksdb:snapshot(Db),
+  ReadOptions = [{snapshot, Snapshot}],
+  FoldOptions = [{gte, StartKey}, {lte, EndKey}, {max, Max}, {read_options, ReadOptions}],
+
+  WrapperFun =
+    fun(KeyBin, BinMap, Acc) ->
+      PathSize = byte_size(KeyBin) - 1,
+      << _Path:PathSize/binary, KeyOffset:8 >> = KeyBin,
+      if
+        KeyOffset > Offset -> {stop, Acc};
+        true ->
+          Map = binary_to_term(BinMap),
+          case maps:find(Sel, Map) of
+            {ok, Entries} ->
+              fold_entries(Entries, Fun, Db, DbId, ReadOptions, Acc);
+            error ->
+              {ok, Acc}
+          end
+      end
+    end,
+
+  try fold_prefix(Db, Prefix, WrapperFun, AccIn, FoldOptions)
+  after erocksdb:release_snapshot(Snapshot)
+  end.
+
+fold_entries([DocId | Rest], Fun, Db, DbId, ReadOptions, Acc) ->
+  {ok, Doc} = get_doc1(
+    DbId, DocId, Db, <<>>, false, 0, [], ReadOptions
+  ),
+  
+  case Fun(DocId, Doc, Acc) of
+    {ok, Acc2} ->
+      
+      fold_entries(Rest, Fun, Db, DbId, ReadOptions, Acc2);
+    Else ->
+      Else
+  end;
+fold_entries([], _Fun, _Db, _DbId, _ReadOptions, Acc) ->
+  {ok, Acc}.
+
+find_key(Path) ->
+  Parts = binary:split(Path, <<".">>, [global]),
+  parse_parts(Parts, 0, 0, []).
+
+parse_parts(Parts, _N, Offset, Levels) when length(Parts) =< 3 ->
+  {barrel_lib:binary_join(Parts, <<"/">>), Offset, Levels};
+parse_parts([<< $[, _/binary >> = Item | Rest], N, Offset, Levels) ->
+  [<<>>, BinInt, <<>>] = binary:split(Item, [<<"[">>,<<"]">>], [global]),
+  Idx = binary_to_integer(BinInt),
+  N2 = N + 1,
+  if
+    N2 =:= 3 ->
+      parse_parts(Rest, 0, Offset + 1, [Idx | Levels]);
+    true ->
+      parse_parts(Rest, N2, Offset, [Idx | Levels])
+  end.
+
 %% key api
 
 meta_key(DbId, Meta) -> << DbId/binary, 0, 0, (barrel_lib:to_binary(Meta))/binary >>.
@@ -365,3 +509,8 @@ seq_key(DbId, Seq) -> << DbId/binary, 0, 0, 100, Seq:32>>.
 sys_key(DbId, DocId) -> << DbId/binary, 0, 0, 200, DocId/binary>>.
 
 rev_key(DbId, DocId, Rev) -> << DbId/binary, DocId/binary, 1, Rev/binary >>.
+
+
+idx_last_doc_key(DbId, DocId) -> << DbId/binary, 0, 0, 400, DocId/binary >>.
+idx_forward_path_key(DbId, Path) -> << DbId/binary, 0, 0, 410, 0, Path/binary >>.
+idx_reverse_path_key(DbId, Path) -> << DbId/binary, 0, 0, 420, 0, Path/binary >>.
