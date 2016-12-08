@@ -385,7 +385,7 @@ handle_info({'EXIT', Pid, Reason},State) ->
       {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
     Pid =:= Indexer ->
       lager:info("~p Indexer crashed: ~p~n", [Name, Reason]),
-      Indexer = barrel_indexer:start_link(self(), DbId, Store),
+      Indexer = barrel_indexer:start_link(DbId, Store),
       {noreply, State#{ indexer => Indexer }};
     true ->
       {noreply, State}
