@@ -105,6 +105,10 @@ parse_fold_options([_ | Rest], Options) ->
 binary_join([], _Sep) ->
   <<>>;
 binary_join([Part], _Sep) ->
-  Part;
-binary_join([Head|Tail], Sep) ->
-  lists:foldl(fun (Value, Acc) -> <<Acc/binary, Sep/binary, (to_binary(Value))/binary>> end, Head, Tail).
+  to_binary(Part);
+binary_join([Head|Tail]=B, Sep) ->
+  lists:foldl(
+    fun (Value, Acc) -> <<Acc/binary, Sep/binary, (to_binary(Value))/binary>> end,
+    to_binary(Head),
+    Tail
+  ).

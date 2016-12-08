@@ -42,7 +42,8 @@
   change_since_include_doc/1,
   revdiff/1,
   get_revisions/1,
-  put_rev/1
+  put_rev/1,
+  find_by_key/1
 ]).
 
 all() ->
@@ -62,7 +63,8 @@ all() ->
     change_since_many,
     change_since_include_doc,
     revdiff,
-    put_rev
+    put_rev,
+    find_by_key
   ].
 
 init_per_suite(Config) ->
@@ -271,7 +273,7 @@ change_since_include_doc(Config) ->
   {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
   {ok, Doc1} = barrel_db:get(Conn, <<"aa">>, []),
   [Change] = barrel:changes_since(Conn, 0, Fun, [], [{include_doc, true}]),
-  {1, {ok, Doc1}} = Change,
+  {1, Doc1} = Change,
   ok.
 
 change_since_many(Config) ->
@@ -321,3 +323,37 @@ revdiff(Config) ->
   {ok, <<"revdiff">>, _RevId3} = barrel_db:put(Conn, <<"revdiff">>, Doc2, []),
   {ok, [<<"1-missing">>], []} = barrel_db:revsdiff(Conn, <<"revdiff">>, [<<"1-missing">>]),
   ok.
+
+
+find_by_key(Config) ->
+  Conn = proplists:get_value(conn, Config),
+  Doc = #{
+    <<"id">> => <<"AndersenFamily">>,
+    <<"lastName">> => <<"Andersen">>,
+    <<"parents">> => [
+      #{ <<"firstName">> => <<"Thomas">> },
+      #{ <<"firstName">> => <<"Mary Kay">>}
+    ],
+    <<"children">> => [
+      #{
+        <<"firstName">> => <<"Henriette Thaulow">>, <<"gender">> => <<"female">>, <<"grade">> =>  5,
+        <<"pets">> => [#{ <<"givenName">> => <<"Fluffy">> }]
+      }
+    ],
+    <<"address">> => #{ <<"state">> => <<"WA">>, <<"county">> => <<"King">>, <<"city">> => <<"seattle">> },
+    <<"creationDate">> => 1431620472,
+    <<"isRegistered">> => true
+  },
+  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(Conn, <<"AndersenFamily">>, Doc, []),
+  timer:sleep(400),
+  {ok, Doc1} = barrel:get(Conn, <<"AndersenFamily">>, []),
+  
+  lager:info("ici", []),
+  Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
+  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(Conn, <<"id">>, Fun, [], []),
+  
+  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(
+    Conn, <<"id.AndersenFamily">>, Fun, [], []),
+  ok.
+  
+  

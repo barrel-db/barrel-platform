@@ -128,7 +128,7 @@ index_get_forward_path(Store, DbId, Path) ->
 
 
 find_by_key(Store, DbId, Path, Fun, AccIn, Opts) ->
-  call(Store, {update_index, DbId, Path, Fun, AccIn, Opts}).
+  call(Store, {find_by_key, DbId, Path, Fun, AccIn, Opts}).
 
 call(Store, Msg) ->
   try wpool:call(Store, Msg)

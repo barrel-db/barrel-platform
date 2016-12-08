@@ -355,7 +355,7 @@ handle_cast(_Msg, State) ->
 handle_info({updated, Seq}, State = #{ store := Store, name := Name, waiters := Waiters }) ->
   barrel_db_event:notify({Store, Name}, db_updated),
   Waiters2 = process_waiters(Waiters, Seq),
-  {noreply, State#{waiters => Waiters2}};
+  {noreply, State#{ waiters => Waiters2 }};
 
 handle_info({wait_changes, Pid, Since}, State = #{ waiters := Waiters, update_seq := Seq}) ->
   State2 = if
@@ -373,21 +373,21 @@ handle_info({'EXIT', Pid, Reason},State) ->
     name := Name,
     store := Store,
     writer := WriterPid,
-    updater := Updater,
+    indexer := Indexer,
     options := Options}=State,
-  case Pid of
-    WriterPid ->
+  if
+    Pid =:= WriterPid ->
       lager:info("~p writer crashed: ~p~n", [Name, Reason]),
       %% the writer crashed, respawn it
       UpdateSeq = barrel_store:last_update_seq(Store, DbId),
       {ok, NewWriter} = barrel_transactor:start_link(self(), DbId, Store, Options),
       lager:info("~p new writer spawned: dbid=~p store=~p~n", [Name, DbId, Store]),
       {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
-    Updater ->
-      lager:info("~p updater crashed: ~p~n", [Name, Reason]),
+    Pid =:= Indexer ->
+      lager:info("~p Indexer crashed: ~p~n", [Name, Reason]),
       Indexer = barrel_indexer:start_link(self(), DbId, Store),
       {noreply, State#{ indexer => Indexer }};
-    _ ->
+    true ->
       {noreply, State}
   end;
 handle_info(_Info, State) ->
@@ -414,7 +414,7 @@ init_db(Name, Store, Options) ->
       %% spawn writer actor
       {ok, WriterPid} = barrel_transactor:start_link(self(), DbId, Store, UpdateSeq),
       %% spawn indexer
-      Indexer = barrel_indexer:start_link(self(), DbId, Store),
+      {ok, Indexer} = barrel_indexer:start_link(DbId, Store),
       %% return state
       {ok, #{
         id => DbId,
@@ -433,6 +433,7 @@ init_db(Name, Store, Options) ->
 process_waiters(W, Seq) -> process_waiters_1(W, Seq, queue:new()).
 
 process_waiters_1(Waiters, Seq, NW) ->
+  lager:info("process waiters ~p~n", [Waiters]),
   case queue:out(Waiters) of
     {{value, {Pid, Since}}, Waiters2} when Seq > Since ->
       catch Pid ! {updated, Since},
