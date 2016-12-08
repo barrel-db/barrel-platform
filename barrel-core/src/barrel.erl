@@ -186,7 +186,7 @@ database_names(Store) ->
   Conn::conn(),
   DocId :: docid(),
   Options :: read_options(),
-  Doc :: doc,
+  Doc :: doc(),
   Res :: {ok, Doc} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options) ->
   barrel_db:get(Conn, DocId, Options).

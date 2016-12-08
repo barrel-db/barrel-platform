@@ -43,15 +43,11 @@ loop(State) ->
 
   LastUpdatedSeq  = barrel_transactor:last_update_seq(DbId),
   
-  lager:info(" ~p === ~p", [LastUpdatedSeq, LastSeq]),
-  
   if
     is_integer(LastUpdatedSeq), LastUpdatedSeq > LastSeq ->
-      lager:info("fetch changes since ~p~n", [LastSeq]),
       Changes = fetch_changes(State, LastUpdatedSeq),
       process_changes(Changes, State);
     true ->
-      lager:info("wait changes since ~p~n", [LastSeq]),
       Parent ! {wait_changes, self(), LastSeq},
       wait_changes_loop(State)
   end.
@@ -62,10 +58,8 @@ wait_changes_loop(State = #{ parent := Parent, dbid := DbId }) ->
       Changes = fetch_changes(State, Since),
       process_changes(Changes, State);
     {'EXIT', Parent, Reason} ->
-      lager:info("parent exited ~p~n", [[Parent, Reason]]),
       exit(Reason);
     {system, From, Request} ->
-      lager:info("got ~p", [[From, Request]]),
       sys:handle_system_msg(Request, From, Parent, ?MODULE, [], State);
     Msg ->
       lager:info(
