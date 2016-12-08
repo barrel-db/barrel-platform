@@ -146,7 +146,6 @@ merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ store := Store, dbid := DbId
                        del -> Entries -- [DocId]
                      end,
           Sz = length(Entries2),
-          
           Acc2 = if
                    Sz > 0 ->
                      Map2 = Map#{ Sel => Entries2 },
@@ -157,7 +156,14 @@ merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ store := Store, dbid := DbId
                        0 ->  [{delete, Path} | Acc];
                        _ ->  [{put, Path, Map2} | Acc]
                      end
-                     
+                 end,
+          merge(Rest, DocId, Op, Fun, St, Acc2);
+        error ->
+          Acc2 = case Op of
+                   add ->
+                     [{put, Path, #{ Sel => [DocId]}} | Acc];
+                   del ->
+                     Acc
                  end,
           merge(Rest, DocId, Op, Fun, St, Acc2)
       end;
@@ -167,7 +173,6 @@ merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ store := Store, dbid := DbId
                  [{put, Path, #{ Sel => [DocId]}} | Acc];
                del ->
                  Acc
-    
              end,
       merge(Rest, DocId, Op, Fun, St, Acc2)
   end;
