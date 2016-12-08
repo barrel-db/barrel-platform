@@ -46,7 +46,7 @@ loop(State) ->
   lager:info(" ~p === ~p", [LastUpdatedSeq, LastSeq]),
   
   if
-    LastUpdatedSeq > LastSeq ->
+    is_integer(LastUpdatedSeq), LastUpdatedSeq > LastSeq ->
       lager:info("fetch changes since ~p~n", [LastSeq]),
       Changes = fetch_changes(State, LastUpdatedSeq),
       process_changes(Changes, State);
