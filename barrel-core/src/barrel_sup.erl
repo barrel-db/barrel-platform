@@ -45,23 +45,14 @@ start_link() ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
   _ = ets:new(barrel_db, [set, named_table, public]),
-  _ = ets:new(barrel_transactor, [ordered_set, named_table, public, {write_concurrency, true}]),
-  
-  ReplicateManager =
-    #{id => barrel_replicate_manager,
-      start => {barrel_replicate_manager, start_link, []},
-      restart => permanent,
-      shutdown => infinity,
-      type => worker,
-      modules => [barrel_replicate_manager]},
-  
-  Specs =[
-      ?sup(barrel_store_sup)
+  _ = ets:new(barrel_transactor, [ordered_set, named_table, public]),
+
+  Specs = [
+    ?sup(barrel_store_sup)
     , ?sup(barrel_db_sup)
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
-    , ?sup(barrel_replicate_sup)
-    , ReplicateManager
+    , ?sup(barrel_replicator_sup)
   ],
-  
+
   {ok, { {one_for_one, 5, 10}, Specs} }.
