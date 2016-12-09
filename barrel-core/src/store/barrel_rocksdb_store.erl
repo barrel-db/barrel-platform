@@ -141,8 +141,6 @@ fold_prefix_loop({error, iterator_closed}, _Itr, _Fun, Acc, _N, _Opts) ->
 fold_prefix_loop({error, invalid_iterator}, _Itr, _Fun, Acc, _N, _Opts) ->
   Acc;
 
-
-
 fold_prefix_loop({ok, K, _V}=KV, Itr, Fun, Acc, N0,
                  Opts = #{ lt := Lt, lte := nil, prefix := Prefix})
   when Lt =:= nil orelse K < <<Prefix/binary, Lt/binary>> ->
@@ -449,10 +447,12 @@ find_by_key(DbId, Path, Fun, AccIn, Options, #{ db := Db} ) ->
     fun(KeyBin, BinMap, Acc) ->
       PathSize = byte_size(KeyBin) - 1,
       << _Path:PathSize/binary, KeyOffset:8 >> = KeyBin,
+      lager:info("found ~p~n", [KeyBin]),
       if
         KeyOffset > Offset -> {stop, Acc};
         true ->
           Map = binary_to_term(BinMap),
+          lager:info("found map ~p~n", [[KeyBin, Map]]),
           case maps:find(Sel, Map) of
             {ok, Entries} ->
               fold_entries(Entries, Fun, Db, DbId, ReadOptions, Acc);
@@ -473,7 +473,6 @@ fold_entries([DocId | Rest], Fun, Db, DbId, ReadOptions, Acc) ->
   
   case Fun(DocId, Doc, Acc) of
     {ok, Acc2} ->
-      
       fold_entries(Rest, Fun, Db, DbId, ReadOptions, Acc2);
     Else ->
       Else

@@ -87,19 +87,17 @@ process_changes(Changes, State0 = #{ store := Store, dbid := DbId}) ->
       
       ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
       ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
-      
-      lager:info("~n====~n~nindex ~p~n~n", [ToAdd]),
-      
+
       ok = barrel_store:update_index(
         Store, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths
       ),
-      lager:info("put was ok", []),
-      timer:sleep(100),
-      loop(State#{ update_seq := Seq })
+      lager:debug("put was ok", []),
+      State#{ update_seq := Seq }
     end,
     State0,
     Changes
   ),
+  lager:debug("return in loop", []),
   loop(State2).
 
 fetch_changes(#{ store := Store, dbid := DbId, changes := OldChanges}, Since) ->

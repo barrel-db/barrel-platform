@@ -358,6 +358,7 @@ handle_info({updated, Seq}, State = #{ store := Store, name := Name, waiters := 
   {noreply, State#{ waiters => Waiters2 }};
 
 handle_info({wait_changes, Pid, Since}, State = #{ waiters := Waiters, update_seq := Seq}) ->
+  lager:debug("~p registered for changes since ~p", [Pid, Since]),
   State2 = if
     Seq > Since ->
       Pid ! {updated, Since},
@@ -381,7 +382,6 @@ handle_info({'EXIT', Pid, Reason},State) ->
       %% the writer crashed, respawn it
       UpdateSeq = barrel_store:last_update_seq(Store, DbId),
       {ok, NewWriter} = barrel_transactor:start_link(self(), DbId, Store, Options),
-      lager:info("~p new writer spawned: dbid=~p store=~p~n", [Name, DbId, Store]),
       {noreply, State#{update_seq => UpdateSeq, writer => NewWriter}};
     Pid =:= Indexer ->
       lager:info("~p Indexer crashed: ~p~n", [Name, Reason]),
@@ -433,7 +433,7 @@ init_db(Name, Store, Options) ->
 process_waiters(W, Seq) -> process_waiters_1(W, Seq, queue:new()).
 
 process_waiters_1(Waiters, Seq, NW) ->
-  lager:info("process waiters ~p~n", [Waiters]),
+  lager:debug("process waiters ~p  at ~p~n", [Waiters, Seq]),
   case queue:out(Waiters) of
     {{value, {Pid, Since}}, Waiters2} when Seq > Since ->
       catch Pid ! {updated, Since},
