@@ -417,9 +417,13 @@ update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, #{ db := Db}) 
       erocksdb:write(Db, Batch, [{sync, true}])
   end.
 
-prepare_index([{Op, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
+prepare_index([{put, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
   Key = KeyFun(DbId, Path),
-  Acc2 = [{Op, Key, term_to_binary(Entries)} | Acc],
+  Acc2 = [{put, Key, term_to_binary(Entries)} | Acc],
+  prepare_index(Rest, DbId, KeyFun, Acc2);
+prepare_index([{delete, Path} | Rest], DbId, KeyFun, Acc) ->
+  Key = KeyFun(DbId, Path),
+  Acc2 = [{delete, Key} | Acc],
   prepare_index(Rest, DbId, KeyFun, Acc2);
 prepare_index([], _DbId, _KeyFun, Acc) ->
   Acc.
@@ -468,15 +472,21 @@ find_by_key(DbId, Path, Fun, AccIn, Options, #{ db := Db} ) ->
   end.
 
 fold_entries([DocId | Rest], Fun, Db, DbId, ReadOptions, Acc) ->
-  {ok, Doc} = get_doc1(
+
+  Res = get_doc1(
     DbId, DocId, Db, <<>>, false, 0, [], ReadOptions
   ),
   
-  case Fun(DocId, Doc, Acc) of
-    {ok, Acc2} ->
-      fold_entries(Rest, Fun, Db, DbId, ReadOptions, Acc2);
-    Else ->
-      Else
+  case Res of
+    {ok, Doc} ->
+      case Fun(DocId, Doc, Acc) of
+        {ok, Acc2} ->
+          fold_entries(Rest, Fun, Db, DbId, ReadOptions, Acc2);
+        Else ->
+          Else
+      end;
+    _ ->
+      {ok, Acc}
   end;
 fold_entries([], _Fun, _Db, _DbId, _ReadOptions, Acc) ->
   {ok, Acc}.

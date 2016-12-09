@@ -88,10 +88,11 @@ process_changes(Changes, State0 = #{ store := Store, dbid := DbId}) ->
       ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
       ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
 
-      ok = barrel_store:update_index(
+      Res = barrel_store:update_index(
         Store, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths
       ),
-      lager:debug("put was ok", []),
+      lager:debug("put was ok: ~p", [Res]),
+      Res = ok,
       State#{ update_seq := Seq }
     end,
     State0,
@@ -102,6 +103,7 @@ process_changes(Changes, State0 = #{ store := Store, dbid := DbId}) ->
 
 fetch_changes(#{ store := Store, dbid := DbId, changes := OldChanges}, Since) ->
   Max = changes_size() - length(OldChanges),
+  lager:debug("fetch ~p changes since ~p~n", [Max, Since]),
   Fun = fun
           (_Seq, Change, {N, Acc}) ->
             N2 = N + 1,
@@ -113,7 +115,7 @@ fetch_changes(#{ store := Store, dbid := DbId, changes := OldChanges}, Since) ->
   {_, Changes} = barrel_store:changes_since(
     Store, DbId, Since, Fun, {Since, OldChanges}, [{include_doc, true}]
   ),
-  Changes.
+  lists:reverse(Changes).
 
 merge_forward_paths(ToAdd, ToDel, DocId, St) ->
   Ops0 = merge(
