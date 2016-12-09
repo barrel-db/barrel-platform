@@ -447,12 +447,10 @@ find_by_key(DbId, Path, Fun, AccIn, Options, #{ db := Db} ) ->
     fun(KeyBin, BinMap, Acc) ->
       PathSize = byte_size(KeyBin) - 1,
       << _Path:PathSize/binary, KeyOffset:8 >> = KeyBin,
-      lager:info("found ~p~n", [KeyBin]),
       if
         KeyOffset > Offset -> {stop, Acc};
         true ->
           Map = binary_to_term(BinMap),
-          lager:info("found map ~p~n", [[KeyBin, Map]]),
           case maps:find(Sel, Map) of
             {ok, Entries} ->
               fold_entries(Entries, Fun, Db, DbId, ReadOptions, Acc);
