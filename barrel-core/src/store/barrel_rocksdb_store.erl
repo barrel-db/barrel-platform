@@ -407,13 +407,16 @@ update_index(DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths, #{ db := Db}) 
     )
   ),
   
-  Batch = [
-    {put, meta_key(DbId, index_seq), term_to_binary(Seq)},
-    {put, idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)}
-  ] ++ Ops,
-  
-  erocksdb:write(Db, Batch, [{sync, true}]).
-  
+  case Ops of
+    [] -> ok;
+    _ ->
+      Batch = [
+        {put, meta_key(DbId, index_seq), term_to_binary(Seq)},
+        {put, idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)}
+      ] ++ Ops,
+      erocksdb:write(Db, Batch, [{sync, true}])
+  end.
+
 prepare_index([{Op, Path, Entries} | Rest], DbId, KeyFun, Acc) ->
   Key = KeyFun(DbId, Path),
   Acc2 = [{Op, Key, term_to_binary(Entries)} | Acc],
