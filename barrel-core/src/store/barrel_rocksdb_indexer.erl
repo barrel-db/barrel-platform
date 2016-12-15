@@ -1,109 +1,86 @@
--module(barrel_indexer).
+%% Copyright 2016, Benoit Chesneau
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License. You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
+
+-module(barrel_rocksdb_indexer).
 -author("Benoit Chesneau").
+-behaviour(gen_server).
+
+-export([refresh_index/2]).
+
+-export([start_link/4]).
 
 %% API
 -export([
-  start_link/2,
-  init/3
-]).
-
--export([
-  system_continue/3,
-  system_terminate/4,
-  system_code_change/4
+  init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2,
+  code_change/3
 ]).
 
 -define(DEFAULT_CHANGES_SIZE, 10).
 
--define(n, 3). %% partial depth
 
+refresh_index(Indexer, Since) ->
+  gen_server:call(Indexer, {refresh_index, Since}, infinity).
 
-start_link(DbId, Store) ->
-  proc_lib:start_link(?MODULE, init, [self(), DbId, Store]).
+start_link(Parent, Name, Ref, Opts) ->
+  gen_server:start_link(?MODULE, [Parent, Name, Ref, Opts], []).
 
-init(Parent, DbId, Store) ->
-  process_flag(trap_exit, true),
-  ok = proc_lib:init_ack(Parent, {ok, self()}),
-  UpdateSeq = barrel_store:index_seq(Store, DbId),
+init([Parent, Name, Ref, Opts]) ->
+  {ok, UpdateSeq} = last_index_seq(Ref),
+  IndexChangeSize = maps:get(index_changes_size, Opts, ?DEFAULT_CHANGES_SIZE),
   
   State = #{
     parent => Parent,
-    dbid => DbId,
-    store => Store,
+    name => Name,
+    ref => Ref,
     update_seq => UpdateSeq,
-    changes => [],
-    pids => []
+    index_changes_size => IndexChangeSize
   },
-  
-  loop(State).
+  self() ! refresh_index,
+  {ok, State}.
 
+handle_call({refresh_index, Since}, _From, State) ->
+  {Reply, NState} = do_refresh_index(Since, State),
+  {reply, Reply, NState};
 
-loop(State) ->
-  #{ parent := Parent, dbid := DbId, update_seq := LastSeq } = State,
+handle_call(Req, _From, State) ->
+  {reply, {badcall, Req}, State}.
 
-  LastUpdatedSeq  = barrel_transactor:last_update_seq(DbId),
-  
-  if
-    is_integer(LastUpdatedSeq), LastUpdatedSeq > LastSeq ->
-      Changes = fetch_changes(State, LastUpdatedSeq),
-      process_changes(Changes, State);
-    true ->
-      Parent ! {wait_changes, self(), LastSeq},
-      wait_changes_loop(State)
-  end.
+handle_cast(_Msg, State) ->
+  {noreply, State}.
 
-wait_changes_loop(State = #{ parent := Parent, dbid := DbId }) ->
-  receive
-    {updated, Since} ->
-      Changes = fetch_changes(State, Since),
-      process_changes(Changes, State);
-    {'EXIT', Parent, Reason} ->
-      exit(Reason);
-    {system, From, Request} ->
-      sys:handle_system_msg(Request, From, Parent, ?MODULE, [], State);
-    Msg ->
-      lager:info(
-        "Barrel indexer ~p received unexpected message ~p~n",
-        [DbId, Msg]
-      )
-  end.
+handle_info(refresh_index, State = #{ update_seq := LastSeq }) ->
+  {_Reply, NState} = do_refresh_index(LastSeq, State),
+  {noreply, NState};
 
+handle_info(_Info, State) ->
+  {noreply, State}.
 
-system_continue(_, _, State) ->
-  wait_changes_loop(State).
+terminate(_Reason, _State) ->
+  ok.
 
-system_terminate(Reason, _, _, _State) ->
-  exit(Reason).
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
 
-system_code_change(Misc, _, _, _) ->
-  {ok, Misc}.
+do_refresh_index(Since, State) ->
+  Changes= fetch_changes(Since, State),
+  process_changes(Changes, State).
 
-
-
-process_changes(Changes, State0 = #{ store := Store, dbid := DbId}) ->
-  State2 = lists:foldl(
-    fun(Change = #{ seq := Seq }, State) ->
-      {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, State),
-      
-      ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
-      ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
-
-      Res = barrel_store:update_index(
-        Store, DbId, ForwardOps, ReverseOps, DocId, Seq, FullPaths
-      ),
-      lager:debug("put was ok: ~p", [Res]),
-      Res = ok,
-      State#{ update_seq := Seq }
-    end,
-    State0,
-    Changes
-  ),
-  lager:debug("return in loop", []),
-  loop(State2).
-
-fetch_changes(#{ store := Store, dbid := DbId, changes := OldChanges}, Since) ->
-  Max = changes_size() - length(OldChanges),
-  lager:debug("fetch ~p changes since ~p~n", [Max, Since]),
+fetch_changes(Since, #{ ref := Ref, index_changes_size := Max}) ->
   Fun = fun
           (_Seq, Change, {N, Acc}) ->
             N2 = N + 1,
@@ -112,32 +89,109 @@ fetch_changes(#{ store := Store, dbid := DbId, changes := OldChanges}, Since) ->
               true -> {stop, {N2, [Change | Acc]}}
             end
         end,
-  {_, Changes} = barrel_store:changes_since(
-    Store, DbId, Since, Fun, {Since, OldChanges}, [{include_doc, true}]
+  {NChanges, Changes} = barrel_rocksdb:changes_since(
+    {ref, Ref}, Since, Fun, {Since, []}, [{include_doc, true}]
   ),
+  lager:debug("fetched ~p changes since ~p~n", [NChanges, Since]),
   lists:reverse(Changes).
+
+process_changes(Changes, State0 = #{ ref := Ref }) ->
+  #{ update_seq := LastSeq } = State2 = lists:foldl(
+    fun(Change = #{ seq := Seq }, State = #{ update_seq := OldSeq}) ->
+      {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Ref),
+      
+      ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
+      ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
+      
+      ok = update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths),
+      State#{ update_seq => erlang:max(Seq, OldSeq) }
+    end,
+    State0,
+    Changes
+  ),
+  {{ok, LastSeq}, State2}.
+
+
+
+update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths) ->
+  Ops = prepare_index(
+    ForwardOps, fun barrel_rocksdb:idx_forward_path_key/1,
+    prepare_index(
+      ReverseOps, fun barrel_rocksdb:idx_reverse_path_key/1,
+      []
+    )
+  ),
+  case Ops of
+    [] -> ok;
+    _ ->
+      Batch = [
+        {put, barrel_rocksdb:idx_last_doc_key(DocId), term_to_binary(FullPaths)}
+      ] ++ Ops,
+      erocksdb:write(Ref, Batch, [{sync, true}])
+  end.
+
+prepare_index([{put, Path, Entries} | Rest], KeyFun, Acc) ->
+  Key = KeyFun(Path),
+  Acc2 = [{put, Key, term_to_binary(Entries)} | Acc],
+  prepare_index(Rest, KeyFun, Acc2);
+prepare_index([{delete, Path} | Rest], KeyFun, Acc) ->
+  Key = KeyFun(Path),
+  Acc2 = [{delete, Key} | Acc],
+  prepare_index(Rest, KeyFun, Acc2);
+prepare_index([], _KeyFun, Acc) ->
+  Acc.
+
+
+
+last_index_seq(Ref) ->
+  case erocksdb:get(Ref, barrel_rocksdb:meta_key(0), []) of
+    {ok, BinInfo } ->
+      #{ last_index_seq := Seq} = binary_to_term(BinInfo),
+      {ok, Seq};
+    not_found -> {ok, 0}; % race condition?
+    Error -> Error
+  end.
+
+index_get_last_doc(Ref, DocId) ->
+  case erocksdb:get(Ref, barrel_rocksdb:idx_last_doc_key(DocId), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
+index_get_reverse_path(Ref, Path) ->
+  case erocksdb:get(Ref, barrel_rocksdb:idx_reverse_path_key(Path), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
+index_get_forward_path(Ref, Path) ->
+  case erocksdb:get(Ref, barrel_rocksdb:idx_forward_path_key(Path), []) of
+    {ok, BinVal} -> {ok, binary_to_term(BinVal)};
+    Error -> Error
+  end.
+
 
 merge_forward_paths(ToAdd, ToDel, DocId, St) ->
   Ops0 = merge(
-    forward_paths(ToAdd, []), DocId, add, index_get_forward_path, St, []
+    forward_paths(ToAdd, []), DocId, add, fun index_get_forward_path/2, St, []
   ),
   
   merge(
-    forward_paths(ToDel, []), DocId, del, index_get_forward_path, St, Ops0
+    forward_paths(ToDel, []), DocId, del, fun index_get_forward_path/2, St, Ops0
   ).
 
 merge_reverse_paths(ToAdd, ToDel, DocId, St) ->
   Ops0 = merge(
-    reverse_paths(ToAdd, []), DocId, add, index_get_forward_path, St, []
+    reverse_paths(ToAdd, []), DocId, add, fun index_get_reverse_path/2, St, []
   ),
   
   merge(
-    reverse_paths(ToDel, []), DocId, del, index_get_forward_path, St, Ops0
+    reverse_paths(ToDel, []), DocId, del, fun index_get_reverse_path/2, St, Ops0
   ).
 
 
-merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ store := Store, dbid := DbId}, Acc) ->
-  case barrel_store:Fun(Store, DbId, Path) of
+merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
+  case Fun(Ref, Path) of
     {ok, Map} ->
       case maps:find(Sel, Map) of
         {ok, Entries} ->
@@ -179,11 +233,11 @@ merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ store := Store, dbid := DbId
 merge([], _DocId, _Op, _Fun, _St, Acc) ->
   Acc.
 
-analyze(Change, #{ store := Store, dbid := DbId}) ->
+analyze(Change, Ref) ->
   Doc = maps:get(doc, Change),
   Del = maps:get(deleted, Change, false),
   DocId = barrel_doc:id(Doc),
-  OldPaths = case barrel_store:index_get_last_doc(Store, DbId, DocId) of
+  OldPaths = case index_get_last_doc(Ref, DocId) of
                {ok, OldPaths1} -> OldPaths1;
                not_found -> []
              end,
@@ -210,6 +264,7 @@ forward_paths([{PathParts, Pos, Sel} | Rest], Acc) ->
   forward_paths(Rest, [{Path, Sel} | Acc]);
 forward_paths([], Acc) ->
   lists:usort(Acc).
+
 
 %% TODO: this part can be optimized in rust or C if needed
 flatten(Obj) ->
@@ -291,8 +346,7 @@ maybe_split(Parts) ->
       {false, Parts, nil}
   end.
 
-changes_size() ->
-  application:get_env(barrel, index_changes_size, ?DEFAULT_CHANGES_SIZE).
+
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -338,7 +392,7 @@ flatten_test() ->
     {[1, <<"e">>, <<"$">>], 0, []},
     {[<<"b">>, 1, <<"e">>], 1, [1]},
     {[2, <<"b">>, 1], 2, [1]}
-    
+  
   ],
   ?assertEqual(lists:sort(Expected), lists:sort(flatten(Doc))).
 

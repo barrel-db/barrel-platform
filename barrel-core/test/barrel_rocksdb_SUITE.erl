@@ -28,9 +28,6 @@
 
 -export([
   store_exists/1,
-  missing_db/1,
-  open_db/1,
-  database_names/1,
   basic_op/1,
   update_doc/1,
   update_doc_lwww/1,
@@ -49,9 +46,6 @@
 all() ->
   [
     store_exists,
-    missing_db,
-    open_db,
-    database_names,
     basic_op,
     update_doc,
     update_doc_lwww,
@@ -67,142 +61,97 @@ all() ->
     find_by_key
   ].
 
-init_per_suite(Config) ->
+init_per_suite(_Config) ->
   {ok, _} = application:ensure_all_started(barrel),
-  Config.
+  _Config.
 
 
-init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
-  [{conn, Conn} | Config].
+init_per_testcase(_, _Config) ->
+  ok = barrel:open_store(testdb, barrel_rocksdb, #{ dir => "data/testdb"}),
+  [{conn, testdb} | _Config].
 
-end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  barrel:delete_database(Conn),
+end_per_testcase(_, _Config) ->
+  testdb = proplists:get_value(conn, _Config),
+  ok = barrel:delete_store(testdb),
   ok.
 
-end_per_suite(Config) ->
-  erocksdb:destroy("data/testdb", []),
-  Config.
+end_per_suite(_Config) ->
+  %%ok = barrel:delete_store(testdb),
+  _Config.
 
 store_exists(_Config) ->
   true = filelib:is_dir(<<"data/testdb">>),
   ok.
 
-missing_db(_Config) ->
-  {error, not_found} = barrel:connect_database(barrel_test_rocksdb, <<"testdb_unknown">>),
-  ok.
 
-
-open_db(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  {ok, Infos} = barrel:database_infos(Conn),
-  Id = maps:get(id, Infos),
-  {ok, Infos2} = barrel:database_infos(Conn),
-  Id = maps:get(id, Infos2),
-  ok = barrel:delete_database(Conn),
-  {error, not_found} = barrel:connect_database(barrel_test_rocksdb, <<"testdb">>),
-  {true, _} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
-  %% can start it several times
-  {false, _} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
-  {ok, Conn2} = barrel:connect_database(barrel_test_rocksdb, <<"testdb">>),
-  {ok, Infos3} = barrel:database_infos(Conn2),
-  true = (Id /= maps:get(id, Infos3)).
-
-database_names(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
-  {true, Conn1} = barrel:create_database(barrel_test_rocksdb, <<"testdb1">>),
-  [<<"testdb">>, <<"testdb1">>] = barrel:database_names(barrel_test_rocksdb),
-  {true, Conn2} = barrel:create_database(barrel_test_rocksdb, <<"testdb2">>),
-  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok = barrel:close_database(Conn1),
-  [<<"testdb">>, <<"testdb1">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok =  barrel:delete_database(Conn1),
-  [<<"testdb">>, <<"testdb2">>] = barrel:database_names(barrel_test_rocksdb),
-  ok =  barrel:delete_database(Conn2),
-  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb),
+basic_op(_Config) ->
+  {error, not_found} = barrel:get(testdb, <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
-  [<<"testdb">>] = barrel:database_names(barrel_test_rocksdb).
-
-
-
-basic_op(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  {error, not_found} = barrel_db:get(Conn, <<"a">>, []),
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(testdb, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_db:get(Conn, <<"a">>, []),
-  {ok, <<"a">>, _RevId2} = barrel_db:delete(Conn, <<"a">>, RevId, []),
-  {error, not_found} = barrel_db:get(Conn, <<"a">>, []).
+  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel:delete(testdb, <<"a">>, RevId, []),
+  {error, not_found} = barrel:get(testdb, <<"a">>, []).
 
-update_doc(Config) ->
-  Conn = proplists:get_value(conn, Config),
+update_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(testdb, <<"a">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_db:get(Conn, <<"a">>, []),
+  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, <<"a">>, RevId2} = barrel_db:put(Conn, <<"a">>, Doc3, []),
+  {ok, <<"a">>, RevId2} = barrel:put(testdb, <<"a">>, Doc3, []),
   true = (RevId =/= RevId2),
   Doc4 = Doc3#{<<"_rev">> => RevId2},
-  {ok, Doc4} = barrel_db:get(Conn, <<"a">>, []),
-  {ok, <<"a">>, _RevId2} = barrel_db:delete(Conn, <<"a">>, RevId2, []),
-  {error, not_found} = barrel_db:get(Conn, <<"a">>, []),
-  {ok, <<"a">>, _RevId3} = barrel_db:put(Conn, <<"a">>, Doc, []).
+  {ok, Doc4} = barrel:get(testdb, <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel:delete(testdb, <<"a">>, RevId2, []),
+  {error, not_found} = barrel:get(testdb, <<"a">>, []),
+  {ok, <<"a">>, _RevId3} = barrel:put(testdb, <<"a">>, Doc, []).
 
-update_doc_lwww(Config) ->
-  Conn = proplists:get_value(conn, Config),
+update_doc_lwww(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
-  {ok, Doc2} = barrel_db:get(Conn, <<"a">>, []),
+  {ok, <<"a">>, _RevId} = barrel:put(testdb, <<"a">>, Doc, []),
+  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
   #{ <<"v">> := 1 } = Doc2,
 
   Doc3 = #{ <<"id">> => <<"a">>, <<"v">> => 2},
-  {error, {conflict, doc_exists}} = barrel_db:put(Conn, <<"a">>, Doc3, []),
+  {error, {conflict, doc_exists}} = barrel:put(testdb, <<"a">>, Doc3, []),
 
-  {ok, <<"a">>, _RevId2} = barrel_db:put(Conn, <<"a">>, Doc3, [{lww, true}]),
-  {ok, Doc4} = barrel_db:get(Conn, <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel:put(testdb, <<"a">>, Doc3, [{lww, true}]),
+  {ok, Doc4} = barrel:get(testdb, <<"a">>, []),
   #{ <<"v">> := 2 } = Doc4.
 
-bad_doc(Config) ->
-  Conn = proplists:get_value(conn, Config),
+bad_doc(_Config) ->
   Doc = #{ <<"v">> => 1},
-  try barrel_db:put(Conn, <<"a">>, Doc, [])
+  try barrel:put(testdb, <<"a">>, Doc, [])
   catch
     error:{bad_doc, invalid_docid} -> ok
   end.
 
-create_doc(Config) ->
-  Conn = proplists:get_value(conn, Config),
+create_doc(_Config) ->
   Doc = #{<<"v">> => 1},
-  {ok, DocId, RevId} =  barrel_db:post(Conn, Doc, []),
+  {ok, DocId, RevId} =  barrel:post(testdb, Doc, []),
   CreatedDoc = Doc#{ <<"id">> => DocId, <<"_rev">> => RevId},
-  {ok, CreatedDoc} = barrel_db:get(Conn, DocId, []),
-  {error, not_found} =  barrel_db:post(Conn, CreatedDoc, []),
+  {ok, CreatedDoc} = barrel:get(testdb, DocId, []),
+  {error, not_found} =  barrel:post(testdb, CreatedDoc, []),
   Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, <<"b">>, _RevId2} =  barrel_db:post(Conn, Doc2, []).
+  {ok, <<"b">>, _RevId2} =  barrel:post(testdb, Doc2, []).
 
-get_revisions(Config) ->
-  Conn = proplists:get_value(conn, Config),
+get_revisions(_Config) ->
   Doc = #{<<"v">> => 1},
-  {ok, DocId, RevId} =  barrel_db:post(Conn, Doc, []),
-  {ok, Doc2} = barrel_db:get(Conn, DocId, []),
+  {ok, DocId, RevId} =  barrel:post(testdb, Doc, []),
+  {ok, Doc2} = barrel:get(testdb, DocId, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, DocId, RevId2} = barrel_db:put(Conn, DocId, Doc3, []),
-  {ok, Doc4} = barrel_db:get(Conn, DocId, [{history, true}]),
+  {ok, DocId, RevId2} = barrel:put(testdb, DocId, Doc3, []),
+  {ok, Doc4} = barrel:get(testdb, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
 
-put_rev(Config) ->
-  Conn = proplists:get_value(conn, Config),
+put_rev(_Config) ->
   Doc = #{<<"v">> => 1},
-  {ok, DocId, RevId} =  barrel_db:post(Conn, Doc, []),
-  {ok, Doc2} = barrel_db:get(Conn, DocId, []),
+  {ok, DocId, RevId} =  barrel:post(testdb, Doc, []),
+  {ok, Doc2} = barrel:get(testdb, DocId, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, DocId, RevId2} = barrel_db:put(Conn, DocId, Doc3, []),
+  {ok, DocId, RevId2} = barrel:put(testdb, DocId, Doc3, []),
 
   Doc4_0 = Doc2#{ v => 3 },
   {Pos, _} = barrel_doc:parse_revision(RevId),
@@ -210,98 +159,96 @@ put_rev(Config) ->
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
  
-  ok = barrel_db:put_rev(Conn, DocId, Doc4, History, []),
-  {ok, Doc5} = barrel_db:get(Conn, DocId, [{history, true}]),
+  ok = barrel:put_rev(testdb, DocId, Doc4, History, []),
+  {ok, Doc5} = barrel:get(testdb, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
 
 
-fold_by_id(Config) ->
-  Conn = proplists:get_value(conn, Config),
+fold_by_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_db:put(Conn, <<"a">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel:put(testdb, <<"a">>, Doc, []),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, <<"b">>, _RevId2} = barrel_db:put(Conn, <<"b">>, Doc2, []),
+  {ok, <<"b">>, _RevId2} = barrel:put(testdb, <<"b">>, Doc2, []),
   Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
-  {ok, <<"c">>, _RevId3} = barrel_db:put(Conn, <<"c">>, Doc3, []),
+  {ok, <<"c">>, _RevId3} = barrel:put(testdb, <<"c">>, Doc3, []),
   Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
       DocId = barrel_doc:id(FoldDoc),
       {ok, [DocId | Acc1]}
     end,
-  Acc = barrel_db:fold_by_id(Conn, Fun, [], [{include_doc, true}]),
+  Acc = barrel:fold_by_id(testdb, Fun, [], [{include_doc, true}]),
   [<<"c">>, <<"b">>, <<"a">>] = Acc,
-  Acc2 = barrel_db:fold_by_id(Conn, Fun, [],
+  Acc2 = barrel:fold_by_id(testdb, Fun, [],
                               [{include_doc, true}, {lt, <<"b">>}]),
   [<<"a">>] = Acc2,
-  Acc3 = barrel_db:fold_by_id(Conn, Fun, [],
+  Acc3 = barrel:fold_by_id(testdb, Fun, [],
                               [{include_doc, true}, {lte, <<"b">>}]),
   [<<"b">>, <<"a">>] = Acc3,
-  Acc4 = barrel_db:fold_by_id(Conn, Fun, [],
+  Acc4 = barrel:fold_by_id(testdb, Fun, [],
                               [{include_doc, true}, {gte, <<"b">>}]),
   [<<"c">>, <<"b">>] = Acc4,
-  Acc5 = barrel_db:fold_by_id(Conn, Fun, [],
+  Acc5 = barrel:fold_by_id(testdb, Fun, [],
                               [{include_doc, true}, {gt, <<"b">>}]),
   [<<"c">>] = Acc5,
   ok.
 
-change_since(Config) ->
-  Conn = proplists:get_value(conn, Config),
+change_since(_Config) ->
   Fun = fun(_Seq, Change, Acc) ->
+    io:format("fuck ", []),
                   Id = maps:get(id, Change),
                   {ok, [Id|Acc]}
         end,
-  [] = barrel:changes_since(Conn, 0, Fun, []),
+  [] = barrel:changes_since(testdb, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel:put(testdb, <<"aa">>, Doc, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _RevId2} = barrel_db:put(Conn, <<"bb">>, Doc2, []),
-  [<<"bb">>, <<"aa">>] = barrel:changes_since(Conn, 0, Fun, []),
-  [<<"bb">>] = barrel:changes_since(Conn, 1, Fun, []),
-  [] = barrel:changes_since(Conn, 2, Fun, []),
+  {ok, <<"bb">>, _RevId2} = barrel:put(testdb, <<"bb">>, Doc2, []),
+  
+  {ok, _} = barrel:get(testdb, <<"bb">>, []),
+  [<<"bb">>, <<"aa">>] = barrel:changes_since(testdb, 0, Fun, []),
+  [<<"bb">>] = barrel:changes_since(testdb, 1, Fun, []),
+  [] = barrel:changes_since(testdb, 2, Fun, []),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
-  {ok, <<"cc">>, _RevId3} = barrel_db:put(Conn, <<"cc">>, Doc3, []),
-  [<<"cc">>] = barrel:changes_since(Conn, 2, Fun, []),
+  {ok, <<"cc">>, _RevId3} = barrel:put(testdb, <<"cc">>, Doc3, []),
+  [<<"cc">>] = barrel:changes_since(testdb, 2, Fun, []),
   ok.
 
-change_since_include_doc(Config) ->
-  Conn = proplists:get_value(conn, Config),
+change_since_include_doc(_Config) ->
   Fun =
     fun(Seq, Change, Acc) ->
       {ok, [{Seq, maps:get(doc, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_db:put(Conn, <<"aa">>, Doc, []),
-  {ok, Doc1} = barrel_db:get(Conn, <<"aa">>, []),
-  [Change] = barrel:changes_since(Conn, 0, Fun, [], [{include_doc, true}]),
+  {ok, <<"aa">>, _RevId} = barrel:put(testdb, <<"aa">>, Doc, []),
+  {ok, Doc1} = barrel:get(testdb, <<"aa">>, []),
+  [Change] = barrel:changes_since(testdb, 0, Fun, [], [{include_doc, true}]),
   {1, Doc1} = Change,
   ok.
 
-change_since_many(Config) ->
-  Conn = proplists:get_value(conn, Config),
-
+change_since_many(_Config) ->
   Fun = fun(Seq, Change, Acc) ->
             {ok, [{Seq, Change}|Acc]}
         end,
 
   %% No changes. Database is empty.
-  [] = barrel:changes_since(Conn, 0, Fun, []),
+  [] = barrel:changes_since(testdb, 0, Fun, []),
 
   %% Add 20 docs (doc1 to doc20).
   AddDoc = fun(N) ->
                K = integer_to_binary(N),
                Key = <<"doc", K/binary>>,
                Doc = #{ <<"id">> => Key, <<"v">> => 1},
-               {ok, Key, _RevId} = barrel_db:put(Conn, Key, Doc, [])
+               {ok, Key, _RevId} = barrel:put(testdb, Key, Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
 
   %% Delete doc1
-  {ok, Doc1} = barrel_db:get(Conn, <<"doc1">>, []),
+  {ok, Doc1} = barrel:get(testdb, <<"doc1">>, []),
   #{<<"_rev">> := RevId} = Doc1,
-  {ok, <<"doc1">>, _} = barrel_db:delete(Conn, <<"doc1">>, RevId, []),
+  {ok, <<"doc1">>, _} = barrel:delete(testdb, <<"doc1">>, RevId, []),
 
   %% 20 changes (for doc1 to doc20)
-  All = barrel:changes_since(Conn, 0, Fun, [], [{history, all}]),
+  All = barrel:changes_since(testdb, 0, Fun, [], [{history, all}]),
   20 = length(All),
   %% History for doc1 includes creation and deletion
   {21, #{changes := HistoryDoc1}} = hd(All),
@@ -309,24 +256,22 @@ change_since_many(Config) ->
 
   [{21, #{id := <<"doc1">>}},
    {20, #{id := <<"doc20">>}},
-   {19, #{id := <<"doc19">>}}] = barrel:changes_since(Conn, 18, Fun, []),
+   {19, #{id := <<"doc19">>}}] = barrel:changes_since(testdb, 18, Fun, []),
   [{21, #{id := <<"doc1">>}},
-   {20, #{id := <<"doc20">>}}] = barrel:changes_since(Conn, 19, Fun, []),
-  [] = barrel:changes_since(Conn, 21, Fun, []),
+   {20, #{id := <<"doc20">>}}] = barrel:changes_since(testdb, 19, Fun, []),
+  [] = barrel:changes_since(testdb, 21, Fun, []),
   ok.
 
-revdiff(Config) ->
-  Conn = proplists:get_value(conn, Config),
+revdiff(_Config) ->
   Doc = #{ <<"id">> => <<"revdiff">>, <<"v">> => 1},
-  {ok, <<"revdiff">>, RevId} = barrel_db:put(Conn, <<"revdiff">>, Doc, []),
+  {ok, <<"revdiff">>, RevId} = barrel:put(testdb, <<"revdiff">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
-  {ok, <<"revdiff">>, _RevId3} = barrel_db:put(Conn, <<"revdiff">>, Doc2, []),
-  {ok, [<<"1-missing">>], []} = barrel_db:revsdiff(Conn, <<"revdiff">>, [<<"1-missing">>]),
+  {ok, <<"revdiff">>, _RevId3} = barrel:put(testdb, <<"revdiff">>, Doc2, []),
+  {ok, [<<"1-missing">>], []} = barrel:revsdiff(testdb, <<"revdiff">>, [<<"1-missing">>]),
   ok.
 
 
-find_by_key(Config) ->
-  Conn = proplists:get_value(conn, Config),
+find_by_key(_Config) ->
   Doc = #{
     <<"id">> => <<"AndersenFamily">>,
     <<"lastName">> => <<"Andersen">>,
@@ -344,16 +289,16 @@ find_by_key(Config) ->
     <<"creationDate">> => 1431620472,
     <<"isRegistered">> => true
   },
-  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(Conn, <<"AndersenFamily">>, Doc, []),
+  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(testdb, <<"AndersenFamily">>, Doc, []),
   timer:sleep(400),
-  {ok, Doc1} = barrel:get(Conn, <<"AndersenFamily">>, []),
+  {ok, Doc1} = barrel:get(testdb, <<"AndersenFamily">>, []),
   
   lager:info("ici", []),
   Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
-  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(Conn, <<"id">>, Fun, [], []),
+  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
   
   [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(
-    Conn, <<"id.AndersenFamily">>, Fun, [], []),
+    testdb, <<"id.AndersenFamily">>, Fun, [], []),
   ok.
   
   

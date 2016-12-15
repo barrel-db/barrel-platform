@@ -44,12 +44,10 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  _ = ets:new(barrel_db, [set, named_table, public]),
-  _ = ets:new(barrel_transactor, [ordered_set, named_table, public]),
+  _ = ets:new(barrel_stores, [set, named_table, public]),
 
   Specs = [
     ?sup(barrel_store_sup)
-    , ?sup(barrel_db_sup)
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
     , ?sup(barrel_replicator_sup)
