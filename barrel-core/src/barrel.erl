@@ -36,7 +36,7 @@
 %% Database API
 
 -export([
-  open_store/3,
+  open_store/2,
   close_store/1,
   delete_store/1,
   store_infos/1
@@ -142,7 +142,8 @@
 ]).
 
 
-open_store(Name, Module, Options) ->
+open_store(Name, Options) ->
+  Module = maps:get(adapter, Options, barrel_rocksdb),
   Module:open_store(Name, Options).
 
 close_store(Name) ->

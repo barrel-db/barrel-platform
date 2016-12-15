@@ -25,7 +25,7 @@
 
 -define(SERVER, ?MODULE).
 
--export([start_store/3, stop_store/1]).
+-export([start_store/2, stop_store/1]).
 
 -define(SHUTDOWN, 120000).
 
@@ -46,8 +46,8 @@ start_link() ->
 init([]) ->
   Stores = application:get_env(barrel, stores, []),
   Specs = lists:map(
-    fun({Name, {Mod, Options}}) ->
-      store_spec(Name, Mod, Options)
+    fun({Name, Options}) ->
+      store_spec(Name,Options)
     end,
     Stores
   ),
@@ -59,9 +59,9 @@ init([]) ->
 
 %% @private
 
--spec start_store(atom(), atom(), map()) -> supervisor:startchild_ret().
-start_store(Name, Mod, Options) ->
-  case supervisor:start_child(?MODULE, store_spec(Name, Mod, Options)) of
+-spec start_store(atom(), map()) -> supervisor:startchild_ret().
+start_store(Name, Options) ->
+  case supervisor:start_child(?MODULE, store_spec(Name, Options)) of
     {ok, _Pid} -> ok;
     {error, {already_started, _Pid}} -> ok;
     Error -> Error
@@ -80,7 +80,9 @@ stop_store(Name) ->
       Error
   end.
 
-store_spec(Name, Mod, StoreOpts) ->
+store_spec(Name, StoreOpts) ->
+  Mod = maps:get(adapter, StoreOpts, barrel_rocksdb),
+  
   %% register the store
   ets:insert(barrel_stores, {Name, Mod}),
   Opts = maps:get(adapter_options, StoreOpts, #{}),

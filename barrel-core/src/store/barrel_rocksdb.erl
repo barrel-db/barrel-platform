@@ -60,7 +60,7 @@ open_store(Name, DbOpts) ->
   case whereis(ProcName) of
     Pid when is_pid(Pid) -> ok;
     undefined ->
-      barrel_store_sup:start_store(Name, ?MODULE, DbOpts)
+      barrel_store_sup:start_store(Name, DbOpts#{ adapter => ?MODULE})
   end.
 
 close_store(Name) ->
@@ -80,8 +80,7 @@ close_store(Name) ->
       _ = barrel_store_sup:stop_store(Name),
       ok
   end.
-  
-  
+
 delete_store(Name) ->
   case opt_call(Name, delete_db) of
     {error, noproc} ->
@@ -142,7 +141,6 @@ get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
       end;
     Error ->  Error
   end.
-
 
 get_doc_rev(Ref, DocId, RevId, ReadOptions) ->
   case erocksdb:get(Ref, rev_key(DocId, RevId), ReadOptions) of

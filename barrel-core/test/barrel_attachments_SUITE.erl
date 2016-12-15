@@ -41,7 +41,7 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, barrel_rocksdb, #{ dir => "data/testdb"}),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
   Config.
 
 end_per_testcase(_, _Config) ->
