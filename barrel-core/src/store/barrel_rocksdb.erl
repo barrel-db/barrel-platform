@@ -593,11 +593,11 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
               not_found -> empty_doc_info();
               Error -> throw(Error)
             end,
-  LastSeq = maps:get(seq, DocInfo, undefined),
   case Fun(DocInfo) of
     {ok, DocInfo2, Body, NewRev} ->
-      LastUpdateSeq = ets:update_counter(Ets, last_update_seq, {2, 0}),
-      NewSeq = LastUpdateSeq + 1,
+      Seq = ets:update_counter(Ets, last_update_seq, {2, 0}),
+      LastSeq = maps:get(update_seq, DocInfo2, undefined),
+      NewSeq = Seq + 1,
       Inc = case DocInfo2 of
               #{ deleted := true } -> -1;
               _ -> 1
@@ -606,8 +606,8 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
         ok ->
           ets:update_counter(Ets, last_update_seq, {2, 1}),
           ets:update_counter(Ets, doc_count, {2, Inc}),
-          {ok, _Seq} = barrel_rocksdb_indexer:refresh_index(Idx, LastUpdateSeq),
-          _ = do_update_index_seq(LastUpdateSeq, St),
+          {ok, _Seq} = barrel_rocksdb_indexer:refresh_index(Idx, NewSeq),
+          _ = do_update_index_seq(NewSeq, St),
 
           {ok, DocId, NewRev};
         WriteError ->
