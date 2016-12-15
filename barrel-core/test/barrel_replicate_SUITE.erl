@@ -53,15 +53,13 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Source} = barrel:create_database(barrel_source_rocksdb, source()),
-  {true, Target} = barrel:create_database(barrel_source_rocksdb, target()),
-  [{source, Source}, {target, Target} |Config].
+  ok = barrel:open_store(source, #{ dir => "data/source"}),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  Config.
 
-end_per_testcase(_, Config) ->
-  {Source, Target} = repctx(Config),
-  ok = barrel_replicate:clean(Source, Target),
-  ok = barrel:delete_database(Source),
-  ok = barrel:delete_database(Target),
+end_per_testcase(_, _Config) ->
+  ok = barrel:delete_store(source),
+  ok = barrel:delete_store(testdb),
   ok.
 
 end_per_suite(Config) ->
@@ -73,81 +71,68 @@ end_per_suite(Config) ->
   %% ok = erocksdb:destroy("source", []),
   Config.
 
-
-source() ->
-  <<"source">>.
-
-target() ->
-  <<"testdb">>.
-
-repctx(Config) ->
-  {proplists:get_value(source, Config), proplists:get_value(target, Config)}.
-
 %% =============================================================================
 %% Basic usage
 %% =============================================================================
 
-one_doc(Config) ->
-  {Source, Target} = repctx(Config),
+one_doc(_Config) ->
+
   Name = <<"onedoc">>,
   Options = [{metrics_freq, 100}],
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel:put(source, <<"a">>, Doc, []),
   timer:sleep(200),
-  {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
-  {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
+  {ok, Doc2} = barrel:get(source, <<"a">>, []),
+  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),
 
   %%[Stats] = barrel_task_status:all(),
   %%1 = proplists:get_value(docs_read, Stats),
   %%1 = proplists:get_value(docs_written, Stats),
 
-  ok = delete_doc("a", Source),
-  ok = delete_doc("a", Target),
+  ok = delete_doc("a", source),
+  ok = delete_doc("a", testdb),
   %% Id = maps:get(id, Info),
-  %% {ok, _Checkpoint} = barrel_db:get(source(), <<"_replication_", Id/binary>>, []),
-  %% {ok, _Checkpoint} = barrel_db:get(target(), <<"_replication_", Id/binary>>, []),
+  %% {ok, _Checkpoint} = barrel:get(source(), <<"_replication_", Id/binary>>, []),
+  %% {ok, _Checkpoint} = barrel:get(target(), <<"_replication_", Id/binary>>, []),
   ok.
 
-source_not_empty(Config) ->
-  {Source, Target} = repctx(Config),
+source_not_empty(_Config) ->
   Name = <<"sourcenotempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
-  {ok, Doc2} = barrel_db:get(Source, <<"a">>, []),
-  {ok, Name} = barrel:start_replication(Name, Source, Target),
+  {ok, <<"a">>, _RevId} = barrel:put(source, <<"a">>, Doc, []),
+  {ok, Doc2} = barrel:get(source, <<"a">>, []),
+  {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
-  {ok, Doc2} = barrel_db:get(Target, <<"a">>, []),
+  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),
   ok.
 
-deleted_doc(Config) ->
-  {Source, Target} = repctx(Config),
+deleted_doc(_Config) ->
   Name = <<"deleteddoc">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_db:put(Source, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(source, <<"a">>, Doc, []),
 
-  {ok, Name} = barrel:start_replication(Name, Source, Target),
+  {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel_db:get(Target, <<"a">>, []),
-  barrel_db:delete(Source, <<"a">>, RevId, []),
+  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel:get(source, <<"a">>, []),
+  barrel:delete(source, <<"a">>, RevId, []),
   timer:sleep(400),
-  {error, not_found} = barrel_db:get(Target, <<"a">>, []),
+  {error, not_found} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),
   ok.
 
 
-persistent_replication(Config) ->
-  {Source, Target} = repctx(Config),
+persistent_replication(_Config) ->
   Name = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   {ok, [AllConfig]} = file:consult("data/replication.config"),
   RepConfig = maps:get(<<"a">>, AllConfig),
-  #{ source := Source, target := Target, options := Options} = RepConfig,
-  RepId = barrel_replicate:repid(Source, Target),
+  #{ source := source, target := testdb, options := Options} = RepConfig,
+  RepId = barrel_replicate:repid(source, testdb),
   [{<<"a">>, {RepId, Pid, true}}] = ets:lookup(replication_names, <<"a">>),
   true = is_pid(Pid),
   [{RepId, {Name, true, Pid, _}}] = ets:lookup(replication_ids, RepId),
@@ -158,7 +143,7 @@ persistent_replication(Config) ->
   [] = ets:lookup(replication_ids, Pid),
   {ok, [AllConfig2]} = file:consult("data/replication.config"),
   RepConfig2 = maps:get(<<"a">>, AllConfig2),
-  #{ source := Source, target := Target, options := Options} = RepConfig2,
+  #{ source := source, target := testdb, options := Options} = RepConfig2,
   ok = barrel:delete_replication(<<"a">>),
   {ok, [AllConfig3]} = file:consult("data/replication.config"),
   undefined = maps:get(<<"a">>, AllConfig3, undefined),
@@ -166,14 +151,13 @@ persistent_replication(Config) ->
   [] = ets:lookup(replication_ids, RepId),
   ok.
 
-restart_persistent_replication(Config) ->
-  {Source, Target} = repctx(Config),
+restart_persistent_replication(_Config) ->
   Name = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   {ok, [AllConfig]} = file:consult("data/replication.config"),
   RepConfig = maps:get(<<"a">>, AllConfig),
-  #{ source := Source, target := Target, options := Options} = RepConfig,
+  #{ source := source, target := testdb, options := Options} = RepConfig,
   Manager = whereis(barrel_replicate_manager),
   MRef = erlang:monitor(process, Manager),
   try
@@ -187,7 +171,7 @@ restart_persistent_replication(Config) ->
   end,
   {'EXIT', {badarg, _}} = (catch ets:lookup(replication_names, <<"a">>)),
   timer:sleep(200),
-  RepId = barrel_replicate:repid(Source, Target),
+  RepId = barrel_replicate:repid(source, testdb),
   [{<<"a">>, {RepId, Pid, true}}] = ets:lookup(replication_names, <<"a">>),
   true = is_pid(Pid),
   ok = barrel:delete_replication(<<"a">>),
@@ -198,23 +182,21 @@ restart_persistent_replication(Config) ->
   ok.
 
 
-start_duplicate_replication(Config) ->
-  {Source, Target} = repctx(Config),
+start_duplicate_replication(_Config) ->
   Name = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   ok = barrel:delete_replication(<<"a">>),
   ok.
 
-start_replication_error(Config) ->
-  {Source, Target} = repctx(Config),
+start_replication_error(_Config) ->
   Name = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel:start_replication(Name, Source, Target, Options),
-  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, Source, Target, Options),
+  {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
+  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, source, testdb, Options),
   ok = barrel:stop_replication(<<"a">>),
-  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, Source, Target, Options),
+  {error, {task_already_registered, <<"a">>}} = barrel:start_replication(<<"b">>, source, testdb, Options),
   ok = barrel:delete_replication(<<"a">>),
   ok.
 
@@ -223,52 +205,49 @@ start_replication_error(Config) ->
 %% Complex scenarios
 %% =============================================================================
 
-random_activity(Config) ->
-  {Source, Target} = repctx(Config),
+random_activity(_Config) ->
   Name = <<"random">>,
   Scenario = scenario(),
-  {ok, Name} = barrel:start_replication(Name, Source, Target),
-  ExpectedResults = play_scenario(Scenario, Source),
+  {ok, Name} = barrel:start_replication(Name, source, testdb),
+  ExpectedResults = play_scenario(Scenario, source),
   timer:sleep(200),
-  ok = check_all(ExpectedResults, Source, Target),
+  ok = check_all(ExpectedResults, source, testdb),
   ok = barrel:stop_replication(Name),
-  ok = purge_scenario(ExpectedResults, Source),
-  ok = purge_scenario(ExpectedResults, Target),
+  ok = purge_scenario(ExpectedResults, source),
+  ok = purge_scenario(ExpectedResults, testdb),
   ok.
 
 %% =============================================================================
 %% Checkpoints
 %% =============================================================================
 
-checkpoints(Config) ->
-  {Source, Target} = repctx(Config),
+checkpoints(_Config) ->
   Scenario = scenario(),
   [P1,P2,P3,P4] = split(4, Scenario),
 
   %% start and stop replication 4 times
-  M1 = play_checkpoint(P1, maps:new(), Config),
-  M2 = play_checkpoint(P2, M1, Config),
-  M3 = play_checkpoint(P3, M2, Config),
-  M4 = play_checkpoint(P4, M3, Config),
+  M1 = play_checkpoint(P1, maps:new()),
+  M2 = play_checkpoint(P2, M1),
+  M3 = play_checkpoint(P3, M2),
+  M4 = play_checkpoint(P4, M3),
 
-  Info = get_checkpoints(Source, Target),
+  Info = get_checkpoints(source, testdb),
   SourceCheckpoints = maps:get(source_checkpoints, Info),
   History = maps:get(<<"history">>, SourceCheckpoints),
   4 = length(History),
   LastSession = hd(History),
   12 = maps:get(<<"source_last_seq">>, LastSession),
 
-  ok = purge_scenario(M4, Source),
-  ok = purge_scenario(M2, Target),
+  ok = purge_scenario(M4, source),
+  ok = purge_scenario(M2, testdb),
   ok.
 
-play_checkpoint(Scenario, M, Config) ->
-  {Source, Target} = repctx(Config),
+play_checkpoint(Scenario, M) ->
   Name = <<"checkpoints">>,
-  {ok, Name} = barrel:start_replication(Name, Source, Target),
-  Expected = play_scenario(Scenario, Source, M),
+  {ok, Name} = barrel:start_replication(Name, source, testdb),
+  Expected = play_scenario(Scenario, source, M),
   timer:sleep(200),
-  ok = check_all(Expected, Source, Target),
+  ok = check_all(Expected, source, testdb),
   ok = barrel:stop_replication(Name),
   Expected.
 
@@ -309,11 +288,11 @@ check(DocName, Map, Db1, Db2) ->
   Id = list_to_binary(DocName),
   case maps:get(DocName, Map) of
     deleted ->
-      {error, not_found} = barrel_db:get(Db1, Id, []),
-      {error, not_found} = barrel_db:get(Db2, Id, []);
+      {error, not_found} = barrel:get(Db1, Id, []),
+      {error, not_found} = barrel:get(Db2, Id, []);
     Expected ->
-      {ok, DocSource} = barrel_db:get(Db1, Id, []),
-      {ok, DocTarget} = barrel_db:get(Db2, Id, []),
+      {ok, DocSource} = barrel:get(Db1, Id, []),
+      {ok, DocTarget} = barrel:get(Db2, Id, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -326,22 +305,22 @@ purge_scenario(Map, Db) ->
 
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
-  case barrel_db:get(Db, Id, []) of
+  case barrel:get(Db, Id, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel_db:put(Db, Id, Doc2, []);
+      {ok,_,_} = barrel:put(Db, Id, Doc2, []);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel_db:put(Db, Id, Doc, [])
+      {ok,_,_} = barrel:put(Db, Id, Doc, [])
   end.
 
 delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
-  case barrel_db:get(Db, Id, []) of
+  case barrel:get(Db, Id, []) of
     {error, not_found} -> ok;
     {ok, Doc} ->
       RevId = maps:get(<<"_rev">>, Doc),
-      {ok, _, _} = barrel_db:delete(Db, Id, RevId, []),
+      {ok, _, _} = barrel:delete(Db, Id, RevId, []),
       ok
   end.
 
@@ -369,7 +348,7 @@ get_checkpoints(Source, Target) ->
     target_checkpoints => TargetCheckpoint}.
 
 read_checkpoint_doc(Db, RepId) ->
-  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
+  barrel_store:read_system_doc(Db, checkpoint_docid(RepId)).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.
