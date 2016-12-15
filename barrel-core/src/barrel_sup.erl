@@ -47,7 +47,7 @@ init([]) ->
   _ = ets:new(barrel_stores, [set, named_table, public]),
 
   Specs = [
-    ?sup(barrel_store_sup)
+      ?sup(barrel_store_sup)
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
     , ?sup(barrel_replicator_sup)

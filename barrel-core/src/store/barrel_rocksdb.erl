@@ -606,7 +606,7 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
           ets:update_counter(Ets, doc_count, {2, Inc}),
           {ok, _Seq} = barrel_rocksdb_indexer:refresh_index(Idx, NewSeq),
           _ = do_update_index_seq(NewSeq, St),
-
+          barrel_db_event:notify(Name, db_updated),
           {ok, DocId, NewRev};
         WriteError ->
           lager:error("db error: error writing ~p on ~p", [DocId, Name]),

@@ -233,17 +233,17 @@ changes(Source, Since) ->
 
 get({Mod, ModState}, Id, Opts) ->
   Mod:get(ModState, Id, Opts);
-get(Conn, Id, Opts) when is_map(Conn) ->
+get(Conn, Id, Opts) when is_atom(Conn) ->
   barrel_store:get(Conn, Id, Opts).
 
 put_rev({Mod, ModState}, Id, Doc, History, Opts) ->
   Mod:put_rev(ModState, Id, Doc, History, Opts);
-put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
+put_rev(Conn, Id, Doc, History, Opts) when is_atom(Conn) ->
   barrel_store:put_rev(Conn, Id, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
-changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
+changes_since(Conn, Since, Fun, Acc) when is_atom(Conn) ->
   barrel_store:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
 
 revsdiff({Mod, ModState}, DocId, History) ->
@@ -325,7 +325,7 @@ write_checkpoint_doc(Db, RepId, Checkpoint) ->
 
 write_system_doc({Mod, ModState}, Id, Doc) ->
   Mod:write_system_doc(ModState, Id, Doc);
-write_system_doc(Conn, Id, Doc) when is_map(Conn) ->
+write_system_doc(Conn, Id, Doc) when is_atom(Conn) ->
   barrel_store:write_system_doc(Conn, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
@@ -333,7 +333,7 @@ read_checkpoint_doc(Db, RepId) ->
 
 read_system_doc({Mod, ModState}, Id) ->
   Mod:read_system_doc(ModState, Id);
-read_system_doc(Conn, Id) when is_map(Conn) ->
+read_system_doc(Conn, Id) when is_atom(Conn) ->
   barrel_store:read_system_doc(Conn, Id).
 
 delete_checkpoint_doc(Db, RepId) ->
@@ -341,7 +341,7 @@ delete_checkpoint_doc(Db, RepId) ->
 
 delete_system_doc({Mod, ModState}, Id) ->
   Mod:delete_system_doc(ModState, Id);
-delete_system_doc(Conn, Id) when is_map(Conn) ->
+delete_system_doc(Conn, Id) when is_atom(Conn) ->
   barrel_store:delete_system_doc(Conn, Id).
 
 checkpoint_docid(RepId) ->
