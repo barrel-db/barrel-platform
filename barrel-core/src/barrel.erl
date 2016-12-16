@@ -201,7 +201,7 @@ put(Store, DocId, Body, Options) ->
   Body :: doc(),
   History :: [rev()],
   Options :: write_options(),
-  Res :: ok | {error, conflict()} | {error, any()}.
+  Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put_rev(Store, DocId, Body, History, Options) ->
   barrel_store:put_rev(Store, DocId, Body, History, Options).
 

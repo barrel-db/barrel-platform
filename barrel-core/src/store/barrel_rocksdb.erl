@@ -434,14 +434,16 @@ parse_parts([<< $[, _/binary >> = Item | Rest], N, Offset, Levels) ->
       parse_parts(Rest, N2, Offset, [Idx | Levels])
   end.
 
-
-
 get_ref(Name) ->
   case catch ets:lookup_element(tab_name(Name), ref, 2) of
-    {'EXIT', _} -> error(noproc);
+    {'EXIT', _} ->
+      lager:error(
+        "barrel_rocksdb:get_ref(~p) -> noproc",
+        [Name]
+      ),
+      {error, noproc};
     Ref -> Ref
   end.
-
 
 opt_call(Name, Req) ->
   ProcName = proc_name(Name),
@@ -483,6 +485,8 @@ init([Name, Options]) ->
   {ok, Indexer} = barrel_rocksdb_indexer:start_link(self(), Name, Ref, Options),
   {ok, #{ name => Name, dir => DbDir, ref => Ref, ets => Ets, indexer => Indexer}}.
 
+handle_call(get_ref, _From, State = #{ ref := Ref }) ->
+  {reply, Ref, State};
 
 handle_call({put, K, V}, _From, State) ->
   Reply = do_put(K, V, State),
@@ -519,6 +523,10 @@ handle_info({last_index_seq, Seq}, State) ->
   {noreply, State};
 
 handle_info(_Info, State) ->
+  lager:info(
+    "barrel_rocksdb: received unknonwn message:~p~n",
+    [_Info]
+  ),
   {noreply, State}.
 
 terminate(_Reason, State = #{ ets := Ets}) ->

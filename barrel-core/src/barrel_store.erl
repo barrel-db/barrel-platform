@@ -124,7 +124,7 @@ put_rev(StoreName, DocId, Body, History, _Options) when is_map(Body) ->
   ok = check_docid(DocId, Body),
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Body),
-  Res = update_doc(
+  update_doc(
     StoreName,
     DocId,
     fun(DocInfo) ->
@@ -146,11 +146,7 @@ put_rev(StoreName, DocId, Body, History, _Options) when is_map(Body) ->
           Body2 = Body#{ <<"_rev">> => NewRev },
           {ok, DocInfo2, Body2, NewRev}
       end
-    end),
-  case Res of
-    {ok, _, _} -> ok;
-    Error -> Error
-  end;
+    end);
 put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 

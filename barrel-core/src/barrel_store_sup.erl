@@ -69,11 +69,11 @@ start_store(Name, Options) ->
 
 -spec stop_store(term()) -> ok |{error, term()}.
 stop_store(Name) ->
-  %% unregister the store
-  ets:delete(barrel_stores, Name),
   case supervisor:terminate_child(?MODULE, Name) of
     ok ->
       _ = supervisor:delete_child(?MODULE, Name),
+      %% unregister the store
+      ets:delete(barrel_stores, Name),
       ok;
     {error, not_found} -> ok;
     Error ->
@@ -82,7 +82,6 @@ stop_store(Name) ->
 
 store_spec(Name, StoreOpts) ->
   Mod = maps:get(adapter, StoreOpts, barrel_rocksdb),
-  
   %% register the store
   ets:insert(barrel_stores, {Name, Mod}),
   Opts = maps:get(adapter_options, StoreOpts, #{}),

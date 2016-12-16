@@ -91,7 +91,7 @@ handle_info(init_config, State) ->
   {noreply, State2};
 
 handle_info(Info, State) ->
-  lager:error("received an unknown message, exiting", [Info]),
+  lager:error("received an unknown message, exiting ~p~n", [Info]),
   {stop, normal, State}.
 
 terminate(_Reason, _State) ->

@@ -148,7 +148,10 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
 %% default gen_server callback
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_metrics:update_task(State#st.metrics),
-  lager:info("replication ~p terminated", [RepId]),
+  lager:debug(
+    "barrel_replicate(~p} terminated: ~p",
+    [RepId, _Reason]
+  ),
   ok = write_checkpoint(State),
   ok = barrel_event:unreg(),
   %% close the connections
@@ -210,7 +213,7 @@ write_doc(_, _, undefined, _, Metrics) ->
 write_doc(Target, Id, Doc, History, Metrics) ->
   PutRev = fun() -> put_rev(Target, Id, Doc, History, []) end,
   case timer:tc(PutRev) of
-    {Time, ok} ->
+    {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;

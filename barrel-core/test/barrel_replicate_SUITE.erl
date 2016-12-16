@@ -118,7 +118,7 @@ deleted_doc(_Config) ->
   {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
   {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel:get(source, <<"a">>, []),
-  barrel:delete(source, <<"a">>, RevId, []),
+  {ok, _, _} = barrel:delete(source, <<"a">>, RevId, []),
   timer:sleep(400),
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),

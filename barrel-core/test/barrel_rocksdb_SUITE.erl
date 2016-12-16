@@ -71,7 +71,6 @@ init_per_testcase(_, _Config) ->
   [{conn, testdb} | _Config].
 
 end_per_testcase(_, _Config) ->
-  testdb = proplists:get_value(conn, _Config),
   ok = barrel:delete_store(testdb),
   ok.
 
@@ -152,14 +151,12 @@ put_rev(_Config) ->
   {ok, Doc2} = barrel:get(testdb, DocId, []),
   Doc3 = Doc2#{ v => 2},
   {ok, DocId, RevId2} = barrel:put(testdb, DocId, Doc3, []),
-
   Doc4_0 = Doc2#{ v => 3 },
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc4_0),
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
- 
-  ok = barrel:put_rev(testdb, DocId, Doc4, History, []),
+  {ok, DocId, _RevId3} = barrel:put_rev(testdb, DocId, Doc4, History, []),
   {ok, Doc5} = barrel:get(testdb, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
