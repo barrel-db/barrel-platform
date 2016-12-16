@@ -104,7 +104,12 @@ infos(Db) ->
   Info.
 
 update_doc(Db, DocId, Fun) ->
-  call(Db, {update_doc, DocId, Fun}).
+  Res = call(Db, {update_doc, DocId, Fun}),
+  lager:info(
+    "barrel_rocksdb:update_doc(~p, ~p, _) -> ~p",
+    [Db, DocId, Res]
+  ),
+  Res.
 
 
 get_doc(Db, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
@@ -435,15 +440,16 @@ parse_parts([<< $[, _/binary >> = Item | Rest], N, Offset, Levels) ->
   end.
 
 get_ref(Name) ->
-  case catch ets:lookup_element(tab_name(Name), ref, 2) of
-    {'EXIT', _} ->
-      lager:error(
-        "barrel_rocksdb:get_ref(~p) -> noproc",
-        [Name]
-      ),
-      {error, noproc};
-    Ref -> Ref
-  end.
+  call(Name, get_ref).
+%%  case catch ets:lookup_element(tab_name(Name), ref, 2) of
+%%    {'EXIT', _} ->
+%%      lager:error(
+%%        "barrel_rocksdb:get_ref(~p) -> noproc",
+%%        [Name]
+%%      ),
+%%      {error, noproc};
+%%    Ref -> Ref
+%%  end.
 
 opt_call(Name, Req) ->
   ProcName = proc_name(Name),
@@ -489,15 +495,15 @@ handle_call(get_ref, _From, State = #{ ref := Ref }) ->
   {reply, Ref, State};
 
 handle_call({put, K, V}, _From, State) ->
-  Reply = do_put(K, V, State),
+  Reply = (catch do_put(K, V, State)),
   {reply, Reply, State};
 
 handle_call({delete, K}, _From, State) ->
-  Reply = do_delete(K, State),
+  Reply = (catch do_delete(K, State)),
   {reply, Reply, State};
 
 handle_call({update_doc, DocId, Fun}, _From, State) ->
-  Reply = do_update(DocId, Fun, State),
+  Reply = (catch do_update(DocId, Fun, State)),
   {reply, Reply, State};
 
 handle_call(close_db, _From, State = #{ref := Ref, ets := Ets}) ->
@@ -530,6 +536,10 @@ handle_info(_Info, State) ->
   {noreply, State}.
 
 terminate(_Reason, State = #{ ets := Ets}) ->
+  lager:info(
+    "barrel_rocksdb: terminated: ~p~n",
+    [_Reason]
+  ),
   case maps:find(ref, State) of
     {ok, Ref} ->
       _ = (catch ets:delete(Ets)),
