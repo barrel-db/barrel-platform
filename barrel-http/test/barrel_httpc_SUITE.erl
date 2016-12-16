@@ -105,7 +105,7 @@ put_rev(Config) ->
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc3),
   Doc4 = Doc3#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
-  ok = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
+  {ok, DocId, NewRev} = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
   ok.
 
 system_doc(Config) ->

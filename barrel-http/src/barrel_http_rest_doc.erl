@@ -262,12 +262,7 @@ create_resource(Req, State) ->
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           case barrel:put_rev(Store, DocId, Doc, History, []) of
-                             ok ->
-                               {ok, #{<<"_rev">> := Rev}} = barrel:get(Store, DocId, []),
-                               {{ok, DocId, Rev}, Req3};
-                             Error -> {Error, Req3}
-                           end
+                           { barrel:put_rev(Store, DocId, Doc, History, []), Req3 }
                        end
                    end,
   case Result of
