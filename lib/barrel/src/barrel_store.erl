@@ -1,148 +1,264 @@
-
-%% Created by benoitc on 13/09/16.
+%% Copyright 2016, Benoit Chesneau
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License. You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(barrel_store).
 -author("Benoit Chesneau").
--behaviour(supervisor).
+
 
 %% API
 -export([
-  open_db/3,
-  clean_db/3,
-  all_dbs/1,
-  get_doc_info/3,
-  write_doc/6,
-  get_doc/7,
-  fold_by_id/5,
-  changes_since/6,
-  last_update_seq/2,
-  write_system_doc/4,
-  read_system_doc/3,
-  delete_system_doc/3,
-  start_link/2
+  infos/1,
+  put/4,
+  put_rev/5,
+  get/3,
+  delete/4,
+  post/3,
+  fold_by_id/4,
+  changes_since/5,
+  revsdiff/3,
+  write_system_doc/3,
+  read_system_doc/2,
+  delete_system_doc/2,
+  find_by_key/5
 ]).
 
-%% supervisor callback
--export([init/1]).
 
+%% internal processes
+-define(default_timeout, 5000).
 
--define(DEFAULT_WORKERS, 100).
-
-
-%%%=============================================================================
-%%% Callbacks
-%%%=============================================================================
-
--callback init(atom(), term()) -> {ok, any()}.
-
--callback open_db(term(), term(), list()) -> term().
-
--callback clean_db(term(), term(), term()) -> ok | {error, term()}.
-
--callback all_dbs(term()) -> list().
-
--callback get_doc_info(term(), binary(), binary()) -> {ok, map()} | {error, term()}.
-
--callback write_doc(term(), binary(), binary(), integer(), map(), map())
-    -> {ok, integer()} | {error, term()}.
-
--callback get_doc(DbId :: binary(), DocId :: binary(), Rev :: barrel_db:rev(),
-  History :: boolean(), MaxHistory::integer(), HistoryForm::list(), State :: any())
-    -> {ok, Body :: map() } | {error, term()}.
-
-
--callback fold_by_id(DbId :: binary(), Fun :: fun(),
-  AccIn::any(), FoldOpts :: list(), State::any()) -> AccOut :: any().
-
--callback changes_since(DbId :: binary(), Since :: integer(), Fun :: fun(),
-  AccIn::any(), Opts::list(), State::any()) -> AccOut :: any().
-
--callback last_update_seq(DbId :: binary(), State :: any()) ->
-  Seq :: integer | {error, term()}.
+-define(IMAX1, 16#ffffFFFFffffFFFF).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-open_db(Store, Name, Options) ->
-  call(Store, {open_db, Name, Options}).
+infos(StoreName) ->
+  Store = store_mod(StoreName),
+  Store:infos(StoreName).
 
-clean_db(Store, Name, DbId) ->
-  call(Store, {clean_db, Name, DbId}).
-
-all_dbs(Store) ->
-  call(Store, all_dbs).
-
-get_doc_info(Store, DbId, DocId) ->
-  call(Store, {get_doc_info, DbId, DocId}).
-
-write_doc(Store, DbId, DocId, LastSeq, DocInfo, Body) ->
-  call(Store, {write_doc, DbId, DocId, LastSeq, DocInfo, Body}).
-
-get_doc(Store, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
-  call(Store, {get_doc, DbId, DocId, Rev, WithHistory, MaxHistory, HistoryFrom}).
+%% TODO: handle attachment
+get(StoreName, DocId, Options) ->
+  Store = store_mod(StoreName),
+  Rev = proplists:get_value(rev, Options, <<"">>),
+  WithHistory = proplists:get_value(history, Options, false),
+  MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
+  Ancestors = proplists:get_value(ancestors, Options, []),
+  Store:get_doc(StoreName, DocId, Rev, WithHistory, MaxHistory, Ancestors).
 
 
-fold_by_id(Store, DbId, Fun, AccIn, Opts) ->
-  call(Store, {fold_by_id, DbId, Fun, AccIn, Opts}).
+put(StoreName, DocId, Body, Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
+  Rev = barrel_doc:rev(Body),
+  {Gen, _} = barrel_doc:parse_revision(Rev),
+  Deleted = barrel_doc:deleted(Body),
+  Lww = proplists:get_value(lww, Options, false),
+  
+  update_doc(
+    StoreName,
+    DocId,
+    fun(DocInfo) ->
+      #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
+      Res = case {Lww, Rev} of
+              {true, _} ->
+                if
+                  CurrentRev /= <<>> ->
+                    {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                    {ok, CurrentGen + 1, CurrentRev};
+                  true ->
+                    {ok, Gen + 1, <<>>}
+                end;
+              {false, <<>>} ->
+                if
+                  CurrentRev /= <<>> ->
+                    case maps:get(CurrentRev, RevTree) of
+                      #{deleted := true} ->
+                        {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                        {ok, CurrentGen + 1, CurrentRev};
+                      _ ->
+                        {conflict, doc_exists}
+                    end;
+                  true ->
+                    {ok, Gen + 1, Rev}
+                end;
+              {false, _} ->
+                case barrel_revtree:is_leaf(Rev, RevTree) of
+                  true -> {ok, Gen + 1, Rev};
+                  false -> {conflict, revision_conflict}
+                end
+            end,
+      case Res of
+        {ok, NewGen, ParentRev} ->
+          NewRev = barrel_doc:revid(NewGen, Rev, Body),
+          RevInfo = #{  id => NewRev,  parent => ParentRev,  deleted => Deleted},
+          RevTree2 = barrel_revtree:add(RevInfo, RevTree),
+          Body2 = Body#{<<"_rev">> => NewRev},
+          %% update the doc infos
+          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+          DocInfo2 = DocInfo#{
+            id => DocId,
+            current_rev => WinningRev,
+            branched => Branched,
+            conflict => Conflict,
+            revtree => RevTree2
+          },
+          {ok, DocInfo2, Body2, NewRev};
+        Conflict ->
+          Conflict
+      end
+    end);
+put(_, _, _, _) ->
+  erlang:error(badarg).
 
-changes_since(Store, DbId, Since, Fun, AccIn, Opts) ->
-  call(Store, {changes_since, DbId, Since, Fun, AccIn, Opts}).
+put_rev(StoreName, DocId, Body, History, _Options) when is_map(Body) ->
+  ok = check_docid(DocId, Body),
+  [NewRev |_] = History,
+  Deleted = barrel_doc:deleted(Body),
+  update_doc(
+    StoreName,
+    DocId,
+    fun(DocInfo) ->
+      #{revtree := RevTree} = DocInfo,
+      {Idx, Parent} = find_parent(History, RevTree, 0),
+      if
+        Idx =:= 0 -> ok;
+        true ->
+          ToAdd = lists:sublist(History, Idx),
+          RevTree2 = edit_revtree(ToAdd, Parent, Deleted, RevTree),
+          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+          DocInfo2 = DocInfo#{
+            id => DocId,
+            current_rev => WinningRev,
+            branched => Branched,
+            conflict => Conflict,
+            revtree => RevTree2
+          },
+          Body2 = Body#{ <<"_rev">> => NewRev },
+          {ok, DocInfo2, Body2, NewRev}
+      end
+    end);
+put_rev(_, _, _, _, _) ->
+  erlang:error(badarg).
 
-last_update_seq(Store, DbId) ->
-  call(Store, {last_update_seq, DbId}).
+edit_revtree([RevId], Parent, Deleted, Tree) ->
+  case Deleted of
+    true ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
+    false ->
+      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
+  end;
+edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
+  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
+  edit_revtree(Rest, Parent, Deleted, Tree2);
+edit_revtree([], _Parent, _Deleted, Tree) ->
+  Tree.
 
-write_system_doc(Store, DbId, DocId, Doc) ->
-  call(Store, {write_system_doc, DbId, DocId, Doc}).
+find_parent([RevId | Rest], RevTree, I) ->
+  case barrel_revtree:contains(RevId, RevTree) of
+    true -> {I, RevId};
+    false -> find_parent(Rest, RevTree, I+1)
+  end;
+find_parent([], _RevTree, I) ->
+  {I, <<"">>}.
 
-read_system_doc(Store, DbId, DocId) ->
-  call(Store, {read_system_doc, DbId, DocId}).
-
-delete_system_doc(Store, DbId, DocId) ->
-  call(Store, {delete_system_doc, DbId, DocId}).
+delete(StoreName, DocId, RevId, Options) ->
+  put(StoreName, DocId, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
 
-call(Store, Msg) ->
-  try wpool:call(Store, Msg)
-  catch
-    _:Error -> {error, {store_error, {Store, Error}}}
+post(_StoreName, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
+post(StoreName, Doc, Options) ->
+  DocId = case barrel_doc:id(Doc) of
+            undefined -> barrel_lib:uniqid();
+            Id -> Id
+          end,
+  put(StoreName, DocId, Doc#{<<"id">> => DocId}, Options).
+
+
+fold_by_id(StoreName, Fun, Acc, Opts) ->
+  Store = store_mod(StoreName),
+  Store:fold_by_id(StoreName, Fun, Acc, Opts).
+
+changes_since(StoreName, Since0, Fun, Acc, Opts) when is_integer(Since0) ->
+  Since = if
+            Since0 > 0 -> Since0 + 1;
+            true -> Since0
+          end,
+  Store = store_mod(StoreName),
+  Store:changes_since(StoreName, Since, Fun, Acc, Opts).
+
+revsdiff(StoreName, DocId, RevIds) ->
+  Store = store_mod(StoreName),
+  case Store:get_doc_info(StoreName, DocId, []) of
+    {ok, #{revtree := RevTree}} -> revsdiff1(RevTree, RevIds);
+    {error, not_found} -> {ok, RevIds, []};
+    Error -> Error
   end.
 
+revsdiff1(RevTree, RevIds) ->
+  {Missing, PossibleAncestors} = lists:foldl(
+    fun(RevId, {M, A} = Acc) ->
+      case barrel_revtree:contains(RevId, RevTree) of
+        true -> Acc;
+        false ->
+          M2 = [RevId | M],
+          {Gen, _} = barrel_doc:parse_revision(RevId),
+          A2 = barrel_revtree:fold_leafs(
+            fun(#{ id := Id}=RevInfo, A1) ->
+              Parent = maps:get(parent, RevInfo, <<"">>),
+              case lists:member(Id, RevIds) of
+                true ->
+                  {PGen, _} = barrel_doc:parse_revision(Id),
+                  if
+                    PGen < Gen -> [Id | A1];
+                    PGen =:= Gen, Parent =/= <<"">> -> [Parent | A1];
+                    true -> A1
+                  end;
+                false -> A1
+              end
+            end, A, RevTree),
+          {M2, A2}
+      end
+    end, {[], []}, RevIds),
+  {ok, lists:reverse(Missing), lists:usort(PossibleAncestors)}.
 
-start_link(Name, Config) ->
-  supervisor:start_link(?MODULE, [Name, Config]).
 
 
-init([Name, Config0]) ->
-  {Specs0, Config1} = case maps:find(backend, Config0) of
-                        {ok, BackendMod} ->
-                          Backend = backend_name(Name),
-                          BackendSpec =
-                            #{id => Backend,
-                              start => {BackendMod, start_link, [Backend, Name, Config0]},
-                              restart => permanent,
-                              shutdown => 5000,
-                              type => worker,
-                              modules => [BackendMod]
-                            },
-                          {[BackendSpec], Config0#{store_backend => Backend, store_name => Name}};
-                        error ->
-                          {[], Config0#{store_name => Name}}
-                      end,
-  StoreMod = maps:get(store, Config1),
-  StoreSpec =
-    #{id => Name,
-      start => {barrel_store_pool, start_link, [Name, StoreMod, Config1]},
-      restart => permanent,
-      shutdown => 5000,
-      type => worker,
-      modules => [StoreMod]
-    },
-  Specs = Specs0 ++ [StoreSpec],
-  {ok, {{one_for_all, 5, 10}, Specs}}.
+update_doc(StoreName, DocId, Fun) ->
+  Store = store_mod(StoreName),
+  Store:update_doc(StoreName, DocId, Fun).
 
-%%%=============================================================================
-%%% Internal API
-%%%=============================================================================
-backend_name(Name) ->
-  barrel_lib:to_atom(atom_to_list(Name) ++ "-backend").
+write_system_doc(StoreName, DocId, Doc) ->
+  Store = store_mod(StoreName),
+  Store:write_system_doc(StoreName, DocId, Doc).
+
+read_system_doc(StoreName, DocId) ->
+  Store = store_mod(StoreName),
+  Store:read_system_doc(StoreName, DocId).
+
+delete_system_doc(StoreName, DocId) ->
+  Store = store_mod(StoreName),
+  Store:delete_system_doc(StoreName, DocId).
+
+
+find_by_key(StoreName, Path, Fun, AccIn, Options) ->
+  Store = store_mod(StoreName),
+  Store:find_by_key(StoreName, Path, Fun, AccIn, Options).
+
+check_docid(DocId, #{ <<"id">> := DocId }) -> ok;
+check_docid(_, _) -> erlang:error({bad_doc, invalid_docid}).
+
+store_mod(Name) ->
+  case catch ets:lookup_element(barrel_stores, Name, 2) of
+    {'EXIT', _} -> error(bad_store);
+    Store -> Store
+  end.

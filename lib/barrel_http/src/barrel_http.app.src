@@ -1,6 +1,6 @@
 {application, barrel_http,
   [{description, "Barrel-db HTTP Server"},
-   {vsn, "0.5.2"},
+   {vsn, "0.6.0"},
    {registered, []},
    {mod, {barrel_http_app, []}},
    {applications,
@@ -15,7 +15,9 @@
      cowboy_swagger,
      hackney
     ]},
-   {env, []},
+   {env, [
+    {port, 8080}
+   ]},
    {modules, []},
 
    {maintainers, []},

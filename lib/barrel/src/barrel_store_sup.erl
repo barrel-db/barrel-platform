@@ -12,8 +12,6 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
-%% Created by benoitc on 03/09/16.
-
 -module(barrel_store_sup).
 -author("Benoit Chesneau").
 
@@ -26,6 +24,10 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
+
+-export([start_store/2, stop_store/1]).
+
+-define(SHUTDOWN, 120000).
 
 %%%===================================================================
 %%% API functions
@@ -42,23 +44,59 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  {ok, Stores} = application:get_env(barrel, stores),
-  Children = lists:map(
-    fun({Name, Config}) ->
-      storage_spec(Name, Config)
-    end, Stores),
-  
-  {ok, {{one_for_one, 5, 10}, Children}}.
+  Stores = application:get_env(barrel, stores, []),
+  Specs = lists:map(
+    fun({Name, Options}) ->
+      store_spec(Name,Options)
+    end,
+    Stores
+  ),
+  {ok, {{one_for_one, 10, 60}, Specs}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
-storage_spec(Name, Config) when is_map(Config) ->
-  #{id => Name,
-    start => {barrel_store, start_link, [Name, Config]},
-    restart => permanent,
-    shutdown => 5000,
-    type => worker,
-    modules => [barrel_store]}.
+
+-spec start_store(atom(), map()) -> supervisor:startchild_ret().
+start_store(Name, Options) ->
+  case supervisor:start_child(?MODULE, store_spec(Name, Options)) of
+    {ok, _Pid} -> ok;
+    {error, {already_started, _Pid}} -> ok;
+    Error -> Error
+  end.
+
+-spec stop_store(term()) -> ok |{error, term()}.
+stop_store(Name) ->
+  case supervisor:terminate_child(?MODULE, Name) of
+    ok ->
+      _ = supervisor:delete_child(?MODULE, Name),
+      %% unregister the store
+      ets:delete(barrel_stores, Name),
+      ok;
+    {error, not_found} -> ok;
+    Error ->
+      Error
+  end.
+
+store_spec(Name, StoreOpts) ->
+  Mod = maps:get(adapter, StoreOpts, barrel_rocksdb),
+  %% register the store
+  ets:insert(barrel_stores, {Name, Mod}),
+  Opts = maps:get(adapter_options, StoreOpts, #{}),
+  [Restart, Shutdown, Type, Modules] =
+    [ maps:get(K, Opts, Default)
+      || {K, Default} <- [{restart, transient},
+                          {shutdown, ?SHUTDOWN},
+                          {type, worker},
+                          {modules, [Mod]}]
+    ],
+  #{
+    id => Name,
+    start => {Mod, start_link, [Name, StoreOpts]},
+    restart => Restart,
+    shutdown => Shutdown,
+    type => Type,
+    modules => Modules
+  }.

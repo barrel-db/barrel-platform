@@ -35,24 +35,21 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
-  [{conn, Conn}|Config].
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  Config.
 
-end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  barrel_db:clean(Conn),
+end_per_testcase(_, _Config) ->
+  ok = barrel:delete_store(testdb),
   ok.
 
 end_per_suite(Config) ->
-  erocksdb:destroy("data/testdb", []),
   Config.
 
-write_and_get(Config) ->
-  Conn = proplists:get_value(conn, Config),
+write_and_get(_Config) ->
   Doc = #{<<"v">> => 1},
-  ok = barrel_db:write_system_doc(Conn, <<"a">>, Doc),
-  {ok, Doc} = barrel_db:read_system_doc(Conn, <<"a">>),
-  ok = barrel_db:delete_system_doc(Conn, <<"a">>),
-  {error, not_found} = barrel_db:read_system_doc(Conn, <<"a">>),
+  ok = barrel_store:write_system_doc(testdb, <<"a">>, Doc),
+  {ok, Doc} = barrel_store:read_system_doc(testdb, <<"a">>),
+  ok = barrel_store:delete_system_doc(testdb, <<"a">>),
+  {error, not_found} = barrel_store:read_system_doc(testdb, <<"a">>),
   ok.
 

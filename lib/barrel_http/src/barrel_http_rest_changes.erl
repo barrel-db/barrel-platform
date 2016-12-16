@@ -43,12 +43,6 @@ trails() ->
                      , required => false
                      , type => <<"integer">>
                      }
-                   ,#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>
-                     }
                    ,#{ name => <<"store">>
                      , description => <<"Store ID">>
                      , in => <<"path">>
@@ -58,11 +52,11 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/:store/:dbid/_changes", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/_changes", ?MODULE, [], Metadata)].
 
 
 
--record(state, {method, conn, store, dbid,
+-record(state, {method, store,
                 feed, since, heartbeat, options=[],
                 changes, last_seq, subscribed}).
 
@@ -77,15 +71,14 @@ route(Req, State) ->
   {shutdown, Req2, State}.
 
 check_store_db(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-  case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
-    {ok, Conn} ->
-      State2 = State#state{store=Store, dbid=DbId, conn=Conn},
-      check_params(Req3, State2);
+  {StoreName, Req2} = cowboy_req:binding(store, Req),
+  Store = barrel_lib:to_atom(StoreName),
+  case barrel_http_lib:has_store(Store) of
+    true ->
+      check_params(Req2, State#state{store=Store});
     _Error ->
-      {ok, Req4, S} = barrel_http_reply:error(400, "db or database not found", Req, State),
-      {shutdown, Req4, S}
+      {ok, Req3, S} = barrel_http_reply:error(400, "unknown store", Req2, State),
+      {shutdown, Req3, S}
   end.
 
 check_params(Req, State) ->
@@ -117,8 +110,8 @@ parse_params([{Param, _Value}|_], _State) ->
 
 
 
-init_feed(Req, #state{conn=Conn, since=Since, options=Options}=State) ->
-  {LastSeq, Changes} = changes(Conn, Since, Options),
+init_feed(Req, #state{store=Store, since=Since, options=Options}=State) ->
+  {LastSeq, Changes} = changes(Store, Since, Options),
   init_feed_changes(Req, State#state{changes=Changes, last_seq=LastSeq}).
 
 init_feed_changes(Req, #state{feed=normal}=S) ->
@@ -126,7 +119,7 @@ init_feed_changes(Req, #state{feed=normal}=S) ->
 
 init_feed_changes(Req, #state{feed=longpoll, changes=[]}=S) ->
   %% No changes available for reply. We register for db_updated events.
-  ok = barrel_event:reg(S#state.conn),
+  ok = barrel_event:reg(S#state.store),
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
   {loop, Req2, S2#state{subscribed=true}};
 
@@ -135,11 +128,11 @@ init_feed_changes(Req, #state{feed=longpoll}=S) ->
   {ok, Req, S};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
-  ok = barrel_event:reg(S#state.conn),
-  #{ store := Store, name := Name} = S#state.conn,
+  ok = barrel_event:reg(S#state.store),
+  #state{store=Store} = S,
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat(Headers, Req, S),
-  info({'$barrel_event', {Store, Name}, db_updated}, Req2, S2#state{subscribed=true}).
+  info({'$barrel_event', Store, db_updated}, Req2, S2#state{subscribed=true}).
 
 init_chunked_reply_with_hearbeat(Headers, Req, State) ->
   {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
@@ -160,7 +153,7 @@ info(heartbeat, Req, S) ->
   {loop, Req, S};
 
 info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
-  {LastSeq, Changes} = changes(S#state.conn, S#state.last_seq, S#state.options),
+  {LastSeq, Changes} = changes(S#state.store, S#state.last_seq, S#state.options),
   db_updated(Changes, LastSeq, Req, S);
 info(_Info, Req, S) ->
   {loop, Req, S}.
@@ -196,12 +189,13 @@ terminate(_Reason, _Req, _S) ->
 
 %% ----------
 
-changes(Conn, Since, Options) ->
+changes(Store, Since, Options) ->
   Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  barrel:changes_since(Conn, Since, Fun, {Since, []}, Options).
+  lager:info("barrel:changes_since(~p,~p,_)", [Store, Since]),
+  barrel:changes_since(Store, Since, Fun, {Since, []}, Options).
 
 to_json(LastSeq, Changes) ->
   Map = #{<<"last_seq">> => LastSeq,

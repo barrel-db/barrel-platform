@@ -24,7 +24,7 @@
         , accept_put_get/1
         , accept_delete/1
         , reject_replication_name_unknown/1
-        , reject_store_or_db_unknown/1
+        , reject_store_unknown/1
         , reject_bad_json /1
         ]).
 
@@ -32,7 +32,7 @@ all() -> [ accept_post_get
          , accept_put_get
          , accept_delete
          , reject_replication_name_unknown
-         , reject_store_or_db_unknown
+         , reject_store_unknown
          , reject_bad_json
          ].
 
@@ -41,97 +41,94 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
-  [{conn, Conn} |Config].
+  ok = barrel:open_store(dba, #{ dir => "data/dba"}),
+  ok = barrel:open_store(dbb, #{ dir => "data/dbb"}),
+  ok = barrel:open_store(dbaa, #{ dir => "data/dbaa"}),
+  ok = barrel:open_store(dbbb, #{ dir => "data/dbbb"}),
+  ok = barrel:open_store(dbaaa, #{ dir => "data/dbaaa"}),
+  ok = barrel:open_store(dbbbb, #{ dir => "data/dbbbb"}),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  Config.
 
 end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = barrel:delete_database(Conn),
+  ok = barrel:delete_store(dba),
+  ok = barrel:delete_store(dbb),
+  ok = barrel:delete_store(dbaa),
+  ok = barrel:delete_store(dbbb),
+  ok = barrel:delete_store(dbaaa),
+  ok = barrel:delete_store(dbbbb),
+  ok = barrel:delete_store(testdb),
+  file:delete("data/replication.config"),
   Config.
 
 end_per_suite(Config) ->
-  catch erocksdb:destroy(<<"testdb">>), Config.
+  Config.
 
 
 accept_post_get(_Config) ->
-  %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dba", []),
-  {201, _} = test_lib:req(put, "/testdb/dbb", []),
-
-  {404, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {404, _} = test_lib:req(get, "/dbb/mouse"),
   %% create a replication task from one db to the other
-  Source = <<"http://localhost:8080/testdb/dba">>,
-  Target = <<"http://localhost:8080/testdb/dbb">>,
-  Request = #{<<"source">> => Source,
-              <<"target">> => Target},
+  Request = #{<<"source">> => <<"http://localhost:8080/dba">>,
+              <<"target">> => <<"http://localhost:8080/dbb">>},
   {200, R} = test_lib:req(post, "/_replicate", Request),
   #{<<"name">> := NameBin} = jsx:decode(R, [return_maps]),
   Name = binary_to_list(NameBin),
 
-  %% it has been persisted in barrel
-  {ok, [AllConfig]} = file:consult("data/replication.config"),
-  RepConfig = maps:get(list_to_binary(Name), AllConfig),
-  #{source := {barrel_httpc, Source},
-    target := {barrel_httpc, Target},
-    options := [{persist, true}]} = RepConfig,
-
   %% put one doc in source db
   Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dba/mouse", Mouse),
+  {201, _} = test_lib:req(put, "/dba/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = test_lib:req(get, "/testdb/dbb/mouse"),
+  {200, _} = test_lib:req(get, "/dbb/mouse"),
 
   {404, _} = test_lib:req(get, "/_replicate/doesnotexist"),
   {200, R2} = test_lib:req(get, "/_replicate/" ++ Name),
   Metrics = jsx:decode(R2, [return_maps]),
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
+  io:format("replication name ~p~n", [Name]),
+  ok = barrel:delete_replication(Name),
   ok.
 
 accept_put_get(_Config) ->
-  %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dbaa", []),
-  {201, _} = test_lib:req(put, "/testdb/dbbb", []),
-
-  {404, _} = test_lib:req(get, "/testdb/dbbb/mouse"),
+  {404, _} = test_lib:req(get, "/dbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaa">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbbb">>},
+  Request = #{<<"source">> => <<"http://localhost:8080/dbaa">>,
+              <<"target">> => <<"http://localhost:8080/dbbb">>,
+              <<"persisted">> => true},
   {200, R} = test_lib:req(put, "/_replicate/myreplication", Request),
   #{<<"name">> := <<"myreplication">>} = jsx:decode(R, [return_maps]),
 
   %% put one doc in source db
   Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dbaa/mouse", Mouse),
+  {201, _} = test_lib:req(put, "/dbaa/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = test_lib:req(get, "/testdb/dbbb/mouse"),
+  {200, _} = test_lib:req(get, "/dbbb/mouse"),
 
   {200, R2} = test_lib:req(get, "/_replicate/myreplication"),
   Metrics = jsx:decode(R2, [return_maps]),
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
+  barrel:delete_replication(<<"myreplication">>),
+  timer:sleep(100),
   ok.
 
 accept_delete(_Config) ->
-  %% create 2 databases
-  {201, _} = test_lib:req(put, "/testdb/dbaaa", []),
-  {201, _} = test_lib:req(put, "/testdb/dbbbb", []),
-
-  {404, _} = test_lib:req(get, "/testdb/dbbbb/mouse"),
+  {404, _} = test_lib:req(get, "/dbbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/testdb/dbaaa">>,
-              <<"target">> => <<"http://localhost:8080/testdb/dbbbb">>},
+  Request = #{<<"source">> => <<"http://localhost:8080/dbaaa">>,
+              <<"target">> => <<"http://localhost:8080/dbbbb">>,
+              <<"persisted">> => true},
   {200, R} = test_lib:req(put, "/_replicate/tasktobedeleted", Request),
   #{<<"name">> := <<"tasktobedeleted">>} = jsx:decode(R, [return_maps]),
 
   %% put one doc in source db
   Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/testdb/dbaaa/mouse", Mouse),
+  {201, _} = test_lib:req(put, "/dbaaa/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
-  {200, _} = test_lib:req(get, "/testdb/dbbbb/mouse"),
+  {200, _} = test_lib:req(get, "/dbbbb/mouse"),
 
   %% delete the replication task
   {200, _} = test_lib:req(get, "/_replicate/tasktobedeleted"),
@@ -140,11 +137,11 @@ accept_delete(_Config) ->
 
   %% put another doc in source db
   Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/testdb/dbaaa/cat", Cat),
+  {201, _} = test_lib:req(put, "/dbaaa/cat", Cat),
   timer:sleep(500),
 
   %% it has not been replicated
-  {404, _} = test_lib:req(get, "/testdb/dbbbb/cat"),
+  {404, _} = test_lib:req(get, "/dbbbb/cat"),
   ok.
 
 
@@ -153,20 +150,15 @@ reject_replication_name_unknown(_Config) ->
   {404, _} = test_lib:req(delete, "/_replicate/unknown"),
   ok.
 
-reject_store_or_db_unknown(_Config) ->
-  NoStoreSource = #{<<"source">> => <<"http://localhost:8080/nostore/dba">>,
-                    <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
-  NoStoreTarget = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
-                    <<"target">> => <<"http://localhost:8080/nostore/dbb">>},
-  NoDbSource = #{<<"source">> => <<"http://localhost:8080/testdb/nodb">>,
-                 <<"target">> => <<"http://localhost:8080/testdb/dbb">>},
-  NoDbTarget = #{<<"source">> => <<"http://localhost:8080/testdb/dba">>,
-                 <<"target">> => <<"http://localhost:8080/testdb/nodb">>},
+reject_store_unknown(_Config) ->
+  M = #{<<"persisted">> => true},
+  NoStoreSource = M#{<<"source">> => <<"http://localhost:8080/nostore">>,
+                    <<"target">> => <<"http://localhost:8080/dbb">>},
+  NoStoreTarget = M#{<<"source">> => <<"http://localhost:8080/dba">>,
+                    <<"target">> => <<"http://localhost:8080/nostore">>},
 
   {400, _} = test_lib:req(post, "/_replicate", NoStoreSource),
   {400, _} = test_lib:req(post, "/_replicate", NoStoreTarget),
-  {400, _} = test_lib:req(post, "/_replicate", NoDbSource),
-  {400, _} = test_lib:req(post, "/_replicate", NoDbTarget),
   ok.
 
 reject_bad_json(_Config) ->

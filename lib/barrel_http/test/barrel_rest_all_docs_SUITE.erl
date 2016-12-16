@@ -24,14 +24,14 @@
         , accept_start_key/1
         , accept_end_key/1
         , accept_max/1
-        , reject_store_or_db_unknown/1
+        , reject_store_unknown/1
         ]).
 
 all() -> [ accept_get
          , accept_start_key
          , accept_end_key
          , accept_max
-         , reject_store_or_db_unknown
+         , reject_store_unknown
          ].
 
 init_per_suite(Config) ->
@@ -39,32 +39,28 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
-  [{conn, Conn} |Config].
-
-end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = barrel:delete_database(Conn),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
   Config.
 
+end_per_testcase(_, Config) ->
+  ok = barrel:delete_store(testdb),
+  Config.
 end_per_suite(Config) ->
-  catch erocksdb:destroy(<<"testdb">>), Config.
+  Config.
 
 
-accept_get(Config) ->
-  Conn = proplists:get_value(conn, Config),
-
-  {200, R1} = test_lib:req(get, "/testdb/testdb/_all_docs"),
+accept_get(_Config) ->
+  {200, R1} = test_lib:req(get, "/testdb/_all_docs"),
   A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
   Rows1 = maps:get(rows, A1),
   0 = length(Rows1),
 
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(Conn, <<"cat">>, D1, []),
+  {ok, _, _} = barrel:put(testdb, <<"cat">>, D1, []),
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
-  {ok, _, DogRevId} = barrel:put(Conn, <<"dog">>, D2, []),
+  {ok, _, DogRevId} = barrel:put(testdb, <<"dog">>, D2, []),
 
-  {200, R2} = test_lib:req(get, "/testdb/testdb/_all_docs"),
+  {200, R2} = test_lib:req(get, "/testdb/_all_docs"),
   A2 = jsx:decode(R2, [return_maps]),
   Rows2 = maps:get(<<"rows">>, A2),
   2 = length(Rows2),
@@ -72,28 +68,25 @@ accept_get(Config) ->
   #{<<"id">> := <<"dog">>, <<"rev">> := DogRevId} = Row,
   ok.
 
-accept_start_key(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = create_docs(<<"startkey">>, 10, Conn),
+accept_start_key(_Config) ->
+  ok = create_docs(<<"startkey">>, 10, testdb),
 
-  {200, R} = test_lib:req(get, "/testdb/testdb/_all_docs?start_key=startkey0004"),
+  {200, R} = test_lib:req(get, "/testdb/_all_docs?start_key=startkey0004"),
   A = jsx:decode(R, [return_maps]),
   #{<<"rows">> := Rows} = A,
   7 = length(Rows),
   ok.
 
-accept_end_key(Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = create_docs(<<"endkey">>, 10, Conn),
+accept_end_key(_Config) ->
+  ok = create_docs(<<"endkey">>, 10, testdb),
 
-  {200, R} = test_lib:req(get, "/testdb/testdb/_all_docs?end_key=endkey0004"),
+  {200, R} = test_lib:req(get, "/testdb/_all_docs?end_key=endkey0004"),
   A = jsx:decode(R, [return_maps]),
   #{<<"rows">> := Rows} = A,
   4 = length(Rows),
   ok.
 
-accept_max(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_max(_Config) ->
   ok.
 
 create_docs(_Prefix, 0, _Conn) ->
@@ -107,7 +100,6 @@ create_docs(Prefix, N, Conn) ->
   create_docs(Prefix, N-1, Conn).
 
 
-reject_store_or_db_unknown(_Config) ->
-  {400, _} = test_lib:req(get, "/badstore/testdb/_all_docs"),
-  {400, _} = test_lib:req(get, "/testdb/baddb/_all_docs"),
+reject_store_unknown(_Config) ->
+  {400, _} = test_lib:req(get, "/badstore/_all_docs"),
   ok.

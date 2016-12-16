@@ -155,7 +155,8 @@ check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
   case barrel_http_lib:req(get, SourceUrl) of
     {200, _} ->
       check_target_db_exist(Req, State);
-    _ ->
+    _Else ->
+      lager:info("got ~p: ~p~n", [_Else, SourceUrl]),
       barrel_http_reply:error(400, "source database not found", Req, State)
   end.
 
@@ -183,12 +184,11 @@ create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
   {ReqName, Req2} = cowboy_req:binding(name, Req),
   SourceConn = {barrel_httpc, SourceUrl},
   TargetConn = {barrel_httpc, TargetUrl},
-  Opts = [{persist, true}],
   {ok, Name} = case ReqName of
                  undefined ->
-                   barrel:start_replication(SourceConn, TargetConn, Opts);
+                   barrel:start_replication(SourceConn, TargetConn, []);
                  _ ->
-                   barrel:start_replication(ReqName, SourceConn, TargetConn, Opts)
+                   barrel:start_replication(ReqName, SourceConn, TargetConn, [])
                end,
   Doc = #{name => Name},
   barrel_http_reply:doc(Doc, Req2, State).
@@ -204,10 +204,12 @@ delete_resource(Req, #state{name=Name}=State) ->
 params() ->
   #{<<"POST">> =>
       #{<<"source">> => mandatory,
-        <<"target">> => mandatory},
+        <<"target">> => mandatory,
+        <<"persisted">> => optional},
     <<"PUT">> =>
       #{<<"source">> => mandatory,
-        <<"target">> => mandatory}
+        <<"target">> => mandatory,
+        <<"persisted">> => optional}
    }.
 
 check_body_properties(OkFun, FailFun, Req, #state{method=Method, body=Body}=State) ->

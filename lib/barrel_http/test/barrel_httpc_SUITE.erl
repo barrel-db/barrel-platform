@@ -46,22 +46,22 @@ init_per_suite(Config) ->
   Config.
 
 url() ->
-  <<"http://localhost:8080/testdb/testdb">>.
+  <<"http://localhost:8080/testdb">>.
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
-  [{http_conn, HttpConn}, {conn, Conn}|Config].
+  [{http_conn, HttpConn}, {conn, testdb}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
-  Conn = proplists:get_value(conn, Config),
+  ok = barrel:delete_store(testdb),
   ok = barrel_httpc:disconnect(HttpConn),
-  ok = barrel:delete_database(Conn),
+  
   ok.
 
 end_per_suite(Config) ->
-  catch erocksdb:destroy(<<"testdb">>),
+  ok = barrel:delete_store(testdb),
   Config.
 
 %% ----------
@@ -105,7 +105,7 @@ put_rev(Config) ->
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc3),
   Doc4 = Doc3#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
-  ok = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
+  {ok, DocId, NewRev} = barrel_httpc:put_rev(HttpConn, DocId, Doc4, History, []),
   ok.
 
 system_doc(Config) ->

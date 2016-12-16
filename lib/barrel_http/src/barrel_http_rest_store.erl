@@ -23,7 +23,7 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Get list of available databases of a store"
+    #{ get => #{ summary => "Get the store informations"
                , produces => ["application/json"]
                , parameters =>
                    [#{ name => <<"store">>
@@ -34,7 +34,7 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/_store/:store", ?MODULE, [], Metadata)].
+  [trails:trail("/:store", ?MODULE, [], Metadata)].
 
 -record(state, {method, store}).
 
@@ -50,27 +50,21 @@ terminate(_Reason, _Req, _State) ->
 
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_exist(Req, State);
+route(Req, #state{method= <<"POST">>}) ->
+  barrel_http_rest_doc:handle_post(Req);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
 check_store_exist(Req, State) ->
   {StoreBin, Req2} = cowboy_req:binding(store, Req),
-  Store = list_to_atom(binary_to_list(StoreBin)),
-  {ok, Stores} = application:get_env(barrel, stores),
-  case proplists:is_defined(Store, Stores) of
+  Store = barrel_lib:to_atom(StoreBin),
+  case barrel_http_lib:has_store(Store) of
     true ->
       get_resource(Req2, State#state{store=Store});
     false ->
+      lager:info("store ~p not found, stores ~p", [Store, ets:tab2list(barrel_stores)]),
       barrel_http_reply:error(404, "store not found", Req2, State)
   end.
 
-
 get_resource(Req, #state{store=Store}=State) ->
-  Databases =  barrel:database_names(Store),
-  Doc = [database_info(Store, DbName) || DbName <- Databases],
-  barrel_http_reply:doc(Doc, Req, State).
-
-database_info(Store, DbName) ->
-  {ok, Conn} = barrel:connect_database(Store, DbName),
-  {ok, Infos} = barrel:database_infos(Conn),
-  Infos.
+  barrel_http_reply:doc(barrel:store_infos(Store), Req, State).

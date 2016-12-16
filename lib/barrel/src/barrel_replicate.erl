@@ -148,7 +148,10 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
 %% default gen_server callback
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_metrics:update_task(State#st.metrics),
-  lager:info("replication ~p terminated", [RepId]),
+  lager:debug(
+    "barrel_replicate(~p} terminated: ~p",
+    [RepId, _Reason]
+  ),
   ok = write_checkpoint(State),
   ok = barrel_event:unreg(),
   %% close the connections
@@ -210,7 +213,7 @@ write_doc(_, _, undefined, _, Metrics) ->
 write_doc(Target, Id, Doc, History, Metrics) ->
   PutRev = fun() -> put_rev(Target, Id, Doc, History, []) end,
   case timer:tc(PutRev) of
-    {Time, ok} ->
+    {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
@@ -233,18 +236,18 @@ changes(Source, Since) ->
 
 get({Mod, ModState}, Id, Opts) ->
   Mod:get(ModState, Id, Opts);
-get(Conn, Id, Opts) when is_map(Conn) ->
-  barrel_db:get(Conn, Id, Opts).
+get(Conn, Id, Opts) when is_atom(Conn) ->
+  barrel_store:get(Conn, Id, Opts).
 
 put_rev({Mod, ModState}, Id, Doc, History, Opts) ->
   Mod:put_rev(ModState, Id, Doc, History, Opts);
-put_rev(Conn, Id, Doc, History, Opts) when is_map(Conn) ->
-  barrel_db:put_rev(Conn, Id, Doc, History, Opts).
+put_rev(Conn, Id, Doc, History, Opts) when is_atom(Conn) ->
+  barrel_store:put_rev(Conn, Id, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
-changes_since(Conn, Since, Fun, Acc) when is_map(Conn) ->
-  barrel_db:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
+changes_since(Conn, Since, Fun, Acc) when is_atom(Conn) ->
+  barrel_store:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
 
 revsdiff({Mod, ModState}, DocId, History) ->
   Mod:revsdiff(ModState, DocId, History);
@@ -325,24 +328,24 @@ write_checkpoint_doc(Db, RepId, Checkpoint) ->
 
 write_system_doc({Mod, ModState}, Id, Doc) ->
   Mod:write_system_doc(ModState, Id, Doc);
-write_system_doc(Conn, Id, Doc) when is_map(Conn) ->
-  barrel_db:write_system_doc(Conn, Id, Doc).
+write_system_doc(Conn, Id, Doc) when is_atom(Conn) ->
+  barrel_store:write_system_doc(Conn, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
   read_system_doc(Db, checkpoint_docid(RepId)).
 
 read_system_doc({Mod, ModState}, Id) ->
   Mod:read_system_doc(ModState, Id);
-read_system_doc(Conn, Id) when is_map(Conn) ->
-  barrel_db:read_system_doc(Conn, Id).
+read_system_doc(Conn, Id) when is_atom(Conn) ->
+  barrel_store:read_system_doc(Conn, Id).
 
 delete_checkpoint_doc(Db, RepId) ->
   delete_system_doc(Db, checkpoint_docid(RepId)).
 
 delete_system_doc({Mod, ModState}, Id) ->
   Mod:delete_system_doc(ModState, Id);
-delete_system_doc(Conn, Id) when is_map(Conn) ->
-  barrel_db:delete_system_doc(Conn, Id).
+delete_system_doc(Conn, Id) when is_atom(Conn) ->
+  barrel_store:delete_system_doc(Conn, Id).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.

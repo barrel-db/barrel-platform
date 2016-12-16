@@ -15,16 +15,16 @@ init([]) ->
     #{id => barrel_replicate_manager,
       start => {barrel_replicate_manager, start_link, []},
       restart => permanent,
-      shutdown => infinity,
+      shutdown => 2000,
       type => worker,
       modules => [barrel_replicate_manager]},
 
   TaskSup =
     #{id => barrel_replicate_sup,
       start => {barrel_replicate_sup, start_link, []},
-      restart => permanent,
-      shutdown => infinity,
-      type => worker,
+      restart => transient,
+      shutdown => 2000,
+      type => supervisor,
       modules => [barrel_replicate_sup]},
 
-  {ok, {{one_for_one, 10000, 1}, [Manager, TaskSup]}}.
+  {ok, {{one_for_all, 10000, 1}, [Manager, TaskSup]}}.

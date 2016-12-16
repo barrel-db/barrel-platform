@@ -39,11 +39,6 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
-                   ,#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
                    ,#{ name => <<"store">>
                      , description => <<"Store ID">>
                      , in => <<"path">>
@@ -64,11 +59,6 @@ trails() ->
                      , type => <<"application/json">>}
                    ,#{ name => <<"docid">>
                      , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -95,11 +85,6 @@ trails() ->
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
-                      ,#{ name => <<"dbid">>
-                        , description => <<"Database ID">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
                       ,#{ name => <<"store">>
                         , description => <<"Store ID">>
                         , in => <<"path">>
@@ -120,11 +105,6 @@ trails() ->
                      , in => <<"body">>
                      , required => true
                      , type => <<"json">>}
-                   ,#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
                    ,#{ name => <<"store">>
                      , description => <<"Store ID">>
                      , in => <<"path">>
@@ -133,10 +113,10 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/:store/:dbid/", ?MODULE, [], Post),
-   trails:trail("/:store/:dbid/:docid", ?MODULE, [], GetPutDel)].
+  [trails:trail("/:store/", ?MODULE, [], Post),
+   trails:trail("/:store/:docid", ?MODULE, [], GetPutDel)].
 
--record(state, {method, store, dbid, docid, revid, edit, history, body, doc, conn, options}).
+-record(state, {method, store, docid, revid, edit, history, body, doc, conn, options}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -180,30 +160,30 @@ check_request_revid(Req, S) ->
   check_store_db(Req, S#state{body=Body}).
 
 check_store_db(Req, State) ->
-    {Store, Req2} = cowboy_req:binding(store, Req),
-    {DbId, Req3} = cowboy_req:binding(dbid, Req2),
-    case barrel:connect_database(barrel_lib:to_atom(Store), DbId) of
-      {error, {unknown_store, _}} ->
-        barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req3, State);
-      {error, not_found} ->
-        barrel_http_reply:error(400, <<"database not found: ", DbId/binary>>, Req3, State);
-      {ok, Conn} ->
-        {DocId, Req2} = cowboy_req:binding(docid, Req),
-        RevId = State#state.revid,
-        Opts1 = case RevId of
-                  undefined -> [];
-                  _ -> [{rev, RevId}]
-                end,
-        Opts2 = case State#state.history of
-                  true -> [{history, true}|Opts1];
-                  _ -> Opts1
-                end,
-        State2 = State#state{store=Store, dbid=DbId, docid=DocId,
-                             conn=Conn, revid=RevId, options=Opts2},
-        route(Req3, State2)
-    end.
-
-
+  {StoreName, Req2} = cowboy_req:binding(store, Req),
+  Store = barrel_lib:to_atom(StoreName),
+  case barrel_http_lib:has_store(Store) of
+    false ->
+      barrel_http_reply:error(400, <<"store not found: ", StoreName/binary>>, Req2, State);
+    true ->
+      {DocId, Req3} = cowboy_req:binding(docid, Req2),
+      RevId = State#state.revid,
+      Opts1 = case RevId of
+                undefined -> [];
+                _ -> [{rev, RevId}]
+              end,
+      Opts2 = case State#state.history of
+                true -> [{history, true}|Opts1];
+                _ -> Opts1
+              end,
+      State2 =  State#state{
+        store=Store,
+        docid=DocId,
+        revid=RevId,
+        options=Opts2
+      },
+      route(Req3, State2)
+  end.
 
 
 route(Req, #state{method= <<"POST">>}=State) ->
@@ -215,6 +195,7 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_resource_exists(Req, State);
 route(Req, State) ->
+  lager:info("state is ~p~n", [State]),
   barrel_http_reply:error(405, Req, State).
 
 
@@ -245,10 +226,9 @@ check_id_property(Req, #state{body=Json}=State) ->
 
 
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
-  Conn = S#state.conn,
-  DocId = S#state.docid,
-  Options = S#state.options,
-  case barrel:get(Conn, DocId, Options) of
+  #state{ store=Store, docid=DocId, options=Options } = S,
+  lager:info("Store is ~p ~n", [Store]),
+  case barrel:get(Store, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
     {ok, Doc} ->
@@ -269,28 +249,20 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 
 create_resource(Req, State) ->
-  Json = State#state.body,
-  Conn = State#state.conn,
-  DocId = State#state.docid,
-  Method = State#state.method,
+  #state{ store=Store, docid=DocId, body=Json, method=Method} = State,
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel:post(Conn, Json, []), Req};
+                       {barrel:post(Store, Json, []), Req};
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           { barrel:put(Conn, DocId, Json, []), Req3 };
+                           { barrel:put(Store, DocId, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           case barrel:put_rev(Conn, DocId, Doc, History, []) of
-                             ok ->
-                               {ok, #{<<"_rev">> := Rev}} = barrel:get(Conn, DocId, []),
-                               {{ok, DocId, Rev}, Req3};
-                             Error -> {Error, Req3}
-                           end
+                           { barrel:put_rev(Store, DocId, Doc, History, []), Req3 }
                        end
                    end,
   case Result of
@@ -308,10 +280,8 @@ create_resource(Req, State) ->
   end.
 
 delete_resource(Req, State) ->
-  Conn = State#state.conn,
-  DocId = State#state.docid,
-  RevId = State#state.revid,
-  {ok, DocId, RevId2} = barrel:delete(Conn, DocId, RevId, []),
+  #state{ store=Store, docid=DocId, revid=RevId} = State,
+  {ok, DocId, RevId2} = barrel:delete(Store, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},

@@ -1,0 +1,17 @@
+erlang-lru version 2.2.0, released on 2016/10/12
+================================================
+
+- improvements: allows a function to return `{ok, Val}`.
+
+erlang-lru version 2.1.0, released on 2016/10/12
+================================================
+
+- add the possibility to pass a function to `lru:add/3` or `lru:contains_or_add/3 ` functions.
+
+erlang-lru version 2.0.0, released on 2016/10/08
+================================================
+
+- add options to evict items in the cache depending on their size (in bytes)
+or  number
+
+** DEPRECATION **: `size`in 1.x should now be set using the `max_objs` setting.

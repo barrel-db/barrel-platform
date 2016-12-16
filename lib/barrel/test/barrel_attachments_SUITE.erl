@@ -41,23 +41,20 @@ init_per_suite(Config) ->
 
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(barrel_test_rocksdb, <<"testdb">>),
-  [{conn, Conn}|Config].
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  Config.
 
-end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  barrel_db:clean(Conn),
+end_per_testcase(_, _Config) ->
+  ok = barrel:delete_store(testdb),
   ok.
 
 end_per_suite(Config) ->
-  erocksdb:destroy("testdb", []),
   Config.
 
-attachment_doc(Config) ->
-  Conn = proplists:get_value(conn, Config),
+attachment_doc(_Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_db:put(Conn, DocId, Doc, []),
+  {ok, <<"a">>, R1} = barrel_store:put(testdb, DocId, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
@@ -65,23 +62,22 @@ attachment_doc(Config) ->
     <<"link">> => <<"http://somehost.com/cat.png">>
    },
 
-  {ok, DocId, R2} = barrel_attachments:attach(Conn, DocId, AttDescription, [{db_version, R1}]),
-  {ok, AttDescription} = barrel_attachments:get_attachment(Conn, DocId, <<"myattachement">>, []),
-  [AttDescription] = barrel_attachments:attachments(Conn, DocId, []),
+  {ok, DocId, R2} = barrel_attachments:attach(testdb, DocId, AttDescription, [{db_version, R1}]),
+  {ok, AttDescription} = barrel_attachments:get_attachment(testdb, DocId, <<"myattachement">>, []),
+  [AttDescription] = barrel_attachments:attachments(testdb, DocId, []),
 
   AttDescription2 = AttDescription#{link => <<"http://anotherhost.com/panther.png">>},
-  {error, attachment_conflict} = barrel_attachments:attach(Conn, DocId, AttDescription2, [{db_version, R2}]),
-  {ok, DocId, R3} = barrel_attachments:replace_attachment(Conn, DocId, AttId, AttDescription2, [{db_version, R2}]),
-  [AttDescription2] = barrel_attachments:attachments(Conn, DocId, []),
-  {ok, DocId, _} = barrel_attachments:delete_attachment(Conn, DocId, AttId, [{db_version, R3}]),
-  [] = barrel_attachments:attachments(Conn, DocId, []),
+  {error, attachment_conflict} = barrel_attachments:attach(testdb, DocId, AttDescription2, [{db_version, R2}]),
+  {ok, DocId, R3} = barrel_attachments:replace_attachment(testdb, DocId, AttId, AttDescription2, [{db_version, R2}]),
+  [AttDescription2] = barrel_attachments:attachments(testdb, DocId, []),
+  {ok, DocId, _} = barrel_attachments:delete_attachment(testdb, DocId, AttId, [{db_version, R3}]),
+  [] = barrel_attachments:attachments(testdb, DocId, []),
   ok.
 
-binary_attachment(Config) ->
-  Conn = proplists:get_value(conn, Config),
+binary_attachment(_Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_db:put(Conn, DocId, Doc, []),
+  {ok, <<"a">>, R1} = barrel_store:put(testdb, DocId, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
@@ -89,10 +85,10 @@ binary_attachment(Config) ->
    },
   Blob = <<"blobdata">>,
 
-  {ok, DocId, R2} = barrel_attachments:attach(Conn, DocId, AttDescription, Blob, [{db_version, R1}]),
-  {ok, Blob} = barrel_attachments:get_attachment_binary(Conn, DocId, AttId, [{db_version, R2}]),
+  {ok, DocId, R2} = barrel_attachments:attach(testdb, DocId, AttDescription, Blob, [{db_version, R1}]),
+  {ok, Blob} = barrel_attachments:get_attachment_binary(testdb, DocId, AttId, [{db_version, R2}]),
 
   Blob2 = <<"anotherblobdata">>,
-  {ok, DocId, R3} = barrel_attachments:replace_attachment_binary(Conn, DocId, AttId, Blob2, [{db_version, R2}]),
-  {ok, Blob2} = barrel_attachments:get_attachment_binary(Conn, DocId, AttId, [{db_version, R3}]),
+  {ok, DocId, R3} = barrel_attachments:replace_attachment_binary(testdb, DocId, AttId, Blob2, [{db_version, R2}]),
+  {ok, Blob2} = barrel_attachments:get_attachment_binary(testdb, DocId, AttId, [{db_version, R3}]),
   ok.
