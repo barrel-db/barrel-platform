@@ -33,9 +33,11 @@ all() ->
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
   Config.
 
 end_per_suite(Config) ->
+  ok = barrel:delete_store(testdb),
   Config.
 
 accept_get(_Config) ->
