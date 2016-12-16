@@ -354,11 +354,10 @@ req(Method, Url, Map) when is_map(Map) ->
 req(Method, Url, Body) ->
   ParsedUrl = hackney_url:parse_url(Url),
   PoolName = pool_name(ParsedUrl),
-  Options = [{timeout, 150000}, {max_connections, 20}, {pool, PoolName}],
+  Options = [{timeout, 150000}, {max_connections, 20}, {pool, PoolName}, with_body],
   Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  {ok, Code, _Headers, Ref} = hackney:request(Method, ParsedUrl, Headers, Body, Options),
-  {ok, Answer} = hackney:body(Ref),
-  {Code, Answer}.
+  {ok, Code, _Headers, RespBody} = hackney:request(Method, ParsedUrl, Headers, Body, Options),
+  {Code, RespBody}.
 
 
 pool_name(ParsedUrl) ->

@@ -14,37 +14,43 @@
 
 -module(barrel_rest_store_SUITE).
 
--export([all/0,
-         end_per_suite/1,
-         init_per_suite/1]).
+-export([
+  all/0,
+  end_per_suite/1,
+  init_per_suite/1
+]).
 
--export([ accept_get/1
-        , reject_unknown_store/1
-        ]).
+-export([
+    accept_get/1
+  , reject_unknown_store/1
+]).
 
-all() -> [ accept_get
-         , reject_unknown_store
-         ].
+all() ->
+  [
+    accept_get
+    , reject_unknown_store
+  ].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
   Config.
 
-
 end_per_suite(Config) ->
   Config.
 
-
 accept_get(_Config) ->
-  {201, _} = test_lib:req(put, "/testdb/newdb1"),
-  {200, R1} = test_lib:req(get, "/_store/testdb"),
-  Databases = jsx:decode(R1, [return_maps]),
-  true = (length(Databases) >= 1),
+  {200, R1} = test_lib:req(get, "/testdb"),
+  Info = jsx:decode(R1, [return_maps]),
+  
   #{<<"name">> := _,
-    <<"store">> := _} = hd(Databases),
+    <<"id">> := _,
+    <<"doc_count">> := _,
+    <<"last_update_seq">> := _,
+    <<"system_doc_count">> := _,
+    <<"last_index_seq">> := _} = Info,
   ok.
 
 reject_unknown_store(_Config) ->
-  {404, _} = test_lib:req(get, "/_store/badstore"),
+  {404, _} = test_lib:req(get, "/badstore"),
   ok.
 

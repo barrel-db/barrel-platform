@@ -48,10 +48,9 @@ route(Req, State) ->
 
 
 get_resource(Req, State) ->
-  {ok, Stores} = application:get_env(barrel, stores),
-  Doc = [ create_info(Store, Options) || {Store, Options} <- Stores],
-  barrel_http_reply:doc(Doc, Req, State).
-
-create_info(Store, Options) ->
-  #{<<"name">> => list_to_binary(atom_to_list(Store)),
-    <<"dir">> => list_to_binary(maps:get(dir, Options))}.
+  Stores = ets:foldl(
+    fun({Store, _}, Acc) -> [barrel_lib:to_binary(Store) | Acc] end,
+    [],
+    barrel_stores
+  ),
+  barrel_http_reply:doc(lists:usort(Stores), Req, State).

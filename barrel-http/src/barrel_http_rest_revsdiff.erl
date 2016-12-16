@@ -31,11 +31,6 @@ trails() ->
                       , in => <<"body">>
                       , required => true
                       , type => <<"json">>}
-                    ,#{ name => <<"dbid">>
-                      , description => <<"Database ID">>
-                      , in => <<"path">>
-                      , required => true
-                      , type => <<"string">>}
                     ,#{ name => <<"store">>
                       , description => <<"Store ID">>
                       , in => <<"path">>
@@ -44,7 +39,7 @@ trails() ->
                     ]
                 }
      },
-  [trails:trail("/:store/:dbid/_revs_diff", ?MODULE, [], Metadata)].
+  [trails:trail("/:store/_revs_diff", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->
@@ -53,22 +48,21 @@ init(_Type, Req, []) ->
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
   {Store, Req3} = cowboy_req:binding(store, Req2),
-  {DbId, Req4} = cowboy_req:binding(dbid, Req3),
-  handle(Method, Store, DbId, Req4, State).
+  handle(Method, Store, Req3, State).
 
-handle(<<"POST">>, Store, DbId, Req, State) ->
+handle(<<"POST">>, StoreName, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
-  {ok, Conn} = barrel:connect_database(barrel_lib:to_atom(Store), DbId),
+  Store = barrel_lib:to_atom(StoreName),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                         {ok, Missing, Possible} = barrel:revsdiff(Conn, DocId, RevIds),
+                         {ok, Missing, Possible} = barrel:revsdiff(Store, DocId, RevIds),
                          Acc#{DocId => #{<<"missing">> => Missing,
                                          <<"possible_ancestors">> => Possible}}
                      end,#{}, RequestedDocs),
   barrel_http_reply:doc(Result, Req2, State);
 
 
-handle(_, _, _, Req, State) ->
+handle(_, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 terminate(_Reason, _Req, _State) ->

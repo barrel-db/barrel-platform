@@ -15,6 +15,7 @@
 -module(barrel_http_lib).
 
 -export([req/2, req/3]).
+-export([has_store/1]).
 
 req(Method, Url) ->
   req(Method,Url,[]).
@@ -35,3 +36,6 @@ req(Method, Url, Body) when is_binary(Body) ->
       {Code, Answer};
     Error -> Error
   end.
+
+
+has_store(Store) -> ets:member(barrel_stores, Store).

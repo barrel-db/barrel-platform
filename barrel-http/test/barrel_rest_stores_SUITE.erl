@@ -32,12 +32,9 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
   Config.
 
-
 accept_get(_Config) ->
   {200, R1} = test_lib:req(get, "/_stores"),
   A1 = jsx:decode(R1, [return_maps]),
-  [TestDb, Source] = A1,
-  #{<<"name">> := <<"testdb">>} = TestDb,
-  #{<<"name">> := <<"source">>} = Source,
+  [<<"source">>, <<"testdb">>] = A1,
   ok.
 

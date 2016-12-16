@@ -27,10 +27,9 @@
         , accept_post/1
         , accept_put/1
         , accept_delete/1
-        , reject_store_or_db_unknown/1
+        , reject_store_unknown/1
         , reject_unknown_query_parameters/1
         , reject_bad_json/1
-        , two_databases_on_same_store/1
         , revsdiff/1
         , put_rev/1
         ]).
@@ -41,10 +40,9 @@ all() -> [ accept_get
          , accept_post
          , accept_put
          , accept_delete
-         , reject_store_or_db_unknown
+         , reject_store_unknown
          , reject_unknown_query_parameters
          , reject_bad_json
-         , two_databases_on_same_store
          , revsdiff
          , put_rev
          ].
@@ -54,160 +52,134 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
-  [{conn, Conn} |Config].
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  Config.
 
 end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = barrel:delete_database(Conn),
+  ok = barrel:delete_store(testdb),
   Config.
 
 end_per_suite(Config) ->
-  catch erocksdb:destroy(<<"testdb">>), Config.
+  Config.
 
 
-accept_get(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(Conn, <<"acceptget">>, Doc, []),
+  {ok, _, _} = barrel:put(testdb, <<"acceptget">>, Doc, []),
 
-  {200, R} = test_lib:req(get, "/testdb/testdb/acceptget"),
+  {200, R} = test_lib:req(get, "/testdb/acceptget"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
   ok.
 
-accept_get_with_rev(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_get_with_rev(_Config) ->
   DocId = <<"acceptgetrev">>,
   Doc1 = #{<<"id">> => DocId, <<"v">> => 1},
-  {ok, _, RevId1} = barrel:put(Conn, DocId, Doc1, []),
+  {ok, _, RevId1} = barrel:put(testdb, DocId, Doc1, []),
   Doc2 = #{<<"id">> => DocId, <<"v">> => 2, <<"_rev">> => RevId1},
-  {ok, _, RevId2} = barrel:put(Conn, DocId, Doc2, []),
-  {ok, _, _RevId3} = barrel:delete(Conn, DocId, RevId2, []),
+  {ok, _, RevId2} = barrel:put(testdb, DocId, Doc2, []),
+  {ok, _, _RevId3} = barrel:delete(testdb, DocId, RevId2, []),
 
-  {200, R1} = test_lib:req(get, "/testdb/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
+  {200, R1} = test_lib:req(get, "/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
   J1 = jsx:decode(R1, [return_maps]),
   #{<<"v">> := 1} = J1,
-  {200, R2} = test_lib:req(get, "/testdb/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
+  {200, R2} = test_lib:req(get, "/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
   J2 = jsx:decode(R2, [return_maps]),
   #{<<"v">> := 2} = J2,
   ok.
 
-accept_get_with_history(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_get_with_history(_Config) ->
   Doc = #{<<"id">> => <<"acceptgethist">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(Conn, <<"acceptgethist">>, Doc, []),
+  {ok, _, _} = barrel:put(testdb, <<"acceptgethist">>, Doc, []),
 
-  {200, R} = test_lib:req(get, "/testdb/testdb/acceptgethist?history=true"),
+  {200, R} = test_lib:req(get, "/testdb/acceptgethist?history=true"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>,
     <<"_revisions">> := Revisions} = J,
   #{<<"ids">> := [_], <<"start">> := 1} = Revisions,
   ok.
 
-accept_post(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_post(_Config) ->
   D1 = #{<<"name">> => <<"tom">>},
-  {201, R} = test_lib:req(post, "/testdb/testdb", D1),
+  {201, R} = test_lib:req(post, "/testdb", D1),
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel:get(Conn, DocId, []),
+  {ok, Doc} = barrel:get(testdb, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
-accept_put(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_put(_Config) ->
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {201, R} = test_lib:req(put, "/testdb/testdb/cat", D1),
+  {201, R} = test_lib:req(put, "/testdb/cat", D1),
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel:get(Conn, DocId, []),
+  {ok, Doc} = barrel:get(testdb, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
-accept_delete(Config) ->
-  Conn = proplists:get_value(conn, Config),
+accept_delete(_Config) ->
   Doc = #{<<"id">> => <<"acceptdelete">>, <<"name">> => <<"tom">>},
-  {ok, _, RevIdBin} = barrel:put(Conn, <<"acceptdelete">>, Doc, []),
+  {ok, _, RevIdBin} = barrel:put(testdb, <<"acceptdelete">>, Doc, []),
   RevId = binary_to_list(RevIdBin),
 
-  Url = "/testdb/testdb/acceptdelete?rev=" ++ RevId,
+  Url = "/testdb/acceptdelete?rev=" ++ RevId,
   {200, _} = test_lib:req(delete, Url),
 
-  {error, not_found} = barrel:get(Conn, <<"acceptdelete">>, []),
+  {error, not_found} = barrel:get(testdb, <<"acceptdelete">>, []),
   ok.
 
-reject_store_or_db_unknown(_) ->
+reject_store_unknown(_) ->
   Doc = #{<<"name">> => <<"tom">>},
-  {400, _} = test_lib:req(get, "/bad/testdb/docid"),
-  {400, _} = test_lib:req(put, "/bad/testdb/docid", Doc),
-  {400, _} = test_lib:req(post, "/bad/testdb", Doc),
-  {400, _} = test_lib:req(delete, "/bad/testdb/docid"),
-
-  {400, _} = test_lib:req(get, "/testdb/bad/docid"),
-  {400, _} = test_lib:req(put, "/testdb/bad/docid", Doc),
-  {400, _} = test_lib:req(post, "/testdb/bad", Doc),
-  {400, _} = test_lib:req(delete, "/testdb/bad/docid"),
+  {400, _} = test_lib:req(get, "/bad/docid"),
+  {400, _} = test_lib:req(put, "/bad/docid", Doc),
+  {400, _} = test_lib:req(post, "/bad", Doc),
+  {400, _} = test_lib:req(delete, "/bad/docid"),
   ok.
 
 reject_unknown_query_parameters(_) ->
   Doc = #{<<"name">> => <<"tom">>},
-  {400, _} = test_lib:req(get, "/testdb/testdb/docid?badparam=whatever"),
-  {400, _} = test_lib:req(put, "/testdb/testdb/docid?badparam=whatever", Doc),
-  {400, _} = test_lib:req(post, "/testdb/testdb?badparam=whatever", Doc),
-  {400, _} = test_lib:req(delete, "/testdb/testdb/docid?badparam=whatever"),
+  {400, _} = test_lib:req(get, "/testdb/docid?badparam=whatever"),
+  {400, _} = test_lib:req(put, "/testdb/docid?badparam=whatever", Doc),
+  {400, _} = test_lib:req(post, "/testdb?badparam=whatever", Doc),
+  {400, _} = test_lib:req(delete, "/testdb/docid?badparam=whatever"),
   ok.
 
 reject_bad_json(_) ->
   BadJson = "{\"name\": \"badjson",
-  {400, _} = test_lib:req(put, "/testdb/testdb/docid", BadJson),
+  {400, _} = test_lib:req(put, "/testdb/docid", BadJson),
   NoId = "{\"name\": \"whatever\"}",
-  {400, _} = test_lib:req(put, "/testdb/testdb/docid", NoId),
+  {400, _} = test_lib:req(put, "/testdb/docid", NoId),
   ok.
 
 
 put_cat() ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(put, "/testdb/testdb/cat", Doc),
+  {201, R} = test_lib:req(put, "/testdb/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
-
-two_databases_on_same_store(_Config) ->
-  Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  Dog = "{\"id\": \"dog\", \"name\": \"spike\"}",
-  {201, _} = test_lib:req(put, "/testdb/db1", []),
-  {201, _} = test_lib:req(put, "/testdb/db2", []),
-  {201, _} = test_lib:req(put, "/testdb/db1/cat", Cat),
-  {201, _} = test_lib:req(put, "/testdb/db2/dog", Dog),
-  {200, _} = test_lib:req(get, <<"/testdb/db1/cat">>),
-  {404, _} = test_lib:req(get, <<"/testdb/db2/cat">>),
-  {200, _} = test_lib:req(get, <<"/testdb/db2/dog">>),
-  {404, _} = test_lib:req(get, <<"/testdb/db1/dog">>),
-  ok.
 
 revsdiff(_Config) ->
   CatRevId = put_cat(),
   Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = test_lib:req(post, "/testdb/testdb/_revs_diff", Request),
+  {200, R} = test_lib:req(post, "/testdb/_revs_diff", Request),
   A = jsx:decode(R, [return_maps]),
   CatDiffs = maps:get(<<"cat">>, A),
   Missing = maps:get(<<"missing">>, CatDiffs),
   true = lists:member(<<"2-missing">>, Missing),
   ok.
 
-put_rev(Config) ->
-  Conn = proplists:get_value(conn, Config),
+put_rev(_Config) ->
   RevId = put_cat(),
-  {ok, Doc} = barrel:get(Conn, <<"cat">>, []),
+  {ok, Doc} = barrel:get(testdb, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],
   Request = #{<<"id">> => cat,
               <<"document">> => Doc,
               <<"history">> => History},
-  {201, R} = test_lib:req(put, "/testdb/testdb/cat?edit=true", Request),
+  {201, R} = test_lib:req(put, "/testdb/cat?edit=true", Request),
   A = jsx:decode(R, [return_maps]),
   true = maps:get(<<"ok">>, A),
   ok.

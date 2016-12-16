@@ -29,28 +29,27 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Conn} = barrel:create_database(testdb, <<"testdb">>),
-  [{conn, Conn} |Config].
-
-end_per_testcase(_, Config) ->
-  Conn = proplists:get_value(conn, Config),
-  ok = barrel:delete_database(Conn),
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
   Config.
 
-end_per_suite(Config) ->
-  catch erocksdb:destroy(<<"testdb">>), Config.
+end_per_testcase(_, Config) ->
+  ok = barrel:delete_store(testdb),
+  Config.
+
+end_per_suite(_Config) ->
+  ok.
 
 %% ----------
 
 
 system_doc(_Config) ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {200, _} = test_lib:req(put, "/testdb/testdb/_system/cat", Doc),
-  {200, R} = test_lib:req(get, <<"/testdb/testdb/_system/cat">>),
+  {200, _} = test_lib:req(put, "/testdb/_system/cat", Doc),
+  {200, R} = test_lib:req(get, <<"/testdb/_system/cat">>),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
-  {200, _} = test_lib:req(put, "/testdb/testdb/_system/cat", "{}"),
-  {200, _} = test_lib:req(delete, "/testdb/testdb/_system/cat"),
-  {404, _} = test_lib:req(get, <<"/testdb/testdb/_system/cat">>),
+  {200, _} = test_lib:req(put, "/testdb/_system/cat", "{}"),
+  {200, _} = test_lib:req(delete, "/testdb/_system/cat"),
+  {404, _} = test_lib:req(get, <<"/testdb/_system/cat">>),
   ok.
 

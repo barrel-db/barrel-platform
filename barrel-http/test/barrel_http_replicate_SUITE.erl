@@ -43,14 +43,13 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {true, Target} = barrel:create_database(testdb, <<"testdb">>),
-  {true, Source} = barrel:create_database(source, <<"source">>),
-  [{source_conn, source()},{target_conn, target()}, {source, Source}, {target, Target}|Config].
+  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  ok = barrel:open_store(source, #{ dir => "data/source"}),
+  [{source_conn, source()},{target_conn, target()}, {source, source}, {target, testdb}|Config].
 
-end_per_testcase(_, Config) ->
-  {Source, Target} = repctx(Config),
-  ok = barrel:delete_database(Target),
-  ok = barrel:delete_database(Source),
+end_per_testcase(_, _Config) ->
+  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_store(source),
   ok.
 
 end_per_suite(Config) ->
@@ -63,21 +62,21 @@ end_per_suite(Config) ->
   Config.
 
 
-repctx(Config) ->
-  {proplists:get_value(source, Config), proplists:get_value(target, Config)}.
-
-
 source_url() ->
-  <<"http://localhost:8080/source/source">>.
+  <<"http://localhost:8080/source">>.
 
 source() ->
   {barrel_httpc, source_url()}.
 
 target_url() ->
-  <<"http://localhost:8080/testdb/testdb">>.
+  <<"http://localhost:8080/testdb">>.
 
 target() ->
   {barrel_httpc, target_url()}.
+
+repctx(Config) ->
+  {proplists:get_value(source, Config), proplists:get_value(target, Config)}.
+
 
 one_doc(Config) ->
   {Source, Target} = repctx(Config),
