@@ -114,11 +114,11 @@ update_doc(Db, DocId, Fun) ->
 
 get_doc(Db, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
   Ref = get_ref(Db),
-  {ok, Snapshot} = erocksdb:snapshot(Ref),
+  {ok, Snapshot} = rocksdb:snapshot(Ref),
   ReadOptions = [{snapshot, Snapshot}],
   
   try get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, HistoryFrom, ReadOptions)
-  after erocksdb:release_snapshot(Snapshot)
+  after rocksdb:release_snapshot(Snapshot)
   end.
 
 get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
@@ -148,7 +148,7 @@ get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
   end.
 
 get_doc_rev(Ref, DocId, RevId, ReadOptions) ->
-  case erocksdb:get(Ref, rev_key(DocId, RevId), ReadOptions) of
+  case rocksdb:get(Ref, rev_key(DocId, RevId), ReadOptions) of
     {ok, Bin} -> {ok, binary_to_term(Bin)};
     not_found -> {error, not_found};
     Error -> Error
@@ -159,7 +159,7 @@ get_doc_info(Db, DocId, ReadOptions) when is_atom(Db) ->
   get_doc_info({ref, Ref}, DocId, ReadOptions);
 get_doc_info({ref, Ref}, DocId, ReadOptions) ->
   DocKey = doc_key(DocId),
-  case erocksdb:get(Ref, DocKey, ReadOptions) of
+  case rocksdb:get(Ref, DocKey, ReadOptions) of
     {ok, BinDocInfo} -> {ok, binary_to_term(BinDocInfo)};
     not_found -> {error, not_found}
   end.
@@ -167,9 +167,9 @@ get_doc_info({ref, Ref}, DocId, ReadOptions) ->
 fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   ReadOptions = proplists:get_value(read_options, Opts, []),
   
-  {ok, Itr} = erocksdb:iterator(Db, ReadOptions),
+  {ok, Itr} = rocksdb:iterator(Db, ReadOptions),
   try do_fold_prefix(Itr, Prefix, Fun, AccIn, barrel_lib:parse_fold_options(Opts))
-  after erocksdb:iterator_close(Itr)
+  after rocksdb:iterator_close(Itr)
   end.
 
 do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
@@ -187,9 +187,9 @@ do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
                            error(badarg)
                        end,
   Opts2 = Opts#{prefix => Prefix},
-  case erocksdb:iterator_move(Itr, Start) of
+  case rocksdb:iterator_move(Itr, Start) of
     {ok, Start, _V} when Inclusive /= true ->
-      fold_prefix_loop(erocksdb:iterator_move(Itr, next), Itr, Fun, AccIn, 0, Opts2);
+      fold_prefix_loop(rocksdb:iterator_move(Itr, next), Itr, Fun, AccIn, 0, Opts2);
     Next ->
       fold_prefix_loop(Next, Itr, Fun, AccIn, 0, Opts2)
   end.
@@ -232,7 +232,7 @@ fold_prefix_loop1({ok, K, V}, Itr, Fun, Acc0, N0, Opts) ->
     true ->
       case Fun(K, V, Acc0) of
         {ok, Acc} when (Max =:= 0) orelse (N < Max) ->
-          fold_prefix_loop(erocksdb:iterator_move(Itr, next),
+          fold_prefix_loop(rocksdb:iterator_move(Itr, next),
             Itr, Fun, Acc, N, Opts);
         {ok, Acc} -> Acc;
         stop -> Acc0;
@@ -252,7 +252,7 @@ match_prefix(Bin, Prefix) ->
 fold_by_id(Db, Fun, AccIn, Opts) ->
   Ref = get_ref(Db),
   Prefix = << 0, 50, 0 >>,
-  {ok, Snapshot} = erocksdb:snapshot(Ref),
+  {ok, Snapshot} = rocksdb:snapshot(Ref),
   ReadOptions = [{snapshot, Snapshot}],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   Opts2 = [{read_options, ReadOptions} | Opts],
@@ -272,7 +272,7 @@ fold_by_id(Db, Fun, AccIn, Opts) ->
     end,
   
   try fold_prefix(Ref, Prefix, WrapperFun, AccIn, Opts2)
-  after erocksdb:release_snapshot(Snapshot)
+  after rocksdb:release_snapshot(Snapshot)
   end.
 
 changes_since(Db, Since, Fun, AccIn, Opts) when is_atom(Db) ->
@@ -280,7 +280,7 @@ changes_since(Db, Since, Fun, AccIn, Opts) when is_atom(Db) ->
   changes_since({ref, Ref}, Since, Fun, AccIn, Opts);
 changes_since({ref, Ref}, Since, Fun, AccIn, Opts) ->
   Prefix = << 0, 100, 0 >>,
-  {ok, Snapshot} = erocksdb:snapshot(Ref),
+  {ok, Snapshot} = rocksdb:snapshot(Ref),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOpts = [
     {start_key, <<Since:32>>},
@@ -319,7 +319,7 @@ changes_since({ref, Ref}, Since, Fun, AccIn, Opts) ->
     end,
   
   try fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOpts)
-  after erocksdb:release_snapshot(Snapshot)
+  after rocksdb:release_snapshot(Snapshot)
   end.
 
 change_with_revtree(Change, DocInfo, true) ->
@@ -351,7 +351,7 @@ write_system_doc(Db, DocId, Doc) ->
   call(Db, {put, EncKey, EncVal}).
 
 read_system_doc(Db, DocId) ->
-  case erocksdb:get(get_ref(Db), sys_key(DocId), []) of
+  case rocksdb:get(get_ref(Db), sys_key(DocId), []) of
     {ok, Bin} -> {ok, binary_to_term(Bin)};
     not_found -> {error, not_found};
     Error -> Error
@@ -381,7 +381,7 @@ find_by_key(Db, Path, Fun, AccIn, Options ) ->
   Max = proplists:get_value(limit_to_last, Options, 0),
   Prefix = idx_forward_path_key(Key),
   
-  {ok, Snapshot} = erocksdb:snapshot(Ref),
+  {ok, Snapshot} = rocksdb:snapshot(Ref),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOptions = [{gte, StartKey}, {lte, EndKey}, {max, Max}, {read_options, ReadOptions}],
   
@@ -403,7 +403,7 @@ find_by_key(Db, Path, Fun, AccIn, Options ) ->
     end,
   
   try fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOptions)
-  after erocksdb:release_snapshot(Snapshot)
+  after rocksdb:release_snapshot(Snapshot)
   end.
 
 fold_entries([DocId | Rest], Fun, Ref, ReadOptions, Acc) ->
@@ -571,11 +571,11 @@ init_db(Dir, Options) ->
              false ->
                [{create_if_missing, true} | RocksDbOptions]
            end,
-  erocksdb:open(Dir, DbOpts, []).
+  rocksdb:open(Dir, DbOpts).
 
 load_infos(Ref, Name, Dir, Ets) ->
   _ = ets:insert(Ets, {ref, Ref}),
-  case erocksdb:get(Ref, meta_key(0), []) of
+  case rocksdb:get(Ref, meta_key(0), []) of
     {ok, BinInfos} ->
       Infos = binary_to_term(BinInfos),
       ets:insert(Ets, maps:to_list(Infos#{ name => Name, dir => Dir }));
@@ -587,16 +587,16 @@ load_infos(Ref, Name, Dir, Ets) ->
         system_doc_count => 0,
         last_index_seq => 0
       },
-      ok = erocksdb:put(Ref, meta_key(0), term_to_binary(Infos), [{sync, true}]),
+      ok = rocksdb:put(Ref, meta_key(0), term_to_binary(Infos), [{sync, true}]),
       ets:insert(Ets, maps:to_list(Infos#{ name => Name, dir => Dir }))
   end,
   ok.
 
 do_delete_db(Dir) ->
-  (catch erocksdb:destroy(Dir, [])).
+  (catch rocksdb:destroy(Dir, [])).
 
 erocksdb_close(Ref) ->
-  Res = erocksdb:close(Ref),
+  Res = rocksdb:close(Ref),
   erlang:garbage_collect(),
   Res.
 
@@ -604,7 +604,7 @@ empty_doc_info() ->
   #{ current_rev => <<>>, revtree => #{}}.
 
 do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := Idx }) ->
-  DocInfo = case erocksdb:get(Ref, doc_key(DocId), []) of
+  DocInfo = case rocksdb:get(Ref, doc_key(DocId), []) of
               {ok, DI} -> binary_to_term(DI);
               not_found -> empty_doc_info();
               Error -> throw(Error)
@@ -639,7 +639,7 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
 
 
 bin_infos(Ref) ->
-  {ok, OldDbInfoBin} = erocksdb:get(Ref, meta_key(0), []),
+  {ok, OldDbInfoBin} = rocksdb:get(Ref, meta_key(0), []),
   binary_to_term(OldDbInfoBin).
 
 write_doc(Ref, DocId, LastSeq, Inc, DocInfo, Body) ->
@@ -659,7 +659,7 @@ write_doc(Ref, DocId, LastSeq, Inc, DocInfo, Body) ->
          undefined -> [];
          _ -> [{delete, seq_key(LastSeq)}]
        end,
-  erocksdb:write(Ref, Batch, [{sync, true}]).
+  rocksdb:write(Ref, Batch, [{sync, true}]).
 
 
 do_put(K, V, #{ ref := Ref, ets := Ets}) ->
@@ -670,7 +670,7 @@ do_put(K, V, #{ ref := Ref, ets := Ets}) ->
     {put, K, V},
     {put, meta_key(0), term_to_binary(DbInfo)}
   ],
-  case erocksdb:write(Ref, Batch, [{sync, true}]) of
+  case rocksdb:write(Ref, Batch, [{sync, true}]) of
     ok ->
       ets:update_counter(Ets, system_doc_count, {2, 1}),
       ok;
@@ -686,7 +686,7 @@ do_delete(K, #{ ref := Ref, ets := Ets}) ->
     {delete, K},
     {put, meta_key(0), term_to_binary(DbInfo)}
   ],
-  case erocksdb:write(Ref, Batch, [{sync, true}]) of
+  case rocksdb:write(Ref, Batch, [{sync, true}]) of
     ok ->
       ets:update_counter(Ets, system_doc_count, {2, -1}),
       ok;
@@ -697,7 +697,7 @@ do_delete(K, #{ ref := Ref, ets := Ets}) ->
 do_update_index_seq(Seq, #{ ref := Ref, ets := Ets}) ->
   OldDbInfo = bin_infos(Ref),
   DbInfo = OldDbInfo#{ last_index_seq =>  Seq },
-  ok = erocksdb:put(Ref, meta_key(0), term_to_binary(DbInfo), [{sync, true}]),
+  ok = rocksdb:put(Ref, meta_key(0), term_to_binary(DbInfo), [{sync, true}]),
   ets:insert(Ets, {last_index_seq, Seq}),
   ok.
 

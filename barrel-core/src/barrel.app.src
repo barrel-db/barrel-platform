@@ -11,7 +11,7 @@
      crypto,
      worker_pool,
      gproc,
-     erocksdb,
+     rocksdb,
      uuid
     ]},
    {env, []},
