@@ -127,7 +127,7 @@ update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths) ->
       Batch = [
         {put, barrel_rocksdb:idx_last_doc_key(DocId), term_to_binary(FullPaths)}
       ] ++ Ops,
-      erocksdb:write(Ref, Batch, [{sync, true}])
+      rocksdb:write(Ref, Batch, [{sync, true}])
   end.
 
 prepare_index([{put, Path, Entries} | Rest], KeyFun, Acc) ->
@@ -144,7 +144,7 @@ prepare_index([], _KeyFun, Acc) ->
 
 
 last_index_seq(Ref) ->
-  case erocksdb:get(Ref, barrel_rocksdb:meta_key(0), []) of
+  case rocksdb:get(Ref, barrel_rocksdb:meta_key(0), []) of
     {ok, BinInfo } ->
       #{ last_index_seq := Seq} = binary_to_term(BinInfo),
       {ok, Seq};
@@ -153,19 +153,19 @@ last_index_seq(Ref) ->
   end.
 
 index_get_last_doc(Ref, DocId) ->
-  case erocksdb:get(Ref, barrel_rocksdb:idx_last_doc_key(DocId), []) of
+  case rocksdb:get(Ref, barrel_rocksdb:idx_last_doc_key(DocId), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
 index_get_reverse_path(Ref, Path) ->
-  case erocksdb:get(Ref, barrel_rocksdb:idx_reverse_path_key(Path), []) of
+  case rocksdb:get(Ref, barrel_rocksdb:idx_reverse_path_key(Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
 index_get_forward_path(Ref, Path) ->
-  case erocksdb:get(Ref, barrel_rocksdb:idx_forward_path_key(Path), []) of
+  case rocksdb:get(Ref, barrel_rocksdb:idx_forward_path_key(Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.

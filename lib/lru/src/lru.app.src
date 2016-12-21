@@ -1,17 +1,10 @@
-{application, 'lru',
- [{description, "implements a fixed-size LRU cache"},
-  {vsn, "2.3.1"},
-  {registered, []},
-  {applications,
-   [kernel,
-    stdlib
-   ]},
-  {env,[]},
-  {modules, []},
-
-  {maintainers, [
-    "Benoit Chesneau",
-    "Constantin Rack"]},
-  {licenses, ["BSD"]},
-  {links, [{"Github", "https://gitlab.com/barrel-db/erlang-lru"}]}
- ]}.
+{application,lru,
+             [{description,"implements a fixed-size LRU cache"},
+              {vsn,"2.3.1"},
+              {registered,[]},
+              {applications,[kernel,stdlib]},
+              {env,[]},
+              {modules,[]},
+              {maintainers,["Benoit Chesneau","Constantin Rack"]},
+              {licenses,["BSD"]},
+              {links,[{"Github","https://gitlab.com/barrel-db/erlang-lru"}]}]}.
