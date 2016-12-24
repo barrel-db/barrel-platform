@@ -35,7 +35,7 @@ attach(Store, DocId, AttDescription, Options) ->
     {ok, _} -> {error, attachment_conflict};
     {error, not_found} ->
       Attachments2 = [AttDescription|Attachments],
-      barrel_store:put(Store, DocId, Doc#{?ATTTAG => Attachments2}, Options)
+      barrel_store:put(Store, Doc#{?ATTTAG => Attachments2}, Options)
   end.
 
 attach(Store, DocId, AttDescription, Binary, Options) ->
@@ -62,7 +62,7 @@ replace_attachment(Store, DocId, AttId, AttDescription, Options) ->
   Attachments = maps:get(?ATTTAG, Doc, []),
   AttId = maps:get(<<"id">>, AttDescription),
   NewAttachments = replace_att_doc(AttId, AttDescription, Attachments),
-  barrel_store:put(Store, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
+  barrel_store:put(Store, Doc#{?ATTTAG => NewAttachments}, Options).
 
 replace_attachment_binary(Store, DocId, AttId, Binary, Options) ->
   {ok, Doc} = barrel_store:get(Store, DocId, Options),
@@ -79,7 +79,7 @@ delete_attachment(Store, DocId, AttId, Options) ->
   {ok, Doc} = barrel_store:get(Store, DocId, Options),
   Attachments = maps:get(?ATTTAG, Doc, []),
   NewAttachments = delete_att_doc(AttId, Attachments),
-  barrel_store:put(Store, DocId, Doc#{?ATTTAG => NewAttachments}, Options).
+  barrel_store:put(Store, Doc#{?ATTTAG => NewAttachments}, Options).
 
 attachments(Store, DocId, Options) ->
   {ok, Doc} = barrel_store:get(Store, DocId, Options),

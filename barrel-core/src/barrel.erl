@@ -18,8 +18,8 @@
 %% DOC API
 
 -export([
-  put/4,
-  put_rev/5,
+  put/3,
+  put_rev/4,
   get/3,
   delete/4,
   post/3,
@@ -184,26 +184,24 @@ get(Store, DocId, Options) ->
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
--spec put(Store, DocId, Body, Options) -> Res when
+-spec put(Store, Doc, Options) -> Res when
   Store::store(),
-  DocId :: docid(),
-  Body :: doc(),
+  Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put(Store, DocId, Body, Options) ->
-  barrel_store:put(Store, DocId, Body, Options).
+put(Store, Doc, Options) ->
+  barrel_store:put(Store, Doc, Options).
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Store, DocId, Body, History, Options) -> Res when
+-spec put_rev(Store, Doc, History, Options) -> Res when
   Store::store(),
-  DocId :: docid(),
-  Body :: doc(),
+  Doc :: doc(),
   History :: [rev()],
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Store, DocId, Body, History, Options) ->
-  barrel_store:put_rev(Store, DocId, Body, History, Options).
+put_rev(Store, Doc, History, Options) ->
+  barrel_store:put_rev(Store, Doc, History, Options).
 
 %% @doc delete a document
 -spec delete(Store, DocId, RevId, Options) -> Res when

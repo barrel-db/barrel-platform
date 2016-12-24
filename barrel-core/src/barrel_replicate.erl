@@ -193,7 +193,7 @@ sync_revision(Source, Target, DocId, Revision, Metrics) ->
   {Doc, Metrics2} = read_doc_with_history(Source, DocId, Revision, Metrics),
   History = barrel_doc:parse_revisions(Doc),
   DocWithoutRevisions = maps:remove(<<"_revisions">>, Doc),
-  Metrics3 = write_doc(Target, DocId, DocWithoutRevisions, History, Metrics2),
+  Metrics3 = write_doc(Target, DocWithoutRevisions, History, Metrics2),
   Metrics3.
 
 read_doc_with_history(Source, Id, Rev, Metrics) ->
@@ -208,10 +208,10 @@ read_doc_with_history(Source, Id, Rev, Metrics) ->
       {undefined, Metrics2}
   end.
 
-write_doc(_, _, undefined, _, Metrics) ->
+write_doc(_, undefined, _, Metrics) ->
   Metrics;
-write_doc(Target, Id, Doc, History, Metrics) ->
-  PutRev = fun() -> put_rev(Target, Id, Doc, History, []) end,
+write_doc(Target, Doc, History, Metrics) ->
+  PutRev = fun() -> put_rev(Target, Doc, History, []) end,
   case timer:tc(PutRev) of
     {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
@@ -220,7 +220,7 @@ write_doc(Target, Id, Doc, History, Metrics) ->
     {_, Error} ->
       lager:error(
         "replicate write error on dbid=~p for docid=~p: ~w",
-        [Target, Id, Error]
+        [Target, maps:get(<<"id">>, Doc, undefined), Error]
       ),
       barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
@@ -239,10 +239,10 @@ get({Mod, ModState}, Id, Opts) ->
 get(Conn, Id, Opts) when is_atom(Conn) ->
   barrel_store:get(Conn, Id, Opts).
 
-put_rev({Mod, ModState}, Id, Doc, History, Opts) ->
-  Mod:put_rev(ModState, Id, Doc, History, Opts);
-put_rev(Conn, Id, Doc, History, Opts) when is_atom(Conn) ->
-  barrel_store:put_rev(Conn, Id, Doc, History, Opts).
+put_rev({Mod, ModState}, Doc, History, Opts) ->
+  Mod:put_rev(ModState, Doc, History, Opts);
+put_rev(Conn, Doc, History, Opts) when is_atom(Conn) ->
+  barrel_store:put_rev(Conn, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
