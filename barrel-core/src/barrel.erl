@@ -18,11 +18,11 @@
 %% DOC API
 
 -export([
-  put/3,
-  put_rev/4,
-  get/3,
-  delete/4,
   post/3,
+  put/3,
+  put_rev/3,
+  get/3,
+  delete/3,
   fold_by_id/4,
   changes_since/4,
   changes_since/5,
@@ -106,9 +106,15 @@
   | {ancestors, [rev()]}
 ].
 
--type write_options() :: [
-  {async, boolean()}
+-type update_options() :: [
+  {rev, rev()}
+  | {async, boolean()}
   | {timeout, integer()}
+].
+
+-type create_options() :: [
+{upsert, boolean()}
+| {timeout, integer()}
 ].
 
 -type conflict() ::
@@ -134,7 +140,8 @@
   rev/0,
   docid/0,
   read_options/0,
-  write_options/0,
+  update_options/0,
+  create_options/0,
   revid/0,
   revinfo/0,
   revtree/0,
@@ -187,38 +194,36 @@ get(Store, DocId, Options) ->
 -spec put(Store, Doc, Options) -> Res when
   Store::store(),
   Doc :: doc(),
-  Options :: write_options(),
+  Options :: update_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put(Store, Doc, Options) ->
   barrel_store:put(Store, Doc, Options).
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Store, Doc, History, Options) -> Res when
+-spec put_rev(Store, Doc, History) -> Res when
   Store::store(),
   Doc :: doc(),
   History :: [rev()],
-  Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Store, Doc, History, Options) ->
-  barrel_store:put_rev(Store, Doc, History, Options).
+put_rev(Store, Doc, History) ->
+  barrel_store:put_rev(Store, Doc, History).
 
 %% @doc delete a document
--spec delete(Store, DocId, RevId, Options) -> Res when
+-spec delete(Store, DocId, Options) -> Res when
   Store::store(),
   DocId :: docid(),
-  RevId :: rev(),
-  Options :: write_options(),
+  Options :: update_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-delete(Store, DocId, RevId, Options) ->
-  barrel_store:delete(Store, DocId, RevId, Options).
+delete(Store, DocId, Options) ->
+  barrel_store:delete(Store, DocId, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
 -spec post(Store, Doc, Options) -> Res when
   Store::store(),
   Doc :: doc(),
-  Options :: write_options(),
+  Options :: create_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 post(Store, Doc, Options) ->
   barrel_store:post(Store, Doc, Options).

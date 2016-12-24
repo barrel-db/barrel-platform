@@ -82,7 +82,7 @@ one_doc(_Config) ->
   {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:put(source, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel:post(source, Doc, []),
   timer:sleep(200),
   {ok, Doc2} = barrel:get(source, <<"a">>, []),
   {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
@@ -102,7 +102,7 @@ one_doc(_Config) ->
 source_not_empty(_Config) ->
   Name = <<"sourcenotempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:put(source, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel:post(source, Doc, []),
   {ok, Doc2} = barrel:get(source, <<"a">>, []),
   {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
@@ -113,12 +113,12 @@ source_not_empty(_Config) ->
 deleted_doc(_Config) ->
   Name = <<"deleteddoc">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(source, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:post(source, Doc, []),
 
   {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
   {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel:get(source, <<"a">>, []),
-  {ok, _, _} = barrel:delete(source, <<"a">>, RevId, []),
+  {ok, _, _} = barrel:delete(source, <<"a">>, [{rev, RevId}]),
   timer:sleep(400),
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),
@@ -305,24 +305,15 @@ purge_scenario(Map, Db) ->
 
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
-  case barrel:get(Db, Id, []) of
-    {ok, Doc} ->
-      Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel:put(Db, Doc2, []);
-    {error, not_found} ->
-      Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel:put(Db, Doc, [])
-  end.
+  Doc = #{<<"id">> => Id, <<"v">> => Value},
+  {ok,_,_} = barrel:post(Db, Doc, [{upsert, true}]),
+  ok.
+
 
 delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
-  case barrel:get(Db, Id, []) of
-    {error, not_found} -> ok;
-    {ok, Doc} ->
-      RevId = maps:get(<<"_rev">>, Doc),
-      {ok, _, _} = barrel:delete(Db, Id, RevId, []),
-      ok
-  end.
+  _ = barrel:delete(Db, Id, []),
+  ok.
 
 scenario() ->
   [ {put, "a", 1}
