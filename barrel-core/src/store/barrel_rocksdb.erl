@@ -610,7 +610,7 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
               Error -> throw(Error)
             end,
   case Fun(DocInfo) of
-    {ok, DocInfo2, Body, NewRev} ->
+    {ok, DocInfo2, NewDoc} ->
       Seq = ets:update_counter(Ets, last_update_seq, {2, 0}),
       LastSeq = maps:get(update_seq, DocInfo2, undefined),
       NewSeq = Seq + 1,
@@ -618,21 +618,20 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
               #{ deleted := true } -> -1;
               _ -> 1
             end,
-      case write_doc(Ref, DocId, LastSeq, Inc, DocInfo2#{ update_seq => NewSeq}, Body) of
+      case write_doc(Ref, DocId, LastSeq, Inc, DocInfo2#{ update_seq => NewSeq}, NewDoc) of
         ok ->
           ets:update_counter(Ets, last_update_seq, {2, 1}),
           ets:update_counter(Ets, doc_count, {2, Inc}),
           {ok, _Seq} = barrel_rocksdb_indexer:refresh_index(Idx, NewSeq),
           _ = do_update_index_seq(NewSeq, St),
           barrel_db_event:notify(Name, db_updated),
-          {ok, DocId, NewRev};
+          {ok, NewDoc};
         WriteError ->
           lager:error("db error: error writing ~p on ~p", [DocId, Name]),
           WriteError
       end;
-    ok ->
-      #{ current_rev := Rev } = DocInfo,
-      {ok, DocId, Rev};
+    {no_update, Doc} ->
+      {ok, Doc};
     Conflict ->
       {error, Conflict}
   end.

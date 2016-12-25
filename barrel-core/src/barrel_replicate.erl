@@ -213,7 +213,7 @@ write_doc(_, undefined, _, Metrics) ->
 write_doc(Target, Doc, History, Metrics) ->
   PutRev = fun() -> put_rev(Target, Doc, History) end,
   case timer:tc(PutRev) of
-    {Time, {ok, _, _}} ->
+    {Time, {ok, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;

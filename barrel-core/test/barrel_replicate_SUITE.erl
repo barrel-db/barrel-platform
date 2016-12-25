@@ -82,7 +82,7 @@ one_doc(_Config) ->
   {ok, Name} = barrel:start_replication(Name, source, testdb, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:post(source, Doc, []),
+  {ok, #{ <<"id">> := <<"a">>}} = barrel:post(source, Doc, []),
   timer:sleep(200),
   {ok, Doc2} = barrel:get(source, <<"a">>, []),
   {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
@@ -102,8 +102,7 @@ one_doc(_Config) ->
 source_not_empty(_Config) ->
   Name = <<"sourcenotempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:post(source, Doc, []),
-  {ok, Doc2} = barrel:get(source, <<"a">>, []),
+  {ok, Doc2} = barrel:post(source, Doc, []),
   {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
   {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
@@ -113,12 +112,12 @@ source_not_empty(_Config) ->
 deleted_doc(_Config) ->
   Name = <<"deleteddoc">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:post(source, Doc, []),
+  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId}} = barrel:post(source, Doc, []),
 
   {ok, Name} = barrel:start_replication(Name, source, testdb),
   timer:sleep(200),
   {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel:get(source, <<"a">>, []),
-  {ok, _, _} = barrel:delete(source, <<"a">>, [{rev, RevId}]),
+  ok = barrel:delete(source, <<"a">>, [{rev, RevId}]),
   timer:sleep(400),
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
   ok = barrel:stop_replication(Name),
@@ -306,7 +305,7 @@ purge_scenario(Map, Db) ->
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   Doc = #{<<"id">> => Id, <<"v">> => Value},
-  {ok,_,_} = barrel:post(Db, Doc, [{upsert, true}]),
+  {ok, _} = barrel:post(Db, Doc, [{upsert, true}]),
   ok.
 
 

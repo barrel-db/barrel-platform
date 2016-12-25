@@ -82,7 +82,7 @@ post(StoreName, Doc, Options) when is_map(Doc) ->
             conflict => Conflict,
             revtree => RevTree2
           },
-          {ok, DocInfo2, Doc2, NewRev};
+          {ok, DocInfo2, Doc2};
         Conflict ->
           Conflict
       end
@@ -141,7 +141,7 @@ put(StoreName, Doc, Options) when is_map(Doc) ->
             conflict => Conflict,
             revtree => RevTree2
           },
-          {ok, DocInfo2, Doc2, NewRev};
+          {ok, DocInfo2, Doc2};
         Conflict ->
           Conflict
       end
@@ -160,7 +160,9 @@ put_rev(StoreName, Doc, History) when is_map(Doc) ->
       #{revtree := RevTree} = DocInfo,
       {Idx, Parent} = find_parent(History, RevTree, 0),
       if
-        Idx =:= 0 -> ok;
+        Idx =:= 0 ->
+          #{ current_rev := Rev } = DocInfo,
+          {noupdate, Doc#{ <<"_rev">> => Rev} };
         true ->
           ToAdd = lists:sublist(History, Idx),
           RevTree2 = edit_revtree(ToAdd, Parent, Deleted, RevTree),
@@ -173,7 +175,7 @@ put_rev(StoreName, Doc, History) when is_map(Doc) ->
             revtree => RevTree2
           },
           Doc2 = Doc#{ <<"_rev">> => NewRev },
-          {ok, DocInfo2, Doc2, NewRev}
+          {ok, DocInfo2, Doc2}
       end
     end);
 put_rev(_, _, _) ->
@@ -211,7 +213,7 @@ get(StoreName, DocId, Options) ->
 
 delete(StoreName, DocId, Options) ->
   Rev = proplists:get_value(rev, Options, <<>>),
-  update_doc(
+  Res = update_doc(
     StoreName,
     DocId,
     fun(DocInfo) ->
@@ -252,11 +254,16 @@ delete(StoreName, DocId, Options) ->
             conflict => Conflict,
             revtree => RevTree2
           },
-          {ok, DocInfo2, Doc2, NewRev};
+          {ok, DocInfo2, Doc2};
         Error ->
           Error
       end
-    end).
+    end),
+  %% we do not return a doc on delete
+  case Res of
+    {ok, _} -> ok;
+    Error -> Error
+  end.
 
 fold_by_id(StoreName, Fun, Acc, Opts) ->
   Store = store_mod(StoreName),
