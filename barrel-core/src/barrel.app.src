@@ -9,8 +9,6 @@
      sasl,
      lager,
      crypto,
-     worker_pool,
-     gproc,
      rocksdb,
      uuid
     ]},

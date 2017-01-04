@@ -310,8 +310,6 @@ delete_attachment(Store, DocId, AttId, Options) ->
 attachments(Store, DocId, Options) ->
   barrel_attachments:attachments(Store, DocId, Options).
 
-
-
 %% replication API
 start_replication(Source, Target) ->
   start_replication(Source, Target, []).
@@ -337,7 +335,6 @@ stop_replication(Name) ->
 delete_replication(Name) ->
   barrel_replicate_manager:delete_replication(Name).
 
-  
 replication_info(Name) ->
   case barrel_replicate_manager:where(Name) of
     Pid when is_pid(Pid) -> barrel_replicate:info(Pid);
