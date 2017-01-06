@@ -43,19 +43,21 @@ decode_path(<<Codepoint/utf8, Rest/binary>>, [Current|Done]) ->
   decode_path(Rest, [<< Current/binary, Codepoint/utf8 >> | Done]).
 
 get(Path, Doc) ->
- try get_1(decode_path(Path), Doc, Doc)
- catch error:_ -> erlang:error(badarg)
- end.
+ get_1(decode_path(Path), Doc, Doc).
 
 get_1([Key | Rest], Obj, _Parent) when is_map(Obj) ->
   get_1(Rest, maps:get(Key, Obj), Obj);
-get_1([BinInt | Rest], Obj, _Parent) when is_list(Obj) ->
+get_1([BinInt | Rest], Obj, _Parent) when is_list(Obj) ->
   Idx = binary_to_integer(BinInt) + 1, %% erlang lists start at 1
   get_1(Rest, lists:nth(Idx, Obj), Obj);
 get_1([Key], Obj, Parent) ->
-  case jsx:decode(Key) of
-    Obj -> Parent;
-    _ -> erlang:error(badarg)
+  ToMatch = case jsx:is_json(Key) of
+              true -> jsx:decode(Key);
+              false -> Key
+            end,
+  if
+    Obj =:= ToMatch -> Parent;
+    true -> erlang:error(badarg)
   end;
 get_1([], Obj, _Parent) ->
   Obj.

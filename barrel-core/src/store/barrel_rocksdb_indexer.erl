@@ -112,7 +112,6 @@ process_changes(Changes, State0 = #{ ref := Ref }) ->
   {{ok, LastSeq}, State2}.
 
 
-
 update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths) ->
   Ops = prepare_index(
     ForwardOps, fun barrel_rocksdb:idx_forward_path_key/1,

@@ -266,7 +266,7 @@ find_by_key(_Config) ->
   timer:sleep(400),
   {ok, Doc1} = barrel:get(testdb, <<"AndersenFamily">>, []),
   Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
-  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
+  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
   [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(
                                      testdb, <<"id/AndersenFamily">>, Fun, [], []
                                     ),
