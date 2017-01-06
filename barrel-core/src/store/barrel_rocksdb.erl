@@ -338,8 +338,6 @@ changes_with_deleted(Change, RevId, RevTree) ->
     _ -> Change
   end.
 
-
-
 write_system_doc(Db, DocId, Doc) ->
   EncKey = sys_key(DocId),
   EncVal = term_to_binary(Doc),
@@ -415,7 +413,6 @@ parse_key(Path) ->
           lists:sublist(Parts, Len - 2, Len)
       end
   end.
-
 
 get_ref(Name) ->
   call(Name, get_ref).
