@@ -42,7 +42,7 @@ start_link(Parent, Name, Ref, Opts) ->
 init([Parent, Name, Ref, Opts]) ->
   {ok, UpdateSeq} = last_index_seq(Ref),
   IndexChangeSize = maps:get(index_changes_size, Opts, ?DEFAULT_CHANGES_SIZE),
-  
+
   State = #{
     parent => Parent,
     name => Name,
@@ -99,10 +99,10 @@ process_changes(Changes, State0 = #{ ref := Ref }) ->
   #{ update_seq := LastSeq } = State2 = lists:foldl(
     fun(Change = #{ seq := Seq }, State = #{ update_seq := OldSeq}) ->
       {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Ref),
-      
+
       ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
       ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
-      
+
       ok = update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths),
       State#{ update_seq => erlang:max(Seq, OldSeq) }
     end,
@@ -141,8 +141,6 @@ prepare_index([{delete, Path} | Rest], KeyFun, Acc) ->
 prepare_index([], _KeyFun, Acc) ->
   Acc.
 
-
-
 last_index_seq(Ref) ->
   case rocksdb:get(Ref, barrel_rocksdb:meta_key(0), []) of
     {ok, BinInfo } ->
@@ -172,59 +170,35 @@ index_get_forward_path(Ref, Path) ->
 
 
 merge_forward_paths(ToAdd, ToDel, DocId, St) ->
-  Ops0 = merge(
-    forward_paths(ToAdd, []), DocId, add, fun index_get_forward_path/2, St, []
-  ),
-  
-  merge(
-    forward_paths(ToDel, []), DocId, del, fun index_get_forward_path/2, St, Ops0
-  ).
+  ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
+  ToDel1 = lists:usort([lists:reverse(P) || P <- ToDel]),
+  Ops0 = merge(ToAdd1,  DocId, add, fun index_get_forward_path/2, St, []),
+  merge(ToDel1, DocId, del, fun index_get_forward_path/2, St, Ops0).
 
 merge_reverse_paths(ToAdd, ToDel, DocId, St) ->
-  Ops0 = merge(
-    reverse_paths(ToAdd, []), DocId, add, fun index_get_reverse_path/2, St, []
-  ),
-  
-  merge(
-    reverse_paths(ToDel, []), DocId, del, fun index_get_reverse_path/2, St, Ops0
-  ).
+  Ops0 = merge(ToAdd, DocId, add, fun index_get_reverse_path/2, St, []),
+  merge(ToDel, DocId, del, fun index_get_reverse_path/2, St, Ops0).
 
 
-merge([{Path, Sel} | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
+merge([Path | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
   case Fun(Ref, Path) of
-    {ok, Map} ->
-      case maps:find(Sel, Map) of
-        {ok, Entries} ->
-          Entries2 = case Op of
-                       add -> lists:usort([DocId | Entries]) ;
-                       del -> Entries -- [DocId]
-                     end,
-          Sz = length(Entries2),
-          Acc2 = if
-                   Sz > 0 ->
-                     Map2 = Map#{ Sel => Entries2 },
-                     [{put, Path, Map2} | Acc];
-                   true ->
-                     Map2 = maps:remove(Sel, Map),
-                     case maps:size(Map2) of
-                       0 ->  [{delete, Path} | Acc];
-                       _ ->  [{put, Path, Map2} | Acc]
-                     end
+    {ok, Entries} ->
+      Entries2 = case Op of
+                   add -> lists:usort([DocId | Entries]) ;
+                   del -> Entries -- [DocId]
                  end,
-          merge(Rest, DocId, Op, Fun, St, Acc2);
-        error ->
-          Acc2 = case Op of
-                   add ->
-                     [{put, Path, #{ Sel => [DocId]}} | Acc];
-                   del ->
-                     Acc
-                 end,
-          merge(Rest, DocId, Op, Fun, St, Acc2)
-      end;
+      Sz = length(Entries2),
+      Acc2 = if
+               Sz > 0 ->
+                 [{put, Path, Entries2} | Acc];
+               true ->
+                 [{delete, Path} | Acc]
+             end,
+      merge(Rest, DocId, Op, Fun, St, Acc2);
     not_found ->
       Acc2 = case Op of
                add ->
-                 [{put, Path, #{ Sel => [DocId]}} | Acc];
+                 [{put, Path, [DocId]} | Acc];
                del ->
                  Acc
              end,
@@ -241,159 +215,14 @@ analyze(Change, Ref) ->
                {ok, OldPaths1} -> OldPaths1;
                not_found -> []
              end,
-  
   case Del of
     true ->
       {[], OldPaths, DocId, []};
     false ->
-      Paths = flatten(Doc),
+      Paths = barrel_json:flatten(Doc),
       Removed = OldPaths -- Paths,
       Added = Paths -- OldPaths,
       {Added, Removed, DocId, Paths}
   end.
 
-%% TODO: should we encode the pos ?
-reverse_paths([{PathParts, Pos, Sel} | Rest], Acc) ->
-  Path = << (barrel_lib:binary_join(PathParts, <<"/">>))/binary, Pos:8 >>,
-  reverse_paths(Rest, [{Path, Sel} | Acc]);
-reverse_paths([], Acc) ->
-  lists:usort(Acc).
 
-forward_paths([{PathParts, Pos, Sel} | Rest], Acc) ->
-  Path = << (barrel_lib:binary_join(lists:reverse(PathParts), <<"/">>))/binary, Pos:8 >>,
-  forward_paths(Rest, [{Path, Sel} | Acc]);
-forward_paths([], Acc) ->
-  lists:usort(Acc).
-
-
-%% TODO: this part can be optimized in rust or C if needed
-flatten(Obj) ->
-  Flat = maps:fold(
-    fun
-      (<<"_", _/binary >>, _, Acc) -> Acc;
-      (Key, Val, Acc) when is_map(Val) ->
-        json_obj(Val, [Key, <<"$">>], 0, [], Acc);
-      (Key, Val, Acc) when is_list(Val) ->
-        json_array(Val, [Key, <<"$">>], 0, [], Acc);
-      (Key, Val, Acc) ->
-        [{[Val, Key, <<"$">>], 0, []} | Acc]
-    end,
-    [],
-    Obj
-  ),
-  Flat.
-
-json_obj(Obj, Root, Pos, Levels, Acc0) ->
-  maps:fold(
-    fun
-      (Key, Val, Acc) when is_map(Val) ->
-        case maybe_split([Key | Root]) of
-          {true, NRoot, Path} ->
-            json_obj(Val, NRoot, Pos + 1, Levels, [{Path, Pos, Levels} | Acc]);
-          {false, NRoot, _} ->
-            json_obj(Val, NRoot, Pos, Levels, Acc)
-        end;
-      (Key, Val, Acc) when is_list(Val) ->
-        case maybe_split([Key | Root]) of
-          {true, NRoot, Path} ->
-            json_array(Val, NRoot, Pos + 1, Levels, [{Path, Pos, Levels} | Acc]);
-          {false, NRoot, _} ->
-            json_array(Val, NRoot, Pos, Levels, Acc)
-        end;
-      (Key, Val, Acc) ->
-        [ {[Val, Key | lists:droplast(Root)], Pos + 1, Levels},
-          {[Key | Root], Pos, Levels} | Acc
-        ]
-    end,
-    Acc0,
-    Obj
-  ).
-
-json_array(Arr, Root, Pos, Levels, Acc) -> json_array_1(Arr, Root, 0, Pos, Levels, Acc).
-
-json_array_1([Item | Rest], Root, Idx, Pos, Levels, Acc) when is_map(Item) ->
-  Acc1 = case maybe_split([Idx | Root]) of
-           {true, NRoot, Path} ->
-             json_obj(Item, NRoot, Pos + 1, [Idx | Levels], [{Path, Pos, Levels} | Acc]);
-           {false, NRoot, _} ->
-             json_obj(Item, NRoot, Pos, [Idx | Levels], Acc)
-         end,
-  json_array_1(Rest, Root, Idx + 1, Pos, Levels, Acc1);
-json_array_1([Item | Rest], Root, Idx, Pos, Levels, Acc) when is_list(Item) ->
-  Acc1 = case maybe_split([Idx | Root]) of
-           {true, NRoot, Path} ->
-             json_array(Item, NRoot, Pos + 1, [Idx | Levels], [{Path, Pos, Levels} | Acc]);
-           {false, NRoot, _} ->
-             json_array(Item, NRoot, Pos, [Idx | Levels], Acc)
-         end,
-  json_array_1(Rest, Root, Idx + 1, Pos, Levels, Acc1);
-json_array_1([Item | Rest], Root, Idx, Pos, Levels, Acc) ->
-  Acc1 = [
-    {[Item, Idx | lists:droplast(Root)], Pos + 1, [Idx | Levels] },
-    {[Idx | Root], Pos , Levels} | Acc
-  ],
-  json_array_1(Rest, Root, Idx + 1, Pos, Levels, Acc1);
-json_array_1([], _Root, _Idx, _Pos, _Levels, Acc) ->
-  Acc.
-
-maybe_split(Parts) ->
-  Len = length(Parts),
-  if
-    Len =:= 3 ->
-      NParts = lists:droplast(Parts),
-      {true, NParts, Parts};
-    true ->
-      {false, Parts, nil}
-  end.
-
-
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
-flatten_test() ->
-  Doc =
-    #{
-      <<"a">> => 1,
-      <<"b">> => <<"2">>,
-      <<"c">> => #{
-        <<"a">> => 1,
-        <<"b">> => [<<"a">>, <<"b">>, <<"c">>],
-        <<"c">> => #{ <<"a">> => 1}
-      },
-      <<"d">> => [<<"a">>, <<"b">>, <<"c">>],
-      <<"e">> => [#{<<"a">> => 1}, #{ <<"b">> => 2}]
-    },
-  
-  Expected = [
-    {[1, <<"a">>, <<"$">>], 0, []},
-    {[<<"2">>, <<"b">>, <<"$">>], 0, []},
-    {[<<"a">>, <<"c">>, <<"$">>], 0, []},
-    {[1, <<"a">>, <<"c">>], 1, []},
-    {[<<"b">>, <<"c">>, <<"$">>], 0, []},
-    {[0, <<"b">>, <<"c">>], 1, []},
-    {[<<"a">>, 0, <<"b">>], 2, [0]},
-    {[1, <<"b">>, <<"c">>], 1, []},
-    {[<<"b">>, 1, <<"b">>], 2, [1]},
-    {[2, <<"b">>, <<"c">>], 1, []},
-    {[<<"c">>, 2, <<"b">>], 2, [2]},
-    {[<<"c">>, <<"c">>, <<"$">>], 0, []},
-    {[<<"a">>, <<"c">>, <<"c">>], 1, []},
-    {[1, <<"a">>, <<"c">>], 2, []},
-    {[2, <<"d">>, <<"$">>], 0, []},
-    {[<<"c">>, 2, <<"d">>], 1, [2]},
-    {[ 1, <<"d">>, <<"$">>], 0, []},
-    {[<<"b">>, 1, <<"d">>], 1, [1]},
-    {[0, <<"d">>, <<"$">>], 0, []},
-    {[<<"a">>, 0, <<"d">>], 1, [0]},
-    {[0, <<"e">>, <<"$">>], 0, []},
-    {[<<"a">>, 0, <<"e">>], 1, [0]},
-    {[1, <<"a">>, 0], 2, [0]},
-    {[1, <<"e">>, <<"$">>], 0, []},
-    {[<<"b">>, 1, <<"e">>], 1, [1]},
-    {[2, <<"b">>, 1], 2, [1]}
-  
-  ],
-  ?assertEqual(lists:sort(Expected), lists:sort(flatten(Doc))).
-
--endif.

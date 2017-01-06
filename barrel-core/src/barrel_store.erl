@@ -30,7 +30,7 @@
   write_system_doc/3,
   read_system_doc/2,
   delete_system_doc/2,
-  find_by_key/5
+  query/5
 ]).
 
 
@@ -330,9 +330,8 @@ delete_system_doc(StoreName, DocId) ->
   Store:delete_system_doc(StoreName, DocId).
 
 
-find_by_key(StoreName, Path, Fun, AccIn, Options) ->
-  Store = store_mod(StoreName),
-  Store:find_by_key(StoreName, Path, Fun, AccIn, Options).
+query(StoreName, Path, Fun, AccIn, Options) ->
+  barrel_query:query(StoreName, Path, Fun, AccIn, Options).
 
 store_mod(Name) ->
   case catch ets:lookup_element(barrel_stores, Name, 2) of

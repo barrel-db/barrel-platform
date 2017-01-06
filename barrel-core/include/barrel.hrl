@@ -3,7 +3,7 @@
 
 -define(default_fold_options,
   #{
-    start_key => first,
+    start_key => nil,
     end_key => nil,
     gt => nil,
     gte => nil,

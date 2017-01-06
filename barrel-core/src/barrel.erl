@@ -273,7 +273,8 @@ changes_since(Store, Since, Fun, Acc, Opts) ->
   AccOut :: any(),
   Error :: {error, term()}.
 find_by_key(Store, Path, Fun, AccIn, Opts) ->
-  barrel_store:find_by_key(Store, Path, Fun, AccIn, Opts).
+  lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
+  barrel_store:query(Store, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Store, DocId, RevIds) -> Res when
@@ -310,8 +311,6 @@ delete_attachment(Store, DocId, AttId, Options) ->
 attachments(Store, DocId, Options) ->
   barrel_attachments:attachments(Store, DocId, Options).
 
-
-
 %% replication API
 start_replication(Source, Target) ->
   start_replication(Source, Target, []).
@@ -337,7 +336,6 @@ stop_replication(Name) ->
 delete_replication(Name) ->
   barrel_replicate_manager:delete_replication(Name).
 
-  
 replication_info(Name) ->
   case barrel_replicate_manager:where(Name) of
     Pid when is_pid(Pid) -> barrel_replicate:info(Pid);

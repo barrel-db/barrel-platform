@@ -28,7 +28,6 @@
   get_doc/6,
   fold_by_id/4,
   changes_since/5,
-  find_by_key/5,
   write_system_doc/3,
   read_system_doc/2,
   delete_system_doc/2
@@ -37,6 +36,8 @@
 -export([start_link/2]).
 
 -export([
+  get_ref/1,
+  get_doc1/7,
   fold_prefix/5,
   meta_key/1,
   idx_forward_path_key/1,
@@ -104,19 +105,14 @@ infos(Db) ->
   Info.
 
 update_doc(Db, DocId, Fun) ->
-  Res = call(Db, {update_doc, DocId, Fun}),
-  lager:info(
-    "barrel_rocksdb:update_doc(~p, ~p, _) -> ~p",
-    [Db, DocId, Res]
-  ),
-  Res.
+  call(Db, {update_doc, DocId, Fun}).
 
 
 get_doc(Db, DocId, Rev, WithHistory, MaxHistory, HistoryFrom) ->
   Ref = get_ref(Db),
   {ok, Snapshot} = rocksdb:snapshot(Ref),
   ReadOptions = [{snapshot, Snapshot}],
-  
+
   try get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, HistoryFrom, ReadOptions)
   after rocksdb:release_snapshot(Snapshot)
   end.
@@ -128,7 +124,7 @@ get_doc1(Ref, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
                 <<"">> -> maps:get(current_rev, DocInfo);
                 UserRev -> UserRev
               end,
-      
+
       case get_doc_rev(Ref, DocId, RevId, ReadOptions) of
         {ok, #{ <<"_deleted">> := true }} when Rev =:= <<"">> ->
           {error, not_found};
@@ -166,7 +162,7 @@ get_doc_info({ref, Ref}, DocId, ReadOptions) ->
 
 fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   ReadOptions = proplists:get_value(read_options, Opts, []),
-  
+
   {ok, Itr} = rocksdb:iterator(Db, ReadOptions),
   try do_fold_prefix(Itr, Prefix, Fun, AccIn, barrel_lib:parse_fold_options(Opts))
   after rocksdb:iterator_close(Itr)
@@ -256,7 +252,7 @@ fold_by_id(Db, Fun, AccIn, Opts) ->
   ReadOptions = [{snapshot, Snapshot}],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   Opts2 = [{read_options, ReadOptions} | Opts],
-  
+
   WrapperFun =
     fun(_Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
@@ -267,10 +263,10 @@ fold_by_id(Db, Fun, AccIn, Opts) ->
                 get_doc_rev(Ref, DocId, RevId, ReadOptions);
               false -> {ok, nil}
             end,
-      
+
       Fun(DocId, DocInfo, Doc, Acc)
     end,
-  
+
   try fold_prefix(Ref, Prefix, WrapperFun, AccIn, Opts2)
   after rocksdb:release_snapshot(Snapshot)
   end.
@@ -289,7 +285,7 @@ changes_since({ref, Ref}, Since, Fun, AccIn, Opts) ->
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   WithHistory = proplists:get_value(history, Opts, last) =:= all,
   WithRevtree =  proplists:get_value(revtree, Opts, false) =:= true,
-  
+
   WrapperFun =
     fun(Key, BinDocInfo, Acc) ->
       DocInfo = binary_to_term(BinDocInfo),
@@ -298,12 +294,12 @@ changes_since({ref, Ref}, Since, Fun, AccIn, Opts) ->
       RevId = maps:get(current_rev, DocInfo),
       DocId = maps:get(id, DocInfo),
       RevTree = maps:get(revtree, DocInfo),
-      
+
       Changes = case WithHistory of
                   false -> [RevId];
                   true ->  barrel_revtree:history(RevId, RevTree)
                 end,
-      
+
       %% create change
       Change = change_with_revtree(
         change_with_doc(
@@ -317,7 +313,7 @@ changes_since({ref, Ref}, Since, Fun, AccIn, Opts) ->
       ),
       Fun(Seq, Change, Acc)
     end,
-  
+
   try fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOpts)
   after rocksdb:release_snapshot(Snapshot)
   end.
@@ -343,8 +339,6 @@ changes_with_deleted(Change, RevId, RevTree) ->
     _ -> Change
   end.
 
-
-
 write_system_doc(Db, DocId, Doc) ->
   EncKey = sys_key(DocId),
   EncVal = term_to_binary(Doc),
@@ -360,84 +354,6 @@ read_system_doc(Db, DocId) ->
 delete_system_doc(Db, DocId) ->
   EncKey = sys_key(DocId),
   call(Db, {delete, EncKey}).
-
-
-find_by_key(Db, Path, Fun, AccIn, Options ) ->
-  Ref = get_ref(Db),
-  {Key, Offset, Sel} = case Path of
-                         <<>> -> {<<"$">>, 0, []};
-                         <<"/">> -> {<<"$">>, 0, []};
-                         _ ->
-                           find_key(<< "$.", Path/binary >>)
-                       end,
-  StartKey = case proplists:get_value(start_at, Options) of
-               undefined -> nil;
-               Start -> << "/", (barrel_lib:to_binary(Start))/binary >>
-             end,
-  EndKey = case proplists:get_value(end_at, Options) of
-             undefined -> nil;
-             End -> << "/", (barrel_lib:to_binary(End))/binary >>
-           end,
-  Max = proplists:get_value(limit_to_last, Options, 0),
-  Prefix = idx_forward_path_key(Key),
-  
-  {ok, Snapshot} = rocksdb:snapshot(Ref),
-  ReadOptions = [{snapshot, Snapshot}],
-  FoldOptions = [{gte, StartKey}, {lte, EndKey}, {max, Max}, {read_options, ReadOptions}],
-  
-  WrapperFun =
-    fun(KeyBin, BinMap, Acc) ->
-      PathSize = byte_size(KeyBin) - 1,
-      << _Path:PathSize/binary, KeyOffset:8 >> = KeyBin,
-      if
-        KeyOffset > Offset -> {stop, Acc};
-        true ->
-          Map = binary_to_term(BinMap),
-          case maps:find(Sel, Map) of
-            {ok, Entries} ->
-              fold_entries(Entries, Fun, Ref, ReadOptions, Acc);
-            error ->
-              {ok, Acc}
-          end
-      end
-    end,
-  
-  try fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOptions)
-  after rocksdb:release_snapshot(Snapshot)
-  end.
-
-fold_entries([DocId | Rest], Fun, Ref, ReadOptions, Acc) ->
-  Res = get_doc1(Ref, DocId, <<>>, false, 0, [], ReadOptions),
-  case Res of
-    {ok, Doc} ->
-      case Fun(DocId, Doc, Acc) of
-        {ok, Acc2} ->
-          fold_entries(Rest, Fun, Ref, ReadOptions, Acc2);
-        Else ->
-          Else
-      end;
-    _ ->
-      {ok, Acc}
-  end;
-fold_entries([], _Fun, _Ref, _ReadOptions, Acc) ->
-  {ok, Acc}.
-
-find_key(Path) ->
-  Parts = binary:split(Path, <<".">>, [global]),
-  parse_parts(Parts, 0, 0, []).
-
-parse_parts(Parts, _N, Offset, Levels) when length(Parts) =< 3 ->
-  {barrel_lib:binary_join(Parts, <<"/">>), Offset, Levels};
-parse_parts([<< $[, _/binary >> = Item | Rest], N, Offset, Levels) ->
-  [<<>>, BinInt, <<>>] = binary:split(Item, [<<"[">>,<<"]">>], [global]),
-  Idx = binary_to_integer(BinInt),
-  N2 = N + 1,
-  if
-    N2 =:= 3 ->
-      parse_parts(Rest, 0, Offset + 1, [Idx | Levels]);
-    true ->
-      parse_parts(Rest, N2, Offset, [Idx | Levels])
-  end.
 
 get_ref(Name) ->
   call(Name, get_ref).
@@ -516,7 +432,7 @@ handle_call(delete_db, _From, State=#{ ref := Ref, ets := Ets, dir := Dir}) ->
   _ = (catch ets:delete(Ets)),
   do_delete_db(Dir),
   {stop, normal, ok, maps:remove(ref, State)};
-  
+
 
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
@@ -664,7 +580,7 @@ write_doc(Ref, DocId, LastSeq, Inc, DocInfo, Body) ->
 do_put(K, V, #{ ref := Ref, ets := Ets}) ->
   #{ system_doc_count := Count} = OldDbInfo = bin_infos(Ref),
   DbInfo = OldDbInfo#{ system_doc_count => Count + 1 },
-  
+
   Batch = [
     {put, K, V},
     {put, meta_key(0), term_to_binary(DbInfo)}
@@ -680,7 +596,7 @@ do_put(K, V, #{ ref := Ref, ets := Ets}) ->
 do_delete(K, #{ ref := Ref, ets := Ets}) ->
   #{ system_doc_count := Count} = OldDbInfo = bin_infos(Ref),
   DbInfo = OldDbInfo#{ system_doc_count => Count -1 },
-  
+
   Batch = [
     {delete, K},
     {put, meta_key(0), term_to_binary(DbInfo)}
@@ -715,6 +631,13 @@ rev_key(DocId, Rev) -> << DocId/binary, 1, Rev/binary >>.
 
 idx_last_doc_key(DocId) -> <<  0, 400, 0, DocId/binary >>.
 
-idx_forward_path_key(Path) -> << 0, 410, 0, Path/binary >>.
+idx_forward_path_key(Path) -> << 0, 410, 0, (encode_path(Path))/binary >>.
 
-idx_reverse_path_key(Path) -> << 0, 420, 0, Path/binary >>.
+idx_reverse_path_key(Path) -> << 0, 420, 0, (encode_path(Path))/binary >>.
+
+encode_path(Path) -> encode_path(Path, <<>>).
+
+encode_path([P | R], Acc) ->
+  encode_path(R, << Acc/binary, (sext:encode(P))/binary, "/" >>);
+encode_path([], Acc) ->
+  Acc.
