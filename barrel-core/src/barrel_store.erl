@@ -30,7 +30,8 @@
   write_system_doc/3,
   read_system_doc/2,
   delete_system_doc/2,
-  query/5
+  query/5,
+  query/6
 ]).
 
 
@@ -332,6 +333,9 @@ delete_system_doc(StoreName, DocId) ->
 
 query(StoreName, Path, Fun, AccIn, Options) ->
   barrel_query:query(StoreName, Path, Fun, AccIn, Options).
+
+query(StoreName, Path, Fun, AccIn, OrderBy, Options) ->
+  barrel_query:query(StoreName, Path, Fun, AccIn, OrderBy, Options).
 
 store_mod(Name) ->
   case catch ets:lookup_element(barrel_stores, Name, 2) of

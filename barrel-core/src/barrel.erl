@@ -30,6 +30,11 @@
 ]).
 
 -export([
+  query/5,
+  query/6
+]).
+
+-export([
   find_by_key/5
 ]).
 
@@ -263,7 +268,7 @@ changes_since(Store, Since, Fun, Acc, Opts) ->
   barrel_store:changes_since(Store, Since, Fun, Acc, Opts).
 
 %% @doc find in the index a document by its path
--spec find_by_key(Store, Path, Fun, AccIn, Options) -> AccOut | Error when
+-spec query(Store, Path, Fun, AccIn, Options) -> AccOut | Error when
   Store::store(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
@@ -272,6 +277,24 @@ changes_since(Store, Since, Fun, Acc, Opts) ->
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
+query(Store, Path, Fun, AccIn, Opts) ->
+  barrel_store:query(Store, Path, Fun, AccIn, Opts).
+
+%% @doc find in the index a document
+-spec query(Store, Path, Fun, AccIn, OrderBy, Options) -> AccOut | Error when
+  Store::store(),
+  Path :: binary(),
+  FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
+  Fun :: fun((DocId :: docid(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  OrderBy :: order_by_key | order_by_value | {order_by_child, ChildKey :: binary()},
+  Options :: fold_options(),
+  AccIn :: any(),
+  AccOut :: any(),
+  Error :: {error, term()}.
+query(Store, Path, Fun, AccIn, OrderBy, Opts) ->
+  barrel_store:query(Store, Path, Fun, AccIn, OrderBy, Opts).
+
+%% @deprecated
 find_by_key(Store, Path, Fun, AccIn, Opts) ->
   lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
   barrel_store:query(Store, Path, Fun, AccIn, Opts).
