@@ -28,7 +28,6 @@
   get_doc/6,
   fold_by_id/4,
   changes_since/5,
-  find_by_key/5,
   write_system_doc/3,
   read_system_doc/2,
   delete_system_doc/2
@@ -37,6 +36,8 @@
 -export([start_link/2]).
 
 -export([
+  get_ref/1,
+  get_doc1/7,
   fold_prefix/5,
   meta_key/1,
   idx_forward_path_key/1,
@@ -353,66 +354,6 @@ read_system_doc(Db, DocId) ->
 delete_system_doc(Db, DocId) ->
   EncKey = sys_key(DocId),
   call(Db, {delete, EncKey}).
-
-%% TODO: force the query to pass the "$." first?
-find_by_key(Db, Path, Fun, AccIn, Options ) ->
-  Ref = get_ref(Db),
-  Key= parse_key(Path),
-
-  StartKey = case proplists:get_value(start_at, Options) of
-               undefined -> nil;
-               Start -> idx_forward_path_key(parse_key(Start))
-             end,
-  EndKey = case proplists:get_value(end_at, Options) of
-             undefined -> nil;
-             End -> idx_forward_path_key(parse_key(End))
-           end,
-  Max = proplists:get_value(limit_to_last, Options, 0),
-  Prefix = idx_forward_path_key(Key),
-
-  {ok, Snapshot} = rocksdb:snapshot(Ref),
-  ReadOptions = [{snapshot, Snapshot}],
-  FoldOptions = [{gte, StartKey}, {lte, EndKey}, {max, Max}, {read_options, ReadOptions}],
-
-  WrapperFun =
-    fun(_KeyBin, BinEntries, Acc) ->
-        Entries = binary_to_term(BinEntries),
-        fold_entries(Entries, Fun, Ref, ReadOptions, Acc)
-    end,
-
-  try fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOptions)
-  after rocksdb:release_snapshot(Snapshot)
-  end.
-
-fold_entries([DocId | Rest], Fun, Ref, ReadOptions, Acc) ->
-  Res = get_doc1(Ref, DocId, <<>>, false, 0, [], ReadOptions),
-  case Res of
-    {ok, Doc} ->
-      case Fun(DocId, Doc, Acc) of
-        {ok, Acc2} ->
-          fold_entries(Rest, Fun, Ref, ReadOptions, Acc2);
-        Else ->
-          Else
-      end;
-    _ ->
-      {ok, Acc}
-  end;
-fold_entries([], _Fun, _Ref, _ReadOptions, Acc) ->
-  {ok, Acc}.
-
-parse_key(Path) ->
-  case Path of
-    <<>> -> <<"$">>;
-    <<"/">> -> <<"$">>;
-    _ ->
-      Parts = barrel_json:decode_path(<< "$/", Path/binary >>),
-      Len = length(Parts),
-      if
-        Len =< 3 -> Parts;
-        true ->
-          lists:sublist(Parts, Len - 2, Len)
-      end
-  end.
 
 get_ref(Name) ->
   call(Name, get_ref).

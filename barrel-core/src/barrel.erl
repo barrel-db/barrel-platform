@@ -273,7 +273,8 @@ changes_since(Store, Since, Fun, Acc, Opts) ->
   AccOut :: any(),
   Error :: {error, term()}.
 find_by_key(Store, Path, Fun, AccIn, Opts) ->
-  barrel_store:find_by_key(Store, Path, Fun, AccIn, Opts).
+  lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
+  barrel_store:query(Store, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Store, DocId, RevIds) -> Res when
