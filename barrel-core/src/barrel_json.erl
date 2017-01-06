@@ -31,15 +31,14 @@ decode_path(_) ->
 
 decode_path(<<>>, Acc) ->
   lists:reverse(Acc);
-decode_path(<< $., Rest/binary >>, Acc) ->
+decode_path(<< $~, $0, Rest/binary >>, [Current |Done]) ->
+  decode_path(Rest, [ << Current/binary, $~ >> | Done ]);
+decode_path(<< $~, $1, Rest/binary >>, [Current |Done]) ->
+  decode_path(Rest, [ << Current/binary, $/ >> | Done ]);
+decode_path(<< $/, Rest/binary >>, Acc) ->
   decode_path(Rest, [<<>> |Acc]);
-decode_path(<< $[, Rest/binary >>, Acc) ->
-  decode_path(Rest, [<<>> | Acc]);
-decode_path(<< $], Rest/binary >>, Acc) ->
-  decode_path(Rest, Acc);
 decode_path(<<Codepoint/utf8, Rest/binary>>, []) ->
   decode_path(Rest, [<< Codepoint/utf8 >>]);
-
 decode_path(<<Codepoint/utf8, Rest/binary>>, [Current|Done]) ->
   decode_path(Rest, [<< Current/binary, Codepoint/utf8 >> | Done]).
 
@@ -155,22 +154,22 @@ maybe_split(Parts) ->
    }).
 
 decode_path_test() ->
-  ?assertEqual([<<"c">>, <<"a">>], decode_path(<<"c.a">>)),
-  ?assertEqual([<<"c">>, <<"b">>, <<"0">>], decode_path(<<"c.b[0]">>)),
+  ?assertEqual([<<"c">>, <<"a">>], decode_path(<<"c/a">>)),
+  ?assertEqual([<<"c">>, <<"b">>, <<"0">>], decode_path(<<"c/b/0">>)),
   ?assertEqual([<<"c">>, <<"a">>], [<<"c">>, <<"a">>]),
   ?assertError(badarg, decode_path(1)).
 
 
 get_test() ->
   ?assertEqual(1, get(<<"a">>, ?doc)),
-  ?assertEqual(1, get(<<"c.a">>, ?doc)),
-  ?assertEqual(1, get(<<"c.c.a">>, ?doc)),
-  ?assertEqual([<<"a">>, <<"b">>, <<"c">>], get(<<"c.b">>, ?doc)),
-  ?assertEqual(<<"a">>, get(<<"c.b[0]">>, ?doc)),
-  ?assertEqual(<<"b">>, get(<<"c.b[1]">>, ?doc)),
-  ?assertEqual(1, get(<<"e[0].a">>, ?doc)),
-  ?assertEqual(?doc, get(<<"a.1">>, ?doc)),
-  ?assertError(badarg, get(<<"a.c">>, ?doc)).
+  ?assertEqual(1, get(<<"c/a">>, ?doc)),
+  ?assertEqual(1, get(<<"c/c/a">>, ?doc)),
+  ?assertEqual([<<"a">>, <<"b">>, <<"c">>], get(<<"c/b">>, ?doc)),
+  ?assertEqual(<<"a">>, get(<<"c/b/0">>, ?doc)),
+  ?assertEqual(<<"b">>, get(<<"c/b/1">>, ?doc)),
+  ?assertEqual(1, get(<<"e/0/a">>, ?doc)),
+  ?assertEqual(?doc, get(<<"a/1">>, ?doc)),
+  ?assertError(badarg, get(<<"a/c">>, ?doc)).
 
 flatten_test() ->
   Expected = [

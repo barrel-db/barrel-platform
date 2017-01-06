@@ -405,7 +405,7 @@ parse_key(Path) ->
     <<>> -> <<"$">>;
     <<"/">> -> <<"$">>;
     _ ->
-      Parts = barrel_json:decode_path(<< "$.", Path/binary >>),
+      Parts = barrel_json:decode_path(<< "$/", Path/binary >>),
       Len = length(Parts),
       if
         Len =< 3 -> Parts;

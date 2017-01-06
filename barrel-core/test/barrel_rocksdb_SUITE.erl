@@ -179,7 +179,7 @@ change_since(_Config) ->
   {ok, #{ <<"id">> := <<"aa">>}} = barrel:post(testdb, Doc, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, #{ <<"id">> := <<"bb">>}} = barrel:post(testdb, Doc2, []),
-  
+
   {ok, _} = barrel:get(testdb, <<"bb">>, []),
   [<<"bb">>, <<"aa">>] = barrel:changes_since(testdb, 0, Fun, []),
   [<<"bb">>] = barrel:changes_since(testdb, 1, Fun, []),
@@ -268,7 +268,8 @@ find_by_key(_Config) ->
   Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
   [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
   [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(
-    testdb, <<"id.AndersenFamily">>, Fun, [], []),
+                                     testdb, <<"id/AndersenFamily">>, Fun, [], []
+                                    ),
   ok.
-  
-  
+
+
