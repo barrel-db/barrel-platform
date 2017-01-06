@@ -407,24 +407,15 @@ parse_key(Path) ->
     <<>> -> <<"$">>;
     <<"/">> -> <<"$">>;
     _ ->
-      Parts = binary:split(<< "$.", Path/binary >>, <<".">>, [global]),
+      Parts = barrel_json:decode_path(<< "$.", Path/binary >>),
       Len = length(Parts),
       if
         Len =< 3 -> Parts;
         true ->
-          Parts1 = lists:sublist(Parts, Len - 2, Len),
-          parse_parts(Parts1, [])
+          lists:sublist(Parts, Len - 2, Len)
       end
   end.
 
-parse_parts([<< $[, _/binary >> = Item | Rest], Acc) ->
-  [<<>>, BinInt, <<>>] = binary:split(Item, [<<"[">>,<<"]">>], [global]),
-  Idx = binary_to_integer(BinInt),
-  parse_parts(Rest, [Idx| Acc]);
-parse_parts([Item | Rest], Acc) ->
-  parse_parts(Rest, [Item | Acc]);
-parse_parts([], Acc) ->
-  lists:reverse(Acc).
 
 get_ref(Name) ->
   call(Name, get_ref).

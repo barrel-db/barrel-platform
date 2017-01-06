@@ -13,13 +13,46 @@
 %% the License.
 
 %% @doc miscellaneous functions to manipulate JSONs
+%%
+%% TODO: this part can be optimized in rust or C if needed
 
 -module(barrel_json).
 
+-export([decode_path/1]).
+-export([get/2]).
 -export([flatten/1]).
 
+decode_path(Path) ->
+  decode_path(Path, []).
+
+decode_path(<<>>, Acc) ->
+  lists:reverse(Acc);
+decode_path(<< $., Rest/binary >>, Acc) ->
+  decode_path(Rest, [<<>> |Acc]);
+decode_path(<< $[, Rest/binary >>, Acc) ->
+  decode_path(Rest, [<<>> | Acc]);
+decode_path(<< $], Rest/binary >>, Acc) ->
+  decode_path(Rest, Acc);
+decode_path(<<Codepoint/utf8, Rest/binary>>, []) ->
+  decode_path(Rest, [<< Codepoint/utf8 >>]);
+
+decode_path(<<Codepoint/utf8, Rest/binary>>, [Current|Done]) ->
+  decode_path(Rest, [<< Current/binary, Codepoint/utf8 >> | Done]).
+
+get(Path, Doc) ->
+  try get_1(decode_path(Path), Doc)
+  catch error:_ -> erlang:error(badarg)
+  end.
+
+get_1([Key | Rest], Obj) when is_map(Obj) ->
+  get_1(Rest, maps:get(Key, Obj));
+get_1([BinInt | Rest], Obj) when is_list(Obj) ->
+  Idx = binary_to_integer(BinInt) + 1, %% erlang lists start at 1
+  get_1(Rest, lists:nth(Idx, Obj));
+get_1([], Obj) ->
+  Obj.
+
 %% @doc flatten a json in triplets
-%% TODO: this part can be optimized in rust or C if needed
 flatten(Obj) ->
   Flat = maps:fold(
     fun
@@ -99,20 +132,33 @@ maybe_split(Parts) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-flatten_test() ->
-  Doc =
-    #{
-      <<"a">> => 1,
-      <<"b">> => <<"2">>,
-      <<"c">> => #{
+-define(doc,
+  #{
+    <<"a">> => 1,
+    <<"b">> => <<"2">>,
+    <<"c">> => #{
         <<"a">> => 1,
         <<"b">> => [<<"a">>, <<"b">>, <<"c">>],
         <<"c">> => #{ <<"a">> => 1}
-      },
-      <<"d">> => [<<"a">>, <<"b">>, <<"c">>],
-      <<"e">> => [#{<<"a">> => 1}, #{ <<"b">> => 2}]
-    },
+       },
+    <<"d">> => [<<"a">>, <<"b">>, <<"c">>],
+    <<"e">> => [#{<<"a">> => 1}, #{ <<"b">> => 2}]
+   }).
 
+decode_path_test() ->
+  ?assertEqual([<<"c">>, <<"a">>], decode_path(<<"c.a">>)),
+  ?assertEqual([<<"c">>, <<"b">>, <<"0">>], decode_path(<<"c.b[0]">>)).
+
+get_test() ->
+  ?assertEqual(1, get(<<"a">>, ?doc)),
+  ?assertEqual(1, get(<<"c.a">>, ?doc)),
+  ?assertEqual(1, get(<<"c.c.a">>, ?doc)),
+  ?assertEqual([<<"a">>, <<"b">>, <<"c">>], get(<<"c.b">>, ?doc)),
+  ?assertEqual(<<"a">>, get(<<"c.b[0]">>, ?doc)),
+  ?assertEqual(<<"b">>, get(<<"c.b[1]">>, ?doc)),
+  ?assertError(badarg, get(<<"a.c">>, ?doc)).
+
+flatten_test() ->
   Expected = [
     [1, <<"a">>, <<"$">>],
     [<<"2">>, <<"b">>, <<"$">>],
@@ -142,6 +188,6 @@ flatten_test() ->
     [2, <<"b">>, 1]
 
   ],
-  ?assertEqual(lists:sort(Expected), lists:sort(flatten(Doc))).
+  ?assertEqual(lists:sort(Expected), lists:sort(flatten(?doc))).
 
 -endif.
