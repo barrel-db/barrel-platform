@@ -106,7 +106,7 @@ binary_join([], _Sep) ->
   <<>>;
 binary_join([Part], _Sep) ->
   to_binary(Part);
-binary_join([Head|Tail]=B, Sep) ->
+binary_join([Head|Tail], Sep) ->
   lists:foldl(
     fun (Value, Acc) -> <<Acc/binary, Sep/binary, (to_binary(Value))/binary>> end,
     to_binary(Head),
