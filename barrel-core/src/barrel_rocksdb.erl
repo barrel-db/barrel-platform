@@ -1,10 +1,10 @@
-%% Copyright 2016, Benoit Chesneau
+%% Copyright (c) 2017. Benoit Chesneau
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
 %% the License at
 %%
-%%   http://www.apache.org/licenses/LICENSE-2.0
+%%    http://www.apache.org/licenses/LICENSE-2.0
 %%
 %% Unless required by applicable law or agreed to in writing, software
 %% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -404,7 +404,7 @@ init([Name, Options]) ->
   {ok, Ref} = init_db(DbDir, Options),
   Ets = ets:new(tab_name(Name), [ordered_set, protected, named_table]),
   ok = load_infos(Ref, Name, DbDir, Ets),
-  {ok, Indexer} = barrel_rocksdb_indexer:start_link(self(), Name, Ref, Options),
+  {ok, Indexer} = barrel_indexer:start_link(self(), Name, Ref, Options),
   {ok, #{ name => Name, dir => DbDir, ref => Ref, ets => Ets, indexer => Indexer}}.
 
 handle_call(get_ref, _From, State = #{ ref := Ref }) ->
@@ -538,7 +538,7 @@ do_update(DocId, Fun, St = #{ name := Name, ref := Ref, ets := Ets, indexer := I
         ok ->
           ets:update_counter(Ets, last_update_seq, {2, 1}),
           ets:update_counter(Ets, doc_count, {2, Inc}),
-          {ok, _Seq} = barrel_rocksdb_indexer:refresh_index(Idx, NewSeq),
+          {ok, _Seq} = barrel_indexer:refresh_index(Idx, NewSeq),
           _ = do_update_index_seq(NewSeq, St),
           barrel_db_event:notify(Name, db_updated),
           {ok, NewDoc};
