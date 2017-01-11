@@ -80,34 +80,39 @@ store_exists(_Config) ->
   true = filelib:is_dir(<<"data/testdb">>),
   ok.
 
+
 basic_op(_Config) ->
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := _}} = barrel:post(testdb, Doc, []),
-  ok = barrel:delete(testdb, <<"a">>, []),
+  {ok, <<"a">>, _RevId} = barrel:post(testdb, Doc, []),
+  {ok, <<"a">>, _RevId2} = barrel:delete(testdb, <<"a">>, []),
   {error, not_found} = barrel:get(testdb, <<"a">>, []).
 
 create_doc(_Config) ->
   Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId}} =  barrel:post(testdb, Doc, []),
+  {ok, <<"a">>, RevId} =  barrel:post(testdb, Doc, []),
   {ok, #{<<"id">> := <<"a">>, <<"v">> := 1}} = barrel:get(testdb, <<"a">>, []),
   Doc2 = Doc#{ <<"v">> => 2 },
   {error, {conflict, doc_exists}} =  barrel:post(testdb, Doc2, []),
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId2}} =  barrel:post(testdb, Doc2, [{upsert, true}]),
+  {ok, <<"a">>, RevId2}  =  barrel:post(testdb, Doc2, [{upsert, true}]),
+  true = RevId /= RevId2,
+  true = RevId /= RevId2,
   true = RevId /= RevId2,
   {ok, #{<<"id">> := <<"a">>, <<"v">> := 2}} = barrel:get(testdb, <<"a">>, []).
 
 update_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId}=Doc2} = barrel:post(testdb, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:post(testdb, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId},
   {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId2}=Doc4} = barrel:put(testdb, Doc3, []),
+  {ok, <<"a">>, RevId2} = barrel:put(testdb, Doc3, []),
   true = (RevId =/= RevId2),
+  Doc4 = Doc3#{<<"_rev">> => RevId2},
   {ok, Doc4} = barrel:get(testdb, <<"a">>, []),
-  ok = barrel:delete(testdb, <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel:delete(testdb, <<"a">>, []),
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
-  {ok, _} = barrel:put(testdb, Doc, []).
+  {ok, <<"a">>, _RevId3} = barrel:put(testdb, Doc, []).
 
 bad_doc(_Config) ->
   Doc = #{ <<"v">> => 1},
@@ -116,38 +121,42 @@ bad_doc(_Config) ->
     error:{bad_doc, invalid_docid} -> ok
   end.
 
+
+
 get_revisions(_Config) ->
   Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"_rev">> := RevId}=Doc2} =  barrel:post(testdb, Doc, []),
-  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
+  {ok, DocId, RevId} =  barrel:post(testdb, Doc, []),
+  {ok, Doc2} = barrel:get(testdb, DocId, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, #{ <<"_rev">> := RevId2}} = barrel:put(testdb, Doc3, []),
-  {ok, Doc4} = barrel:get(testdb, <<"a">>, [{history, true}]),
+  {ok, DocId, RevId2} = barrel:put(testdb, Doc3, []),
+  {ok, Doc4} = barrel:get(testdb, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
 
 put_rev(_Config) ->
   Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"_rev">> := RevId}=Doc2} =  barrel:post(testdb, Doc, []),
+  {ok, DocId, RevId} =  barrel:post(testdb, Doc, []),
+  {ok, Doc2} = barrel:get(testdb, DocId, []),
   Doc3 = Doc2#{ v => 2},
-  {ok, #{ <<"_rev">> := RevId2}} = barrel:put(testdb, Doc3, []),
+  {ok, DocId, RevId2} = barrel:put(testdb, Doc3, []),
   Doc4_0 = Doc2#{ v => 3 },
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc4_0),
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
-  {ok, _} = barrel:put_rev(testdb, Doc4, History),
-  {ok, Doc5} = barrel:get(testdb, <<"a">>, [{history, true}]),
+  {ok, DocId, _RevId3} = barrel:put_rev(testdb, Doc4, History),
+  {ok, Doc5} = barrel:get(testdb, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
 
+
 fold_by_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"a">>}} = barrel:post(testdb, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel:post(testdb, Doc, []),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"b">>}} = barrel:post(testdb, Doc2, []),
+  {ok, <<"b">>, _RevId2} = barrel:post(testdb, Doc2, []),
   Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"c">>}} = barrel:post(testdb, Doc3, []),
+  {ok, <<"c">>, _RevId3} = barrel:post(testdb, Doc3, []),
   Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
       DocId = barrel_doc:id(FoldDoc),
       {ok, [DocId | Acc1]}
@@ -176,16 +185,15 @@ change_since(_Config) ->
         end,
   [] = barrel:changes_since(testdb, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"aa">>}} = barrel:post(testdb, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel:post(testdb, Doc, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"bb">>}} = barrel:post(testdb, Doc2, []),
-
+  {ok, <<"bb">>, _RevId2} = barrel:post(testdb, Doc2, []),
   {ok, _} = barrel:get(testdb, <<"bb">>, []),
   [<<"bb">>, <<"aa">>] = barrel:changes_since(testdb, 0, Fun, []),
   [<<"bb">>] = barrel:changes_since(testdb, 1, Fun, []),
   [] = barrel:changes_since(testdb, 2, Fun, []),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"cc">>}} = barrel:put(testdb, Doc3, []),
+  {ok, <<"cc">>, _RevId3} = barrel:put(testdb, Doc3, []),
   [<<"cc">>] = barrel:changes_since(testdb, 2, Fun, []),
   ok.
 
@@ -195,7 +203,8 @@ change_since_include_doc(_Config) ->
       {ok, [{Seq, maps:get(doc, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"aa">>}=Doc1} = barrel:post(testdb, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel:post(testdb, Doc, []),
+  {ok, Doc1} = barrel:get(testdb, <<"aa">>, []),
   [Change] = barrel:changes_since(testdb, 0, Fun, [], [{include_doc, true}]),
   {1, Doc1} = Change,
   ok.
@@ -213,12 +222,12 @@ change_since_many(_Config) ->
                K = integer_to_binary(N),
                Key = <<"doc", K/binary>>,
                Doc = #{ <<"id">> => Key, <<"v">> => 1},
-               {ok, #{ <<"id">> := Key}} = barrel:post(testdb, Doc, [])
+               {ok, Key, _RevId} = barrel:post(testdb, Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
 
   %% Delete doc1
-  ok = barrel:delete(testdb, <<"doc1">>, []),
+  {ok, <<"doc1">>, _} = barrel:delete(testdb, <<"doc1">>, []),
 
   %% 20 changes (for doc1 to doc20)
   All = barrel:changes_since(testdb, 0, Fun, [], [{history, all}]),
@@ -237,9 +246,9 @@ change_since_many(_Config) ->
 
 revdiff(_Config) ->
   Doc = #{ <<"id">> => <<"revdiff">>, <<"v">> => 1},
-  {ok, #{ <<"id">> := <<"revdiff">>}=Doc2} = barrel:post(testdb, Doc, []),
-  Doc3 = Doc2#{<<"v">> => 2},
-  {ok, _} = barrel:put(testdb, Doc3, []),
+  {ok, <<"revdiff">>, RevId} = barrel:post(testdb, Doc, []),
+  Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
+  {ok, <<"revdiff">>, _RevId3} = barrel:put(testdb, Doc2, []),
   {ok, [<<"1-missing">>], []} = barrel:revsdiff(testdb, <<"revdiff">>, [<<"1-missing">>]),
   ok.
 
@@ -262,9 +271,11 @@ find_by_key(_Config) ->
     <<"creationDate">> => 1431620472,
     <<"isRegistered">> => true
   },
-  {ok, #{ <<"id">> := <<"AndersenFamily">>}} = barrel:post(testdb, Doc, []),
+  {ok, <<"AndersenFamily">>, _Rev} = barrel:post(testdb, Doc, []),
   timer:sleep(400),
   {ok, Doc1} = barrel:get(testdb, <<"AndersenFamily">>, []),
+  
+  lager:info("ici", []),
   Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
   [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
   [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(

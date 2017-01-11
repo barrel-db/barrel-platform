@@ -47,6 +47,7 @@
   store_infos/1
 ]).
 
+
 -export([
   attach/4,
   attach/5,
@@ -199,7 +200,7 @@ get(Store, DocId, Options) ->
   Store::store(),
   Doc :: doc(),
   Options :: update_options(),
-  Res :: {ok, doc()} | {error, conflict()} | {error, any()}.
+  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put(Store, Doc, Options) ->
   barrel_store:put(Store, Doc, Options).
 
@@ -209,7 +210,7 @@ put(Store, Doc, Options) ->
   Store::store(),
   Doc :: doc(),
   History :: [rev()],
-  Res ::  {ok, doc()} | {error, conflict()} | {error, any()}.
+  Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put_rev(Store, Doc, History) ->
   barrel_store:put_rev(Store, Doc, History).
 
@@ -218,7 +219,7 @@ put_rev(Store, Doc, History) ->
   Store::store(),
   DocId :: docid(),
   Options :: update_options(),
-  Res :: ok | {error, conflict()} | {error, any()}.
+  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 delete(Store, DocId, Options) ->
   barrel_store:delete(Store, DocId, Options).
 
@@ -228,7 +229,7 @@ delete(Store, DocId, Options) ->
   Store::store(),
   Doc :: doc(),
   Options :: create_options(),
-  Res :: {ok, doc()} | {error, conflict()} | {error, any()}.
+  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 post(Store, Doc, Options) ->
   barrel_store:post(Store, Doc, Options).
 
