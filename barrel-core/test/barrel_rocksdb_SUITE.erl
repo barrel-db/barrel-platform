@@ -191,7 +191,6 @@ fold_by_id(_Config) ->
 
 change_since(_Config) ->
   Fun = fun(_Seq, Change, Acc) ->
-    io:format("fuck ", []),
                   Id = maps:get(id, Change),
                   {ok, [Id|Acc]}
         end,
