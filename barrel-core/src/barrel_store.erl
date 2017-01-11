@@ -20,10 +20,10 @@
 -export([
   infos/1,
   put/3,
-  post/3,
-  put_rev/3,
+  put_rev/4,
   get/3,
-  delete/3,
+  delete/4,
+  post/3,
   fold_by_id/4,
   changes_since/5,
   revsdiff/3,
@@ -48,67 +48,38 @@ infos(StoreName) ->
   Store = store_mod(StoreName),
   Store:infos(StoreName).
 
-get_id(#{ <<"id">> := DocId }) -> DocId;
-get_id(_) -> erlang:error({bad_doc, invalid_docid}).
+%% TODO: handle attachment
+get(StoreName, DocId, Options) ->
+  Store = store_mod(StoreName),
+  Rev = proplists:get_value(rev, Options, <<"">>),
+  WithHistory = proplists:get_value(history, Options, false),
+  MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
+  Ancestors = proplists:get_value(ancestors, Options, []),
+  Store:get_doc(StoreName, DocId, Rev, WithHistory, MaxHistory, Ancestors).
 
-post(StoreName, Doc, Options) when is_map(Doc) ->
-  DocId = get_id(Doc),
-  Upsert = proplists:get_value(upsert, Options) =:= true,
-  update_doc(
-    StoreName,
-    DocId,
-    fun(DocInfo) ->
-      #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = if
-              CurrentRev /= <<>>, Upsert =:= false ->
-                {conflict, doc_exists};
-              CurrentRev =:=  <<>> ->
-                {ok, 1, <<>>};
-              true ->
-                {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
-                {ok, CurrentGen + 1, CurrentRev}
-            end,
-      case Res of
-        {ok, NewGen, ParentRev} ->
-          NewRev = barrel_doc:revid(NewGen, ParentRev, Doc),
-          RevInfo = #{  id => NewRev,  parent => ParentRev},
-          RevTree2 = barrel_revtree:add(RevInfo, RevTree),
-          Doc2 = Doc#{<<"_rev">> => NewRev},
-          %% update the doc infos
-          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-          DocInfo2 = DocInfo#{
-            id => DocId,
-            current_rev => WinningRev,
-            branched => Branched,
-            conflict => Conflict,
-            revtree => RevTree2
-          },
-          {ok, DocInfo2, Doc2, NewRev};
-        Conflict ->
-          Conflict
-      end
-    end);
-post(_, _, _) ->
-  erlang:error(badarg).
-
-get_rev(undefined, #{ << "_rev">> := Rev }) -> Rev;
-get_rev(Rev, #{ << "_rev">> := Rev }) when is_binary(Rev) -> Rev;
-get_rev(Rev, _) when is_binary(Rev) -> Rev;
-get_rev(undefined, _) -> <<>>;
-get_rev(_, _) -> erlang:error(invalid_rev).
 
 put(StoreName, Doc, Options) when is_map(Doc) ->
   DocId = get_id(Doc),
-  Rev = get_rev(proplists:get_value(rev, Options), Doc),
+  Rev = barrel_doc:rev(Doc),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Doc),
+  Lww = proplists:get_value(lww, Options, false),
+  
   update_doc(
     StoreName,
     DocId,
     fun(DocInfo) ->
       #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = case Rev of
-              <<>> ->
+      Res = case {Lww, Rev} of
+              {true, _} ->
+                if
+                  CurrentRev /= <<>> ->
+                    {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                    {ok, CurrentGen + 1, CurrentRev};
+                  true ->
+                    {ok, Gen + 1, <<>>}
+                end;
+              {false, <<>>} ->
                 if
                   CurrentRev /= <<>> ->
                     case maps:get(CurrentRev, RevTree) of
@@ -121,7 +92,7 @@ put(StoreName, Doc, Options) when is_map(Doc) ->
                   true ->
                     {ok, Gen + 1, Rev}
                 end;
-              _ ->
+              {false, _} ->
                 case barrel_revtree:is_leaf(Rev, RevTree) of
                   true -> {ok, Gen + 1, Rev};
                   false -> {conflict, revision_conflict}
@@ -150,7 +121,7 @@ put(StoreName, Doc, Options) when is_map(Doc) ->
 put(_, _, _) ->
   erlang:error(badarg).
 
-put_rev(StoreName, Doc, History) when is_map(Doc) ->
+put_rev(StoreName, Doc, History, _Options) when is_map(Doc) ->
   DocId = get_id(Doc),
   [NewRev |_] = History,
   Deleted = barrel_doc:deleted(Doc),
@@ -177,7 +148,7 @@ put_rev(StoreName, Doc, History) when is_map(Doc) ->
           {ok, DocInfo2, Doc2, NewRev}
       end
     end);
-put_rev(_, _, _) ->
+put_rev(_, _, _, _) ->
   erlang:error(badarg).
 
 edit_revtree([RevId], Parent, Deleted, Tree) ->
@@ -201,63 +172,18 @@ find_parent([RevId | Rest], RevTree, I) ->
 find_parent([], _RevTree, I) ->
   {I, <<"">>}.
 
-%% TODO: handle attachment
-get(StoreName, DocId, Options) ->
-  Store = store_mod(StoreName),
-  Rev = proplists:get_value(rev, Options, <<"">>),
-  WithHistory = proplists:get_value(history, Options, false),
-  MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
-  Ancestors = proplists:get_value(ancestors, Options, []),
-  Store:get_doc(StoreName, DocId, Rev, WithHistory, MaxHistory, Ancestors).
+delete(StoreName, DocId, RevId, Options) ->
+  put(StoreName, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
-delete(StoreName, DocId, Options) ->
-  Rev = proplists:get_value(rev, Options, <<>>),
-  update_doc(
-    StoreName,
-    DocId,
-    fun(DocInfo) ->
-      #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = case Rev of
-              <<>> ->
-                if
-                  CurrentRev /= <<>> ->
-                    case maps:get(CurrentRev, RevTree) of
-                      #{deleted := true} -> {error, not_found};
-                      _ ->
-                        {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
-                        {ok, CurrentGen + 1, CurrentRev}
-                    end;
-                  true ->
-                    {error, not_found}
-                end;
-              _ ->
-                {Gen, _} = barrel_doc:parse_revision(Rev),
-                case barrel_revtree:is_leaf(Rev, RevTree) of
-                  true -> {ok, Gen + 1, Rev};
-                  false -> {conflict, revision_conflict}
-                end
-            end,
-      case Res of
-        {ok, NewGen, ParentRev} ->
-          Doc = #{<<"id">> => DocId, <<"_rev">> => ParentRev, <<"_deleted">> => true},
-          NewRev = barrel_doc:revid(NewGen, Rev, Doc),
-          RevInfo = #{  id => NewRev,  parent => ParentRev,  deleted => true},
-          RevTree2 = barrel_revtree:add(RevInfo, RevTree),
-          Doc2 = Doc#{<<"_rev">> => NewRev},
-          %% update the doc infos
-          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-          DocInfo2 = DocInfo#{
-            id => DocId,
-            current_rev => WinningRev,
-            branched => Branched,
-            conflict => Conflict,
-            revtree => RevTree2
-          },
-          {ok, DocInfo2, Doc2, NewRev};
-        Error ->
-          Error
-      end
-    end).
+
+post(_StoreName, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
+post(StoreName, Doc, Options) ->
+  DocId = case barrel_doc:id(Doc) of
+            undefined -> barrel_lib:uniqid();
+            Id -> Id
+          end,
+  put(StoreName, Doc#{<<"id">> => DocId}, Options).
+
 
 fold_by_id(StoreName, Fun, Acc, Opts) ->
   Store = store_mod(StoreName),
@@ -307,6 +233,7 @@ revsdiff1(RevTree, RevIds) ->
   {ok, lists:reverse(Missing), lists:usort(PossibleAncestors)}.
 
 
+
 update_doc(StoreName, DocId, Fun) ->
   Store = store_mod(StoreName),
   Store:update_doc(StoreName, DocId, Fun).
@@ -329,6 +256,9 @@ query(StoreName, Path, Fun, AccIn, Options) ->
 
 query(StoreName, Path, Fun, AccIn, OrderBy, Options) ->
   barrel_query:query(StoreName, Path, Fun, AccIn, OrderBy, Options).
+
+get_id(#{ <<"id">> := DocId }) -> DocId;
+get_id(_) -> erlang:error({bad_doc, invalid_docid}).
 
 store_mod(Name) ->
   case catch ets:lookup_element(barrel_stores, Name, 2) of

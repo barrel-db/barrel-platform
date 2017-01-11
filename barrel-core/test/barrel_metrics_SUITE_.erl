@@ -68,10 +68,10 @@ replicate_ok(_Config) ->
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:post(source(), Doc, []),
+  {ok, <<"a">>, RevId} = barrel_db:put(source(), Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
-  {ok, Doc2} = barrel:get(target(), <<"a">>, []),
+  {ok, Doc2} = barrel_db:get(target(), <<"a">>, []),
   
   [Stats] = barrel_task_status:all(),
   io:format("what are my stats? ~p~n", [Stats]),
@@ -92,7 +92,7 @@ replicate_read_fail(_Config) ->
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:post(source(), Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_db:put(source(), Doc, []),
   timer:sleep(200),
 
   [Stats] = barrel_task_status:all(),
@@ -107,12 +107,12 @@ replicate_read_fail(_Config) ->
 
 replicate_write_fail(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:post(source(), Doc, []),
-  meck:new(barrel, [passthrough]),
+  {ok, <<"a">>, _RevId} = barrel_db:put(source(), Doc, []),
+  meck:new(barrel_db, [passthrough]),
   MeckPutRev = fun(_Db, _Id, _Doc, _History, _Options) ->
                 {error, from_mock}
             end,
-  meck:expect(barrel, put_rev, MeckPutRev),
+  meck:expect(barrel_db, put_rev, MeckPutRev),
 
   Options = [{metrics_freq, 100}],
   {ok, RepId} = barrel:start_replication(source(), target(), Options),

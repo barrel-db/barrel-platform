@@ -211,7 +211,7 @@ read_doc_with_history(Source, Id, Rev, Metrics) ->
 write_doc(_, undefined, _, Metrics) ->
   Metrics;
 write_doc(Target, Doc, History, Metrics) ->
-  PutRev = fun() -> put_rev(Target, Doc, History) end,
+  PutRev = fun() -> put_rev(Target, Doc, History, []) end,
   case timer:tc(PutRev) of
     {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
@@ -239,10 +239,10 @@ get({Mod, ModState}, Id, Opts) ->
 get(Conn, Id, Opts) when is_atom(Conn) ->
   barrel_store:get(Conn, Id, Opts).
 
-put_rev({Mod, ModState}, Doc, History) ->
-  Mod:put_rev(ModState, Doc, History);
-put_rev(Conn, Doc, History) when is_atom(Conn) ->
-  barrel_store:put_rev(Conn, Doc, History).
+put_rev({Mod, ModState}, Doc, History, Opts) ->
+  Mod:put_rev(ModState, Doc, History, Opts);
+put_rev(Conn, Doc, History, Opts) when is_atom(Conn) ->
+  barrel_store:put_rev(Conn, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);

@@ -54,7 +54,7 @@ end_per_suite(Config) ->
 attachment_doc(_Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_store:post(testdb, Doc, []),
+  {ok, <<"a">>, R1} = barrel_store:put(testdb, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
@@ -77,7 +77,7 @@ attachment_doc(_Config) ->
 binary_attachment(_Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_store:post(testdb, Doc, []),
+  {ok, <<"a">>, R1} = barrel_store:put(testdb, Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
