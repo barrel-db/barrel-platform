@@ -30,7 +30,6 @@
   store_exists/1,
   basic_op/1,
   update_doc/1,
-  update_doc_lwww/1,
   bad_doc/1,
   create_doc/1,
   fold_by_id/1,
@@ -48,7 +47,6 @@ all() ->
     store_exists,
     basic_op,
     update_doc,
-    update_doc_lwww,
     bad_doc,
     create_doc,
     get_revisions,
@@ -105,19 +103,6 @@ update_doc(_Config) ->
   {ok, <<"a">>, _RevId2} = barrel:delete(testdb, <<"a">>, RevId2, []),
   {error, not_found} = barrel:get(testdb, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel:put(testdb, Doc, []).
-
-update_doc_lwww(_Config) ->
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel:put(testdb, Doc, []),
-  {ok, Doc2} = barrel:get(testdb, <<"a">>, []),
-  #{ <<"v">> := 1 } = Doc2,
-
-  Doc3 = #{ <<"id">> => <<"a">>, <<"v">> => 2},
-  {error, {conflict, doc_exists}} = barrel:put(testdb, Doc3, []),
-
-  {ok, <<"a">>, _RevId2} = barrel:put(testdb, Doc3, [{lww, true}]),
-  {ok, Doc4} = barrel:get(testdb, <<"a">>, []),
-  #{ <<"v">> := 2 } = Doc4.
 
 bad_doc(_Config) ->
   Doc = #{ <<"v">> => 1},

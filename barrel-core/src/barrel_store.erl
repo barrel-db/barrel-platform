@@ -63,36 +63,26 @@ put(StoreName, Doc, Options) when is_map(Doc) ->
   Rev = barrel_doc:rev(Doc),
   {Gen, _} = barrel_doc:parse_revision(Rev),
   Deleted = barrel_doc:deleted(Doc),
-  Lww = proplists:get_value(lww, Options, false),
-  
   update_doc(
     StoreName,
     DocId,
     fun(DocInfo) ->
       #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = case {Lww, Rev} of
-              {true, _} ->
-                if
-                  CurrentRev /= <<>> ->
-                    {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
-                    {ok, CurrentGen + 1, CurrentRev};
-                  true ->
-                    {ok, Gen + 1, <<>>}
-                end;
-              {false, <<>>} ->
+      Res = case Rev of
+              <<>> ->
                 if
                   CurrentRev /= <<>> ->
                     case maps:get(CurrentRev, RevTree) of
-                      #{deleted := true} ->
+                      #{ deleted := true} ->
                         {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
                         {ok, CurrentGen + 1, CurrentRev};
                       _ ->
                         {conflict, doc_exists}
                     end;
                   true ->
-                    {ok, Gen + 1, Rev}
+                    {ok, Gen + 1, <<>>}
                 end;
-              {false, _} ->
+              _ ->
                 case barrel_revtree:is_leaf(Rev, RevTree) of
                   true -> {ok, Gen + 1, Rev};
                   false -> {conflict, revision_conflict}
