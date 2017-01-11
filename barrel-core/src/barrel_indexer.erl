@@ -169,7 +169,7 @@ index_get_forward_path(Ref, Path) ->
 
 
 merge_forward_paths(ToAdd, ToDel, DocId, St) ->
-  ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
+  ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
   ToDel1 = lists:usort([lists:reverse(P) || P <- ToDel]),
   Ops0 = merge(ToAdd1,  DocId, add, fun index_get_forward_path/2, St, []),
   merge(ToDel1, DocId, del, fun index_get_forward_path/2, St, Ops0).
