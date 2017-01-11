@@ -14,7 +14,7 @@
 
 %% Created by benoitc on 03/09/16.
 
--module(barrel_rocksdb_SUITE).
+-module(barrel_db_SUITE).
 -author("Benoit Chesneau").
 
 %% API
@@ -38,8 +38,7 @@
   change_since_include_doc/1,
   revdiff/1,
   get_revisions/1,
-  put_rev/1,
-  find_by_key/1
+  put_rev/1
 ]).
 
 all() ->
@@ -55,8 +54,7 @@ all() ->
     change_since_many,
     change_since_include_doc,
     revdiff,
-    put_rev,
-    find_by_key
+    put_rev
   ].
 
 init_per_suite(_Config) ->
@@ -249,35 +247,3 @@ revdiff(_Config) ->
   {ok, <<"revdiff">>, _RevId3} = barrel:put(testdb, Doc2, []),
   {ok, [<<"1-missing">>], []} = barrel:revsdiff(testdb, <<"revdiff">>, [<<"1-missing">>]),
   ok.
-
-
-find_by_key(_Config) ->
-  Doc = #{
-    <<"id">> => <<"AndersenFamily">>,
-    <<"lastName">> => <<"Andersen">>,
-    <<"parents">> => [
-      #{ <<"firstName">> => <<"Thomas">> },
-      #{ <<"firstName">> => <<"Mary Kay">>}
-    ],
-    <<"children">> => [
-      #{
-        <<"firstName">> => <<"Henriette Thaulow">>, <<"gender">> => <<"female">>, <<"grade">> =>  5,
-        <<"pets">> => [#{ <<"givenName">> => <<"Fluffy">> }]
-      }
-    ],
-    <<"address">> => #{ <<"state">> => <<"WA">>, <<"county">> => <<"King">>, <<"city">> => <<"seattle">> },
-    <<"creationDate">> => 1431620472,
-    <<"isRegistered">> => true
-  },
-  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(testdb, Doc, []),
-  timer:sleep(400),
-  {ok, Doc1} = barrel:get(testdb, <<"AndersenFamily">>, []),
-  
-  lager:info("ici", []),
-  Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
-  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:find_by_key(testdb, <<"id">>, Fun, [], []),
-  [{<<"AndersenFamily">>, Doc1}] = barrel:find_by_key(
-                                     testdb, <<"id/AndersenFamily">>, Fun, [], []
-                                    ),
-  ok.
-
