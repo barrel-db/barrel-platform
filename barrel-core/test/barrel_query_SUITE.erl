@@ -32,22 +32,22 @@ all() ->
     order_by_key
   ].
 
-init_per_suite(_Config) ->
+init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel),
-  _Config.
+  Config.
 
-
-init_per_testcase(_, _Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
-  [{conn, testdb} | _Config].
+init_per_testcase(_, Config) ->
+  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
+  [{db, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel:delete_store(testdb),
+  ok = barrel_store:delete_db(<<"testdb">>),
   ok.
 
-end_per_suite(_Config) ->
-  %%ok = barrel:delete_store(testdb),
-  _Config.
+end_per_suite(Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
+  Config.
 
 
 order_by_key(_Config) ->
@@ -68,12 +68,12 @@ order_by_key(_Config) ->
     <<"creationDate">> => 1431620472,
     <<"isRegistered">> => true
   },
-  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(testdb, Doc, []),
+  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(<<"testdb">>, Doc, []),
   timer:sleep(400),
-  {ok, _Doc1} = barrel:get(testdb, <<"AndersenFamily">>, []),
+  {ok, _Doc1} = barrel:get(<<"testdb">>, <<"AndersenFamily">>, []),
 
   Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
-  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:query(testdb, <<"id">>, Fun, [], []),
-  [{<<"AndersenFamily">>, null}] = barrel:find_by_key(testdb, <<"id/AndersenFamily">>, Fun, [], [] ),
+  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:query(<<"testdb">>, <<"id">>, Fun, [], []),
+  [{<<"AndersenFamily">>, null}] = barrel:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
   ok.
 

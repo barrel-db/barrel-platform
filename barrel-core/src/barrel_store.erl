@@ -1,10 +1,10 @@
-%% Copyright 2016, Benoit Chesneau
+%% Copyright (c) 2017. Benoit Chesneau
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
 %% the License at
 %%
-%%   http://www.apache.org/licenses/LICENSE-2.0
+%%    http://www.apache.org/licenses/LICENSE-2.0
 %%
 %% Unless required by applicable law or agreed to in writing, software
 %% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -13,245 +13,177 @@
 %% the License.
 
 -module(barrel_store).
--author("Benoit Chesneau").
+-author("benoitc").
 
+-behaviour(gen_server).
 
 %% API
 -export([
-  infos/1,
-  put/3,
-  put_rev/4,
-  get/3,
-  delete/4,
-  post/3,
-  fold_by_id/4,
-  changes_since/5,
-  revsdiff/3,
-  write_system_doc/3,
-  read_system_doc/2,
-  delete_system_doc/2,
-  query/5,
-  query/6
+  create_db/2,
+  open_db/2,
+  delete_db/1,
+  databases/0,
+  fold_databases/2
 ]).
 
+-export([
+  start_link/0,
+  get_ref/0,
+  i_list_dbs/1,
+  i_fold_dbs/3,
+  whereis_db/1,
+  open_db_int/1
+]).
 
-%% internal processes
--define(default_timeout, 5000).
+%% gen_server callbacks
+-export([init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2,
+  code_change/3]).
 
--define(IMAX1, 16#ffffFFFFffffFFFF).
+
+-include("barrel.hrl").
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-infos(StoreName) ->
-  Store = store_mod(StoreName),
-  Store:infos(StoreName).
-
-%% TODO: handle attachment
-get(StoreName, DocId, Options) ->
-  Store = store_mod(StoreName),
-  Rev = proplists:get_value(rev, Options, <<"">>),
-  WithHistory = proplists:get_value(history, Options, false),
-  MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
-  Ancestors = proplists:get_value(ancestors, Options, []),
-  Store:get_doc(StoreName, DocId, Rev, WithHistory, MaxHistory, Ancestors).
-
-
-put(StoreName, Doc, Options) when is_map(Doc) ->
-  DocId = get_id(Doc),
-  Rev = barrel_doc:rev(Doc),
-  {Gen, _} = barrel_doc:parse_revision(Rev),
-  Deleted = barrel_doc:deleted(Doc),
-  update_doc(
-    StoreName,
-    DocId,
-    fun(DocInfo) ->
-      #{ current_rev := CurrentRev, revtree := RevTree } = DocInfo,
-      Res = case Rev of
-              <<>> ->
-                if
-                  CurrentRev /= <<>> ->
-                    case maps:get(CurrentRev, RevTree) of
-                      #{ deleted := true} ->
-                        {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
-                        {ok, CurrentGen + 1, CurrentRev};
-                      _ ->
-                        {conflict, doc_exists}
-                    end;
-                  true ->
-                    {ok, Gen + 1, <<>>}
-                end;
-              _ ->
-                case barrel_revtree:is_leaf(Rev, RevTree) of
-                  true -> {ok, Gen + 1, Rev};
-                  false -> {conflict, revision_conflict}
-                end
-            end,
-      case Res of
-        {ok, NewGen, ParentRev} ->
-          NewRev = barrel_doc:revid(NewGen, Rev, Doc),
-          RevInfo = #{  id => NewRev,  parent => ParentRev,  deleted => Deleted},
-          RevTree2 = barrel_revtree:add(RevInfo, RevTree),
-          Doc2 = Doc#{<<"_rev">> => NewRev},
-          %% update the doc infos
-          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-          DocInfo2 = DocInfo#{
-            id => DocId,
-            current_rev => WinningRev,
-            branched => Branched,
-            conflict => Conflict,
-            revtree => RevTree2
-          },
-          {ok, DocInfo2, Doc2, NewRev};
-        Conflict ->
-          Conflict
-      end
-    end);
-put(_, _, _) ->
-  erlang:error(badarg).
-
-put_rev(StoreName, Doc, History, _Options) when is_map(Doc) ->
-  DocId = get_id(Doc),
-  [NewRev |_] = History,
-  Deleted = barrel_doc:deleted(Doc),
-  update_doc(
-    StoreName,
-    DocId,
-    fun(DocInfo) ->
-      #{revtree := RevTree} = DocInfo,
-      {Idx, Parent} = find_parent(History, RevTree, 0),
-      if
-        Idx =:= 0 -> ok;
-        true ->
-          ToAdd = lists:sublist(History, Idx),
-          RevTree2 = edit_revtree(ToAdd, Parent, Deleted, RevTree),
-          {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-          DocInfo2 = DocInfo#{
-            id => DocId,
-            current_rev => WinningRev,
-            branched => Branched,
-            conflict => Conflict,
-            revtree => RevTree2
-          },
-          Doc2 = Doc#{ <<"_rev">> => NewRev },
-          {ok, DocInfo2, Doc2, NewRev}
-      end
-    end);
-put_rev(_, _, _, _) ->
-  erlang:error(badarg).
-
-edit_revtree([RevId], Parent, Deleted, Tree) ->
-  case Deleted of
-    true ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
-    false ->
-      barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
-  end;
-edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
-  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
-  edit_revtree(Rest, Parent, Deleted, Tree2);
-edit_revtree([], _Parent, _Deleted, Tree) ->
-  Tree.
-
-find_parent([RevId | Rest], RevTree, I) ->
-  case barrel_revtree:contains(RevId, RevTree) of
-    true -> {I, RevId};
-    false -> find_parent(Rest, RevTree, I+1)
-  end;
-find_parent([], _RevTree, I) ->
-  {I, <<"">>}.
-
-delete(StoreName, DocId, RevId, Options) ->
-  put(StoreName, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
-
-
-post(_StoreName, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
-post(StoreName, Doc, Options) ->
-  DocId = case barrel_doc:id(Doc) of
-            undefined -> barrel_lib:uniqid();
-            Id -> Id
-          end,
-  put(StoreName, Doc#{<<"id">> => DocId}, Options).
-
-
-fold_by_id(StoreName, Fun, Acc, Opts) ->
-  Store = store_mod(StoreName),
-  Store:fold_by_id(StoreName, Fun, Acc, Opts).
-
-changes_since(StoreName, Since0, Fun, Acc, Opts) when is_integer(Since0) ->
-  Since = if
-            Since0 > 0 -> Since0 + 1;
-            true -> Since0
-          end,
-  Store = store_mod(StoreName),
-  Store:changes_since(StoreName, Since, Fun, Acc, Opts).
-
-revsdiff(StoreName, DocId, RevIds) ->
-  Store = store_mod(StoreName),
-  case Store:get_doc_info(StoreName, DocId, []) of
-    {ok, #{revtree := RevTree}} -> revsdiff1(RevTree, RevIds);
-    {error, not_found} -> {ok, RevIds, []};
-    Error -> Error
+create_db(DbName, Options0) ->
+  case whereis_db(DbName) of
+    undefined ->
+      DbId = barrel_keys:db_id(DbName),
+      Options1 = Options0#{ create_if_missing => true},
+      case barrel_db_sup:start_db(DbName, DbId, Options1) of
+        {ok, DbPid} -> barrel_db:get_db(DbPid);
+        {error, {already_started, DbPid}} -> barrel_db:get_db(DbPid);
+        Else -> Else
+      end;
+    _Db ->
+      {error, db_exists}
   end.
 
-revsdiff1(RevTree, RevIds) ->
-  {Missing, PossibleAncestors} = lists:foldl(
-    fun(RevId, {M, A} = Acc) ->
-      case barrel_revtree:contains(RevId, RevTree) of
-        true -> Acc;
-        false ->
-          M2 = [RevId | M],
-          {Gen, _} = barrel_doc:parse_revision(RevId),
-          A2 = barrel_revtree:fold_leafs(
-            fun(#{ id := Id}=RevInfo, A1) ->
-              Parent = maps:get(parent, RevInfo, <<"">>),
-              case lists:member(Id, RevIds) of
-                true ->
-                  {PGen, _} = barrel_doc:parse_revision(Id),
-                  if
-                    PGen < Gen -> [Id | A1];
-                    PGen =:= Gen, Parent =/= <<"">> -> [Parent | A1];
-                    true -> A1
-                  end;
-                false -> A1
-              end
-            end, A, RevTree),
-          {M2, A2}
-      end
-    end, {[], []}, RevIds),
-  {ok, lists:reverse(Missing), lists:usort(PossibleAncestors)}.
 
-
-
-update_doc(StoreName, DocId, Fun) ->
-  Store = store_mod(StoreName),
-  Store:update_doc(StoreName, DocId, Fun).
-
-write_system_doc(StoreName, DocId, Doc) ->
-  Store = store_mod(StoreName),
-  Store:write_system_doc(StoreName, DocId, Doc).
-
-read_system_doc(StoreName, DocId) ->
-  Store = store_mod(StoreName),
-  Store:read_system_doc(StoreName, DocId).
-
-delete_system_doc(StoreName, DocId) ->
-  Store = store_mod(StoreName),
-  Store:delete_system_doc(StoreName, DocId).
-
-
-query(StoreName, Path, Fun, AccIn, Options) ->
-  barrel_query:query(StoreName, Path, Fun, AccIn, Options).
-
-query(StoreName, Path, Fun, AccIn, OrderBy, Options) ->
-  barrel_query:query(StoreName, Path, Fun, AccIn, OrderBy, Options).
-
-get_id(#{ <<"id">> := DocId }) -> DocId;
-get_id(_) -> erlang:error({bad_doc, invalid_docid}).
-
-store_mod(Name) ->
-  case catch ets:lookup_element(barrel_stores, Name, 2) of
-    {'EXIT', _} -> error(bad_store);
-    Store -> Store
+open_db(DbName, Options) ->
+  case whereis_db(DbName) of
+    undefined -> {error, not_found};
+    #db{pid=nil}=Db->
+      case barrel_db_sup:start_db(Db#db.name, Db#db.id, Options) of
+        {ok, DbPid} -> barrel_db:get_db(DbPid);
+        {error, {already_started, DbPid}} -> barrel_db:get_db(DbPid);
+        Else -> Else
+      end;
+    Db ->
+      {ok, Db}
   end.
+
+
+open_db_int(#db{}=Db) ->
+  case barrel_db_sup:start_db(Db#db.name, Db#db.id, Db#db.options) of
+    {ok, DbPid} -> barrel_db:get_db(DbPid);
+    {error, {already_started, DbPid}} -> barrel_db:get_db(DbPid);
+    Else -> Else
+  end.
+
+delete_db(DbName) ->
+  case whereis_db(DbName) of
+    undefined -> ok;
+    #db{pid=DbPid} ->
+      gen_server:call(DbPid, delete_db)
+  end.
+
+databases() ->
+  AllDbs = fold_databases(
+    fun(DbName, _Db, Acc) -> [DbName | Acc] end,
+    []
+  ),
+  lists:usort(AllDbs).
+
+fold_databases(Fun, AccIn) ->
+  ets:foldl(
+    fun(Db, Acc) -> Fun(Db#db.name, Db, Acc) end,
+    AccIn,
+    barrel_dbs
+  ).
+
+
+get_ref() -> gen_server:call(?MODULE, get_ref).
+
+start_link() ->
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+init([]) ->
+  {ok, Ref} = init_store(),
+  %% we load the list of databases in memory
+  ok = init_dbs(Ref),
+  {ok, #{ref => Ref}}.
+
+
+init_store() ->
+  InMemory = application:get_env(barrel, in_memory, false),
+  RdbOpts = application:get_env(barrel, rocksdb_options, []),
+  DbOpts = case InMemory of
+             true ->
+               [{create_if_missing, true}, {in_memory, true} | RdbOpts];
+             false ->
+               [{create_if_missing, true} | RdbOpts]
+           end,
+  rocksdb:open(barrel_lib:data_dir(), DbOpts).
+
+init_dbs(Ref) ->
+  Fun = fun
+          (DbName, DbMeta, Acc) ->
+            {DbId, DbOptions} = binary_to_term(DbMeta),
+            ets:insert(barrel_dbs, #db{name=DbName, id=DbId, options=DbOptions}),
+            {ok, Acc}
+        end,
+  i_fold_dbs(Ref, Fun, ok).
+
+handle_call(get_ref, _From, State = #{ ref := Ref}) ->
+  {reply, {ok, Ref}, State};
+
+handle_call(_Request, _From, State) ->
+  {reply, bad_call, State}.
+
+handle_cast(_Request, State) ->
+  {noreply, State}.
+
+handle_info(_Info, State) ->
+  {noreply, State}.
+
+terminate(_Reason, State) ->
+  case maps:find(ref, State) of
+    {ok, Ref} ->
+      _ = (catch rocksdb:close(Ref));
+    error ->
+      ok
+  end,
+  ok.
+
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+whereis_db(DbName) ->
+  case ets:lookup(barrel_dbs, DbName) of
+    [] -> undefined;
+    [Db] -> Db
+  end.
+
+i_list_dbs(Ref) ->
+  Fun = fun(DbName, _, Acc) -> {ok, [DbName | Acc]} end,
+  AllDbs = i_fold_dbs(Ref, Fun, []),
+  lists:usort(AllDbs).
+
+i_fold_dbs(Ref, Fun, AccIn) ->
+  DbPrefix = barrel_keys:prefix(db),
+  FoldFun = fun
+          (DbKey, DbId, Acc) ->
+            << _:4/binary, DbName/binary >> = DbKey,
+            Fun(DbName, DbId, Acc)
+        end,
+  barrel_rocksdb:fold_prefix(Ref, DbPrefix, FoldFun, AccIn, []).

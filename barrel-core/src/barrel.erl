@@ -41,10 +41,9 @@
 %% Database API
 
 -export([
-  open_store/2,
-  close_store/1,
-  delete_store/1,
-  store_infos/1
+  create_db/2,
+  delete_db/1,
+  db_infos/1
 ]).
 
 
@@ -70,15 +69,15 @@
 
 
 -type dbname() :: binary().
--type store() :: atom().
+-type db() :: atom().
 
 %% TODO: to define
--type store_infos() :: #{
-  name := store(),
+-type db_infos() :: #{
+  name := db(),
   id := binary(),
-  doc_count := non_neg_integer(),
+  docs_count := non_neg_integer(),
   last_update_seq := non_neg_integer(),
-  system_doc_count := non_neg_integer(),
+  system_docs_count := non_neg_integer(),
   last_index_seq => non_neg_integer()
 }.
 
@@ -134,7 +133,7 @@
 
 -export_type([
   dbname/0,
-  store/0,
+  db/0,
   doc/0,
   rev/0,
   docid/0,
@@ -147,125 +146,110 @@
 ]).
 
 
-open_store(Name, Options) ->
-  Module = maps:get(adapter, Options, barrel_rocksdb),
-  Module:open_store(Name, Options).
+create_db(Name, Options) ->
+  barrel_store:create_db(Name, Options).
 
-close_store(Name) ->
-  case ets:lookup(barrel_stores, Name) of
-    [] ->
-      ok;
-    [{Name, Mod}] ->
-      Mod:stop_store(Name)
-  end.
+delete_db(Name) ->
+  barrel_store:delete_db(Name).
 
 
-delete_store(Name) ->
-  case ets:lookup(barrel_stores, Name) of
-    [] ->
-      ok;
-    [{Name, Mod}] ->
-      Mod:delete_store(Name)
-  end.
-
-
--spec store_infos(Store::store()) ->
-  {ok, DbInfos::store_infos()} | {error, term()}.
-store_infos(Store) ->
-  barrel_store:infos(Store).
+-spec db_infos(Db::db()) ->
+  {ok, DbInfos::db_infos()} | {error, term()}.
+db_infos(Db) ->
+  barrel_db:infos(Db).
 
 %% Database API.
 
 %% @doc retrieve a document by its key
--spec get(Store, DocId, Options) -> Res when
-  Store::store(),
+-spec get(Db, DocId, Options) -> Res when
+  Db::db(),
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc(),
   Res :: {ok, Doc} | {error, not_found} | {error, any()}.
-get(Store, DocId, Options) ->
-  barrel_store:get(Store, DocId, Options).
+get(Db, DocId, Options) ->
+  barrel_db:get(Db, DocId, Options).
 
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
--spec put(Store, Doc, Options) -> Res when
-  Store::store(),
+-spec put(Db, Doc, Options) -> Res when
+  Db::db(),
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put(Store, Doc, Options) ->
-  barrel_store:put(Store, Doc, Options).
+put(Db, Doc, Options) ->
+  barrel_db:put(Db, Doc, Options).
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Store, Doc, History, Options) -> Res when
-  Store::store(),
+-spec put_rev(Db, Doc, History, Options) -> Res when
+  Db::db(),
   Doc :: doc(),
   History :: [rev()],
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Store, Doc, History, Options) ->
-  barrel_store:put_rev(Store, Doc, History, Options).
+put_rev(Db, Doc, History, Options) ->
+  barrel_db:put_rev(Db, Doc, History, Options).
 
 %% @doc delete a document
--spec delete(Store, DocId, RevId, Options) -> Res when
-  Store::store(),
+-spec delete(Db, DocId, RevId, Options) -> Res when
+  Db::db(),
   DocId :: docid(),
   RevId :: rev(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-delete(Store, DocId, RevId, Options) ->
-  barrel_store:delete(Store, DocId, RevId, Options).
+delete(Db, DocId, RevId, Options) ->
+  barrel_db:delete(Db, DocId, RevId, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
--spec post(Store, Doc, Options) -> Res when
-  Store::store(),
+-spec post(Db, Doc, Options) -> Res when
+  Db::db(),
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-post(Store, Doc, Options) ->
-  barrel_store:post(Store, Doc, Options).
+post(Db, Doc, Options) ->
+  barrel_db:post(Db, Doc, Options).
 
 %% @doc fold all docs by Id
--spec fold_by_id(Store, Fun, AccIn, Options) -> AccOut | Error when
-  Store::store(),
+-spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
+  Db::db(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((DocId :: docid(), DocInfo :: docinfo(), Doc :: doc(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
-fold_by_id(Store, Fun, Acc, Options) ->
-  barrel_store:fold_by_id(Store, Fun, Acc, Options).
+fold_by_id(Db, Fun, Acc, Options) ->
+  barrel_db:fold_by_id(Db, Fun, Acc, Options).
 
 %% @doc fold all changes since last sequence
--spec changes_since(Store, Since, Fun, AccIn) -> AccOut when
-  Store::store(),
+-spec changes_since(Db, Since, Fun, AccIn) -> AccOut when
+  Db::db(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
-changes_since(Store, Since, Fun, Acc) ->
-  barrel_store:changes_since(Store, Since, Fun, Acc, []).
+changes_since(Db, Since, Fun, Acc) ->
+  barrel_db:changes_since(Db, Since, Fun, Acc, []).
 
 %% @doc fold all changes since last sequence
--spec changes_since(Store, Since, Fun, AccIn, Opts) -> AccOut when
-  Store::store(),
+-spec changes_since(Db, Since, Fun, AccIn, Opts) -> AccOut when
+  Db::db(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any(),
   Opts :: list().
-changes_since(Store, Since, Fun, Acc, Opts) ->
-  barrel_store:changes_since(Store, Since, Fun, Acc, Opts).
+changes_since(Db, Since, Fun, Acc, Opts) ->
+  barrel_db:changes_since(Db, Since, Fun, Acc, Opts).
 
 %% @doc find in the index a document by its path
--spec query(Store, Path, Fun, AccIn, Options) -> AccOut | Error when
-  Store::store(),
+-spec query(Db, Path, Fun, AccIn, Options) -> AccOut | Error when
+  Db::db(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((DocId :: docid(), Doc :: doc(), Acc1 :: any()) -> FunRes),
@@ -273,12 +257,12 @@ changes_since(Store, Since, Fun, Acc, Opts) ->
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
-query(Store, Path, Fun, AccIn, Opts) ->
-  barrel_store:query(Store, Path, Fun, AccIn, Opts).
+query(Db, Path, Fun, AccIn, Opts) ->
+  barrel_db:query(Db, Path, Fun, AccIn, Opts).
 
 %% @doc find in the index a document
--spec query(Store, Path, Fun, AccIn, OrderBy, Options) -> AccOut | Error when
-  Store::store(),
+-spec query(Db, Path, Fun, AccIn, OrderBy, Options) -> AccOut | Error when
+  Db::db(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((DocId :: docid(), Doc :: doc(), Acc1 :: any()) -> FunRes),
@@ -287,48 +271,48 @@ query(Store, Path, Fun, AccIn, Opts) ->
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
-query(Store, Path, Fun, AccIn, OrderBy, Opts) ->
-  barrel_store:query(Store, Path, Fun, AccIn, OrderBy, Opts).
+query(Db, Path, Fun, AccIn, OrderBy, Opts) ->
+  barrel_db:query(Db, Path, Fun, AccIn, OrderBy, Opts).
 
 %% @deprecated
-find_by_key(Store, Path, Fun, AccIn, Opts) ->
+find_by_key(Db, Path, Fun, AccIn, Opts) ->
   lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
-  barrel_store:query(Store, Path, Fun, AccIn, Opts).
+  barrel_db:query(Db, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
--spec revsdiff(Store, DocId, RevIds) -> Res when
-  Store::store(),
+-spec revsdiff(Db, DocId, RevIds) -> Res when
+  Db::db(),
   DocId :: docid(),
   RevIds :: [revid()],
   Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
-revsdiff(Store, DocId, RevIds) ->
-  barrel_store:revsdiff(Store, DocId, RevIds).
+revsdiff(Db, DocId, RevIds) ->
+  barrel_db:revsdiff(Db, DocId, RevIds).
 
 
 
-attach(Store, DocId, AttDescription, Options) ->
-  barrel_attachments:attach(Store, DocId, AttDescription, Options).
+attach(Db, DocId, AttDescription, Options) ->
+  barrel_attachments:attach(Db, DocId, AttDescription, Options).
 
-attach(Store, DocId, AttDescription, Binary, Options) ->
-  barrel_attachments:attach(Store, DocId, AttDescription, Binary, Options).
+attach(Db, DocId, AttDescription, Binary, Options) ->
+  barrel_attachments:attach(Db, DocId, AttDescription, Binary, Options).
 
-get_attachment(Store, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment(Store, DocId, AttId, Options).
+get_attachment(Db, DocId, AttId, Options) ->
+  barrel_attachments:get_attachment(Db, DocId, AttId, Options).
 
-get_attachment_binary(Store, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment_binary(Store, DocId, AttId, Options).
+get_attachment_binary(Db, DocId, AttId, Options) ->
+  barrel_attachments:get_attachment_binary(Db, DocId, AttId, Options).
 
-replace_attachment(Store, DocId, AttId, AttDescription, Options) ->
-  barrel_attachments:replace_attachment(Store, DocId, AttId, AttDescription, Options).
+replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
+  barrel_attachments:replace_attachment(Db, DocId, AttId, AttDescription, Options).
 
-replace_attachment_binary(Store, DocId, AttId, Binary, Options) ->
-  barrel_attachments:replace_attachment_binary(Store, DocId, AttId, Binary, Options).
+replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
+  barrel_attachments:replace_attachment_binary(Db, DocId, AttId, Binary, Options).
 
-delete_attachment(Store, DocId, AttId, Options) ->
-  barrel_attachments:delete_attachment(Store, DocId, AttId, Options).
+delete_attachment(Db, DocId, AttId, Options) ->
+  barrel_attachments:delete_attachment(Db, DocId, AttId, Options).
 
-attachments(Store, DocId, Options) ->
-  barrel_attachments:attachments(Store, DocId, Options).
+attachments(Db, DocId, Options) ->
+  barrel_attachments:attachments(Db, DocId, Options).
 
 %% replication API
 start_replication(Source, Target) ->
