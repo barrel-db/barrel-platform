@@ -13,7 +13,7 @@
 %% the License.
 
 
--module(barrel_rocksdb_system_SUITE).
+-module(barrel_system_docs_SUITE).
 -author("Bernard Notarianni").
 
 %% API
@@ -33,23 +33,24 @@ init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel),
   Config.
 
-
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
-  Config.
+  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
+  [{db, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel:delete_store(testdb),
+  ok = barrel_store:delete_db(<<"testdb">>),
   ok.
 
 end_per_suite(Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 write_and_get(_Config) ->
   Doc = #{<<"v">> => 1},
-  ok = barrel_store:write_system_doc(testdb, <<"a">>, Doc),
-  {ok, Doc} = barrel_store:read_system_doc(testdb, <<"a">>),
-  ok = barrel_store:delete_system_doc(testdb, <<"a">>),
-  {error, not_found} = barrel_store:read_system_doc(testdb, <<"a">>),
+  ok = barrel_db:write_system_doc(<<"testdb">>, <<"a">>, Doc),
+  {ok, Doc} = barrel_db:read_system_doc(<<"testdb">>, <<"a">>),
+  ok = barrel_db:delete_system_doc(<<"testdb">>, <<"a">>),
+  {error, not_found} = barrel_db:read_system_doc(<<"testdb">>, <<"a">>),
   ok.
 

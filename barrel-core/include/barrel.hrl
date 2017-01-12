@@ -1,5 +1,5 @@
 
--define(DATA_DIR, "./data").
+-define(DOCS_DIR, "./docs").
 
 -define(default_fold_options,
   #{
@@ -13,3 +13,24 @@
     move => next
   }
 ).
+
+
+-record(db, {
+  name = <<>>,
+  id = <<>>,
+  options = [],
+  pid = nil,
+  store = nil,
+  indexer = nil,
+  updated_seq = 0,
+  indexed_seq = 0,
+  docs_count = 0,
+  system_docs_count = 0,
+  deleted_count = 0
+}).
+
+
+%% db metadata
+-define(DB_INFO, 1).
+
+-define(DEFAULT_CHANGES_SIZE, 10).

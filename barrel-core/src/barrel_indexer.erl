@@ -18,7 +18,7 @@
 
 -export([refresh_index/2]).
 
--export([start_link/4]).
+-export([start_link/2]).
 
 %% API
 -export([
@@ -30,23 +30,21 @@
   code_change/3
 ]).
 
--define(DEFAULT_CHANGES_SIZE, 10).
+-include("barrel.hrl").
 
 
 refresh_index(Indexer, Since) ->
   gen_server:call(Indexer, {refresh_index, Since}, infinity).
 
-start_link(Parent, Name, Ref, Opts) ->
-  gen_server:start_link(?MODULE, [Parent, Name, Ref, Opts], []).
+start_link(Db, Opts) ->
+  gen_server:start_link(?MODULE, [Db, Opts], []).
 
-init([Parent, Name, Ref, Opts]) ->
-  {ok, UpdateSeq} = last_index_seq(Ref),
+init([Db, Opts]) ->
+  UpdateSeq = last_index_seq(Db),
   IndexChangeSize = maps:get(index_changes_size, Opts, ?DEFAULT_CHANGES_SIZE),
 
   State = #{
-    parent => Parent,
-    name => Name,
-    ref => Ref,
+    db => Db#db{indexer=self()}, % we probably don't need to set it, but be consistent
     update_seq => UpdateSeq,
     index_changes_size => IndexChangeSize
   },
@@ -80,7 +78,7 @@ do_refresh_index(Since, State) ->
   Changes= fetch_changes(Since, State),
   process_changes(Changes, State).
 
-fetch_changes(Since, #{ ref := Ref, index_changes_size := Max}) ->
+fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
   Fun = fun
           (_Seq, Change, {N, Acc}) ->
             N2 = N + 1,
@@ -89,21 +87,27 @@ fetch_changes(Since, #{ ref := Ref, index_changes_size := Max}) ->
               true -> {stop, {N2, [Change | Acc]}}
             end
         end,
-  {NChanges, Changes} = barrel_rocksdb:changes_since(
-    {ref, Ref}, Since, Fun, {Since, []}, [{include_doc, true}]
+  {NChanges, Changes} = barrel_db:changes_since_int(
+    Db, Since, Fun, {0, []}, [{include_doc, true}]
   ),
-  lager:debug("fetched ~p changes since ~p~n", [NChanges, Since]),
+  lager:debug(
+    "~s: fetched ~p changes since ~p:~n~n~p",
+    [?MODULE_STRING, NChanges, Since, Changes]
+  ),
   lists:reverse(Changes).
 
-process_changes(Changes, State0 = #{ ref := Ref }) ->
+process_changes(Changes, State0 = #{ db := Db }) ->
   #{ update_seq := LastSeq } = State2 = lists:foldl(
     fun(Change = #{ seq := Seq }, State = #{ update_seq := OldSeq}) ->
-      {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Ref),
+      {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Db),
+      lager:debug(
+        "~s: processed changed in ~p, ~n - to add:~n~p~n - to del:~n~p",
+        [?MODULE_STRING, Db#db.name, ToAdd, ToDel]
+      ),
+      ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, Db),
+      ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, Db),
 
-      ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, State),
-      ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, State),
-
-      ok = update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths),
+      ok = update_index(Db, ForwardOps, ReverseOps, DocId, FullPaths),
       State#{ update_seq => erlang:max(Seq, OldSeq) }
     end,
     State0,
@@ -112,11 +116,11 @@ process_changes(Changes, State0 = #{ ref := Ref }) ->
   {{ok, LastSeq}, State2}.
 
 
-update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths) ->
+update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, DocId, FullPaths) ->
   Ops = prepare_index(
-    ForwardOps, fun barrel_rocksdb:idx_forward_path_key/1,
+    ForwardOps, fun barrel_keys:idx_forward_path_key/2, DbId,
     prepare_index(
-      ReverseOps, fun barrel_rocksdb:idx_reverse_path_key/1,
+      ReverseOps, fun barrel_keys:idx_reverse_path_key/2, DbId,
       []
     )
   ),
@@ -124,63 +128,55 @@ update_index(Ref, ForwardOps, ReverseOps, DocId, FullPaths) ->
     [] -> ok;
     _ ->
       Batch = [
-        {put, barrel_rocksdb:idx_last_doc_key(DocId), term_to_binary(FullPaths)}
+        {put, barrel_keys:idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)}
       ] ++ Ops,
-      rocksdb:write(Ref, Batch, [{sync, true}])
+      rocksdb:write(Store, Batch, [{sync, true}])
   end.
 
-prepare_index([{put, Path, Entries} | Rest], KeyFun, Acc) ->
-  Key = KeyFun(Path),
+prepare_index([{put, Path, Entries} | Rest], KeyFun, DbId, Acc) ->
+  Key = KeyFun(DbId, Path),
   Acc2 = [{put, Key, term_to_binary(Entries)} | Acc],
-  prepare_index(Rest, KeyFun, Acc2);
-prepare_index([{delete, Path} | Rest], KeyFun, Acc) ->
-  Key = KeyFun(Path),
+  prepare_index(Rest, KeyFun, DbId, Acc2);
+prepare_index([{delete, Path} | Rest], KeyFun, DbId, Acc) ->
+  Key = KeyFun(DbId, Path),
   Acc2 = [{delete, Key} | Acc],
-  prepare_index(Rest, KeyFun, Acc2);
-prepare_index([], _KeyFun, Acc) ->
+  prepare_index(Rest, KeyFun, DbId, Acc2);
+prepare_index([], _KeyFun, _DbId, Acc) ->
   Acc.
 
-last_index_seq(Ref) ->
-  case rocksdb:get(Ref, barrel_rocksdb:meta_key(0), []) of
-    {ok, BinInfo } ->
-      #{ last_index_seq := Seq} = binary_to_term(BinInfo),
-      {ok, Seq};
-    not_found -> {ok, 0}; % race condition?
-    Error -> Error
-  end.
+last_index_seq(#db{ indexed_seq = Seq}) -> Seq.
 
-index_get_last_doc(Ref, DocId) ->
-  case rocksdb:get(Ref, barrel_rocksdb:idx_last_doc_key(DocId), []) of
+get_last_doc(#db{id=DbId, store=Store}, DocId) ->
+  case rocksdb:get(Store, barrel_keys:idx_last_doc_key(DbId, DocId), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
-index_get_reverse_path(Ref, Path) ->
-  case rocksdb:get(Ref, barrel_rocksdb:idx_reverse_path_key(Path), []) of
+get_reverse_path(#db{id=DbId, store=Store}, Path) ->
+  case rocksdb:get(Store, barrel_keys:idx_reverse_path_key(DbId, Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
-index_get_forward_path(Ref, Path) ->
-  case rocksdb:get(Ref, barrel_rocksdb:idx_forward_path_key(Path), []) of
+get_forward_path(#db{id=DbId, store=Store}, Path) ->
+  case rocksdb:get(Store, barrel_keys:idx_forward_path_key(DbId, Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
-
-merge_forward_paths(ToAdd, ToDel, DocId, St) ->
-  ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
+merge_forward_paths(ToAdd, ToDel, DocId, Db) ->
+  ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
   ToDel1 = lists:usort([lists:reverse(P) || P <- ToDel]),
-  Ops0 = merge(ToAdd1,  DocId, add, fun index_get_forward_path/2, St, []),
-  merge(ToDel1, DocId, del, fun index_get_forward_path/2, St, Ops0).
+  Ops0 = merge(ToAdd1,  DocId, add, fun get_forward_path/2, Db, []),
+  merge(ToDel1, DocId, del, fun get_forward_path/2, Db, Ops0).
 
-merge_reverse_paths(ToAdd, ToDel, DocId, St) ->
-  Ops0 = merge(ToAdd, DocId, add, fun index_get_reverse_path/2, St, []),
-  merge(ToDel, DocId, del, fun index_get_reverse_path/2, St, Ops0).
+merge_reverse_paths(ToAdd, ToDel, DocId, Db) ->
+  Ops0 = merge(ToAdd, DocId, add, fun get_reverse_path/2, Db, []),
+  merge(ToDel, DocId, del, fun get_reverse_path/2, Db, Ops0).
 
 
-merge([Path | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
-  case Fun(Ref, Path) of
+merge([Path | Rest], DocId, Op, Fun, Db, Acc) ->
+  case Fun(Db, Path) of
     {ok, Entries} ->
       Entries2 = case Op of
                    add -> lists:usort([DocId | Entries]) ;
@@ -193,7 +189,7 @@ merge([Path | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
                true ->
                  [{delete, Path} | Acc]
              end,
-      merge(Rest, DocId, Op, Fun, St, Acc2);
+      merge(Rest, DocId, Op, Fun, Db, Acc2);
     not_found ->
       Acc2 = case Op of
                add ->
@@ -201,16 +197,16 @@ merge([Path | Rest], DocId, Op, Fun, St = #{ ref := Ref }, Acc) ->
                del ->
                  Acc
              end,
-      merge(Rest, DocId, Op, Fun, St, Acc2)
+      merge(Rest, DocId, Op, Fun, Db, Acc2)
   end;
-merge([], _DocId, _Op, _Fun, _St, Acc) ->
+merge([], _DocId, _Op, _Fun, _Db, Acc) ->
   Acc.
 
-analyze(Change, Ref) ->
+analyze(Change, Db) ->
   Doc = maps:get(doc, Change),
   Del = maps:get(deleted, Change, false),
   DocId = barrel_doc:id(Doc),
-  OldPaths = case index_get_last_doc(Ref, DocId) of
+  OldPaths = case get_last_doc(Db, DocId) of
                {ok, OldPaths1} -> OldPaths1;
                not_found -> []
              end,

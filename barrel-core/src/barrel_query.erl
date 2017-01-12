@@ -14,54 +14,53 @@
 
 -module(barrel_query).
 
--export([query/5, query/6]).
+-export([query/6]).
 
-query(Db, Path, Fun, Acc, FilterOpts) ->
-  query(Db, Path, Fun, Acc, order_by_key, FilterOpts).
+-include("barrel.hrl").
 
-query(Db, Path0, Fun, Acc, order_by_key, FilterOpts) ->
+
+query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_key, FilterOpts) ->
   Path1 = valid_path(Path0),
   Parts = partial_path(barrel_json:decode_path(Path1)),
   StartKey = case proplists:get_value(start_at, FilterOpts) of
                undefined -> nil;
                Start when is_binary(Start) ->
                  StartParts = Parts ++ [Start],
-                 barrel_rocksdb:idx_forward_path_key(StartParts)
+                 barrel_keys:idx_forward_path_key(DbId, StartParts)
              end,
   EndKey = case proplists:get_value(end_at, FilterOpts) of
              undefined -> nil;
              End when is_binary(End) ->
                EndParts = Parts ++ [End],
-                barrel_rocksdb:idx_forward_path_key(EndParts)
+               barrel_keys:idx_forward_path_key(DbId, EndParts)
 
            end,
-  Prefix = barrel_rocksdb:idx_forward_path_key(Parts),
+  Prefix = barrel_keys:idx_forward_path_key(DbId, Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
-query(Db, Path0, Fun, Acc, order_by_value, FilterOpts) ->
+query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_value, FilterOpts) ->
   Path1 = valid_path(Path0),
   Parts = reverse_partial_path(barrel_json:decode_path(Path1)),
   StartKey = case proplists:get_value(start_at, FilterOpts) of
                undefined -> nil;
                Start when is_binary(Start) ->
                  StartParts = Parts ++ [Start],
-                 barrel_rocksdb:idx_reverse_path_key(StartParts)
+                 barrel_keys:idx_reverse_path_key(DbId, StartParts)
              end,
   EndKey = case proplists:get_value(end_at, FilterOpts) of
              undefined -> nil;
              End when is_binary(End) ->
                EndParts = Parts ++ [End],
-               barrel_rocksdb:idx_reverse_path_key(EndParts)
+               barrel_keys:idx_reverse_path_key(DbId, EndParts)
   
            end,
-  Prefix = barrel_rocksdb:idx_reverse_path_key(Parts),
+  Prefix = barrel_keys:idx_reverse_path_key(DbId, Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
 query(_, _, _, _, _, _) ->
   erlang:error(badarg).
 
-query1(Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
-  Ref = barrel_rocksdb:get_ref(Db),
+query1(#db{store=Store}=Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
   Max = proplists:get_value(limit_to_last, Opts, 0),
-  {ok, Snapshot} = rocksdb:snapshot(Ref),
+  {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOptions =
     [{gte, StartKey},
@@ -72,21 +71,21 @@ query1(Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
   WrapperFun =
     fun(_KeyBin, BinEntries, Acc) ->
         Entries = binary_to_term(BinEntries),
-        fold_entries(Entries, Fun, Path, Ref, ReadOptions, Acc)
+        fold_entries(Entries, Fun, Path, Db, ReadOptions, Acc)
     end,
 
-  try barrel_rocksdb:fold_prefix(Ref, Prefix, WrapperFun, AccIn, FoldOptions)
+  try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOptions)
   after rocksdb:release_snapshot(Snapshot)
   end.
 
-fold_entries([DocId | Rest], Fun, Path, Ref, ReadOptions, Acc) ->
-  Res = barrel_rocksdb:get_doc1(Ref, DocId, <<>>, false, 0, [], ReadOptions),
+fold_entries([DocId | Rest], Fun, Path, Db, ReadOptions, Acc) ->
+  Res = barrel_db:get_doc1(Db, DocId, <<>>, false, 0, [], ReadOptions),
   case Res of
     {ok, Doc} ->
       Val = barrel_json:get(Path, Doc),
       case Fun(DocId, Val, Acc) of
         {ok, Acc2} ->
-          fold_entries(Rest, Fun, Path, Ref, ReadOptions, Acc2);
+          fold_entries(Rest, Fun, Path, Db, ReadOptions, Acc2);
         Else ->
           Else
       end;

@@ -27,6 +27,8 @@
 %% Supervisor callbacks
 -export([init/1]).
 
+-include("barrel.hrl").
+
 -define(SERVER, ?MODULE).
 
 -define(sup(I), {I, {I, start_link, []}, permanent, infinity, supervisor, [I]}).
@@ -44,10 +46,21 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  _ = ets:new(barrel_stores, [set, named_table, public]),
+  _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.name}]),
+  
+  Store =
+    #{
+      id => barrel_store,
+      start => {barrel_store, start_link, []},
+      restart => permanent,
+      shutdown => 2000,
+      type => worker,
+      modules => [barrel_store]
+    },
 
   Specs = [
-      ?sup(barrel_store_sup)
+      Store
+    , ?sup(barrel_db_sup)
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
     , ?sup(barrel_replicator_sup)

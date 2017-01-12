@@ -211,9 +211,9 @@ read_doc_with_history(Source, Id, Rev, Metrics) ->
 write_doc(_, undefined, _, Metrics) ->
   Metrics;
 write_doc(Target, Doc, History, Metrics) ->
-  PutRev = fun() -> put_rev(Target, Doc, History) end,
+  PutRev = fun() -> put_rev(Target, Doc, History, []) end,
   case timer:tc(PutRev) of
-    {Time, {ok, _}} ->
+    {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
@@ -236,18 +236,18 @@ changes(Source, Since) ->
 
 get({Mod, ModState}, Id, Opts) ->
   Mod:get(ModState, Id, Opts);
-get(Conn, Id, Opts) when is_atom(Conn) ->
-  barrel_store:get(Conn, Id, Opts).
+get(Db, Id, Opts) when is_binary(Db) ->
+  barrel_db:get(Db, Id, Opts).
 
-put_rev({Mod, ModState}, Doc, History) ->
-  Mod:put_rev(ModState, Doc, History);
-put_rev(Conn, Doc, History) when is_atom(Conn) ->
-  barrel_store:put_rev(Conn, Doc, History).
+put_rev({Mod, ModState}, Doc, History, Opts) ->
+  Mod:put_rev(ModState, Doc, History, Opts);
+put_rev(Db, Doc, History, Opts) when is_binary(Db) ->
+  barrel_db:put_rev(Db, Doc, History, Opts).
 
 changes_since({Mod, ModState}, Since, Fun, Acc) ->
   Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
-changes_since(Conn, Since, Fun, Acc) when is_atom(Conn) ->
-  barrel_store:changes_since(Conn, Since, Fun, Acc, [{history, all}]).
+changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
+  barrel_db:changes_since(Db, Since, Fun, Acc, [{history, all}]).
 
 revsdiff({Mod, ModState}, DocId, History) ->
   Mod:revsdiff(ModState, DocId, History);
@@ -328,24 +328,24 @@ write_checkpoint_doc(Db, RepId, Checkpoint) ->
 
 write_system_doc({Mod, ModState}, Id, Doc) ->
   Mod:write_system_doc(ModState, Id, Doc);
-write_system_doc(Conn, Id, Doc) when is_atom(Conn) ->
-  barrel_store:write_system_doc(Conn, Id, Doc).
+write_system_doc(Db, Id, Doc) when is_binary(Db) ->
+  barrel_db:write_system_doc(Db, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
   read_system_doc(Db, checkpoint_docid(RepId)).
 
 read_system_doc({Mod, ModState}, Id) ->
   Mod:read_system_doc(ModState, Id);
-read_system_doc(Conn, Id) when is_atom(Conn) ->
-  barrel_store:read_system_doc(Conn, Id).
+read_system_doc(Db, Id) when is_binary(Db) ->
+  barrel_db:read_system_doc(Db, Id).
 
 delete_checkpoint_doc(Db, RepId) ->
   delete_system_doc(Db, checkpoint_docid(RepId)).
 
 delete_system_doc({Mod, ModState}, Id) ->
   Mod:delete_system_doc(ModState, Id);
-delete_system_doc(Conn, Id) when is_atom(Conn) ->
-  barrel_store:delete_system_doc(Conn, Id).
+delete_system_doc(Db, Id) when is_binary(Db) ->
+  barrel_db:delete_system_doc(Db, Id).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.

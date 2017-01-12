@@ -43,23 +43,23 @@ decode_path(<<Codepoint/utf8, Rest/binary>>, [Current|Done]) ->
   decode_path(Rest, [<< Current/binary, Codepoint/utf8 >> | Done]).
 
 get(Path, Doc) ->
- get_1(decode_path(Path), Doc, Doc).
+ get_1(decode_path(Path), Doc).
 
-get_1([Key | Rest], Obj, _Parent) when is_map(Obj) ->
-  get_1(Rest, maps:get(Key, Obj), Obj);
-get_1([BinInt | Rest], Obj, _Parent) when is_list(Obj) ->
+get_1([Key | Rest], Obj) when is_map(Obj) ->
+  get_1(Rest, maps:get(Key, Obj));
+get_1([BinInt | Rest], Obj) when is_list(Obj) ->
   Idx = binary_to_integer(BinInt) + 1, %% erlang lists start at 1
-  get_1(Rest, lists:nth(Idx, Obj), Obj);
-get_1([Key], Obj, Parent) ->
+  get_1(Rest, lists:nth(Idx, Obj));
+get_1([Key], Obj) ->
   ToMatch = case jsx:is_json(Key) of
               true -> jsx:decode(Key);
               false -> Key
             end,
   if
-    Obj =:= ToMatch -> Parent;
+    Obj =:= ToMatch -> null;
     true -> erlang:error(badarg)
   end;
-get_1([], Obj, _Parent) ->
+get_1([], Obj) ->
   Obj.
 
 %% @doc flatten a json in triplets
@@ -170,7 +170,7 @@ get_test() ->
   ?assertEqual(<<"a">>, get(<<"c/b/0">>, ?doc)),
   ?assertEqual(<<"b">>, get(<<"c/b/1">>, ?doc)),
   ?assertEqual(1, get(<<"e/0/a">>, ?doc)),
-  ?assertEqual(?doc, get(<<"a/1">>, ?doc)),
+  ?assertEqual(null, get(<<"a/1">>, ?doc)),
   ?assertError(badarg, get(<<"a/c">>, ?doc)).
 
 flatten_test() ->
