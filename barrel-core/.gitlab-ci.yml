@@ -1,0 +1,12 @@
+image: erlang:19.1
+
+before_script:
+  - apt-get update -y
+  - apt-get -y install g++-4.9
+  - export CXX=g++-4.9
+
+test:
+  script:
+    - ./rebar3 eunit
+    - ./rebar3 ct
+

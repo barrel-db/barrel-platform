@@ -1,0 +1,21 @@
+{application, barrel,
+  [{description, "Barrel-db core application"},
+   {vsn, "0.7.0"},
+   {registered, []},
+   {mod, {barrel_app, []}},
+   {applications,
+    [kernel,
+     stdlib,
+     sasl,
+     lager,
+     crypto,
+     rocksdb,
+     uuid
+    ]},
+   {env, []},
+   {modules, []},
+   {maintainers, []},
+   {licenses, ["Apache 2"]},
+   {links, [{"Main site", "https://barrel-db.org"},
+            {"Gitlab", "https://gitlab.com/barrel-db/barrel"}]}
+  ]}.
