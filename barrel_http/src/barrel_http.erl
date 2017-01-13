@@ -58,7 +58,6 @@ init(_) ->
   trails:store(Trails),
   Dispatch = trails:single_host_compile(Trails),
 
-  lager:info("port is ~p~n", [Port]),
   {ok, _} = cowboy:start_http(http, 100, [{port, Port}], [{env, [{dispatch, Dispatch}]}]),
   {ok, []}.
 
