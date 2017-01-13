@@ -1,0 +1,146 @@
+%% Copyright 2016, Bernard Notarianni
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License. You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
+
+-module(barrel_http_rest_system).
+-author("Bernard Notarianni").
+
+-export([init/3]).
+-export([handle/2]).
+-export([terminate/3]).
+
+-export([trails/0]).
+
+trails() ->
+  GetPutDelete =
+    #{ get => #{ summary => "Get a system document"
+               , description => "Get a document from the system storage"
+               , produces => ["application/json"]
+               , responses =>
+                   #{ <<"200">> => #{ description => "Document found." }
+                    , <<"404">> => #{ description => "Document not found." }
+                    }
+               , parameters =>
+                   [#{ name => <<"docid">>
+                     , description => <<"Document ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     , delete => #{ summary => "Delete a system document"
+                  , description => "Delete a document from the system storage"
+                  , produces => ["application/json"]
+                  , parameters =>
+                      [#{ name => <<"docid">>
+                        , description => <<"Document ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      ,#{ name => <<"store">>
+                        , description => <<"Store ID">>
+                        , in => <<"path">>
+                        , required => true
+                        , type => <<"string">>}
+                      ]
+                  }
+     , put => #{ summary => "Add/update a document."
+               , produces => ["application/json"]
+               , responses =>
+                   #{ <<"200">> => #{ description => "Document updated." }
+                    }
+               , parameters =>
+                   [#{ name => <<"body">>
+                     , description => <<"Document to be added">>
+                     , in => <<"body">>
+                     , required => true
+                     , type => <<"application/json">>}
+                   ,#{ name => <<"docid">>
+                     , description => <<"Document ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ,#{ name => <<"store">>
+                     , description => <<"Store ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+                   ]
+               }
+     },
+  [trails:trail("/:store/_system/:docid", ?MODULE, [], GetPutDelete)].
+
+
+-record(state, {conn, method, store, docid, doc}).
+
+init(_Type, Req, []) ->
+  {ok, Req, #state{}}.
+
+handle(Req, State) ->
+  {Method, Req2} = cowboy_req:method(Req),
+  check_store(Req2, State#state{method=Method}).
+
+terminate(_Reason, _Req, _State) ->
+  ok.
+
+check_store(Req, State) ->
+  {StoreName, Req2} = cowboy_req:binding(store, Req),
+  Store = barrel_lib:to_atom(StoreName),
+  case barrel_http_lib:has_store(Store) of
+    true ->
+      {DocId, Req3} = cowboy_req:binding(docid, Req),
+      State2 = State#state{store=Store,  docid=DocId},
+      route(Req3, State2);
+    false ->
+      barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req2, State)
+  end.
+
+route(Req, #state{method= <<"PUT">>}=State) ->
+  create_resource(Req, State);
+route(Req, #state{method= <<"GET">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, #state{method= <<"DELETE">>}=State) ->
+  check_resource_exists(Req, State);
+route(Req, State) ->
+  barrel_http_reply:code(405, Req, State).
+
+check_resource_exists(Req, State = #state{ store=Store, docid=DocId}) ->
+  case barrel_store:read_system_doc(Store, DocId) of
+    {ok, Doc} ->
+      route2(Req, State#state{doc=Doc});
+    {error, not_found} ->
+      barrel_http_reply:error(404, Req, State)
+  end.
+
+route2(Req, #state{method= <<"GET">>}=State) ->
+  get_resource(Req, State);
+route2(Req, #state{method= <<"DELETE">>}=State) ->
+  delete_resource(Req, State).
+
+get_resource(Req, #state{doc=Doc}=State) ->
+  barrel_http_reply:doc(Doc, Req, State).
+
+create_resource(Req, State = #state{store=Store, docid=DocId}) ->
+  {ok, Body, Req2} = cowboy_req:body(Req),
+  Doc = jsx:decode(Body, [return_maps]),
+  ok = barrel_store:write_system_doc(Store, DocId, Doc),
+  barrel_http_reply:doc(#{ok => true}, Req2, State).
+
+delete_resource(Req, State = #state{store=Store, docid=DocId}) ->
+  ok = barrel_store:delete_system_doc(Store, DocId),
+  barrel_http_reply:doc(#{ok => true}, Req, State).
