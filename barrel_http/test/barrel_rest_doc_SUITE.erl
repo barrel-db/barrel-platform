@@ -52,20 +52,22 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_db(<<"testdb">>),
   Config.
 
 end_per_suite(Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
 accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(testdb, <<"acceptget">>, Doc, []),
+  {ok, _, _} = barrel:put(<<"testdb">>, Doc, []),
 
   {200, R} = test_lib:req(get, "/testdb/acceptget"),
   J = jsx:decode(R, [return_maps]),
@@ -75,10 +77,10 @@ accept_get(_Config) ->
 accept_get_with_rev(_Config) ->
   DocId = <<"acceptgetrev">>,
   Doc1 = #{<<"id">> => DocId, <<"v">> => 1},
-  {ok, _, RevId1} = barrel:put(testdb, DocId, Doc1, []),
+  {ok, _, RevId1} = barrel:put(<<"testdb">>, Doc1, []),
   Doc2 = #{<<"id">> => DocId, <<"v">> => 2, <<"_rev">> => RevId1},
-  {ok, _, RevId2} = barrel:put(testdb, DocId, Doc2, []),
-  {ok, _, _RevId3} = barrel:delete(testdb, DocId, RevId2, []),
+  {ok, _, RevId2} = barrel:put(<<"testdb">>, Doc2, []),
+  {ok, _, _RevId3} = barrel:delete(<<"testdb">>, DocId, RevId2, []),
 
   {200, R1} = test_lib:req(get, "/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
   J1 = jsx:decode(R1, [return_maps]),
@@ -90,7 +92,7 @@ accept_get_with_rev(_Config) ->
 
 accept_get_with_history(_Config) ->
   Doc = #{<<"id">> => <<"acceptgethist">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(testdb, <<"acceptgethist">>, Doc, []),
+  {ok, _, _} = barrel:put(<<"testdb">>, Doc, []),
 
   {200, R} = test_lib:req(get, "/testdb/acceptgethist?history=true"),
   J = jsx:decode(R, [return_maps]),
@@ -105,7 +107,7 @@ accept_post(_Config) ->
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel:get(testdb, DocId, []),
+  {ok, Doc} = barrel:get(<<"testdb">>, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
@@ -115,19 +117,19 @@ accept_put(_Config) ->
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel:get(testdb, DocId, []),
+  {ok, Doc} = barrel:get(<<"testdb">>, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
 accept_delete(_Config) ->
   Doc = #{<<"id">> => <<"acceptdelete">>, <<"name">> => <<"tom">>},
-  {ok, _, RevIdBin} = barrel:put(testdb, <<"acceptdelete">>, Doc, []),
+  {ok, _, RevIdBin} = barrel:put(<<"testdb">>, Doc, []),
   RevId = binary_to_list(RevIdBin),
 
   Url = "/testdb/acceptdelete?rev=" ++ RevId,
   {200, _} = test_lib:req(delete, Url),
 
-  {error, not_found} = barrel:get(testdb, <<"acceptdelete">>, []),
+  {error, not_found} = barrel:get(<<"testdb">>, <<"acceptdelete">>, []),
   ok.
 
 reject_store_unknown(_) ->
@@ -172,7 +174,7 @@ revsdiff(_Config) ->
 
 put_rev(_Config) ->
   RevId = put_cat(),
-  {ok, Doc} = barrel:get(testdb, <<"cat">>, []),
+  {ok, Doc} = barrel:get(<<"testdb">>, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],

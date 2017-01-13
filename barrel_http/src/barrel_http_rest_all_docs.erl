@@ -63,8 +63,7 @@ route(Req, State) ->
 
 
 check_store_db(Req, State) ->
-  {StoreName, Req2} = cowboy_req:binding(store, Req),
-  Store = barrel_lib:to_atom(StoreName),
+  {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
     false ->
       barrel_http_reply:error(400, "store not found", Req2, State);

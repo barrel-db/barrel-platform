@@ -38,4 +38,4 @@ req(Method, Url, Body) when is_binary(Body) ->
   end.
 
 
-has_store(Store) -> ets:member(barrel_stores, Store).
+has_store(Store) -> barrel_store:whereis_db(Store) /= undefined.

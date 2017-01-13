@@ -160,11 +160,10 @@ check_request_revid(Req, S) ->
   check_store_db(Req, S#state{body=Body}).
 
 check_store_db(Req, State) ->
-  {StoreName, Req2} = cowboy_req:binding(store, Req),
-  Store = barrel_lib:to_atom(StoreName),
+  {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
     false ->
-      barrel_http_reply:error(400, <<"store not found: ", StoreName/binary>>, Req2, State);
+      barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req2, State);
     true ->
       {DocId, Req3} = cowboy_req:binding(docid, Req2),
       RevId = State#state.revid,
@@ -258,11 +257,11 @@ create_resource(Req, State) ->
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           { barrel:put(Store, DocId, Json, []), Req3 };
+                           { barrel:put(Store, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           { barrel:put_rev(Store, DocId, Doc, History, []), Req3 }
+                           { barrel:put_rev(Store, Doc, History, []), Req3 }
                        end
                    end,
   case Result of

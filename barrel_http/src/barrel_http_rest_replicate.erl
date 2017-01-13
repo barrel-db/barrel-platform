@@ -252,8 +252,8 @@ check_mandatories([{M,mandatory}|Tail], Props) ->
 check_optionals([], Props) ->
   Unknown = lists:filter(fun({_,unknown}) -> true;
                             (_) -> false
-                         end, maps:to_list(Props)),
-  case Unknown of
+end, maps:to_list(Props)),
+case Unknown of
     [] ->
       {ok, Props};
     L ->

@@ -29,14 +29,16 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_db(<<"testdb">>),
   Config.
 
 end_per_suite(_Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   ok.
 
 %% ----------

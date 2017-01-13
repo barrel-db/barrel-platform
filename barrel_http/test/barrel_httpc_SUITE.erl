@@ -49,19 +49,20 @@ url() ->
   <<"http://localhost:8080/testdb">>.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
-  [{http_conn, HttpConn}, {conn, testdb}|Config].
+  [{http_conn, HttpConn}, {conn, <<"testdb">>}|Config].
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
-  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_db(<<"testdb">>),
   ok = barrel_httpc:disconnect(HttpConn),
-  
+
   ok.
 
 end_per_suite(Config) ->
-  ok = barrel:delete_store(testdb),
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 %% ----------

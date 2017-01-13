@@ -39,13 +39,15 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_db(<<"testdb">>),
   Config.
 end_per_suite(Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
@@ -56,9 +58,9 @@ accept_get(_Config) ->
   0 = length(Rows1),
 
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(testdb, <<"cat">>, D1, []),
+  {ok, _, _} = barrel:put(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
-  {ok, _, DogRevId} = barrel:put(testdb, <<"dog">>, D2, []),
+  {ok, _, DogRevId} = barrel:put(<<"testdb">>, D2, []),
 
   {200, R2} = test_lib:req(get, "/testdb/_all_docs"),
   A2 = jsx:decode(R2, [return_maps]),
@@ -69,7 +71,7 @@ accept_get(_Config) ->
   ok.
 
 accept_start_key(_Config) ->
-  ok = create_docs(<<"startkey">>, 10, testdb),
+  ok = create_docs(<<"startkey">>, 10, <<"testdb">>),
 
   {200, R} = test_lib:req(get, "/testdb/_all_docs?start_key=startkey0004"),
   A = jsx:decode(R, [return_maps]),
@@ -78,7 +80,7 @@ accept_start_key(_Config) ->
   ok.
 
 accept_end_key(_Config) ->
-  ok = create_docs(<<"endkey">>, 10, testdb),
+  ok = create_docs(<<"endkey">>, 10, <<"testdb">>),
 
   {200, R} = test_lib:req(get, "/testdb/_all_docs?end_key=endkey0004"),
   A = jsx:decode(R, [return_maps]),
@@ -96,7 +98,7 @@ create_docs(Prefix, N, Conn) ->
   B = list_to_binary(S),
   Key = <<Prefix/binary, B/binary>>,
   Doc = #{<<"id">> => Key, <<"v">> => 1},
-  {ok, _, _} = barrel:put(Conn, Key, Doc, []),
+  {ok, _, _} = barrel:put(Conn, Doc, []),
   create_docs(Prefix, N-1, Conn).
 
 

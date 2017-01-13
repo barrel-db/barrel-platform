@@ -41,27 +41,29 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(dba, #{ dir => "data/dba"}),
-  ok = barrel:open_store(dbb, #{ dir => "data/dbb"}),
-  ok = barrel:open_store(dbaa, #{ dir => "data/dbaa"}),
-  ok = barrel:open_store(dbbb, #{ dir => "data/dbbb"}),
-  ok = barrel:open_store(dbaaa, #{ dir => "data/dbaaa"}),
-  ok = barrel:open_store(dbbbb, #{ dir => "data/dbbbb"}),
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel:create_db(<<"dba">>, #{}),
+  _ = barrel:create_db(<<"dbb">>, #{}),
+  _ = barrel:create_db(<<"dbaa">>, #{}),
+  _ = barrel:create_db(<<"dbbb">>, #{}),
+  _ = barrel:create_db(<<"dbaaa">>, #{}),
+  _ = barrel:create_db(<<"dbbbb">>, #{}),
+  _ = barrel:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_store(dba),
-  ok = barrel:delete_store(dbb),
-  ok = barrel:delete_store(dbaa),
-  ok = barrel:delete_store(dbbb),
-  ok = barrel:delete_store(dbaaa),
-  ok = barrel:delete_store(dbbbb),
-  ok = barrel:delete_store(testdb),
+  ok = barrel:delete_db(<<"dba">>),
+  ok = barrel:delete_db(<<"dbb">>),
+  ok = barrel:delete_db(<<"dbaa">>),
+  ok = barrel:delete_db(<<"dbbb">>),
+  ok = barrel:delete_db(<<"dbaaa">>),
+  ok = barrel:delete_db(<<"dbbbb">>),
+  ok = barrel:delete_db(<<"testdb">>),
   file:delete("data/replication.config"),
   Config.
 
 end_per_suite(Config) ->
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 

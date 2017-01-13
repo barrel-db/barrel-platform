@@ -71,8 +71,7 @@ route(Req, State) ->
   {shutdown, Req2, State}.
 
 check_store_db(Req, State) ->
-  {StoreName, Req2} = cowboy_req:binding(store, Req),
-  Store = barrel_lib:to_atom(StoreName),
+  {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
     true ->
       check_params(Req2, State#state{store=Store});

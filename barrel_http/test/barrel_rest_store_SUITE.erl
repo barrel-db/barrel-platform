@@ -33,11 +33,12 @@ all() ->
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_suite(Config) ->
-  ok = barrel:delete_store(testdb),
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 accept_get(_Config) ->
@@ -46,9 +47,9 @@ accept_get(_Config) ->
   
   #{<<"name">> := _,
     <<"id">> := _,
-    <<"doc_count">> := _,
+    <<"docs_count">> := _,
     <<"last_update_seq">> := _,
-    <<"system_doc_count">> := _,
+    <<"system_docs_count">> := _,
     <<"last_index_seq">> := _} = Info,
   ok.
 

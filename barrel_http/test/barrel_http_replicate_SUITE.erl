@@ -43,22 +43,18 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  ok = barrel:open_store(testdb, #{ dir => "data/testdb"}),
-  ok = barrel:open_store(source, #{ dir => "data/source"}),
-  [{source_conn, source()},{target_conn, target()}, {source, source}, {target, testdb}|Config].
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  _ = barrel_store:create_db(<<"source">>, #{}),
+  [{source_conn, source()},{target_conn, target()}, {source, <<"source">>}, {target, <<"testdb">>}|Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel:delete_store(testdb),
-  ok = barrel:delete_store(source),
+  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"source">>),
   ok.
 
 end_per_suite(Config) ->
-  %% TODO this gives an error
-  %% {error_db_destroy,
-  %%     "IO error: lock testdb/LOCK: No locks available"}}}
-
-  %% ok = erocksdb:destroy("testdb", []),
-  %% ok = erocksdb:destroy("source", []),
+  application:stop(barrel),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
@@ -84,7 +80,7 @@ one_doc(Config) ->
   TargetConn = proplists:get_value(target_conn, Config),
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel:put(Source, <<"a">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:put(Source, Doc, []),
   {1, [_]} = changes(Source, 0),
   {ok, _} = barrel:get(Source, <<"a">>, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
@@ -105,7 +101,7 @@ target_not_empty(Config) ->
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Doc = #{ <<"id">> => <<"targetnotempty">>, <<"v">> => 1},
-  {ok, <<"targetnotempty">>, RevId} = barrel:put(Source, <<"targetnotempty">>, Doc, []),
+  {ok, <<"targetnotempty">>, RevId} = barrel:put(Source, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
@@ -121,7 +117,7 @@ deleted_doc(Config) ->
   TargetConn = proplists:get_value(target_conn, Config),
   DocId = <<"tobedeleted">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, DocId, RevId} = barrel:put(Source, DocId, Doc, []),
+  {ok, DocId, RevId} = barrel:put(Source, Doc, []),
 
   {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
   barrel:delete(Source, DocId, RevId, []),
@@ -180,10 +176,10 @@ put_doc(DocName, Value, Config) ->
   case barrel:get(Source, DocId, []) of
     {ok, Doc} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, DocId, Doc2, []);
+      {ok,_,_} = barrel:put(Source, Doc2, []);
     {error, not_found} ->
       Doc = #{<<"id">> => DocId, <<"v">> => Value},
-      {ok,_,_} = barrel:put(Source, DocId, Doc, [])
+      {ok,_,_} = barrel:put(Source, Doc, [])
   end.
 
 delete_doc(DocName, Config) ->

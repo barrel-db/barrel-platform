@@ -48,9 +48,5 @@ route(Req, State) ->
 
 
 get_resource(Req, State) ->
-  Stores = ets:foldl(
-    fun({Store, _}, Acc) -> [barrel_lib:to_binary(Store) | Acc] end,
-    [],
-    barrel_stores
-  ),
-  barrel_http_reply:doc(lists:usort(Stores), Req, State).
+  Dbs = barrel_store:databases(),
+  barrel_http_reply:doc(Dbs, Req, State).

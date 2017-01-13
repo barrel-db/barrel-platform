@@ -50,10 +50,9 @@ handle(Req, State) ->
   {Store, Req3} = cowboy_req:binding(store, Req2),
   handle(Method, Store, Req3, State).
 
-handle(<<"POST">>, StoreName, Req, State) ->
+handle(<<"POST">>, Store, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
-  Store = barrel_lib:to_atom(StoreName),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
                          {ok, Missing, Possible} = barrel:revsdiff(Store, DocId, RevIds),
                          Acc#{DocId => #{<<"missing">> => Missing,

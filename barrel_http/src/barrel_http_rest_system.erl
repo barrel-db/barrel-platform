@@ -99,8 +99,7 @@ terminate(_Reason, _Req, _State) ->
   ok.
 
 check_store(Req, State) ->
-  {StoreName, Req2} = cowboy_req:binding(store, Req),
-  Store = barrel_lib:to_atom(StoreName),
+  {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
     true ->
       {DocId, Req3} = cowboy_req:binding(docid, Req),
@@ -120,7 +119,7 @@ route(Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 check_resource_exists(Req, State = #state{ store=Store, docid=DocId}) ->
-  case barrel_store:read_system_doc(Store, DocId) of
+  case barrel_db:read_system_doc(Store, DocId) of
     {ok, Doc} ->
       route2(Req, State#state{doc=Doc});
     {error, not_found} ->
@@ -138,9 +137,9 @@ get_resource(Req, #state{doc=Doc}=State) ->
 create_resource(Req, State = #state{store=Store, docid=DocId}) ->
   {ok, Body, Req2} = cowboy_req:body(Req),
   Doc = jsx:decode(Body, [return_maps]),
-  ok = barrel_store:write_system_doc(Store, DocId, Doc),
+  ok = barrel_db:write_system_doc(Store, DocId, Doc),
   barrel_http_reply:doc(#{ok => true}, Req2, State).
 
 delete_resource(Req, State = #state{store=Store, docid=DocId}) ->
-  ok = barrel_store:delete_system_doc(Store, DocId),
+  ok = barrel_db:delete_system_doc(Store, DocId),
   barrel_http_reply:doc(#{ok => true}, Req, State).

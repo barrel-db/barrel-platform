@@ -56,15 +56,13 @@ route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
 check_store_exist(Req, State) ->
-  {StoreBin, Req2} = cowboy_req:binding(store, Req),
-  Store = barrel_lib:to_atom(StoreBin),
+  {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
     true ->
       get_resource(Req2, State#state{store=Store});
     false ->
-      lager:info("store ~p not found, stores ~p", [Store, ets:tab2list(barrel_stores)]),
       barrel_http_reply:error(404, "store not found", Req2, State)
   end.
 
 get_resource(Req, #state{store=Store}=State) ->
-  barrel_http_reply:doc(barrel:store_infos(Store), Req, State).
+  barrel_http_reply:doc(barrel:db_infos(Store), Req, State).

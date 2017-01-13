@@ -21,6 +21,7 @@
          disconnect/1,
          infos/1,
          put/4,
+         put_rev/4,
          put_rev/5,
          get/3,
          delete/4,
@@ -71,6 +72,9 @@ post(Pid, Doc, Options) ->
 
 put(Pid, DocId, Doc, Options) ->
   gen_server:call(Pid, {put, DocId, Doc, Options}).
+
+put_rev(Pid, Doc, History, Options) ->
+  put_rev(Pid, maps:get(<<"id">>, Doc), Doc, History, Options).
 
 put_rev(Pid, DocId, Doc, History, Options) ->
   gen_server:call(Pid, {put_rev, DocId, Doc, History, Options}).
@@ -130,7 +134,7 @@ handle_call({put, DocId, Doc, _Options}, _From, State) ->
 handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
   Url = << DbUrl/binary, "/", DocId/binary, "?edit" >>,
-  put_rev(Url, Doc, History, State);
+  do_put_rev(Url, Doc, History, State);
 
 handle_call({get, DocId, Options}, _From, State) ->
   DbUrl = State#state.dbid,
@@ -284,7 +288,7 @@ post_put_resp(Code, _, State) ->
 
 %% -----------------------------------------------------------------------------
 
-put_rev(Url, Doc, History, State) ->
+do_put_rev(Url, Doc, History, State) ->
   Request = #{<<"document">> => Doc,
               <<"history">> => History},
   {Code, Reply} = req(put, Url, Request),
