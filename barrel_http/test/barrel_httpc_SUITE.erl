@@ -42,13 +42,16 @@ all() -> [ info_database
          ].
 
 init_per_suite(Config) ->
+  {ok, _} = application:ensure_all_started(barrel),
   {ok, _} = application:ensure_all_started(barrel_http),
+  timer:sleep(100),
   Config.
 
 url() ->
   <<"http://localhost:8080/testdb">>.
 
 init_per_testcase(_, Config) ->
+  
   _ = barrel_store:create_db(<<"testdb">>, #{}),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
   [{http_conn, HttpConn}, {conn, <<"testdb">>}|Config].
