@@ -49,7 +49,7 @@ init([]) ->
       {Id, Options1} = case barrel_store:whereis_db(Name) of
         undefined ->
           {barrel_keys:db_id(Name), Options0#{ create_if_missing => true}};
-        {ok, #db{id=DbId}} ->
+        #db{id=DbId} ->
           {DbId, Options0}
       end,
       db_spec(Name, Id, Options1)

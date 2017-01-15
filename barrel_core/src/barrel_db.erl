@@ -576,7 +576,7 @@ init_db(Db, Options) ->
         deleted_count := DeletedCount,
         system_docs_count := SystemDocsCount} = binary_to_term(BinInfo),
       %% init the db object with them
-      Db1 = #db{
+      Db1 = Db#db{
         updated_seq = Updated,
         indexed_seq = Indexed,
         docs_count = DocsCount,
