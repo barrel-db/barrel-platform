@@ -40,6 +40,7 @@ all() ->
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -79,7 +80,7 @@ one_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
+  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel:put(Source, Doc, []),
   {1, [_]} = changes(Source, 0),
@@ -87,7 +88,7 @@ one_doc(Config) ->
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel:get(Target, <<"a">>, []),
-  ok = barrel:stop_replication(Pid),
+  ok = barrel_replicate:stop_replication(Pid),
   ok.
 
 changes(Conn, Since) ->
@@ -105,7 +106,7 @@ target_not_empty(Config) ->
   {ok, <<"targetnotempty">>, RevId} = barrel:put(Source, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
+  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   timer:sleep(200),
 
   {ok, Doc2} = barrel:get(Target, <<"targetnotempty">>, []),
@@ -120,7 +121,7 @@ deleted_doc(Config) ->
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   {ok, DocId, RevId} = barrel:put(Source, Doc, []),
 
-  {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
+  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   barrel:delete(Source, DocId, RevId, []),
   timer:sleep(200),
   {error, not_found} = barrel:get(Target, DocId, []),
@@ -131,11 +132,11 @@ random_activity(Config) ->
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Scenario = generate_scenario(),
-  {ok, Pid} = barrel:start_replication(SourceConn, TargetConn, []),
+  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   ExpectedResults = play_scenario(Scenario, Config),
   timer:sleep(1000),
   ok = check_all(ExpectedResults, Config),
-  ok = barrel:stop_replication(Pid),
+  ok = barrel_replicate:stop_replication(Pid),
   ok.
 
 play_scenario(Scenario, Config) ->

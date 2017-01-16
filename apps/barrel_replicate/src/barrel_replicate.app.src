@@ -1,0 +1,17 @@
+{application, barrel_replicate,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { barrel_replicate_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    barrel
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.

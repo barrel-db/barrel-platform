@@ -10,6 +10,7 @@
      lager,
      crypto,
      barrel,
+     barrel_replicate,
      cowboy,
      trails,
      cowboy_swagger,

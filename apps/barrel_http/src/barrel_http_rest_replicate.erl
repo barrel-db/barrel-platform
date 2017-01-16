@@ -103,7 +103,7 @@ route(Req, State) ->
 
 check_name(Req, State) ->
   {Name, Req2} = cowboy_req:binding(name, Req),
-  case barrel:replication_info(Name) of
+  case barrel_replicate:replication_info(Name) of
     {error, not_found} ->
       barrel_http_reply:error(404, <<"unknown replication task: ", Name/binary>>, Req2, State);
     _ ->
@@ -172,7 +172,7 @@ check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
 
 get_resource(Req, State) ->
   {Name, Req2} = cowboy_req:binding(name, Req),
-  case barrel:replication_info(Name) of
+  case barrel_replicate:replication_info(Name) of
     {error, not_found} ->
       barrel_http_reply:error(404, "replication task not found", Req2, State);
     Infos ->
@@ -186,15 +186,15 @@ create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
   TargetConn = {barrel_httpc, TargetUrl},
   {ok, Name} = case ReqName of
                  undefined ->
-                   barrel:start_replication(SourceConn, TargetConn, []);
+                   barrel_replicate:start_replication(SourceConn, TargetConn, []);
                  _ ->
-                   barrel:start_replication(ReqName, SourceConn, TargetConn, [])
+                   barrel_replicate:start_replication(ReqName, SourceConn, TargetConn, [])
                end,
   Doc = #{name => Name},
   barrel_http_reply:doc(Doc, Req2, State).
 
 delete_resource(Req, #state{name=Name}=State) ->
-  ok = barrel:delete_replication(Name),
+  ok = barrel_replicate:delete_replication(Name),
   barrel_http_reply:code(200, Req, State).
 
 %% =============================================================================

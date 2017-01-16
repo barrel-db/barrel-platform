@@ -50,7 +50,7 @@ init_per_testcase(_, Config) ->
   Config.
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_replicate:clean(source(), target()),
+  ok = barrel_replicate_task:clean(source(), target()),
   ok = barrel_db:clean(target()),
   ok = barrel_db:clean(source()),
   ok.

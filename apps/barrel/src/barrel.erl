@@ -320,7 +320,7 @@ start_replication(Source, Target) ->
 
 %% TODO: maybe we should pass the calculated replication id in options?
 start_replication(Source, Target, Options) when is_list(Options) ->
-  Name = barrel_replicate:repid(Source, Target),
+  Name = barrel_replicate_task:repid(Source, Target),
   start_replication(Name, Source, Target, Options);
 
 start_replication(Name, Source, Target) ->
@@ -328,19 +328,19 @@ start_replication(Name, Source, Target) ->
 
 start_replication(Name, Source, Target, Options) ->
   Config = #{source => Source, target => Target, options => Options},
-  case barrel_replicate_manager:start_replication(Name, Config) of
+  case barrel_replicate:start_replication(Name, Config) of
     ok -> {ok, Name};
     Error -> Error
   end.
 
 stop_replication(Name) ->
-  barrel_replicate_manager:stop_replication(Name).
+  barrel_replicate:stop_replication(Name).
 
 delete_replication(Name) ->
-  barrel_replicate_manager:delete_replication(Name).
+  barrel_replicate:delete_replication(Name).
 
 replication_info(Name) ->
-  case barrel_replicate_manager:where(Name) of
-    Pid when is_pid(Pid) -> barrel_replicate:info(Pid);
+  case barrel_replicate:where(Name) of
+    Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.

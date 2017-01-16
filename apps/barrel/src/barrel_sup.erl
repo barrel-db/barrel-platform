@@ -63,7 +63,6 @@ init([]) ->
     , ?sup(barrel_db_sup)
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
-    , ?sup(barrel_replicator_sup)
   ],
 
   {ok, { {one_for_one, 5, 10}, Specs} }.

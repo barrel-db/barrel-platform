@@ -357,7 +357,7 @@ change_with_revtree(Change, _DocInfo, false) ->
 change_with_doc(Change, DocId, RevId, Db, ReadOptions, true) ->
   case get_doc_rev(Db, DocId, RevId, ReadOptions) of
     {ok, Doc} -> Change#{ doc => Doc };
-    not_found -> Change#{ doc => {error, missing} }
+    {error, not_found} -> Change#{ doc => {error, missing} }
   end;
 
 change_with_doc(Change, _DocId, _RevId, _Ref, _ReadOptions, false) ->

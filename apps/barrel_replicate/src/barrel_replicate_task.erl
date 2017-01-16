@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_replicate).
+-module(barrel_replicate_task).
 -author("Bernard Notarianni").
 
 -behaviour(gen_server).
@@ -306,7 +306,8 @@ checkpoint_start_seq(Source, Target, RepId) ->
   min(LastSeqTarget, LastSeqSource).
 
 read_last_seq(Db, RepId) ->
-  case read_checkpoint_doc(Db, RepId) of
+  lager:info("read_checkpoint_doc(~p,~p)", [Db, RepId]),
+  case catch read_checkpoint_doc(Db, RepId) of
     {ok, Doc} ->
       History = maps:get(<<"history">>, Doc),
       Sorted = lists:sort(fun(H1,H2) ->

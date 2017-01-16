@@ -10,7 +10,8 @@
      lager,
      crypto,
      rocksdb,
-     uuid
+     uuid,
+     sext
     ]},
    {env, []},
    {modules, []},

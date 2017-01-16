@@ -1,4 +1,4 @@
--module(barrel_replicate_sup).
+-module(barrel_replicate_task_sup).
 -author("Benoit Chesneau").
 
 %% API
@@ -13,11 +13,11 @@ start_link() ->
 
 init([]) ->
   Spec =
-    #{id => barrel_replicate,
-      start => {barrel_replicate, start_link, []},
+    #{id => barrel_replicate_task,
+      start => {barrel_replicate_task, start_link, []},
       restart => transient,
       shutdown => 2000,
       type => worker,
-      modules => [barrel_replicate]},
+      modules => [barrel_replicate_task]},
   
   {ok, {{simple_one_for_one, 5, 10}, [Spec]}}.

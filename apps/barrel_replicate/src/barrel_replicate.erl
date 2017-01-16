@@ -1,13 +1,16 @@
--module(barrel_replicate_manager).
+-module(barrel_replicate).
 -author("Benoit Chesneau").
 -behaviour(gen_server).
 
 -export([
   start_link/0,
   start_replication/2,
+  start_replication/3,
+  start_replication/4,
   stop_replication/1,
   delete_replication/1,
-  where/1
+  where/1,
+  replication_info/1
 ]).
 
 %% API
@@ -29,14 +32,41 @@ start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 
-start_replication(Name, Config) ->
-  gen_server:call(?MODULE, {start_replication, Name, Config}).
+%% replication API
+start_replication(Source, Target) ->
+  start_replication(Source, Target, []).
+
+%% TODO: maybe we should pass the calculated replication id in options?
+start_replication(Source, Target, Options) when is_list(Options) ->
+  Name = barrel_replicate_task:repid(Source, Target),
+  start_replication(Name, Source, Target, Options);
+
+start_replication(Name, Source, Target) ->
+  start_replication(Name, Source, Target, []).
+
+start_replication(Name, Source, Target, Options) ->
+  Config = #{source => Source, target => Target, options => Options},
+  case gen_server:call(?MODULE, {start_replication, Name, Config}) of
+    ok -> {ok, Name};
+    Error -> Error
+  end.
 
 stop_replication(Name) ->
   gen_server:call(?MODULE, {stop_replication, Name}).
 
 delete_replication(Name) ->
   gen_server:call(?MODULE, {delete_replication, Name}).
+
+
+replication_info(Name) ->
+  case barrel_replicate:where(Name) of
+    Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
+    undefined -> {error, not_found}
+  end.
+
+
+
+
 
 where(Name) ->
   case find(Name) of
@@ -98,7 +128,7 @@ terminate(_Reason, _State) ->
   Spec = ets:fun2ms(fun({Pid, _}) when is_pid(Pid) -> Pid end),
   Pids = ets:select(replication_ids, Spec),
   lists:foreach(
-    fun(Pid) -> supervisor:terminate_child(barrel_replicate_sup, Pid) end,
+    fun(Pid) -> supervisor:terminate_child(barrel_replicate_task_sup, Pid) end,
     Pids
   ),
   ets:delete(replication_names),
@@ -170,13 +200,13 @@ maybe_start_replication(Name, Config, State) ->
 
 
 config_repid(#{ source := Source, target := Target}) ->
-  barrel_replicate:repid(Source, Target).
+  barrel_replicate_task:repid(Source, Target).
 
 do_start_replication(Name, RepId, Config, State) ->
   #{ source := Source, target := Target, options := Options} = Config,
   Persisted = proplists:get_value(persist, Options, false),
   {ok, Pid} = supervisor:start_child(
-    barrel_replicate_sup,
+    barrel_replicate_task_sup,
     [Name, Source, Target, Options]
   ),
   register_replication(Name, RepId, Pid, Persisted, Config, State).
@@ -207,7 +237,7 @@ do_stop_replication(Name) ->
     {ok, {_RepId, nil, _Persisted}} ->
       ok;
     {ok, {RepId, Pid, Persisted}} ->
-      ok = supervisor:terminate_child(barrel_replicate_sup, Pid),
+      ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       case Persisted of
         true ->
           [{RepId, {Name, _, _, MRef}}] = ets:lookup(replication_ids, RepId),
