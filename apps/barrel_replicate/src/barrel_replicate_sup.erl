@@ -28,8 +28,6 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  _ = ets:new()
-  
   Manager =
     #{id => barrel_replicate,
       start => {barrel_replicate, start_link, []},
