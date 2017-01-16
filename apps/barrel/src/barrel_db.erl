@@ -509,8 +509,13 @@ handle_call({delete, K}, _From, Db) ->
   Reply = (catch do_delete(K, Db)),
   {reply, Reply, Db};
 handle_call({update_doc, DocId, Fun}, _From, Db) ->
-  Reply = (catch do_update(DocId, Fun, Db)),
-  {reply, Reply, Db};
+  {Reply, NewDb} = case catch do_update(DocId, Fun, Db) of
+            {ok, DocId, NewRev, Db2} ->
+              {{ok, DocId, NewRev}, Db2};
+            Error ->
+              {Error, Db}
+          end,
+  {reply, Reply, NewDb};
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 handle_call(delete_db, From, #db{ name=Name, id=Id, store=Store } = Db) ->
@@ -641,18 +646,18 @@ do_update(DocId, Fun, Db = #db{ name=Name, id=DbId, store=Store, indexer=Idx }) 
       case write_doc(Db, DocId, LastSeq, Inc, DocInfo2#{ update_seq => NewSeq}, Body) of
         ok ->
           ets:update_counter(barrel_dbs, Name, {#db.updated_seq, 1}),
-          ets:update_counter(barrel_dbs, Name, {#db.docs_count, Inc}),
+          NewCount = ets:update_counter(barrel_dbs, Name, {#db.docs_count, Inc}),
           {ok, _Seq} = barrel_indexer:refresh_index(Idx, Seq),
-          _ = do_update_index_seq(NewSeq, Db),
+          Db2 = do_update_index_seq(NewSeq, Db#db{updated_seq=NewSeq, docs_count=NewCount}),
           barrel_db_event:notify(Name, db_updated),
-          {ok, DocId, NewRev};
+          {ok, DocId, NewRev, Db2};
         WriteError ->
           lager:error("db error: error writing ~p on ~p", [DocId, Name]),
           WriteError
       end;
     ok ->
       #{ current_rev := Rev } = DocInfo,
-      {ok, DocId, Rev};
+      {ok, DocId, Rev, Db};
     Conflict ->
       {error, Conflict}
   end.
@@ -721,5 +726,5 @@ do_update_index_seq(Seq, Db = #db{ id=DbId, store=Store}) ->
   ok = rocksdb:put(
     Store, barrel_keys:db_meta_key(DbId, ?DB_INFO), term_to_binary(DbInfo),  [{sync, true}]
   ),
-  ets:insert(barrel_dbs, {indexed_seq, Seq}),
-  ok.
+  ets:insert(barrel_dbs, Db#db{indexed_seq=Seq}),
+  Db.

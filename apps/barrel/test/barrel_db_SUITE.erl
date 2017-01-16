@@ -174,6 +174,7 @@ change_since(_Config) ->
   [] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel:put(<<"testdb">>, Doc, []),
+  [<<"aa">>] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel:put(<<"testdb">>, Doc2, []),
   {ok, _} = barrel:get(<<"testdb">>, <<"bb">>, []),
