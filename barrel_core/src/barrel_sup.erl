@@ -53,7 +53,7 @@ init([]) ->
       id => barrel_store,
       start => {barrel_store, start_link, []},
       restart => permanent,
-      shutdown => 2000,
+      shutdown => 5000,
       type => worker,
       modules => [barrel_store]
     },

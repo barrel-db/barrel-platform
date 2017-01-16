@@ -49,6 +49,7 @@ all() -> [ accept_get
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 init_per_testcase(_, Config) ->

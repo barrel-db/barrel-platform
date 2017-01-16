@@ -33,6 +33,7 @@ all() ->
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel),
   _ = barrel_store:create_db(<<"testdb">>, #{}),
   Config.
 

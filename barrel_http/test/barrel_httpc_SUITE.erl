@@ -51,7 +51,6 @@ url() ->
   <<"http://localhost:8080/testdb">>.
 
 init_per_testcase(_, Config) ->
-  
   _ = barrel_store:create_db(<<"testdb">>, #{}),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
   [{http_conn, HttpConn}, {conn, <<"testdb">>}|Config].

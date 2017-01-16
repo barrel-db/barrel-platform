@@ -114,6 +114,7 @@ start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
+  process_flag(trap_exit, true),
   {ok, Ref} = init_store(),
   %% we load the list of databases in memory
   ok = init_dbs(Ref),
@@ -153,6 +154,7 @@ handle_info(_Info, State) ->
   {noreply, State}.
 
 terminate(_Reason, State) ->
+  lager:info("terminate ~p~n", [_Reason]),
   case maps:find(ref, State) of
     {ok, Ref} ->
       _ = (catch rocksdb:close(Ref));
