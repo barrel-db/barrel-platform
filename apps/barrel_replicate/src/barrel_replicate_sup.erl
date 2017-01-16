@@ -28,7 +28,9 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    Manager =
+  _ = ets:new()
+  
+  Manager =
     #{id => barrel_replicate,
       start => {barrel_replicate, start_link, []},
       restart => permanent,
@@ -36,7 +38,7 @@ init([]) ->
       type => worker,
       modules => [barrel_replicate]},
     
-    TaskSup =
+  TaskSup =
     #{id => barrel_replicate_sup,
       start => {barrel_replicate_task_sup, start_link, []},
       restart => transient,

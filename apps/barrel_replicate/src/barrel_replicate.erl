@@ -64,10 +64,6 @@ replication_info(Name) ->
     undefined -> {error, not_found}
   end.
 
-
-
-
-
 where(Name) ->
   case find(Name) of
     {ok, {_RepId, Pid, _Persisted}} -> Pid;
