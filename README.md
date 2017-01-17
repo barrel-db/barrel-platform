@@ -39,7 +39,7 @@ with [rebar3](https://www.rebar3.org/). You need to have Erlang 19.1  and the la
 ## Quickstart
 
     $ make rel
-    $ ./_build/default/rel/barrel/bin/barrel_http start
+    $ ./_build/default/rel/barrel/bin/barrel start
 
 ## Building a release
 

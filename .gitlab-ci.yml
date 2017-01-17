@@ -7,11 +7,5 @@ before_script:
 
 test:
   script:
-    - make apply
-    - make rel
-    - ./_build/prod/rel/barrel/bin/barrel_http start
-    - sleep 5
-    - ./_build/prod/rel/barrel/bin/barrel_http ping
-    - 'curl -X PUT --header "Content-Type: application/json" --header "Accept: application/json" "http://localhost:8080/testdb/db1"'
-    - 'curl -X GET --header "Accept: application/json" "http://localhost:8080/testdb/db1/_all_docs"'
-    - ./_build/prod/rel/barrel/bin/barrel_http stop
+    - ./support/rebar3 eunit
+    - ./support/rebar3 ct

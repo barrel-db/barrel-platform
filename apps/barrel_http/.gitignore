@@ -15,5 +15,4 @@ erl_crash.dump
 log
 logs
 _build
-docs
-*.iml
+data
