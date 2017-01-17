@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_rest_store).
+-module(barrel_http_rest_dbs).
 -author("Bernard Notarianni").
 
 -export([init/3]).
@@ -23,20 +23,13 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Get the store informations"
+    #{ get => #{ summary => "Get list of available stores"
                , produces => ["application/json"]
-               , parameters =>
-                   [#{ name => <<"store">>
-                     , description => <<"Store ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
                }
      },
-  [trails:trail("/:store", ?MODULE, [], Metadata)].
+  [trails:trail("/_dbs/", ?MODULE, [], Metadata)].
 
--record(state, {method, store}).
+-record(state, {method, store, databases, dbid}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -49,20 +42,11 @@ terminate(_Reason, _Req, _State) ->
   ok.
 
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_store_exist(Req, State);
-route(Req, #state{method= <<"POST">>}) ->
-  barrel_http_rest_doc:handle_post(Req);
+  get_resource(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
-check_store_exist(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
-    true ->
-      get_resource(Req2, State#state{store=Store});
-    false ->
-      barrel_http_reply:error(404, "store not found", Req2, State)
-  end.
 
-get_resource(Req, #state{store=Store}=State) ->
-  barrel_http_reply:doc(barrel:db_infos(Store), Req, State).
+get_resource(Req, State) ->
+  Dbs = barrel_store:databases(),
+  barrel_http_reply:doc(Dbs, Req, State).

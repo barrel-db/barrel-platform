@@ -12,29 +12,42 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_rest_store_SUITE).
+-module(barrel_rest_db_SUITE).
 
 -export([
   all/0,
   end_per_suite/1,
-  init_per_suite/1
+  init_per_suite/1,
+  init_per_testcase/2,
+  end_per_testcase/2
 ]).
 
 -export([
-    accept_get/1
+    db_info/1
   , reject_unknown_store/1
+  , dbs/1
 ]).
 
 all() ->
   [
-    accept_get
+    db_info
     , reject_unknown_store
+    , dbs
   ].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
   {ok, _} = application:ensure_all_started(barrel),
-  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  Config.
+
+init_per_testcase(_, Config) ->
+  _ = barrel:create_db(<<"testdb">>, #{}),
+  _ = barrel:create_db(<<"source">>, #{}),
+  Config.
+
+end_per_testcase(_, Config) ->
+  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"source">>),
   Config.
 
 end_per_suite(Config) ->
@@ -42,7 +55,7 @@ end_per_suite(Config) ->
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
-accept_get(_Config) ->
+db_info(_Config) ->
   {200, R1} = test_lib:req(get, "/testdb"),
   Info = jsx:decode(R1, [return_maps]),
   
@@ -58,3 +71,8 @@ reject_unknown_store(_Config) ->
   {404, _} = test_lib:req(get, "/badstore"),
   ok.
 
+dbs(_Config) ->
+  {200, R1} = test_lib:req(get, "/_dbs"),
+  A1 = jsx:decode(R1, [return_maps]),
+  [<<"source">>, <<"testdb">>] = A1,
+  ok.

@@ -46,6 +46,8 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
   ok = barrel:delete_db(<<"testdb">>),
   Config.
+
+
 end_per_suite(Config) ->
   application:stop(barrel),
   _ = (catch rocksdb:destroy("docs", [])),
