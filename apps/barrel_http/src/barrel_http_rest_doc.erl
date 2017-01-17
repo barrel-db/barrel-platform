@@ -184,7 +184,6 @@ check_store_db(Req, State) ->
       route(Req3, State2)
   end.
 
-
 route(Req, #state{method= <<"POST">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
@@ -216,11 +215,14 @@ check_json_properties(Req, State) ->
 
 
 check_id_property(Req, #state{body=Json}=State) ->
-  case maps:is_key(<<"id">>, Json) of
-    true ->
-      route2(Req, State);
-    false ->
-      barrel_http_reply:error(400, <<"missing property id in document">>, Req, State)
+  {DocId, Req2} = cowboy_req:binding(docid, Req),
+  case Json of
+    #{ <<"id">> := DocId} ->
+      route2(Req2, State);
+    #{ <<"id">> := _ } ->
+      barrel_http_reply:error(400, <<"id in document differs from the path">>, Req2, State);
+    _ ->
+      barrel_http_reply:error(400, <<"missing property id in document">>, Req2, State)
   end.
 
 

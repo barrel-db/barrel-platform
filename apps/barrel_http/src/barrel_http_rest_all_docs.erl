@@ -72,7 +72,6 @@ check_store_db(Req, State) ->
       get_resource(Req2, State2)
   end.
 
-
 get_resource(Req, State = #state{store=Store}) ->
   {Options, Req2} = parse_params(Req),
   Fun = fun(DocId, DocInfo, _Doc, Acc1) ->
