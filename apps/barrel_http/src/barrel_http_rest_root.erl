@@ -27,7 +27,18 @@ trails() ->
   Metadata =
     #{ get => #{ summary => "Information about Barrel-DB version"
                , produces => ["application/json"]
-               }
+               },
+      
+      put => #{ summary => "Create a new database"
+              , produces => ["application/json"]
+              , parameters =>
+                [#{ name => <<"dbid">>
+                  , description => <<"Database ID">>
+                  , in => <<"path">>
+                  , required => true
+                  , type => <<"string">>}
+                ]
+              }
      },
   [trails:trail("/", ?MODULE, [], Metadata)].
 

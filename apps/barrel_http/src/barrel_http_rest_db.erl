@@ -23,7 +23,7 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Get the store informations"
+    #{ get => #{ summary => "Get the database informations"
                , produces => ["application/json"]
                , parameters =>
                    [#{ name => <<"store">>
@@ -32,8 +32,28 @@ trails() ->
                      , required => true
                      , type => <<"string">>}
                    ]
-               }
-     },
+               },
+      put => #{ summary => "Create a new database"
+        , produces => ["application/json"]
+        , parameters =>
+        [#{ name => <<"dbid">>
+          , description => <<"Database ID">>
+          , in => <<"path">>
+          , required => true
+          , type => <<"string">>}
+        ]
+      },
+      delete => #{ summary => "Delete a database"
+        , produces => ["application/json"]
+        , parameters =>
+        [#{ name => <<"dbid">>
+          , description => <<"Database ID">>
+          , in => <<"path">>
+          , required => true
+          , type => <<"string">>}
+        ]
+      }
+    },
   [trails:trail("/:store", ?MODULE, [], Metadata)].
 
 -record(state, {method, store}).
@@ -50,6 +70,21 @@ terminate(_Reason, _Req, _State) ->
 
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_exist(Req, State);
+route(Req, #state{method= <<"PUT">>}=State) ->
+  {Store, Req2} = cowboy_req:binding(store, Req),
+  case barrel:create_db(Store, #{}) of
+    {ok, _} ->
+      barrel_http_reply:json(200, #{ ok => true }, Req2, State);
+    {error, db_exists} ->
+      barrel_http_reply:error(409, "db exists", Req2, State);
+    Error ->
+      lager:error("got server error ~p~n", [Error]),
+      barrel_http_reply:error(500, "db error", Req2, State)
+  end;
+route(Req, #state{method= <<"DELETE">>}=State) ->
+  {Store, Req2} = cowboy_req:binding(store, Req),
+  ok = barrel:delete_db(Store),
+  barrel_http_reply:json(200, #{ ok => true }, Req2, State);
 route(Req, #state{method= <<"POST">>}) ->
   barrel_http_rest_doc:handle_post(Req);
 route(Req, State) ->
