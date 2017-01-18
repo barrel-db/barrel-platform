@@ -28,16 +28,41 @@ trails() ->
     #{ get => #{ summary => "Get list of all available documents."
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"dbid">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"store">>
+                   [#{ name => <<"store">>
                      , description => <<"Store ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
+
+                     , #{ name => <<"gt">>
+                     , description => <<"greater than">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"gte">>
+                     , description => <<"greater or equal to">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"lt">>
+                     , description => <<"lesser than">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"lte">>
+                     , description => <<"lesser or equal to">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"max">>
+                     , description => <<"maximum keys to return">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"integer">>}
                    ]
                }
      },
@@ -61,7 +86,6 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, State) ->
   barrel_http_reply:error(405, "method not allowed", Req, State).
 
-
 check_store_db(Req, State) ->
   {Store, Req2} = cowboy_req:binding(store, Req),
   case barrel_http_lib:has_store(Store) of
@@ -72,33 +96,56 @@ check_store_db(Req, State) ->
       get_resource(Req2, State2)
   end.
 
-get_resource(Req, State = #state{store=Store}) ->
-  {Options, Req2} = parse_params(Req),
-  Fun = fun(DocId, DocInfo, _Doc, Acc1) ->
-            Rev = maps:get(current_rev, DocInfo),
-            Row = #{<<"id">> => DocId,
-                    <<"rev">> => Rev},
-            {ok, [Row | Acc1]}
-        end,
-  Rows = barrel:fold_by_id(Store, Fun, [], Options),
-  OffSet = 0,
-  TotalRows = length(Rows),
-  Reply = #{<<"offset">> => OffSet,
-            <<"rows">> => Rows,
-            <<"total_rows">> => TotalRows},
-  barrel_http_reply:doc(Reply, Req2, State).
+get_resource(Req0, State = #state{store=Store}) ->
+  Options = parse_params(Req0),
+  {ok, Req} = cowboy_req:chunked_reply(
+    200,
+    [{<<"Content-Type">>, <<"application/json">>}],
+    Req0
+  ),
+  %% start the initial chunk
+  ok = cowboy_req:chunk(<<"{\"docs\":[">>, Req),
+  Fun =
+    fun
+      (_DocId, _DocInfo, {ok, nil}, Acc) ->
+        {ok, Acc};
+      (_DocId, _DocInfo, {ok, Doc}, {N, Pre}) ->
+        Chunk = << Pre/binary, (jsx:encode(Doc))/binary >>,
+        ok = cowboy_req:chunk(Chunk, Req),
+        {ok, {N + 1, <<",">>}}
+    end,
+  {Count, _} = barrel:fold_by_id(Store, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
+  %% close the document list and return the calculated count
+  ok = cowboy_req:chunk(
+    iolist_to_binary([
+      <<"],">>,
+      <<"\"_count\":">>,
+      integer_to_binary(Count),
+      <<"}">>
+      ]),
+    Req
+  ),
+  {ok, Req, State}.
 
 parse_params(Req) ->
-  {Params, Req2} = cowboy_req:qs_vals(Req),
+  {Params, _} = cowboy_req:qs_vals(Req),
   Options = lists:foldl(fun({Param, Value}, Acc) ->
                             [param(Param, Value)|Acc]
                         end, [], Params),
-  {Options, Req2}.
+  Options.
 
 param(<<"start_key">>, StartKey) ->
-  {start_key, StartKey};
+  {gte, StartKey};
 param(<<"end_key">>, EndKey) ->
-  {end_key, EndKey};
+  {lte, EndKey};
+param(<<"gt">>, StartKey) ->
+  {gt, StartKey};
+param(<<"gte">>, EndKey) ->
+  {gte, EndKey};
+param(<<"lt">>, StartKey) ->
+  {gt, StartKey};
+param(<<"lte">>, EndKey) ->
+  {gte, EndKey};
 param(<<"max">>, MaxBin) ->
   {max, binary_to_integer(MaxBin)}.

@@ -57,20 +57,20 @@ end_per_suite(Config) ->
 accept_get(_Config) ->
   {200, R1} = test_lib:req(get, "/testdb/_all_docs"),
   A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
-  Rows1 = maps:get(rows, A1),
+  Rows1 = maps:get(docs, A1),
   0 = length(Rows1),
 
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:put(<<"testdb">>, D1, []),
+  {ok, _, CatRevId} = barrel:put(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
-  {ok, _, DogRevId} = barrel:put(<<"testdb">>, D2, []),
+  {ok, _, _DogRevId} = barrel:put(<<"testdb">>, D2, []),
 
   {200, R2} = test_lib:req(get, "/testdb/_all_docs"),
   A2 = jsx:decode(R2, [return_maps]),
-  Rows2 = maps:get(<<"rows">>, A2),
+  Rows2 = maps:get(<<"docs">>, A2),
   2 = length(Rows2),
   Row = hd(Rows2),
-  #{<<"id">> := <<"dog">>, <<"rev">> := DogRevId} = Row,
+  #{<<"id">> := <<"cat">>, <<"_rev">> := CatRevId} = Row,
   ok.
 
 accept_start_key(_Config) ->
@@ -78,7 +78,7 @@ accept_start_key(_Config) ->
 
   {200, R} = test_lib:req(get, "/testdb/_all_docs?start_key=startkey0004"),
   A = jsx:decode(R, [return_maps]),
-  #{<<"rows">> := Rows} = A,
+  #{<<"docs">> := Rows} = A,
   7 = length(Rows),
   ok.
 
@@ -87,7 +87,7 @@ accept_end_key(_Config) ->
 
   {200, R} = test_lib:req(get, "/testdb/_all_docs?end_key=endkey0004"),
   A = jsx:decode(R, [return_maps]),
-  #{<<"rows">> := Rows} = A,
+  #{<<"docs">> := Rows} = A,
   4 = length(Rows),
   ok.
 
