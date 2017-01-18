@@ -80,7 +80,6 @@ handle(Req, State) ->
 terminate(_Reason, _Req, _State) ->
   ok.
 
-
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_db(Req, State);
 route(Req, State) ->
@@ -98,9 +97,11 @@ check_store_db(Req, State) ->
 
 get_resource(Req0, State = #state{store=Store}) ->
   Options = parse_params(Req0),
+  #{last_update_seq := Seq} = barrel:db_infos(Store),
   {ok, Req} = cowboy_req:chunked_reply(
     200,
-    [{<<"Content-Type">>, <<"application/json">>}],
+    [{<<"Content-Type">>, <<"application/json">>},
+      {<<"ETag">>,  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>}],
     Req0
   ),
   %% start the initial chunk
