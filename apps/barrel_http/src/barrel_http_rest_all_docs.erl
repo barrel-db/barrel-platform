@@ -145,8 +145,8 @@ param(<<"gt">>, StartKey) ->
 param(<<"gte">>, EndKey) ->
   {gte, EndKey};
 param(<<"lt">>, StartKey) ->
-  {gt, StartKey};
+  {lt, StartKey};
 param(<<"lte">>, EndKey) ->
-  {gte, EndKey};
+  {lte, EndKey};
 param(<<"max">>, MaxBin) ->
   {max, binary_to_integer(MaxBin)}.
