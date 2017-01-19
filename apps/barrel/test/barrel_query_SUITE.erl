@@ -72,7 +72,7 @@ order_by_key(_Config) ->
   timer:sleep(400),
   {ok, _Doc1} = barrel:get(<<"testdb">>, <<"AndersenFamily">>, []),
 
-  Fun = fun(Id, D, Acc) -> {ok, [{Id, D} | Acc]} end,
+  Fun = fun(Id, _D, V, Acc) -> {ok, [{Id, V} | Acc]} end,
   [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:query(<<"testdb">>, <<"id">>, Fun, [], []),
   [{<<"AndersenFamily">>, null}] = barrel:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
   ok.

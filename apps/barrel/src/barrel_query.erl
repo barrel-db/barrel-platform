@@ -67,11 +67,11 @@ query1(#db{store=Store}=Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
      {lte, EndKey},
      {max, Max},
      {read_options, ReadOptions}],
-
+  
   WrapperFun =
     fun(_KeyBin, BinEntries, Acc) ->
-        Entries = binary_to_term(BinEntries),
-        fold_entries(Entries, Fun, Path, Db, ReadOptions, Acc)
+      Entries = binary_to_term(BinEntries),
+      fold_entries(Entries, Fun, Path, Db, ReadOptions, Acc)
     end,
 
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOptions)
@@ -83,7 +83,7 @@ fold_entries([DocId | Rest], Fun, Path, Db, ReadOptions, Acc) ->
   case Res of
     {ok, Doc} ->
       Val = barrel_json:get(Path, Doc),
-      case Fun(DocId, Val, Acc) of
+      case Fun(DocId, Doc, Val, Acc) of
         {ok, Acc2} ->
           fold_entries(Rest, Fun, Path, Db, ReadOptions, Acc2);
         Else ->

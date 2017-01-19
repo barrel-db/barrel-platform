@@ -49,6 +49,7 @@ init(_) ->
                   , barrel_http_rest_revsdiff
                   , barrel_http_rest_changes
                   , barrel_http_rest_all_docs
+                  , barrel_http_rest_walk
                   , barrel_http_rest_dbs
                   , barrel_http_rest_db
                   

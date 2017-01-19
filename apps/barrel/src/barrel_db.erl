@@ -96,7 +96,6 @@ get(DbName, DocId, Options) ->
       try get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions)
       after rocksdb:release_snapshot(Snapshot)
       end
-      
   end.
 
 get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
@@ -144,7 +143,6 @@ get_doc_info_int(#db{id=DbId, store=Store}, DocId, ReadOptions) ->
     {ok, BinDocInfo} -> {ok, binary_to_term(BinDocInfo)};
     not_found -> {error, not_found}
   end.
-
 
 
 put(DbName, Doc, _Options) when is_map(Doc) ->
