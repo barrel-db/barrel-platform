@@ -68,7 +68,7 @@ List of available commands:
     $ ./_build/prod/rel/barrel/bin/barrel_http
 
 You can consult the embedded [Swagger](http://swagger.io/) page at
-http://localhost:8080/api-docs
+http://localhost:7080/api-docs
 
 <img src="doc/swagger.png" width="800">
 

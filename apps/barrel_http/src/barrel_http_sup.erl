@@ -37,16 +37,40 @@
 start_link() ->
   supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
+-define(DEFAULT_NB_ACCEPTORS, 100).
+-define(DEFAULT_PORT, 7080).
+
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 
 init(_Args) ->
-  Http =#{
-    id => barrel_http,
-    start => {barrel_http, start_link, []}
-  },
-  Specs = [Http],
-  SupFlags = #{strategy => one_for_one, intensity => 5, period => 10},
-  {ok, {SupFlags, Specs}}.
+  ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
+  NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
+  
+  Trails =
+  trails:trails([ cowboy_swagger_handler
+                  , barrel_http_rest_system
+                  , barrel_http_rest_replicate
+                  , barrel_http_rest_revsdiff
+                  , barrel_http_rest_changes
+                  , barrel_http_rest_all_docs
+                  , barrel_http_rest_walk
+                  , barrel_http_rest_dbs
+                  , barrel_http_rest_db
+    
+                  , barrel_http_rest_doc
+                  , barrel_http_rest_root
+                ]),
+  trails:store(Trails),
+  Dispatch = trails:single_host_compile(Trails),
+  
+  
+  Http = ranch:child_spec(
+    barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_protocol,
+    [{env, [{dispatch, Dispatch}]}]
+  ),
 
+  Specs = [Http],
+  SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
+  {ok, {SupFlags, Specs}}.

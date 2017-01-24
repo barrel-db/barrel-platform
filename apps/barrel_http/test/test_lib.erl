@@ -30,7 +30,7 @@ req(Method, Route, String) when is_list(String) ->
   req(Method, Route, Body);
 
 req(Method, Route, Body) when is_binary(Body) ->
-  Server = "http://localhost:8080",
+  Server = "http://localhost:7080",
   Path = list_to_binary(Server ++ Route),
   barrel_http_lib:req(Method, Path, Body).
 

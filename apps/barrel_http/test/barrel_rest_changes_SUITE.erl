@@ -120,7 +120,7 @@ accept_get_history_all(_Config) ->
 %%=======================================================================
 
 accept_get_longpoll(_Config) ->
-  Url = <<"http://localhost:8080/testdb/_changes?feed=longpoll">>,
+  Url = <<"http://localhost:7080/testdb/_changes?feed=longpoll">>,
   Opts = [async, {recv_timeout, infinity}],
   LoopFun = fun(Loop, Ref) ->
                 receive
@@ -154,9 +154,9 @@ accept_get_longpoll(_Config) ->
   ok=  LoopFun(LoopFun, ClientRef2).
 
 accept_get_longpoll_heartbeat(_Config) ->
-  {ok, Socket} = gen_tcp:connect({127,0,0,1}, 8080, [binary, {active,true}]),
+  {ok, Socket} = gen_tcp:connect({127,0,0,1}, 7080, [binary, {active,true}]),
   Request = ["GET /testdb/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
-             "Host:localhost:8080\r\n",
+             "Host:localhost:7080\r\n",
              "Accept: application/json\r\n",
              "\r\n"],
   [ok = gen_tcp:send(Socket, L) || L <- Request],
@@ -195,7 +195,7 @@ accept_get_longpoll_heartbeat(_Config) ->
 accept_get_eventsource(_Config) ->
   Self = self(),
   Pid = spawn(fun () -> wait_response([], 4, Self) end),
-  Url = <<"http://localhost:8080/testdb/_changes?feed=eventsource">>,
+  Url = <<"http://localhost:7080/testdb/_changes?feed=eventsource">>,
   Opts = [async, {stream_to, Pid}],
   {ok, Ref} = hackney:get(Url, [], <<>>, Opts),
   CatRevId = put_cat(),

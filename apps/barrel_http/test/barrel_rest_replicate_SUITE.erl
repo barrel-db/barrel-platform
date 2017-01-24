@@ -71,8 +71,8 @@ end_per_suite(Config) ->
 accept_post_get(_Config) ->
   {404, _} = test_lib:req(get, "/dbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/dba">>,
-              <<"target">> => <<"http://localhost:8080/dbb">>},
+  Request = #{<<"source">> => <<"http://localhost:7080/dba">>,
+              <<"target">> => <<"http://localhost:7080/dbb">>},
   {200, R} = test_lib:req(post, "/_replicate", Request),
   #{<<"name">> := NameBin} = jsx:decode(R, [return_maps]),
   Name = binary_to_list(NameBin),
@@ -96,8 +96,8 @@ accept_post_get(_Config) ->
 accept_put_get(_Config) ->
   {404, _} = test_lib:req(get, "/dbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/dbaa">>,
-              <<"target">> => <<"http://localhost:8080/dbbb">>,
+  Request = #{<<"source">> => <<"http://localhost:7080/dbaa">>,
+              <<"target">> => <<"http://localhost:7080/dbbb">>,
               <<"persisted">> => true},
   {200, R} = test_lib:req(put, "/_replicate/myreplication", Request),
   #{<<"name">> := <<"myreplication">>} = jsx:decode(R, [return_maps]),
@@ -120,8 +120,8 @@ accept_put_get(_Config) ->
 accept_delete(_Config) ->
   {404, _} = test_lib:req(get, "/dbbbb/mouse"),
   %% create a replication task from one db to the other
-  Request = #{<<"source">> => <<"http://localhost:8080/dbaaa">>,
-              <<"target">> => <<"http://localhost:8080/dbbbb">>,
+  Request = #{<<"source">> => <<"http://localhost:7080/dbaaa">>,
+              <<"target">> => <<"http://localhost:7080/dbbbb">>,
               <<"persisted">> => true},
   {200, R} = test_lib:req(put, "/_replicate/tasktobedeleted", Request),
   #{<<"name">> := <<"tasktobedeleted">>} = jsx:decode(R, [return_maps]),
@@ -155,10 +155,10 @@ reject_replication_name_unknown(_Config) ->
 
 reject_store_unknown(_Config) ->
   M = #{<<"persisted">> => true},
-  NoStoreSource = M#{<<"source">> => <<"http://localhost:8080/nostore">>,
-                    <<"target">> => <<"http://localhost:8080/dbb">>},
-  NoStoreTarget = M#{<<"source">> => <<"http://localhost:8080/dba">>,
-                    <<"target">> => <<"http://localhost:8080/nostore">>},
+  NoStoreSource = M#{<<"source">> => <<"http://localhost:7080/nostore">>,
+                    <<"target">> => <<"http://localhost:7080/dbb">>},
+  NoStoreTarget = M#{<<"source">> => <<"http://localhost:7080/dba">>,
+                    <<"target">> => <<"http://localhost:7080/nostore">>},
 
   {400, _} = test_lib:req(post, "/_replicate", NoStoreSource),
   {400, _} = test_lib:req(post, "/_replicate", NoStoreTarget),
@@ -166,8 +166,8 @@ reject_store_unknown(_Config) ->
 
 reject_bad_json(_Config) ->
   BadJson = "{\"source\": \"badjson no complet",
-  NoSource = #{<<"target">> => <<"http://localhost:8080/nostore/dbb">>},
-  NoTarget = #{<<"source">> => <<"http://localhost:8080/nostore/dba">>},
+  NoSource = #{<<"target">> => <<"http://localhost:7080/nostore/dbb">>},
+  NoTarget = #{<<"source">> => <<"http://localhost:7080/nostore/dba">>},
 
   {400, _} = test_lib:req(post, "/_replicate", BadJson),
   {400, _} = test_lib:req(post, "/_replicate", NoSource),

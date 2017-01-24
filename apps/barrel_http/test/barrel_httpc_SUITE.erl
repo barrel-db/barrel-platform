@@ -48,7 +48,7 @@ init_per_suite(Config) ->
   Config.
 
 url() ->
-  <<"http://localhost:8080/testdb">>.
+  <<"http://localhost:7080/testdb">>.
 
 init_per_testcase(_, Config) ->
   _ = barrel_store:create_db(<<"testdb">>, #{}),

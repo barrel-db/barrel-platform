@@ -61,13 +61,13 @@ end_per_suite(Config) ->
 
 
 source_url() ->
-  <<"http://localhost:8080/source">>.
+  <<"http://localhost:7080/source">>.
 
 source() ->
   {barrel_httpc, source_url()}.
 
 target_url() ->
-  <<"http://localhost:8080/testdb">>.
+  <<"http://localhost:7080/testdb">>.
 
 target() ->
   {barrel_httpc, target_url()}.
