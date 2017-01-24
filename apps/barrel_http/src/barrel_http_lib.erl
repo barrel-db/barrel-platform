@@ -38,4 +38,8 @@ req(Method, Url, Body) when is_binary(Body) ->
   end.
 
 
-has_store(Store) -> barrel_store:whereis_db(Store) /= undefined.
+has_store(Store) ->
+  case barrel_store:open_db(Store, #{}) of
+    {error, not_found} -> false;
+    {ok, _Db} -> true
+  end.
