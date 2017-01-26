@@ -68,6 +68,14 @@ handle(Req, State) ->
 terminate(_Reason, _Req, _State) ->
   ok.
 
+route(Req, #state{method= <<"HEAD">>}=State) ->
+  {Store, Req2} = cowboy_req:binding(store, Req),
+  case barrel_http_lib:has_store(Store) of
+    true ->
+      barrel_http_reply:json(200, <<>>, Req2, State);
+    false ->
+      barrel_http_reply:error(404, <<>>, Req2, State)
+  end;
 route(Req, #state{method= <<"GET">>}=State) ->
   check_store_exist(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
