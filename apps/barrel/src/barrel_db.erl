@@ -183,12 +183,17 @@ put(DbName, Doc, _Options) when is_map(Doc) ->
           Doc2 = Doc#{<<"_rev">> => NewRev},
           %% update the doc infos
           {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+          Del = if
+                  NewRev =:= WinningRev -> Deleted;
+                  true -> maps:get(deleted, DocInfo, false)
+                end,
           DocInfo2 = DocInfo#{
             id => DocId,
             current_rev => WinningRev,
             branched => Branched,
             conflict => Conflict,
-            revtree => RevTree2
+            revtree => RevTree2,
+            deleted => Del
           },
           {ok, DocInfo2, Doc2, NewRev};
         Conflict ->
@@ -214,12 +219,14 @@ put_rev(DbName, Doc, History, _Options) when is_map(Doc) ->
           ToAdd = lists:sublist(History, Idx),
           RevTree2 = edit_revtree(ToAdd, Parent, Deleted, RevTree),
           {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+          RevInfo = maps:get(WinningRev, RevTree2),
           DocInfo2 = DocInfo#{
             id => DocId,
             current_rev => WinningRev,
             branched => Branched,
             conflict => Conflict,
-            revtree => RevTree2
+            revtree => RevTree2,
+            deleted => barrel_revtree:is_deleted(RevInfo)
           },
           Doc2 = Doc#{ <<"_rev">> => NewRev },
           {ok, DocInfo2, Doc2, NewRev}
