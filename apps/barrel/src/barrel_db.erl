@@ -542,12 +542,12 @@ handle_cast(_Msg, State) ->
 
 handle_info({init_db, Options}, Db) ->
   case catch init_db(Db, Options) of
-    {'EXIT', _} ->
-      lager:error("~s: error initializing the database ~p.~n", [?MODULE_STRING, Db#db.name]),
-      {stop, normal, Db};
-    NewDb ->
+    #db{}= NewDb ->
       ets:insert(barrel_dbs, NewDb),
-      {noreply, NewDb}
+      {noreply, NewDb};
+    Else ->
+      lager:error("~s: error initializing the database ~p: ~p.~n", [?MODULE_STRING, Db#db.name, Else]),
+      {stop, normal, Db}
   end;
 handle_info(_Info, State) ->
   lager:info(
@@ -558,6 +558,7 @@ handle_info(_Info, State) ->
 
 terminate(_Reason, #db{id = <<>>}) -> ok;
 terminate(_Reason, #db{ name = Name}) ->
+  lager:info("terminate db ~p: ~p~n", [Name, _Reason]),
   _ = ets:delete(barrel_dbs, Name),
   ok.
 

@@ -35,10 +35,10 @@ all() -> [ info_database
          , create_doc
          , put_get_delete
          , put_rev
-         , changes_since
-         , changes_since_history
          , db_updated
          , system_doc
+%%         , changes_since
+%%         , changes_since_history
          ].
 
 init_per_suite(Config) ->
@@ -51,7 +51,7 @@ url() ->
   <<"http://localhost:7080/testdb">>.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
   {ok, HttpConn} = barrel_httpc:start_link(url(), []),
   [{http_conn, HttpConn}, {conn, <<"testdb">>}|Config].
 

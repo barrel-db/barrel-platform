@@ -15,7 +15,7 @@
  {<<"ranch">>,{pkg,<<"ranch">>,<<"1.2.1">>},1},
  {<<"rocksdb">>,
   {git,"https://gitlab.com/barrel-db/erlang-rocksdb.git",
-       {ref,"ffd85f120713800f86a5030cfd05c7dcb6d61b1f"}},
+       {ref,"c18dbea2193162c013350dee11634c79df5cf5c1"}},
   0},
  {<<"sext">>,{pkg,<<"sext">>,<<"1.4.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
