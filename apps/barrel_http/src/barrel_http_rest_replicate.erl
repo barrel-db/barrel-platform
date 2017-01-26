@@ -156,7 +156,6 @@ check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
     {200, _} ->
       check_target_db_exist(Req, State);
     _Else ->
-      lager:info("got ~p: ~p~n", [_Else, SourceUrl]),
       barrel_http_reply:error(400, "source database not found", Req, State)
   end.
 

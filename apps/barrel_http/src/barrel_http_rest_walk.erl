@@ -102,15 +102,15 @@ check_store_db(Req, State) ->
 
 get_resource(Req0, State = #state{store=Store}) ->
   {Path, _} = cowboy_req:path(Req0),
-  lager:info("get resource ~p for store ~p", [Path, Store]),
   case binary:split(Path, << "/", Store/binary, "/_walk">>) of
     [<<>>, <<>>] ->
       fold_docs(Req0, State);
     [<<>>, <<"/">>] ->
       fold_docs(Req0, State);
     [<<>>, << "/", Pointer/binary >>] ->
-      lager:info("poiter is ~p~n", [Pointer]),
-      fold_query(Pointer, Req0, State)
+      fold_query(Pointer, Req0, State);
+    _ ->
+      barrel_http_reply:error(400, "bad_request", Req0, State)
   end.
 
 fold_query(Path, Req0, State = #state{store=Store}) ->
@@ -120,7 +120,6 @@ fold_query(Path, Req0, State = #state{store=Store}) ->
   Req = start_chunked_response(Req0, State),
   Fun =
     fun(DocId, Doc, Val, {N, Pre}) ->
-      lager:info("docid is ~p~n", [DocId]),
       Obj = case IncludeDocs of
               true ->
                 #{ <<"id">> => DocId, <<"val">> => Val, <<"doc">> => Doc };

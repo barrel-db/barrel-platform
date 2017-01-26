@@ -534,9 +534,14 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info({init_db, Options}, Db) ->
-  NewDb = init_db(Db, Options),
-  ets:insert(barrel_dbs, NewDb),
-  {noreply, NewDb};
+  case catch init_db(Db, Options) of
+    {'EXIT', _} ->
+      lager:error("~s: error initializing the database ~p.~n", [?MODULE_STRING, Db#db.name]),
+      {stop, normal, Db};
+    NewDb ->
+      ets:insert(barrel_dbs, NewDb),
+      {noreply, NewDb}
+  end;
 handle_info(_Info, State) ->
   lager:info(
     "~s: received unknonwn message:~p~n",

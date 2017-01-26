@@ -193,7 +193,6 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_resource_exists(Req, State);
 route(Req, State) ->
-  lager:info("state is ~p~n", [State]),
   barrel_http_reply:error(405, Req, State).
 
 
@@ -228,7 +227,6 @@ check_id_property(Req, #state{body=Json}=State) ->
 
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
   #state{ store=Store, docid=DocId, options=Options } = S,
-  lager:info("Store is ~p ~n", [Store]),
   case barrel:get(Store, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
@@ -250,7 +248,7 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 
 create_resource(Req, State) ->
-  #state{ store=Store, docid=DocId, body=Json, method=Method} = State,
+  #state{ store=Store, body=Json, method=Method} = State,
   {Result, Req4} = case Method of
                      <<"POST">> ->
                        {barrel:post(Store, Json, []), Req};
