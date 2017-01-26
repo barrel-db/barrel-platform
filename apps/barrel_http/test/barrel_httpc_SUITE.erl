@@ -37,8 +37,8 @@ all() -> [ info_database
          , put_rev
          , db_updated
          , system_doc
-%%         , changes_since
-%%         , changes_since_history
+         , changes_since
+         , changes_since_history
          ].
 
 init_per_suite(Config) ->

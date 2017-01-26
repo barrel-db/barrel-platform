@@ -76,6 +76,7 @@ check_store_db(Req, State) ->
     true ->
       check_params(Req2, State#state{store=Store});
     _Error ->
+      lager:info("unknown store requested: ~p~n", [Store]),
       {ok, Req3, S} = barrel_http_reply:error(400, "unknown store", Req2, State),
       {shutdown, Req3, S}
   end.
