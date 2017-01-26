@@ -517,11 +517,16 @@ handle_call({update_doc, DocId, Fun}, _From, Db) ->
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 handle_call(delete_db, From, #db{ name=Name, id=Id, store=Store } = Db) ->
-  _ = ets:delete(barrel_dbs, Name),
-  %% we return immediately and handle the deletion asynchronously
-  gen_server:reply(From, ok),
-  ok = do_delete_db(Store, Id),
-  {stop, normal, Db#db{ id = <<>>}};
+  case do_delete_db_info(Store, Name, Id) of
+    ok ->
+      %% we return immediately and handle the deletion asynchronously
+      gen_server:reply(From, ok),
+      ok = do_delete_db(Store, Id),
+      {stop, normal, Db#db{ id = <<>>}};
+    Error ->
+      {stop, normal, Error, Db}
+  end;
+ 
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
 
@@ -595,6 +600,14 @@ init_db(Db, Options) ->
   
 
 %% TODO: replace with DeleteRange in latest rocksdb once it's exposed
+do_delete_db_info(Store, DbName, Id) ->
+  _ = ets:delete(barrel_dbs, DbName),
+  Batch = [
+    {delete, barrel_keys:db_key(DbName)},
+    {delete, barrel_keys:db_meta_key(Id, ?DB_INFO)}
+  ],
+  rocksdb:write(Store, Batch, [{sync, true}]).
+
 do_delete_db(Store, Id) ->
   FinalAcc = barrel_rocksdb:fold_prefix(
     Store,

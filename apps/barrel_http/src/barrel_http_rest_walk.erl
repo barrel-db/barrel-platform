@@ -102,7 +102,7 @@ check_store_db(Req, State) ->
 
 get_resource(Req0, State = #state{store=Store}) ->
   {Path, _} = cowboy_req:path(Req0),
-  
+  lager:info("get resource ~p for store ~p", [Path, Store]),
   case binary:split(Path, << "/", Store/binary, "/_walk">>) of
     [<<>>, <<>>] ->
       fold_docs(Req0, State);
