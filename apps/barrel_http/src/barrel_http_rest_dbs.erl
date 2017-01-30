@@ -23,13 +23,13 @@
 
 trails() ->
   Metadata =
-    #{ get => #{ summary => "Get list of available stores"
+    #{ get => #{ summary => "Get list of available databases"
                , produces => ["application/json"]
                }
      },
-  [trails:trail("/_dbs/", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/", ?MODULE, [], Metadata)].
 
--record(state, {method, store, databases, dbid}).
+-record(state, {method}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.

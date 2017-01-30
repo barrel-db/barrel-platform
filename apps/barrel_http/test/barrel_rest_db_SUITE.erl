@@ -56,9 +56,9 @@ end_per_suite(Config) ->
   Config.
 
 db_info(_Config) ->
-  {200, R1} = test_lib:req(get, "/testdb"),
+  {200, R1} = test_lib:req(get, "/dbs/testdb"),
   Info = jsx:decode(R1, [return_maps]),
-  
+
   #{<<"name">> := _,
     <<"id">> := _,
     <<"docs_count">> := _,
@@ -68,11 +68,11 @@ db_info(_Config) ->
   ok.
 
 reject_unknown_store(_Config) ->
-  {404, _} = test_lib:req(get, "/badstore"),
+  {404, _} = test_lib:req(get, "/dbs/baddatabase"),
   ok.
 
 dbs(_Config) ->
-  {200, R1} = test_lib:req(get, "/_dbs"),
+  {200, R1} = test_lib:req(get, "/dbs"),
   A1 = jsx:decode(R1, [return_maps]),
   [<<"source">>, <<"testdb">>] = A1,
   ok.
