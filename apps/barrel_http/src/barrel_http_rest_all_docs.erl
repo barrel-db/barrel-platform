@@ -28,8 +28,8 @@ trails() ->
     #{ get => #{ summary => "Get list of all available documents."
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   [#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -66,9 +66,9 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/:store/_all_docs", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/:database", ?MODULE, [], Metadata)].
 
--record(state, {method, store, dbid, start_seq, end_seq, max, conn}).
+-record(state, {method, database, start_seq, end_seq, max, conn}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -81,27 +81,27 @@ terminate(_Reason, _Req, _State) ->
   ok.
 
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_store_db(Req, State);
+  check_database_db(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, "method not allowed", Req, State).
 
-check_store_db(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
+check_database_db(Req, State) ->
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
     false ->
-      barrel_http_reply:error(400, "store not found", Req2, State);
+      barrel_http_reply:error(400, "database not found", Req2, State);
     true ->
-      State2 = State#state{store=Store},
+      State2 = State#state{database=Database},
       get_resource(Req2, State2)
   end.
 
-get_resource(Req0, State = #state{store=Store}) ->
+get_resource(Req0, State = #state{database=Database}) ->
   Options = parse_params(Req0),
-  #{last_update_seq := Seq} = barrel:db_infos(Store),
+  #{last_update_seq := Seq} = barrel:db_infos(Database),
   {ok, Req} = cowboy_req:chunked_reply(
     200,
     [{<<"Content-Type">>, <<"application/json">>},
-      {<<"ETag">>,  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>}],
+     {<<"ETag">>,  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>}],
     Req0
   ),
   %% start the initial chunk
@@ -115,7 +115,7 @@ get_resource(Req0, State = #state{store=Store}) ->
         ok = cowboy_req:chunk(Chunk, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel:fold_by_id(Store, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(

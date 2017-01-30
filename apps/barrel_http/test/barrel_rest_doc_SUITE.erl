@@ -70,7 +70,7 @@ accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
   {ok, _, _} = barrel:put(<<"testdb">>, Doc, []),
 
-  {200, R} = test_lib:req(get, "/testdb/acceptget"),
+  {200, R} = test_lib:req(get, "/dbs/testdb/docs/acceptget"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
   ok.
@@ -83,10 +83,10 @@ accept_get_with_rev(_Config) ->
   {ok, _, RevId2} = barrel:put(<<"testdb">>, Doc2, []),
   {ok, _, _RevId3} = barrel:delete(<<"testdb">>, DocId, RevId2, []),
 
-  {200, R1} = test_lib:req(get, "/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
+  {200, R1} = test_lib:req(get, "/dbs/testdb/docs/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
   J1 = jsx:decode(R1, [return_maps]),
   #{<<"v">> := 1} = J1,
-  {200, R2} = test_lib:req(get, "/testdb/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
+  {200, R2} = test_lib:req(get, "/dbs/testdb/docs/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
   J2 = jsx:decode(R2, [return_maps]),
   #{<<"v">> := 2} = J2,
   ok.
@@ -95,7 +95,7 @@ accept_get_with_history(_Config) ->
   Doc = #{<<"id">> => <<"acceptgethist">>, <<"name">> => <<"tom">>},
   {ok, _, _} = barrel:put(<<"testdb">>, Doc, []),
 
-  {200, R} = test_lib:req(get, "/testdb/acceptgethist?history=true"),
+  {200, R} = test_lib:req(get, "/dbs/testdb/docs/acceptgethist?history=true"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>,
     <<"_revisions">> := Revisions} = J,
@@ -104,7 +104,7 @@ accept_get_with_history(_Config) ->
 
 accept_post(_Config) ->
   D1 = #{<<"name">> => <<"tom">>},
-  {201, R} = test_lib:req(post, "/testdb", D1),
+  {201, R} = test_lib:req(post, "/dbs/testdb/docs", D1),
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
@@ -114,7 +114,7 @@ accept_post(_Config) ->
 
 accept_put(_Config) ->
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {201, R} = test_lib:req(put, "/testdb/cat", D1),
+  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat", D1),
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
@@ -127,7 +127,7 @@ accept_delete(_Config) ->
   {ok, _, RevIdBin} = barrel:put(<<"testdb">>, Doc, []),
   RevId = binary_to_list(RevIdBin),
 
-  Url = "/testdb/acceptdelete?rev=" ++ RevId,
+  Url = "/dbs/testdb/docs/acceptdelete?rev=" ++ RevId,
   {200, _} = test_lib:req(delete, Url),
 
   {error, not_found} = barrel:get(<<"testdb">>, <<"acceptdelete">>, []),
@@ -135,38 +135,38 @@ accept_delete(_Config) ->
 
 reject_store_unknown(_) ->
   Doc = #{<<"name">> => <<"tom">>},
-  {400, _} = test_lib:req(get, "/bad/docid"),
-  {400, _} = test_lib:req(put, "/bad/docid", Doc),
-  {400, _} = test_lib:req(post, "/bad", Doc),
-  {400, _} = test_lib:req(delete, "/bad/docid"),
+  {400, _} = test_lib:req(get, "/dbs/bad/docs/docid"),
+  {400, _} = test_lib:req(put, "/dbs/bad/docs/docid", Doc),
+  {400, _} = test_lib:req(post, "/dbs/bad/docs", Doc),
+  {400, _} = test_lib:req(delete, "/dbs/bad/docs/docid"),
   ok.
 
 reject_unknown_query_parameters(_) ->
   Doc = #{<<"name">> => <<"tom">>},
-  {400, _} = test_lib:req(get, "/testdb/docid?badparam=whatever"),
-  {400, _} = test_lib:req(put, "/testdb/docid?badparam=whatever", Doc),
-  {400, _} = test_lib:req(post, "/testdb?badparam=whatever", Doc),
-  {400, _} = test_lib:req(delete, "/testdb/docid?badparam=whatever"),
+  {400, _} = test_lib:req(get, "/dbs/testdb/docs/docid?badparam=whatever"),
+  {400, _} = test_lib:req(put, "/dbs/testdb/docs/docid?badparam=whatever", Doc),
+  {400, _} = test_lib:req(post, "/dbs/testdb/docs?badparam=whatever", Doc),
+  {400, _} = test_lib:req(delete, "/dbs/testdb/docs/docid?badparam=whatever"),
   ok.
 
 reject_bad_json(_) ->
   BadJson = "{\"name\": \"badjson",
-  {400, _} = test_lib:req(put, "/testdb/docid", BadJson),
+  {400, _} = test_lib:req(put, "/dbs/testdb/docs/docid", BadJson),
   NoId = "{\"name\": \"whatever\"}",
-  {400, _} = test_lib:req(put, "/testdb/docid", NoId),
+  {400, _} = test_lib:req(put, "/dbs/testdb/docs/docid", NoId),
   ok.
 
 
 put_cat() ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(put, "/testdb/cat", Doc),
+  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 revsdiff(_Config) ->
   CatRevId = put_cat(),
   Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = test_lib:req(post, "/testdb/_revs_diff", Request),
+  {200, R} = test_lib:req(post, "/dbs/testdb/docs/_revs_diff", Request),
   A = jsx:decode(R, [return_maps]),
   CatDiffs = maps:get(<<"cat">>, A),
   Missing = maps:get(<<"missing">>, CatDiffs),
@@ -182,7 +182,7 @@ put_rev(_Config) ->
   Request = #{<<"id">> => cat,
               <<"document">> => Doc,
               <<"history">> => History},
-  {201, R} = test_lib:req(put, "/testdb/cat?edit=true", Request),
+  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat?edit=true", Request),
   A = jsx:decode(R, [return_maps]),
   true = maps:get(<<"ok">>, A),
   ok.

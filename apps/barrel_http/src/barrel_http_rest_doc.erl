@@ -39,8 +39,8 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
-                   ,#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   ,#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -62,8 +62,8 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
-                   ,#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   ,#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -85,8 +85,8 @@ trails() ->
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
-                      ,#{ name => <<"store">>
-                        , description => <<"Store ID">>
+                      ,#{ name => <<"database">>
+                        , description => <<"Database ID">>
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
@@ -105,18 +105,18 @@ trails() ->
                      , in => <<"body">>
                      , required => true
                      , type => <<"json">>}
-                   ,#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   ,#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
                    ]
                }
      },
-  [trails:trail("/:store/", ?MODULE, [], Post),
-   trails:trail("/:store/:docid", ?MODULE, [], GetPutDel)].
+  [trails:trail("/dbs/:database/docs", ?MODULE, [], Post),
+   trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
 
--record(state, {method, store, docid, revid, edit, history, body, doc, conn, options}).
+-record(state, {method, database, docid, revid, edit, history, body, doc, conn, options}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -157,13 +157,13 @@ check_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
   barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
 check_request_revid(Req, S) ->
   Body = S#state.body,
-  check_store_db(Req, S#state{body=Body}).
+  check_database_db(Req, S#state{body=Body}).
 
-check_store_db(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
+check_database_db(Req, State) ->
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
     false ->
-      barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req2, State);
+      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
     true ->
       {DocId, Req3} = cowboy_req:binding(docid, Req2),
       RevId = State#state.revid,
@@ -176,7 +176,7 @@ check_store_db(Req, State) ->
                 _ -> Opts1
               end,
       State2 =  State#state{
-        store=Store,
+        database=Database,
         docid=DocId,
         revid=RevId,
         options=Opts2
@@ -226,8 +226,8 @@ check_id_property(Req, #state{body=Json}=State) ->
 
 
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
-  #state{ store=Store, docid=DocId, options=Options } = S,
-  case barrel:get(Store, DocId, Options) of
+  #state{ database=Database, docid=DocId, options=Options } = S,
+  case barrel:get(Database, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
     {ok, Doc} ->
@@ -248,20 +248,20 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 
 create_resource(Req, State) ->
-  #state{ store=Store, body=Json, method=Method} = State,
+  #state{ database=Database, body=Json, method=Method} = State,
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel:post(Store, Json, []), Req};
+                       {barrel:post(Database, Json, []), Req};
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           { barrel:put(Store, Json, []), Req3 };
+                           { barrel:put(Database, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           { barrel:put_rev(Store, Doc, History, []), Req3 }
+                           { barrel:put_rev(Database, Doc, History, []), Req3 }
                        end
                    end,
   case Result of
@@ -279,8 +279,8 @@ create_resource(Req, State) ->
   end.
 
 delete_resource(Req, State) ->
-  #state{ store=Store, docid=DocId, revid=RevId} = State,
-  {ok, DocId, RevId2} = barrel:delete(Store, DocId, RevId, []),
+  #state{ database=Database, docid=DocId, revid=RevId} = State,
+  {ok, DocId, RevId2} = barrel:delete(Database, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},

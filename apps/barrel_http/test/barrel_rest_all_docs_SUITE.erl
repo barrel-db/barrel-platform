@@ -55,7 +55,7 @@ end_per_suite(Config) ->
 
 
 accept_get(_Config) ->
-  {200, R1} = test_lib:req(get, "/testdb/_all_docs"),
+  {200, R1} = test_lib:req(get, "/dbs/testdb"),
   A1 = jsx:decode(R1, [return_maps, {labels, attempt_atom}]),
   Rows1 = maps:get(docs, A1),
   0 = length(Rows1),
@@ -65,7 +65,7 @@ accept_get(_Config) ->
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
   {ok, _, _DogRevId} = barrel:put(<<"testdb">>, D2, []),
 
-  {200, R2} = test_lib:req(get, "/testdb/_all_docs"),
+  {200, R2} = test_lib:req(get, "/dbs/testdb"),
   A2 = jsx:decode(R2, [return_maps]),
   Rows2 = maps:get(<<"docs">>, A2),
   2 = length(Rows2),
@@ -76,7 +76,7 @@ accept_get(_Config) ->
 accept_start_key(_Config) ->
   ok = create_docs(<<"startkey">>, 10, <<"testdb">>),
 
-  {200, R} = test_lib:req(get, "/testdb/_all_docs?start_key=startkey0004"),
+  {200, R} = test_lib:req(get, "/dbs/testdb?start_key=startkey0004"),
   A = jsx:decode(R, [return_maps]),
   #{<<"docs">> := Rows} = A,
   7 = length(Rows),
@@ -85,7 +85,7 @@ accept_start_key(_Config) ->
 accept_end_key(_Config) ->
   ok = create_docs(<<"endkey">>, 10, <<"testdb">>),
 
-  {200, R} = test_lib:req(get, "/testdb/_all_docs?end_key=endkey0004"),
+  {200, R} = test_lib:req(get, "/dbs/testdb?end_key=endkey0004"),
   A = jsx:decode(R, [return_maps]),
   #{<<"docs">> := Rows} = A,
   4 = length(Rows),
@@ -106,5 +106,5 @@ create_docs(Prefix, N, Conn) ->
 
 
 reject_store_unknown(_Config) ->
-  {400, _} = test_lib:req(get, "/badstore/_all_docs"),
+  {400, _} = test_lib:req(get, "/dbs/doesnotexist"),
   ok.
