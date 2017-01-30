@@ -47,12 +47,12 @@ end_per_suite(_Config) ->
 
 system_doc(_Config) ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {200, _} = test_lib:req(put, "/testdb/_system/cat", Doc),
-  {200, R} = test_lib:req(get, <<"/testdb/_system/cat">>),
+  {200, _} = test_lib:req(put, "/dbs/testdb/system/cat", Doc),
+  {200, R} = test_lib:req(get, <<"/dbs/testdb/system/cat">>),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>} = J,
-  {200, _} = test_lib:req(put, "/testdb/_system/cat", "{}"),
-  {200, _} = test_lib:req(delete, "/testdb/_system/cat"),
-  {404, _} = test_lib:req(get, <<"/testdb/_system/cat">>),
+  {200, _} = test_lib:req(put, "/dbs/testdb/system/cat", "{}"),
+  {200, _} = test_lib:req(delete, "/dbs/testdb/system/cat"),
+  {404, _} = test_lib:req(get, <<"/dbs/testdb/system/cat">>),
   ok.
 

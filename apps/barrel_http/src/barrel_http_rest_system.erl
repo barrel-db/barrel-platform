@@ -36,8 +36,8 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
-                   ,#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   ,#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -52,8 +52,8 @@ trails() ->
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
-                      ,#{ name => <<"store">>
-                        , description => <<"Store ID">>
+                      ,#{ name => <<"database">>
+                        , description => <<"Database ID">>
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
@@ -75,38 +75,38 @@ trails() ->
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
-                   ,#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   ,#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
                    ]
                }
      },
-  [trails:trail("/:store/_system/:docid", ?MODULE, [], GetPutDelete)].
+  [trails:trail("/dbs/:database/system/:docid", ?MODULE, [], GetPutDelete)].
 
 
--record(state, {conn, method, store, docid, doc}).
+-record(state, {conn, method, database, docid, doc}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
 
 handle(Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  check_store(Req2, State#state{method=Method}).
+  check_database(Req2, State#state{method=Method}).
 
 terminate(_Reason, _Req, _State) ->
   ok.
 
-check_store(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
+check_database(Req, State) ->
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
     true ->
       {DocId, Req3} = cowboy_req:binding(docid, Req),
-      State2 = State#state{store=Store,  docid=DocId},
+      State2 = State#state{database=Database,  docid=DocId},
       route(Req3, State2);
     false ->
-      barrel_http_reply:error(400, <<"store not found: ", Store/binary>>, Req2, State)
+      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State)
   end.
 
 route(Req, #state{method= <<"PUT">>}=State) ->
@@ -118,8 +118,8 @@ route(Req, #state{method= <<"DELETE">>}=State) ->
 route(Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
-check_resource_exists(Req, State = #state{ store=Store, docid=DocId}) ->
-  case barrel_db:read_system_doc(Store, DocId) of
+check_resource_exists(Req, State = #state{ database=Database, docid=DocId}) ->
+  case barrel_db:read_system_doc(Database, DocId) of
     {ok, Doc} ->
       route2(Req, State#state{doc=Doc});
     {error, not_found} ->
@@ -134,12 +134,12 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 get_resource(Req, #state{doc=Doc}=State) ->
   barrel_http_reply:doc(Doc, Req, State).
 
-create_resource(Req, State = #state{store=Store, docid=DocId}) ->
+create_resource(Req, State = #state{database=Database, docid=DocId}) ->
   {ok, Body, Req2} = cowboy_req:body(Req),
   Doc = jsx:decode(Body, [return_maps]),
-  ok = barrel_db:write_system_doc(Store, DocId, Doc),
+  ok = barrel_db:write_system_doc(Database, DocId, Doc),
   barrel_http_reply:doc(#{ok => true}, Req2, State).
 
-delete_resource(Req, State = #state{store=Store, docid=DocId}) ->
-  ok = barrel_db:delete_system_doc(Store, DocId),
+delete_resource(Req, State = #state{database=Database, docid=DocId}) ->
+  ok = barrel_db:delete_system_doc(Database, DocId),
   barrel_http_reply:doc(#{ok => true}, Req, State).
