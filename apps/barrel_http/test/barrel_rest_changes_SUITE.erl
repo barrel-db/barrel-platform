@@ -59,20 +59,20 @@ end_per_suite(Config) ->
 
 put_cat() ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(put, "/testdb/cat", Doc),
+  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 
 delete_cat(CatRevId) ->
-  {200, R3} = test_lib:req(delete, "/testdb/cat?rev=" ++ CatRevId),
+  {200, R3} = test_lib:req(delete, "/dbs/testdb/docs/cat?rev=" ++ CatRevId),
   A3 = jsx:decode(R3, [return_maps]),
   true = maps:get(<<"ok">>, A3),
   binary_to_list(maps:get(<<"rev">>, A3)).
 
 put_dog() ->
   Doc = "{\"id\": \"dog\", \"name\": \"spike\"}",
-  {201, R} = test_lib:req(put, "/testdb/dog", Doc),
+  {201, R} = test_lib:req(put, "/dbs/testdb/docs/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
@@ -83,13 +83,13 @@ accept_get_normal(_Config) ->
   put_cat(),
   put_dog(),
 
-  {200, R1} = test_lib:req(get, "/testdb/_changes"),
+  {200, R1} = test_lib:req(get, "/dbs/testdb/docs/_changes"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
   2 = length(Results1),
 
-  {200, R2} = test_lib:req(get, "/testdb/_changes?since=1"),
+  {200, R2} = test_lib:req(get, "/dbs/testdb/docs/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   2 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -101,7 +101,7 @@ accept_get_history_all(_Config) ->
   put_dog(),
   DeleteRevId = delete_cat(CreateRevId),
 
-  {200, R1} = test_lib:req(get, "/testdb/_changes?history=all"),
+  {200, R1} = test_lib:req(get, "/dbs/testdb/docs/_changes?history=all"),
   A1 = jsx:decode(R1, [return_maps]),
   3 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
@@ -110,7 +110,7 @@ accept_get_history_all(_Config) ->
     <<"changes">> := CatHistory} = hd(Results1),
   [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
 
-  {200, R2} = test_lib:req(get, "/testdb/_changes?since=1"),
+  {200, R2} = test_lib:req(get, "/dbs/testdb/docs/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   3 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -120,7 +120,7 @@ accept_get_history_all(_Config) ->
 %%=======================================================================
 
 accept_get_longpoll(_Config) ->
-  Url = <<"http://localhost:7080/testdb/_changes?feed=longpoll">>,
+  Url = <<"http://localhost:7080/dbs/testdb/docs/_changes?feed=longpoll">>,
   Opts = [async, {recv_timeout, infinity}],
   LoopFun = fun(Loop, Ref) ->
                 receive
@@ -155,7 +155,7 @@ accept_get_longpoll(_Config) ->
 
 accept_get_longpoll_heartbeat(_Config) ->
   {ok, Socket} = gen_tcp:connect({127,0,0,1}, 7080, [binary, {active,true}]),
-  Request = ["GET /testdb/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
+  Request = ["GET /dbs/testdb/docs/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
              "Host:localhost:7080\r\n",
              "Accept: application/json\r\n",
              "\r\n"],
@@ -195,7 +195,7 @@ accept_get_longpoll_heartbeat(_Config) ->
 accept_get_eventsource(_Config) ->
   Self = self(),
   Pid = spawn(fun () -> wait_response([], 4, Self) end),
-  Url = <<"http://localhost:7080/testdb/_changes?feed=eventsource">>,
+  Url = <<"http://localhost:7080/dbs/testdb/docs/_changes?feed=eventsource">>,
   Opts = [async, {stream_to, Pid}],
   {ok, Ref} = hackney:get(Url, [], <<>>, Opts),
   CatRevId = put_cat(),
@@ -230,9 +230,9 @@ wait_response(Msgs, Expected, Parent) ->
 %%=======================================================================
 
 reject_store_unknown(_Config) ->
-  {400, _} = test_lib:req(get, "/badstore/_changes"),
+  {400, _} = test_lib:req(get, "/dbs/badstore/docs/_changes"),
   ok.
 
 reject_bad_params(_Config) ->
-  {400, _} = test_lib:req(get, "/testdb/_changes?badparam=whatever"),
+  {400, _} = test_lib:req(get, "/dbs/testdb/docs/_changes?badparam=whatever"),
   ok.
