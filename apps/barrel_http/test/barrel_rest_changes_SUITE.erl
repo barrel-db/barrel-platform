@@ -54,8 +54,7 @@ end_per_testcase(_, Config) ->
 end_per_suite(Config) ->
   application:stop(barrel_http),
   application:stop(barrel),
-  
-  %%_ = (catch rocksdb:destroy("docs", [])),
+  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
@@ -157,7 +156,7 @@ accept_get_longpoll(_Config) ->
 
 accept_get_longpoll_heartbeat(_Config) ->
   {ok, Socket} = gen_tcp:connect({127,0,0,1}, 7080, [binary, {active,true}]),
-  Request = ["GET /testdb/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
+  Request = ["GET /testdb/_changes?feed=longpoll&heartbeat=10 HTTP/1.1\r\n",
              "Host:localhost:7080\r\n",
              "Accept: application/json\r\n",
              "\r\n"],
