@@ -83,13 +83,13 @@ accept_get_normal(_Config) ->
   put_cat(),
   put_dog(),
 
-  {200, R1} = test_lib:req(get, "/dbs/testdb/docs/_changes"),
+  {200, R1} = req_changes("/dbs/testdb/docs/_changes"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
   2 = length(Results1),
 
-  {200, R2} = test_lib:req(get, "/dbs/testdb/docs/_changes?since=1"),
+  {200, R2} = req_changes("/dbs/testdb/docs/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   2 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -101,7 +101,7 @@ accept_get_history_all(_Config) ->
   put_dog(),
   DeleteRevId = delete_cat(CreateRevId),
 
-  {200, R1} = test_lib:req(get, "/dbs/testdb/docs/_changes?history=all"),
+  {200, R1} = req_changes("/dbs/testdb/docs/_changes?history=all"),
   A1 = jsx:decode(R1, [return_maps]),
   3 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
@@ -110,7 +110,7 @@ accept_get_history_all(_Config) ->
     <<"changes">> := CatHistory} = hd(Results1),
   [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
 
-  {200, R2} = test_lib:req(get, "/dbs/testdb/docs/_changes?since=1"),
+  {200, R2} = req_changes("/dbs/testdb/docs/_changes?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   3 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"results">>, A2),
@@ -230,9 +230,22 @@ wait_response(Msgs, Expected, Parent) ->
 %%=======================================================================
 
 reject_store_unknown(_Config) ->
-  {400, _} = test_lib:req(get, "/dbs/badstore/docs/_changes"),
+  {400, _} = req_changes("/dbs/badstore/docs/_changes"),
   ok.
 
 reject_bad_params(_Config) ->
-  {400, _} = test_lib:req(get, "/dbs/testdb/docs/_changes?badparam=whatever"),
+  {400, _} = req_changes("/dbs/testdb/docs/_changes?badparam=whatever"),
   ok.
+
+%%=======================================================================
+
+req_changes(Url) ->
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"A-IM">>, <<"Incremental feed">>}],
+  case hackney:request(get, Url, Headers, [], []) of
+    {ok, Code, _Headers, Ref} ->
+      {ok, Answer} = hackney:body(Ref),
+      {Code, Answer};
+    Error -> Error
+  end.
+
