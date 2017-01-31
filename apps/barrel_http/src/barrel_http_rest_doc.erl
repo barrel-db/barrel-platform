@@ -93,7 +93,7 @@ trails() ->
                       ]
                   }
      },
-  Post =
+  PostGetAllDocs =
     #{post => #{ summary => "Add a new document."
                , produces => ["application/json"]
                , responses =>
@@ -111,9 +111,49 @@ trails() ->
                      , required => true
                      , type => <<"string">>}
                    ]
+                 },
+      get => #{ summary => "Get list of all available documents."
+               , produces => ["application/json"]
+               , parameters =>
+                   [#{ name => <<"database">>
+                     , description => <<"Database ID">>
+                     , in => <<"path">>
+                     , required => true
+                     , type => <<"string">>}
+
+                     , #{ name => <<"gt">>
+                     , description => <<"greater than">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"gte">>
+                     , description => <<"greater or equal to">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"lt">>
+                     , description => <<"lesser than">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"lte">>
+                     , description => <<"lesser or equal to">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"string">>}
+
+                     , #{ name => <<"max">>
+                     , description => <<"maximum keys to return">>
+                     , in => <<"query">>
+                     , required => false
+                     , type => <<"integer">>}
+                   ]
                }
      },
-  [trails:trail("/dbs/:database/docs", ?MODULE, [], Post),
+  [trails:trail("/dbs/:database/docs", ?MODULE, [], PostGetAllDocs),
    trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
 
 -record(state, {method, database, docid, revid, edit, history, body, doc, conn, options}).
@@ -125,11 +165,31 @@ handle_post(Req) ->
   handle(Req, #state{}).
 
 handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  check_params(Req2, State#state{method=Method}).
+  check_database_db(Req, State).
 
 terminate(_Reason, _Req, _State) ->
   ok.
+
+check_database_db(Req, State) ->
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
+    false ->
+      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
+    true ->
+      {Method, Req2} = cowboy_req:method(Req),
+      {DocId, Req3} = cowboy_req:binding(docid, Req2),
+      State2 =  State#state{
+                  database=Database,
+                  docid=DocId,
+                  method=Method
+                 },
+      route_all_docs(Req3, State2)
+  end.
+
+route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
+  barrel_http_rest_all_docs:get_resource(Database, Req, State);
+route_all_docs(Req, State) ->
+  check_params(Req, State).
 
 check_params(Req, State) ->
   {Params, Req2} = cowboy_req:qs_vals(Req),
@@ -137,9 +197,17 @@ check_params(Req, State) ->
     {error, {unknown_param, Unknown}} ->
       barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req2, State);
     {ok, S2} ->
-      {Method, Req3} = cowboy_req:method(Req2),
-      {ok, Body, Req4} = cowboy_req:body(Req3),
-      check_request_revid(Req4, S2#state{method=Method, body=Body})
+      {ok, Body, Req4} = cowboy_req:body(Req2),
+
+      Opts1 = case S2#state.revid of
+                undefined -> [];
+                RevId -> [{rev, RevId}]
+              end,
+      Opts2 = case S2#state.history of
+                true -> [{history, true}|Opts1];
+                _ -> Opts1
+              end,
+      route(Req4, S2#state{body=Body, options=Opts2})
   end.
 
 parse_params([], State) ->
@@ -153,36 +221,7 @@ parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
 parse_params([{Param, __Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
-check_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
-  barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
-check_request_revid(Req, S) ->
-  Body = S#state.body,
-  check_database_db(Req, S#state{body=Body}).
 
-check_database_db(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
-  case barrel_http_lib:has_database(Database) of
-    false ->
-      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
-    true ->
-      {DocId, Req3} = cowboy_req:binding(docid, Req2),
-      RevId = State#state.revid,
-      Opts1 = case RevId of
-                undefined -> [];
-                _ -> [{rev, RevId}]
-              end,
-      Opts2 = case State#state.history of
-                true -> [{history, true}|Opts1];
-                _ -> Opts1
-              end,
-      State2 =  State#state{
-        database=Database,
-        docid=DocId,
-        revid=RevId,
-        options=Opts2
-      },
-      route(Req3, State2)
-  end.
 
 route(Req, #state{method= <<"POST">>}=State) ->
   check_body(Req, State);
@@ -191,9 +230,16 @@ route(Req, #state{method= <<"PUT">>}=State) ->
 route(Req, #state{method= <<"GET">>}=State) ->
   check_resource_exists(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  check_resource_exists(Req, State);
+  check_request_revid(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
+
+
+check_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
+  barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
+check_request_revid(Req, S) ->
+  Body = S#state.body,
+  check_resource_exists(Req, S#state{body=Body}).
 
 
 check_body(Req, #state{body= <<>>}=S) ->

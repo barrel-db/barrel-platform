@@ -17,85 +17,9 @@
 
 
 %% API
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
+-export([get_resource/3]).
 
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ get => #{ summary => "Get list of all available documents."
-               , produces => ["application/json"]
-               , parameters =>
-                   [#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-
-                     , #{ name => <<"gt">>
-                     , description => <<"greater than">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                     , #{ name => <<"gte">>
-                     , description => <<"greater or equal to">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                     , #{ name => <<"lt">>
-                     , description => <<"lesser than">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                     , #{ name => <<"lte">>
-                     , description => <<"lesser or equal to">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                     , #{ name => <<"max">>
-                     , description => <<"maximum keys to return">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"integer">>}
-                   ]
-               }
-     },
-  [trails:trail("/dbs/:database", ?MODULE, [], Metadata)].
-
--record(state, {method, database, start_seq, end_seq, max, conn}).
-
-init(_Type, Req, []) ->
-  {ok, Req, #state{}}.
-
-handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  route(Req2, State#state{method=Method}).
-
-terminate(_Reason, _Req, _State) ->
-  ok.
-
-route(Req, #state{method= <<"GET">>}=State) ->
-  check_database_db(Req, State);
-route(Req, State) ->
-  barrel_http_reply:error(405, "method not allowed", Req, State).
-
-check_database_db(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
-  case barrel_http_lib:has_database(Database) of
-    false ->
-      barrel_http_reply:error(400, "database not found", Req2, State);
-    true ->
-      State2 = State#state{database=Database},
-      get_resource(Req2, State2)
-  end.
-
-get_resource(Req0, State = #state{database=Database}) ->
+get_resource(Database, Req0, State) ->
   Options = parse_params(Req0),
   #{last_update_seq := Seq} = barrel:db_infos(Database),
   {ok, Req} = cowboy_req:chunked_reply(

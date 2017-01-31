@@ -47,25 +47,22 @@ start_link() ->
 init(_Args) ->
   ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
-  
+
   Trails =
-  trails:trails([ cowboy_swagger_handler
+    trails:trails([ cowboy_swagger_handler
                   , barrel_http_rest_system
                   , barrel_http_rest_replicate
                   , barrel_http_rest_revsdiff
                   , barrel_http_rest_changes
-                  , barrel_http_rest_all_docs
                   , barrel_http_rest_walk
                   , barrel_http_rest_dbs
                   , barrel_http_rest_db
-    
                   , barrel_http_rest_doc
                   , barrel_http_rest_root
-                ]),
+                  ]),
   trails:store(Trails),
   Dispatch = trails:single_host_compile(Trails),
-  
-  
+
   Http = ranch:child_spec(
     barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_protocol,
     [{env, [{dispatch, Dispatch}]}]
