@@ -28,12 +28,13 @@
         , reject_bad_json /1
         ]).
 
-all() -> [ accept_post_get
-         , accept_put_get
-         , accept_delete
-         , reject_replication_name_unknown
-         , reject_store_unknown
-         , reject_bad_json
+all() -> [
+         %%   accept_post_get
+         %% , accept_put_get
+         %% , accept_delete
+         %% , reject_replication_name_unknown
+         %% , reject_store_unknown
+         %% , reject_bad_json
          ].
 
 init_per_suite(Config) ->
