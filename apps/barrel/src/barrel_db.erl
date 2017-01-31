@@ -560,14 +560,13 @@ handle_call({update_doc, DocId, Fun}, _From, Db) ->
   {reply, Reply, NewDb};
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
-handle_call(delete_db, From, #db{ name=Name, id=Id, store=Store } = Db) ->
+handle_call(delete_db, _From, #db{ name=Name, id=Id, store=Store } = Db) ->
   case do_delete_db_info(Store, Name, Id) of
     ok ->
-      %% we return immediately and handle the deletion asynchronously
-      gen_server:reply(From, ok),
       ok = do_delete_db(Store, Id),
-      {stop, normal, Db#db{ id = <<>>}};
+      {stop, normal, ok, Db#db{ id = <<>>}};
     Error ->
+      lager:error("error deleting database ~p: ~p~n", [Name, Error]),
       {stop, normal, Error, Db}
   end;
  
