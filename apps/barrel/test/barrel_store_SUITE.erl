@@ -58,10 +58,9 @@ store_exists(_Config) ->
   ok.
 
 create_db(_Config) ->
-  {ok, #db{name = <<"testdb">>}=Db} = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, #db{name = <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
   {error, db_exists} = barrel_store:create_db(<<"testdb">>, #{}),
-  {ok, Db} = barrel_store:open_db(<<"testdb">>, #{}),
   {ok, #db{name = <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
   [<<"testdb">>, <<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb">>),

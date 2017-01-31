@@ -23,7 +23,7 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--export([start_db/3]).
+-export([create_db/2]).
 
 -include("barrel.hrl").
 
@@ -42,20 +42,27 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  %% initialize the databases from the conf. If missing, create it.
-  Dbs = application:get_env(barrel, dbs, []),
-  Specs = lists:map(
-    fun({Name, Options0}) ->
-      {Id, Options1} = case barrel_store:whereis_db(Name) of
-        undefined ->
-          {barrel_keys:db_id(Name), Options0#{ create_if_missing => true}};
-        #db{id=DbId} ->
-          {DbId, Options0}
-      end,
-      db_spec(Name, Id, Options1)
+  %% initialize persistent databases.
+  {Dbs, Specs0} = persisted_databases(),
+  %% final spec
+  Specs = lists:foldl(
+    fun({Name, Conf0}, Acc) ->
+      case lists:member(Name, Dbs) of
+        true ->
+          %% we ignore already created database
+          Acc;
+        false ->
+          {DbId, Conf}= case maps:is_key(db_id, Conf0) of
+                          true -> maps:take(db_id, Conf0);
+                          false -> {barrel_keys:db_id(Name), Conf0}
+                        end,
+          [db_spec(DbId, {create, Name, DbId, Conf}) | Acc]
+      end
     end,
-    Dbs
+    Specs0,
+    application:get_env(barrel, dbs, [])
   ),
+  
   {ok, {{one_for_one, 10, 60}, Specs}}.
 
 %%%===================================================================
@@ -64,16 +71,30 @@ init([]) ->
 
 %% @private
 
--spec start_db(binary(), binary(), map()) -> supervisor:startchild_ret().
-start_db(Name, Id, Options) ->
-  supervisor:start_child(?MODULE, db_spec(Name, Id, Options)).
+-spec create_db(binary(), map()) -> supervisor:startchild_ret().
+create_db(Name, Conf0) ->
+  {DbId, Conf}= case maps:is_key(db_id, Conf0) of
+                  true -> maps:take(db_id, Conf0);
+                  false -> {barrel_keys:db_id(Name), Conf0}
+                end,
+  supervisor:start_child(?MODULE, db_spec(DbId, {create, Name, DbId, Conf})).
 
-db_spec(Name, Id, Options) ->
+
+db_spec(Id, Args) ->
   #{
     id => Id,
-    start => {barrel_db, start_link, [Name, Id, Options]},
+    start => {barrel_db, start_link, [Args]},
     restart => transient,
     shutdown => 2000,
     type => worker,
     modules => [barrel_db]
   }.
+
+persisted_databases() ->
+  barrel_store:fold_databases(
+    fun(DbName, Meta, {Dbs, Specs}) ->
+      DbId = maps:get(id, Meta),
+      {[DbName | Dbs], [db_spec(DbId, {open, DbName, Meta}) | Specs]}
+    end,
+    {[], []}
+  ).

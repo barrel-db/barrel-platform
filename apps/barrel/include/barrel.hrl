@@ -18,7 +18,7 @@
 -record(db, {
   name = <<>>,
   id = <<>>,
-  options = [],
+  conf = #{},
   pid = nil,
   store = nil,
   indexer = nil,
