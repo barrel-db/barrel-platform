@@ -94,7 +94,7 @@ persisted_databases() ->
   barrel_store:fold_databases(
     fun(DbName, Meta, {Dbs, Specs}) ->
       DbId = maps:get(id, Meta),
-      {[DbName | Dbs], [db_spec(DbId, {open, DbName, Meta}) | Specs]}
+      {ok, {[DbName | Dbs], [db_spec(DbId, {open, DbName, Meta}) | Specs]}}
     end,
     {[], []}
   ).

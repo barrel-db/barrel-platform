@@ -55,7 +55,7 @@ end_per_suite(Config) ->
   application:stop(barrel_http),
   application:stop(barrel),
   
-  _ = (catch rocksdb:destroy("docs", [])),
+  %%_ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
