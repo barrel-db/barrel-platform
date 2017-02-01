@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_rest_changes).
+-module(barrel_http_rest_docs_changes).
 -author("Bernard Notarianni").
 
 -export([init/3]).
@@ -22,7 +22,7 @@
 
 -export([trails/1]).
 
--include("barrel_http_rest_doc.hrl").
+-include("barrel_http_rest_docs.hrl").
 
 trails(Module) ->
   Metadata =

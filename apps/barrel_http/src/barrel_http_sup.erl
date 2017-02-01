@@ -57,7 +57,7 @@ init(_Args) ->
                   , barrel_http_rest_walk
                   , barrel_http_rest_dbs
                   , barrel_http_rest_db
-                  , barrel_http_rest_doc2
+                  , barrel_http_rest_docs
                   , barrel_http_rest_root
                   ]),
   trails:store(Trails),

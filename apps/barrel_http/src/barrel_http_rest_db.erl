@@ -36,7 +36,7 @@ trails() ->
       put => #{ summary => "Create a new database"
         , produces => ["application/json"]
         , parameters =>
-        [#{ name => <<"dbid">>
+        [#{ name => <<"database">>
           , description => <<"Database ID">>
           , in => <<"path">>
           , required => true
@@ -46,7 +46,7 @@ trails() ->
       delete => #{ summary => "Delete a database"
         , produces => ["application/json"]
         , parameters =>
-        [#{ name => <<"dbid">>
+        [#{ name => <<"database">>
           , description => <<"Database ID">>
           , in => <<"path">>
           , required => true
