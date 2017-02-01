@@ -13,6 +13,7 @@
 %% the License.
 
 -record(state, {
+          path,
           method,
           database,
           handler :: list | changes | doc,
@@ -24,5 +25,11 @@
           body,
           doc,
           conn,
-          options
+          options=[],
+
+          since,
+          heartbeat,
+          changes,
+          last_seq,
+          subscribed
          }).

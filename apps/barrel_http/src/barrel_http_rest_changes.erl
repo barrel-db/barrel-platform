@@ -20,9 +20,11 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
+-export([trails/1]).
 
-trails() ->
+-include("barrel_http_rest_doc.hrl").
+
+trails(Module) ->
   Metadata =
     #{ get => #{ summary => "Get changes which happened on the database."
                , produces => ["application/json"]
@@ -52,17 +54,12 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/dbs/:database/docs/_changes", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/:database/docs/_changes", Module, [], Metadata)].
 
 
-
--record(state, {method, database,
-                feed, since, heartbeat, options=[],
-                changes, last_seq, subscribed}).
-
-init(_Type, Req, []) ->
+init(_Type, Req, State) ->
   {Method, Req2} = cowboy_req:method(Req),
-  route(Req2, #state{method=Method}).
+  route(Req2, State#state{method=Method}).
 
 route(Req, #state{method= <<"GET">>}=State) ->
   check_database_db(Req, State);

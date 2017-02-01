@@ -53,7 +53,7 @@ init(_Args) ->
                   , barrel_http_rest_system
                   %% , barrel_http_rest_replicate
                   , barrel_http_rest_revsdiff
-                  , barrel_http_rest_changes
+                  %% , barrel_http_rest_changes
                   , barrel_http_rest_walk
                   , barrel_http_rest_dbs
                   , barrel_http_rest_db

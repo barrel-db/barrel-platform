@@ -158,9 +158,9 @@ trails(Module) ->
 
 -include("barrel_http_rest_doc.hrl").
 
-init(_Type, Req, []) ->
+init(_Type, Req, State) ->
   lager:info("init doc"),
-  {ok, Req, #state{}}.
+  {ok, Req, State}.
 
 handle_post(Req) ->
   handle(Req, #state{}).

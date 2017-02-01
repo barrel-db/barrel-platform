@@ -26,11 +26,22 @@
 -include("barrel_http_rest_doc.hrl").
 
 trails() ->
-  barrel_http_rest_doc:trails(?MODULE).
+  barrel_http_rest_doc:trails(?MODULE) ++ barrel_http_rest_changes:trails(?MODULE).
 
 init(Type, Req, []) ->
-  barrel_http_rest_doc:init(Type, Req, []).
+  {Path, Req2} = cowboy_req:path(Req),
+  S1 = #state{path=Path},
+  case binary:split(Path, <<"/">>, [global]) of
+    [<<>>,<<"dbs">>,_,<<"docs">>,<<"_changes">>] ->
+      barrel_http_rest_changes:init(Type, Req2, S1#state{handler=changes});
+    [<<>>,<<"dbs">>,_,<<"docs">>] ->
+      barrel_http_rest_doc:init(Type, Req2, S1#state{handler=list});
+    _ ->
+      barrel_http_rest_doc:init(Type, Req2, S1#state{handler=doc})
+  end.
 
+handle(Req, #state{handler=changes}=State) ->
+  barrel_http_rest_changes:handle(Req, State);
 handle(Req, State) ->
   check_database_db(Req, State).
 
@@ -55,8 +66,10 @@ route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined
 route_all_docs(Req, State) ->
   barrel_http_rest_doc:handle(Req, State).
 
-info(_Message, Req, State) ->
-  {loop, Req, State}.
+info(Message, Req, #state{handler=changes}=State) ->
+  barrel_http_rest_changes:info(Message, Req, State).
 
+terminate(Reason, Req, #state{handler=changes}=State) ->
+  barrel_http_rest_changes:terminate(Reason, Req, State);
 terminate(Reason, Req, State) ->
   barrel_http_rest_doc:terminate(Reason, Req, State).
