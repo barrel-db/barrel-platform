@@ -20,11 +20,11 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
+-export([trails/1]).
 
 -export([handle_post/1]).
 
-trails() ->
+trails(Module) ->
   GetPutDel =
     #{ get => #{ summary => "Get a document"
                , description => "Get a document."
@@ -153,43 +153,25 @@ trails() ->
                    ]
                }
      },
-  [trails:trail("/dbs/:database/docs", ?MODULE, [], PostGetAllDocs),
-   trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
+  [trails:trail("/dbs/:database/docs", Module, [], PostGetAllDocs),
+   trails:trail("/dbs/:database/docs/:docid", Module, [], GetPutDel)].
 
 -include("barrel_http_rest_doc.hrl").
 
 init(_Type, Req, []) ->
+  lager:info("init doc"),
   {ok, Req, #state{}}.
 
 handle_post(Req) ->
   handle(Req, #state{}).
 
 handle(Req, State) ->
-  check_database_db(Req, State).
+  lager:info("handle method=~p",[State#state.method]),
+  check_params(Req, State).
 
 terminate(_Reason, _Req, _State) ->
   ok.
 
-check_database_db(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
-  case barrel_http_lib:has_database(Database) of
-    false ->
-      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
-    true ->
-      {Method, Req3} = cowboy_req:method(Req2),
-      {DocId, Req4} = cowboy_req:binding(docid, Req3),
-      State2 =  State#state{
-                  database=Database,
-                  docid=DocId,
-                  method=Method
-                 },
-      route_all_docs(Req4, State2)
-  end.
-
-route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
-  barrel_http_rest_docs_list:get_resource(Database, Req, State);
-route_all_docs(Req, State) ->
-  check_params(Req, State).
 
 check_params(Req, State) ->
   {Params, Req2} = cowboy_req:qs_vals(Req),
@@ -232,7 +214,6 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_request_revid(Req, State);
 route(Req, State) ->
-  lager:info("method=~p",[State#state.method]),
   barrel_http_reply:error(405, Req, State).
 
 
