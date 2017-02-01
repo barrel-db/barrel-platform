@@ -146,11 +146,13 @@ accept_get_longpoll(_Config) ->
                     {error, timeout}
                 end
             end,
-  {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"A-IM">>, <<"Incremental feed">>}],
+  {ok, ClientRef} = hackney:get(Url, Headers, <<>>, Opts),
   CatRevId = put_cat(),
   delete_cat(CatRevId),
   ok = LoopFun(LoopFun, ClientRef),
-  {ok, ClientRef2} = hackney:get(Url, [], <<>>, Opts),
+  {ok, ClientRef2} = hackney:get(Url, Headers, <<>>, Opts),
   ok=  LoopFun(LoopFun, ClientRef2).
 
 accept_get_longpoll_heartbeat(_Config) ->
@@ -158,6 +160,7 @@ accept_get_longpoll_heartbeat(_Config) ->
   Request = ["GET /dbs/testdb/docs/_changes?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
              "Host:localhost:7080\r\n",
              "Accept: application/json\r\n",
+             "A-IM: Incremental feed\r\n",
              "\r\n"],
   [ok = gen_tcp:send(Socket, L) || L <- Request],
   timer:sleep(100),
@@ -197,7 +200,9 @@ accept_get_eventsource(_Config) ->
   Pid = spawn(fun () -> wait_response([], 4, Self) end),
   Url = <<"http://localhost:7080/dbs/testdb/docs/_changes?feed=eventsource">>,
   Opts = [async, {stream_to, Pid}],
-  {ok, Ref} = hackney:get(Url, [], <<>>, Opts),
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"A-IM">>, <<"Incremental feed">>}],
+  {ok, Ref} = hackney:get(Url, Headers, <<>>, Opts),
   CatRevId = put_cat(),
   delete_cat(CatRevId),
   receive
@@ -243,9 +248,8 @@ req_changes(Route) ->
   Server = <<"http://localhost:7080">>,
   BinRoute = list_to_binary(Route),
   Url = << Server/binary, BinRoute/binary>>,
-  Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  %% Headers = [{<<"Content-Type">>, <<"application/json">>},
-  %%            {<<"A-IM">>, <<"Incremental feed">>}],
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"A-IM">>, <<"Incremental feed">>}],
   case hackney:request(get, Url, Headers, [], []) of
     {ok, Code, _Headers, Ref} ->
       {ok, Answer} = hackney:body(Ref),
