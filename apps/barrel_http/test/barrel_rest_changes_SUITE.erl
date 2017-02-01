@@ -239,9 +239,13 @@ reject_bad_params(_Config) ->
 
 %%=======================================================================
 
-req_changes(Url) ->
-  Headers = [{<<"Content-Type">>, <<"application/json">>},
-             {<<"A-IM">>, <<"Incremental feed">>}],
+req_changes(Route) ->
+  Server = <<"http://localhost:7080">>,
+  BinRoute = list_to_binary(Route),
+  Url = << Server/binary, BinRoute/binary>>,
+  Headers = [{<<"Content-Type">>, <<"application/json">>}],
+  %% Headers = [{<<"Content-Type">>, <<"application/json">>},
+  %%            {<<"A-IM">>, <<"Incremental feed">>}],
   case hackney:request(get, Url, Headers, [], []) of
     {ok, Code, _Headers, Ref} ->
       {ok, Answer} = hackney:body(Ref),

@@ -156,7 +156,7 @@ trails() ->
   [trails:trail("/dbs/:database/docs", ?MODULE, [], PostGetAllDocs),
    trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
 
--record(state, {method, database, docid, revid, edit, history, body, doc, conn, options}).
+-include("barrel_http_rest_doc.hrl").
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -176,18 +176,18 @@ check_database_db(Req, State) ->
     false ->
       barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
     true ->
-      {Method, Req2} = cowboy_req:method(Req),
-      {DocId, Req3} = cowboy_req:binding(docid, Req2),
+      {Method, Req3} = cowboy_req:method(Req2),
+      {DocId, Req4} = cowboy_req:binding(docid, Req3),
       State2 =  State#state{
                   database=Database,
                   docid=DocId,
                   method=Method
                  },
-      route_all_docs(Req3, State2)
+      route_all_docs(Req4, State2)
   end.
 
 route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
-  barrel_http_rest_all_docs:get_resource(Database, Req, State);
+  barrel_http_rest_docs_list:get_resource(Database, Req, State);
 route_all_docs(Req, State) ->
   check_params(Req, State).
 
@@ -232,6 +232,7 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_request_revid(Req, State);
 route(Req, State) ->
+  lager:info("method=~p",[State#state.method]),
   barrel_http_reply:error(405, Req, State).
 
 

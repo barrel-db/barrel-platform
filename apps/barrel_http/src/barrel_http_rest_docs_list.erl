@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_http_rest_all_docs).
+-module(barrel_http_rest_docs_list).
 -author("Bernard Notarianni").
 
 
