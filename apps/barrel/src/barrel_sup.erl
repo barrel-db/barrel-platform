@@ -59,8 +59,8 @@ init([]) ->
     },
 
   Specs = [
-      Store
-    , ?sup(barrel_db_sup)
+      ?sup(barrel_db_sup)
+    , Store
     , ?sup(barrel_event)
     , ?sup(barrel_task_status)
   ],

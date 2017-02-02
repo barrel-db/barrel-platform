@@ -85,7 +85,7 @@ databases() ->
 
 fold_databases(Fun, AccIn) ->
   {ok, Conf} = get_conf(),
-  fold_databases_1(maps:get(databases, Conf, []), Fun, AccIn).
+  fold_databases_1(maps:get(<<"databases">>, Conf, []), Fun, AccIn).
 
 
 fold_databases_1([Db | Rest], Fun, Acc) ->
@@ -139,8 +139,12 @@ handle_info(init_dbs, State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
   %% get databases from sys.config, we only create dbs not already persisted
-  Dbs = application:get_env(barrel, dbs, []),
-  NState = maybe_create_dbs_from_conf(Dbs -- Loaded, State2),
+  Dbs0 = application:get_env(barrel, dbs, []),
+  Dbs = lists:filter(
+    fun(#{ <<"database_id">> := Id}) -> lists:member(Id, Loaded) /= true  end,
+    Dbs0
+  ),
+  NState = maybe_create_dbs_from_conf(Dbs, State2),
   {noreply, NState};
 
 handle_info(_Info, State) ->  {noreply, State}.
@@ -160,9 +164,9 @@ do_create_db(Config, State = #{ conf := Conf, db_pids := DbPids }) ->
   DbId = maps:get(<<"database_id">>, Config),
   case barrel_db_sup:open_db(DbId, Config) of
     {ok, DbPid} ->
-      #{ databases := Dbs } = Conf,
+      #{ <<"databases">> := Dbs } = Conf,
       {ok, Db} = barrel_db:get_db(DbPid),
-      Conf2 = Conf#{ databases => [ Config | Dbs ] },
+      Conf2 = Conf#{ <<"databases">> => [ Config | Dbs ] },
       case persist_config(Conf2) of
         ok ->
           MRef = erlang:monitor(process, DbPid),
@@ -211,7 +215,7 @@ db_is_down(Pid, State = #{ conf := Conf, db_pids := DbPids }) ->
           erlang:demonitor(MRef, [flush]),
           case Db#db.deleted of
             true ->
-              #{ databases := Dbs } = Conf,
+              #{ <<"databases">> := Dbs } = Conf,
               Dbs2 = lists:filter(
                 fun
                   (#{ <<"database_id">> := Id}) when Id =:= DbId -> false;
@@ -219,7 +223,7 @@ db_is_down(Pid, State = #{ conf := Conf, db_pids := DbPids }) ->
                 end,
                 Dbs
               ),
-              Conf2 = Conf#{ databases => Dbs2 },
+              Conf2 = Conf#{ <<"databases">> => Dbs2 },
               ok = persist_config(Conf2),
               lager:info("remove database ~p from config~n", [DbId]),
               State#{ conf => Conf2, db_pids => DbPids2};
@@ -231,17 +235,17 @@ db_is_down(Pid, State = #{ conf := Conf, db_pids := DbPids }) ->
   end.
 
 load_dbs(#{ conf := Conf, db_pids := DbPids} = State) ->
-  #{ databases := Dbs } = Conf,
+  #{ <<"databases">> := Dbs } = Conf,
   {Loaded, Dbs2, State2} = lists:foldl(
-    fun(#{ database_id := DbId} = Config, {Acc, Dbs1, State1}) ->
+    fun(#{ <<"database_id">> := DbId} = Config, {Acc, Dbs1, State1}) ->
       case barrel_db:exists(DbId, Config) of
         true ->
           case barrel_db_sup:open_db(DbId, Config) of
             {ok, DbPid} ->
-              #{ databases := Dbs } = Conf,
+              #{ <<"databases">> := Dbs } = Conf,
               {ok, Db} = barrel_db:get_db(DbPid),
               MRef = erlang:monitor(process, DbPid),
-              ets:insert( DbId, Db),
+              ets:insert(barrel_dbs, Db),
               lager:debug("load database ~p from config~n", [DbId]),
               {[DbId | Acc], [Config | Dbs1], State1#{ db_pids => DbPids#{ DbPid => {DbId, MRef} }}};
             Error ->
@@ -283,18 +287,18 @@ conf_path() ->
   Path.
   
 persist_config(Conf) ->
-  file:write_file(conf_path(), term_to_binary(Conf)).
+  file:write_file(conf_path(), jsx:encode(Conf)).
 
 load_config() ->
   case filelib:is_regular(conf_path()) of
     true ->
       {ok, ConfBin} = file:read_file(conf_path()),
-      Conf = binary_to_term(ConfBin),
+      Conf = jsx:decode(ConfBin, [return_maps]),
       {ok, Conf};
     false ->
-      Conf = #{version => ?CONF_VERSION,
-               node_id => barrel_lib:uniqid(),
-               databases => []},
+      Conf = #{<<"version">> => ?CONF_VERSION,
+               <<"node_id">> => barrel_lib:uniqid(),
+               <<"databases">> => []},
       ok = persist_config(Conf),
       {ok, Conf}
   end.
