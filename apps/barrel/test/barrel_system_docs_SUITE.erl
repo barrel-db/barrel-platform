@@ -43,7 +43,6 @@ end_per_testcase(_, _Config) ->
 
 end_per_suite(Config) ->
   application:stop(barrel),
-  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 write_and_get(_Config) ->

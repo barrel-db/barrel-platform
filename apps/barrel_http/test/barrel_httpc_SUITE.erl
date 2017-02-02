@@ -43,9 +43,8 @@ all() -> [
          ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
   {ok, _} = application:ensure_all_started(barrel_http),
-  timer:sleep(100),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 url() ->
@@ -58,9 +57,8 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
-  ok = barrel:delete_db(<<"testdb">>),
   ok = barrel_httpc:disconnect(HttpConn),
-
+  ok = barrel:delete_db(<<"testdb">>),
   ok.
 
 end_per_suite(Config) ->

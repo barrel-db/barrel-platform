@@ -17,61 +17,47 @@
 
 %% API
 -export([
-  db_id/1,
   prefix/1,
-  prefix/2,
-  db_prefix/1,
-  db_key/1,
-  db_meta_key/2,
-  doc_key/2,
-  seq_key/2,
-  sys_key/2,
-  rev_key/3,
-  idx_forward_path_key/2,
-  idx_last_doc_key/2,
-  idx_reverse_path_key/2
+  db_meta_key/1,
+  doc_key/1,
+  seq_key/1,
+  sys_key/1,
+  rev_key/2,
+  idx_forward_path_key/1,
+  idx_last_doc_key/1,
+  idx_reverse_path_key/1
 ]).
 
-
-db_id(DbName) -> << (barrel_lib:uniqid())/binary, "-", DbName/binary >>.
-
-prefix(db) -> << 0, 0, 0, 100 >>;
-prefix(_) -> erlang:error(badarg).
-
-prefix(DbId, db_meta) when is_binary(DbId) ->  <<  DbId/binary, 0, 0 >>;
-prefix(DbId, doc) when is_binary(DbId) ->  <<  DbId/binary, 0, 0, 50 >>;
-prefix(DbId, seq) when is_binary(DbId) ->  <<  DbId/binary, 0, 0, 100>>;
-prefix(DbId, sys_doc) when is_binary(DbId) ->  <<  DbId/binary, 0, 0, 200 >>;
-prefix(DbId, idx_last_doc) when is_binary(DbId) ->  <<  DbId/binary, 0, 0, 400 >>;
-prefix(DbId, idx_forward_path) when is_binary(DbId)->  <<  DbId/binary, 0, 0, 410, 0 >>;
-prefix(DbId, idx_reverse_path) when is_binary(DbId)->  <<  DbId/binary, 0, 0, 420, 0 >>;
-prefix(_, _) ->  erlang:error(badarg).
-
-db_prefix(DbId) -> << DbId/binary, 0 >>.
+prefix(db_meta) ->  << 0, 0 >>;
+prefix(doc) ->  <<  0, 0, 50 >>;
+prefix(seq) ->  <<  0, 0, 100>>;
+prefix(sys_doc) ->  << 0, 0, 200 >>;
+prefix(idx_last_doc) ->  <<  0, 0, 400 >>;
+prefix(idx_forward_path) ->  <<  0, 0, 410, 0 >>;
+prefix(idx_reverse_path) ->  <<  0, 0, 420, 0 >>;
+prefix(_) ->  erlang:error(badarg).
 
 %% metadata keys
 
-db_key(DbName) when is_binary(DbName) -> << (prefix(db))/binary, DbName/binary >>.
-
 %% db keys
 
-db_meta_key(DbId, Meta) -> << (prefix(DbId, db_meta))/binary, (barrel_lib:to_binary(Meta))/binary >>.
+db_meta_key(Meta) -> << (prefix(db_meta))/binary, (barrel_lib:to_binary(Meta))/binary >>.
 
-doc_key(DbId, DocId) ->  << (prefix(DbId, doc))/binary,  DocId/binary >>.
+doc_key(DocId) ->  << (prefix(doc))/binary,  DocId/binary >>.
 
-seq_key(DbId, Seq) -> << (prefix(DbId, seq))/binary, Seq:32>>.
+seq_key(Seq) -> << (prefix(seq))/binary, Seq:32>>.
 
-sys_key(DbId, DocId) -> << (prefix(DbId, sys_doc))/binary,  DocId/binary>>.
+sys_key(DocId) -> << (prefix(sys_doc))/binary,  DocId/binary>>.
 
-rev_key(DbId, DocId, Rev) -> << DbId/binary, DocId/binary, 1, Rev/binary >>.
+rev_key(DocId, Rev) -> << DocId/binary, 1, Rev/binary >>.
 
 %% index keys
 
-idx_last_doc_key(DbId, DocId) -> << (prefix(DbId, idx_last_doc))/binary, DocId/binary >>.
+idx_last_doc_key(DocId) -> << (prefix(idx_last_doc))/binary, DocId/binary >>.
 
-idx_forward_path_key(DbId, Path) -> << (prefix(DbId, idx_forward_path))/binary, (encode_path(Path))/binary >>.
+idx_forward_path_key(Path) -> << (prefix(idx_forward_path))/binary, (encode_path(Path))/binary >>.
 
-idx_reverse_path_key(DbId, Path) -> << (prefix(DbId, idx_reverse_path))/binary, (encode_path(Path))/binary >>.
+idx_reverse_path_key(Path) -> << (prefix(idx_reverse_path))/binary, (encode_path(Path))/binary >>.
 
 encode_path(Path) -> encode_path(Path, <<>>).
 

@@ -41,6 +41,7 @@
 %% Database API
 
 -export([
+  create_db/1,
   create_db/2,
   delete_db/1,
   db_infos/1
@@ -145,12 +146,18 @@
   docinfo/0
 ]).
 
+-deprecated([create_db/2]).
 
-create_db(Name, Options) ->
-  barrel_store:create_db(Name, Options).
+create_db(DbId, Config) ->
+  lager:warning("barrel_db:create/2 is deprecated", []),
+  barrel_store:create_db(Config#{ <<"database_id">> => DbId }).
 
-delete_db(Name) ->
-  barrel_store:delete_db(Name).
+create_db(Config) ->
+  barrel_store:create_db(Config).
+
+
+delete_db(DbId) ->
+  barrel_store:delete_db(DbId).
 
 
 -spec db_infos(Db::db()) ->

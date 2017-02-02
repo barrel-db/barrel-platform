@@ -23,7 +23,7 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--export([start_db/3]).
+-export([open_db/2]).
 
 -include("barrel.hrl").
 
@@ -42,21 +42,7 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  %% initialize the databases from the conf. If missing, create it.
-  Dbs = application:get_env(barrel, dbs, []),
-  Specs = lists:map(
-    fun({Name, Options0}) ->
-      {Id, Options1} = case barrel_store:whereis_db(Name) of
-        undefined ->
-          {barrel_keys:db_id(Name), Options0#{ create_if_missing => true}};
-        #db{id=DbId} ->
-          {DbId, Options0}
-      end,
-      db_spec(Name, Id, Options1)
-    end,
-    Dbs
-  ),
-  {ok, {{one_for_one, 10, 60}, Specs}}.
+  {ok, {{one_for_one, 10, 60}, []}}.
 
 %%%===================================================================
 %%% Internal functions
@@ -64,15 +50,16 @@ init([]) ->
 
 %% @private
 
--spec start_db(binary(), binary(), map()) -> supervisor:startchild_ret().
-start_db(Name, Id, Options) ->
-  supervisor:start_child(?MODULE, db_spec(Name, Id, Options)).
+-spec open_db(binary(), map()) -> supervisor:startchild_ret().
+open_db(DbId, Config) ->
+  supervisor:start_child(?MODULE, db_spec(DbId, Config)).
 
-db_spec(Name, Id, Options) ->
+
+db_spec(Id, Config) ->
   #{
     id => Id,
-    start => {barrel_db, start_link, [Name, Id, Options]},
-    restart => transient,
+    start => {barrel_db, start_link, [Id, Config]},
+    restart => temporary,
     shutdown => 2000,
     type => worker,
     modules => [barrel_db]

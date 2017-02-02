@@ -26,7 +26,8 @@
 
 -export([
   store_exists/1,
-  create_db/1
+  create_db/1,
+  persist_db/1
 ]).
 
 -include("barrel.hrl").
@@ -34,7 +35,8 @@
 all() ->
   [
     store_exists,
-    create_db
+    create_db,
+    persist_db
   ].
 
 init_per_suite(Config) ->
@@ -43,7 +45,6 @@ init_per_suite(Config) ->
 
 end_per_suite(Config) ->
   application:stop(barrel),
-  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
@@ -58,14 +59,30 @@ store_exists(_Config) ->
   ok.
 
 create_db(_Config) ->
-  {ok, #db{name = <<"testdb">>}=Db} = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
   {error, db_exists} = barrel_store:create_db(<<"testdb">>, #{}),
-  {ok, Db} = barrel_store:open_db(<<"testdb">>, #{}),
-  {ok, #db{name = <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
+  {ok, #{ <<"database_id">> := <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
   [<<"testdb">>, <<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb">>),
-  [<<"testdb1">>] = barrel_store:databases().
+  timer:sleep(100),
+  [<<"testdb1">>] = barrel_store:databases(),
+  ok = barrel_store:delete_db(<<"testdb1">>),
+  timer:sleep(100),
+  [] = barrel_store:databases().
   
   
-
+persist_db(_Config) ->
+  {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
+  [<<"testdb">>] = barrel_store:databases(),
+  ok = application:stop(barrel),
+  timer:sleep(100),
+  {ok, _} = application:ensure_all_started(barrel),
+  [<<"testdb">>] = barrel_store:databases(),
+  ok = barrel_store:delete_db(<<"testdb">>),
+  timer:sleep(100),
+  [] = barrel_store:databases(),
+  ok = application:stop(barrel),
+  timer:sleep(100),
+  {ok, _} = application:ensure_all_started(barrel),
+  [] = barrel_store:databases().

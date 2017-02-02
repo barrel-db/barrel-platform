@@ -26,16 +26,16 @@ query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_key, FilterOpts) ->
                undefined -> nil;
                Start when is_binary(Start) ->
                  StartParts = Parts ++ [Start],
-                 barrel_keys:idx_forward_path_key(DbId, StartParts)
+                 barrel_keys:idx_forward_path_key(StartParts)
              end,
   EndKey = case proplists:get_value(end_at, FilterOpts) of
              undefined -> nil;
              End when is_binary(End) ->
                EndParts = Parts ++ [End],
-               barrel_keys:idx_forward_path_key(DbId, EndParts)
+               barrel_keys:idx_forward_path_key(EndParts)
 
            end,
-  Prefix = barrel_keys:idx_forward_path_key(DbId, Parts),
+  Prefix = barrel_keys:idx_forward_path_key(Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
 query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_value, FilterOpts) ->
   Path1 = valid_path(Path0),
@@ -44,16 +44,16 @@ query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_value, FilterOpts) ->
                undefined -> nil;
                Start when is_binary(Start) ->
                  StartParts = Parts ++ [Start],
-                 barrel_keys:idx_reverse_path_key(DbId, StartParts)
+                 barrel_keys:idx_reverse_path_key(StartParts)
              end,
   EndKey = case proplists:get_value(end_at, FilterOpts) of
              undefined -> nil;
              End when is_binary(End) ->
                EndParts = Parts ++ [End],
-               barrel_keys:idx_reverse_path_key(DbId, EndParts)
+               barrel_keys:idx_reverse_path_key(EndParts)
   
            end,
-  Prefix = barrel_keys:idx_reverse_path_key(DbId, Parts),
+  Prefix = barrel_keys:idx_reverse_path_key(Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
 query(_, _, _, _, _, _) ->
   erlang:error(badarg).
