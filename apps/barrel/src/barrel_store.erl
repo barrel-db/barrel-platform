@@ -59,7 +59,7 @@ create_db(Config) when is_map(Config) ->
   case maps:find(<<"database_id">>, Config) of
     error ->
       DbId = barrel_lib:uniqid(),
-      gen_server:call(?MODULE, {create_db, Config#{ database_id => DbId}});
+      gen_server:call(?MODULE, {create_db, Config#{ <<"database_id">> => DbId}});
     {ok, DbId} ->
       case whereis_db(DbId) of
         undefined -> gen_server:call(?MODULE, {create_db, Config});
