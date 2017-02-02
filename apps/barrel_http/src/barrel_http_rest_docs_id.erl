@@ -25,14 +25,12 @@
 -include("barrel_http_rest_docs.hrl").
 
 init(_Type, Req, State) ->
-  lager:info("init doc"),
   {ok, Req, State}.
 
 handle_post(Req) ->
   handle(Req, #state{}).
 
 handle(Req, State) ->
-  lager:info("handle method=~p",[State#state.method]),
   check_params(Req, State).
 
 terminate(_Reason, _Req, _State) ->

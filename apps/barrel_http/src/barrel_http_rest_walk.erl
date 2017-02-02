@@ -62,7 +62,7 @@ trails() ->
         , in => <<"query">>
         , required => false
         , type => <<"string">>}
-        
+
         , #{ name => <<"max">>
         , description => <<"maximum keys to return">>
         , in => <<"query">>
@@ -133,7 +133,7 @@ fold_query(Path, Req0, State = #state{store=Store}) ->
   %% start the initial chunk
   ok = cowboy_req:chunk(<<"{\"docs\":[">>, Req),
   {Count, _} = barrel:query(Store, Path, Fun, {0, <<"">>}, OrderBy, Options),
-  
+
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
     iolist_to_binary([
@@ -163,7 +163,7 @@ fold_docs(Req0, State = #state{store=Store}) ->
         {ok, {N + 1, <<",">>}}
     end,
   {Count, _} = barrel:fold_by_id(Store, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
-  
+
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
     iolist_to_binary([
