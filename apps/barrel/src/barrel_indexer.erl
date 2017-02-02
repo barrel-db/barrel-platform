@@ -118,9 +118,9 @@ process_changes(Changes, State0 = #{ db := Db }) ->
 
 update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, DocId, FullPaths) ->
   Ops = prepare_index(
-    ForwardOps, fun barrel_keys:idx_forward_path_key/2, DbId,
+    ForwardOps, fun barrel_keys:idx_forward_path_key/1, DbId,
     prepare_index(
-      ReverseOps, fun barrel_keys:idx_reverse_path_key/2, DbId,
+      ReverseOps, fun barrel_keys:idx_reverse_path_key/1, DbId,
       []
     )
   ),
@@ -128,17 +128,17 @@ update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, DocId, FullPaths
     [] -> ok;
     _ ->
       Batch = [
-        {put, barrel_keys:idx_last_doc_key(DbId, DocId), term_to_binary(FullPaths)}
+        {put, barrel_keys:idx_last_doc_key(DocId), term_to_binary(FullPaths)}
       ] ++ Ops,
       rocksdb:write(Store, Batch, [{sync, true}])
   end.
 
 prepare_index([{put, Path, Entries} | Rest], KeyFun, DbId, Acc) ->
-  Key = KeyFun(DbId, Path),
+  Key = KeyFun(Path),
   Acc2 = [{put, Key, term_to_binary(Entries)} | Acc],
   prepare_index(Rest, KeyFun, DbId, Acc2);
 prepare_index([{delete, Path} | Rest], KeyFun, DbId, Acc) ->
-  Key = KeyFun(DbId, Path),
+  Key = KeyFun(Path),
   Acc2 = [{delete, Key} | Acc],
   prepare_index(Rest, KeyFun, DbId, Acc2);
 prepare_index([], _KeyFun, _DbId, Acc) ->
@@ -146,20 +146,20 @@ prepare_index([], _KeyFun, _DbId, Acc) ->
 
 last_index_seq(#db{ indexed_seq = Seq}) -> Seq.
 
-get_last_doc(#db{id=DbId, store=Store}, DocId) ->
-  case rocksdb:get(Store, barrel_keys:idx_last_doc_key(DbId, DocId), []) of
+get_last_doc(#db{store=Store}, DocId) ->
+  case rocksdb:get(Store, barrel_keys:idx_last_doc_key(DocId), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
-get_reverse_path(#db{id=DbId, store=Store}, Path) ->
-  case rocksdb:get(Store, barrel_keys:idx_reverse_path_key(DbId, Path), []) of
+get_reverse_path(#db{store=Store}, Path) ->
+  case rocksdb:get(Store, barrel_keys:idx_reverse_path_key(Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
 
-get_forward_path(#db{id=DbId, store=Store}, Path) ->
-  case rocksdb:get(Store, barrel_keys:idx_forward_path_key(DbId, Path), []) of
+get_forward_path(#db{store=Store}, Path) ->
+  case rocksdb:get(Store, barrel_keys:idx_forward_path_key(Path), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.

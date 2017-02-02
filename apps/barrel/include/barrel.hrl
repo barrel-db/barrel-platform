@@ -26,7 +26,8 @@
   indexed_seq = 0,
   docs_count = 0,
   system_docs_count = 0,
-  deleted_count = 0
+  deleted_count = 0,
+  deleted = false
 }).
 
 

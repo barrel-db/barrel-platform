@@ -23,7 +23,7 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--export([create_db/2]).
+-export([open_db/2]).
 
 -include("barrel.hrl").
 
@@ -42,28 +42,7 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  %% initialize persistent databases.
-  {Dbs, Specs0} = persisted_databases(),
-  %% final spec
-  Specs = lists:foldl(
-    fun({Name, Conf0}, Acc) ->
-      case lists:member(Name, Dbs) of
-        true ->
-          %% we ignore already created database
-          Acc;
-        false ->
-          {DbId, Conf}= case maps:is_key(db_id, Conf0) of
-                          true -> maps:take(db_id, Conf0);
-                          false -> {barrel_keys:db_id(Name), Conf0}
-                        end,
-          [db_spec(DbId, {create, Name, DbId, Conf}) | Acc]
-      end
-    end,
-    Specs0,
-    application:get_env(barrel, dbs, [])
-  ),
-  
-  {ok, {{one_for_one, 10, 60}, Specs}}.
+  {ok, {{one_for_one, 10, 60}, []}}.
 
 %%%===================================================================
 %%% Internal functions
@@ -71,30 +50,17 @@ init([]) ->
 
 %% @private
 
--spec create_db(binary(), map()) -> supervisor:startchild_ret().
-create_db(Name, Conf0) ->
-  {DbId, Conf}= case maps:is_key(db_id, Conf0) of
-                  true -> maps:take(db_id, Conf0);
-                  false -> {barrel_keys:db_id(Name), Conf0}
-                end,
-  supervisor:start_child(?MODULE, db_spec(DbId, {create, Name, DbId, Conf})).
+-spec open_db(binary(), map()) -> supervisor:startchild_ret().
+open_db(DbId, Config) ->
+  supervisor:start_child(?MODULE, db_spec(DbId, Config)).
 
 
-db_spec(Id, Args) ->
+db_spec(Id, Config) ->
   #{
     id => Id,
-    start => {barrel_db, start_link, [Args]},
-    restart => transient,
+    start => {barrel_db, start_link, [Id, Config]},
+    restart => temporary,
     shutdown => 2000,
     type => worker,
     modules => [barrel_db]
   }.
-
-persisted_databases() ->
-  barrel_store:fold_databases(
-    fun(DbName, Meta, {Dbs, Specs}) ->
-      DbId = maps:get(id, Meta),
-      {ok, {[DbName | Dbs], [db_spec(DbId, {open, DbName, Meta}) | Specs]}}
-    end,
-    {[], []}
-  ).

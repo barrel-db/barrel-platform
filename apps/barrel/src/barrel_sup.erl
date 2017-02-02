@@ -46,7 +46,7 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.name}]),
+  _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.id}]),
   
   Store =
     #{

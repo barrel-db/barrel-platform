@@ -43,7 +43,6 @@ init_per_suite(Config) ->
 
 end_per_suite(Config) ->
   application:stop(barrel),
-  _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
 
@@ -58,13 +57,17 @@ store_exists(_Config) ->
   ok.
 
 create_db(_Config) ->
-  {ok, #db{name = <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
   {error, db_exists} = barrel_store:create_db(<<"testdb">>, #{}),
-  {ok, #db{name = <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
+  {ok, #{ <<"database_id">> := <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
   [<<"testdb">>, <<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb">>),
-  [<<"testdb1">>] = barrel_store:databases().
+  timer:sleep(100),
+  [<<"testdb1">>] = barrel_store:databases(),
+  ok = barrel_store:delete_db(<<"testdb1">>),
+  timer:sleep(100),
+  [] = barrel_store:databases().
   
   
 
