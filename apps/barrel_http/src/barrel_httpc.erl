@@ -91,7 +91,6 @@ fold_by_id(_Db, _Fun, _Acc, _Opts) ->
 changes_since(Pid, Since, Fun, Acc) ->
   gen_server:call(Pid, {changes_since, Since, Fun, Acc, []}).
 
-
 changes_since(Pid, Since, Fun, Acc, Options) ->
   gen_server:call(Pid, {changes_since, Since, Fun, Acc, Options}).
 
@@ -127,27 +126,23 @@ handle_call({post, Doc, _Options}, _From, State) ->
 
 handle_call({put, DocId, Doc, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
-  Sep = <<"/">>,
-  Url = <<DbUrl/binary, Sep/binary, DocId/binary>>,
+  Url = << DbUrl/binary, "/docs/", DocId/binary>>,
   post_put(put, Url, Doc, State);
 
 handle_call({put_rev, DocId, Doc, History, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
-  Url = << DbUrl/binary, "/", DocId/binary, "?edit" >>,
+  Url = << DbUrl/binary, "/docs/", DocId/binary, "?edit" >>,
   do_put_rev(Url, Doc, History, State);
 
 handle_call({get, DocId, Options}, _From, State) ->
   DbUrl = State#state.dbid,
-  Sep = <<"/">>,
-  Url = <<DbUrl/binary, Sep/binary, DocId/binary, (parse_get_options(Options))/binary>>,
+  Url = <<DbUrl/binary, "/docs/", DocId/binary, (parse_get_options(Options))/binary>>,
   {Code, Reply} = req(get, Url),
   get_resp(Code, Reply, State);
 
 handle_call({delete, DocId, RevId, _Options}, _From, State) ->
   DbUrl = State#state.dbid,
-  Sep = <<"/">>,
-  Rev = <<"?rev=">>,
-  Url = <<DbUrl/binary, Sep/binary, DocId/binary, Rev/binary, RevId/binary>>,
+  Url = <<DbUrl/binary, "/docs/", DocId/binary, "?rev=", RevId/binary>>,
   {200, R} = req(delete, Url),
   Reply = jsx:decode(R, [return_maps, {labels, attempt_atom}]),
   DocId = maps:get(id, Reply),
@@ -179,7 +174,7 @@ handle_call({changes_since, Since, Fun, Acc, Options}, _From, S) ->
             end,
   ChangesSince = <<"/_changes?feed=normal&since=">>,
   SinceBin = integer_to_binary(Since),
-  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary, History/binary>>,
+  Url = <<DbUrl/binary, "/docs", ChangesSince/binary, SinceBin/binary, History/binary>>,
   {ok, 200, _Headers, Ref} = hackney:request(get, Url, [], [], []),
   {ok, Body} = hackney:body(Ref),
   Answer = jsx:decode(Body, [return_maps, {labels, attempt_atom}]),
@@ -220,7 +215,8 @@ handle_call(stop, _From, State) ->
 handle_cast({longpoll, DbUrl, Since}, S) ->
   ChangesSince = <<"/_changes?feed=longpoll&heartbeat=5000&history=all&since=">>,
   SinceBin = integer_to_binary(Since),
-  Url = <<DbUrl/binary, ChangesSince/binary, SinceBin/binary>>,
+  Url = <<DbUrl/binary, "/docs", ChangesSince/binary, SinceBin/binary>>,
+  lager:info("longpoll url=~p",[Url]),
   Opts = [async, {recv_timeout, 300000}],
   {ok, ClientRef} = hackney:get(Url, [], <<>>, Opts),
   EmptyAcc = <<>>,
@@ -284,7 +280,7 @@ post_put_resp(201, R, State) ->
   Reply = {ok, DocId, RevId},
   {reply, Reply, State};
 post_put_resp(Code, _, State) ->
-  {reply, {error, {unexepected_http_code, Code}}, State}.
+  {reply, {error, {unexpected_http_code, Code}}, State}.
 
 %% -----------------------------------------------------------------------------
 

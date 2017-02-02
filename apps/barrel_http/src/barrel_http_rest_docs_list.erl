@@ -1,0 +1,76 @@
+%% Copyright 2016, Bernard Notarianni
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License. You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
+
+-module(barrel_http_rest_docs_list).
+-author("Bernard Notarianni").
+
+
+%% API
+-export([get_resource/3]).
+
+get_resource(Database, Req0, State) ->
+  Options = parse_params(Req0),
+  #{last_update_seq := Seq} = barrel:db_infos(Database),
+  {ok, Req} = cowboy_req:chunked_reply(
+    200,
+    [{<<"Content-Type">>, <<"application/json">>},
+     {<<"ETag">>,  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>}],
+    Req0
+  ),
+  %% start the initial chunk
+  ok = cowboy_req:chunk(<<"{\"docs\":[">>, Req),
+  Fun =
+    fun
+      (_DocId, _DocInfo, {ok, nil}, Acc) ->
+        {ok, Acc};
+      (_DocId, _DocInfo, {ok, Doc}, {N, Pre}) ->
+        Chunk = << Pre/binary, (jsx:encode(Doc))/binary >>,
+        ok = cowboy_req:chunk(Chunk, Req),
+        {ok, {N + 1, <<",">>}}
+    end,
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+
+  %% close the document list and return the calculated count
+  ok = cowboy_req:chunk(
+    iolist_to_binary([
+      <<"],">>,
+      <<"\"_count\":">>,
+      integer_to_binary(Count),
+      <<"}">>
+      ]),
+    Req
+  ),
+  {ok, Req, State}.
+
+parse_params(Req) ->
+  {Params, _} = cowboy_req:qs_vals(Req),
+  Options = lists:foldl(fun({Param, Value}, Acc) ->
+                            [param(Param, Value)|Acc]
+                        end, [], Params),
+  Options.
+
+param(<<"start_key">>, StartKey) ->
+  {gte, StartKey};
+param(<<"end_key">>, EndKey) ->
+  {lte, EndKey};
+param(<<"gt">>, StartKey) ->
+  {gt, StartKey};
+param(<<"gte">>, EndKey) ->
+  {gte, EndKey};
+param(<<"lt">>, StartKey) ->
+  {lt, StartKey};
+param(<<"lte">>, EndKey) ->
+  {lte, EndKey};
+param(<<"max">>, MaxBin) ->
+  {max, binary_to_integer(MaxBin)}.

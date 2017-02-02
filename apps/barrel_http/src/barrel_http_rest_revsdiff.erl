@@ -39,7 +39,7 @@ trails() ->
                     ]
                 }
      },
-  [trails:trail("/:store/_revs_diff", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/:store/docs/_revs_diff", ?MODULE, [], Metadata)].
 
 
 init(_Type, Req, []) ->

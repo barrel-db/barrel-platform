@@ -16,6 +16,7 @@
 
 -export([req/2, req/3]).
 -export([has_store/1]).
+-export([has_database/1]).
 
 req(Method, Url) ->
   req(Method,Url,[]).
@@ -38,6 +39,8 @@ req(Method, Url, Body) when is_binary(Body) ->
   end.
 
 
+has_database(Database) ->
+  has_store(Database).
 has_store(Store) ->
   case barrel_store:whereis_db(Store) of
     undefined -> false;

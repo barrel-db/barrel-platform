@@ -26,8 +26,8 @@ trails() ->
     #{ get => #{ summary => "Get the database informations"
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"store">>
-                     , description => <<"Store ID">>
+                   [#{ name => <<"database">>
+                     , description => <<"Database ID">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -36,7 +36,7 @@ trails() ->
       put => #{ summary => "Create a new database"
         , produces => ["application/json"]
         , parameters =>
-        [#{ name => <<"dbid">>
+        [#{ name => <<"database">>
           , description => <<"Database ID">>
           , in => <<"path">>
           , required => true
@@ -46,7 +46,7 @@ trails() ->
       delete => #{ summary => "Delete a database"
         , produces => ["application/json"]
         , parameters =>
-        [#{ name => <<"dbid">>
+        [#{ name => <<"database">>
           , description => <<"Database ID">>
           , in => <<"path">>
           , required => true
@@ -54,9 +54,9 @@ trails() ->
         ]
       }
     },
-  [trails:trail("/:store", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/:database", ?MODULE, [], Metadata)].
 
--record(state, {method, store}).
+-record(state, {method, database}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -69,18 +69,18 @@ terminate(_Reason, _Req, _State) ->
   ok.
 
 route(Req, #state{method= <<"HEAD">>}=State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
     true ->
       barrel_http_reply:json(200, <<>>, Req2, State);
     false ->
       barrel_http_reply:error(404, <<>>, Req2, State)
   end;
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_store_exist(Req, State);
+  check_database_exist(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel:create_db(Store, #{}) of
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel:create_db(Database, #{}) of
     {ok, _} ->
       barrel_http_reply:json(200, #{ ok => true }, Req2, State);
     {error, db_exists} ->
@@ -90,22 +90,22 @@ route(Req, #state{method= <<"PUT">>}=State) ->
       barrel_http_reply:error(500, "db error", Req2, State)
   end;
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  ok = barrel:delete_db(Store),
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  ok = barrel:delete_db(Database),
   barrel_http_reply:json(200, #{ ok => true }, Req2, State);
 route(Req, #state{method= <<"POST">>}) ->
   barrel_http_rest_doc:handle_post(Req);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
-check_store_exist(Req, State) ->
-  {Store, Req2} = cowboy_req:binding(store, Req),
-  case barrel_http_lib:has_store(Store) of
+check_database_exist(Req, State) ->
+  {Database, Req2} = cowboy_req:binding(database, Req),
+  case barrel_http_lib:has_database(Database) of
     true ->
-      get_resource(Req2, State#state{store=Store});
+      get_resource(Req2, State#state{database=Database});
     false ->
-      barrel_http_reply:error(404, "store not found", Req2, State)
+      barrel_http_reply:error(404, "database not found", Req2, State)
   end.
 
-get_resource(Req, #state{store=Store}=State) ->
-  barrel_http_reply:doc(barrel:db_infos(Store), Req, State).
+get_resource(Req, #state{database=Database}=State) ->
+  barrel_http_reply:doc(barrel:db_infos(Database), Req, State).
