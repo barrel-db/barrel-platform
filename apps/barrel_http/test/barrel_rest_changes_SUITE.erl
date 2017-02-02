@@ -22,7 +22,6 @@
 
 -export([ accept_get_normal/1
         , accept_get_history_all/1
-        , accept_get_longpoll/1
         , accept_get_longpoll_heartbeat/1
         , accept_get_eventsource/1
         , reject_store_unknown/1
@@ -31,7 +30,6 @@
 
 all() -> [ accept_get_normal
          , accept_get_history_all
-         , accept_get_longpoll
          , accept_get_longpoll_heartbeat
          , accept_get_eventsource
          , reject_store_unknown
@@ -120,25 +118,27 @@ accept_get_history_all(_Config) ->
 
 %%=======================================================================
 
-accept_get_longpoll(_Config) ->
-  Url = <<"http://localhost:7080/dbs/testdb/docs?feed=longpoll">>,
+accept_get_longpoll_heartbeat(_Config) ->
+  Url = <<"http://localhost:7080/dbs/testdb/docs?feed=longpoll&heartbeat=10">>,
   Opts = [async, {recv_timeout, infinity}],
-  LoopFun = fun(Loop, Ref) ->
+  LoopFun = fun(Loop, {Ref, N}=Acc) ->
                 receive
                   {hackney_response, Ref, {status, StatusInt, _Reason}} ->
                     200 = StatusInt,
-                    Loop(Loop, Ref);
+                    Loop(Loop, Acc);
                   {hackney_response, Ref, {headers, _Headers}} ->
-                    Loop(Loop, Ref);
+                    Loop(Loop, Acc);
                   {hackney_response, Ref, done} ->
-                    ok;
+                    {ok, N};
                   {hackney_response, Ref, <<>>} ->
-                    Loop(Loop, Ref);
+                    Loop(Loop, Acc);
+                  {hackney_response, Ref, <<"\n">>} ->
+                    Loop(Loop, {Ref, N+1});
                   {hackney_response, Ref, Bin} ->
                     R = jsx:decode(Bin,[return_maps]),
                     Results = maps:get(<<"results">>, R),
                     [_OnlyOneChange] = Results,
-                    Loop(Loop, Ref);
+                    Loop(Loop, Acc);
 
                   Else ->
                     ct:fail("Unexpected answer from longpoll: ~p", [Else]),
@@ -149,49 +149,17 @@ accept_get_longpoll(_Config) ->
             end,
   Headers = [{<<"Content-Type">>, <<"application/json">>},
              {<<"A-IM">>, <<"Incremental feed">>}],
+
   {ok, ClientRef} = hackney:get(Url, Headers, <<>>, Opts),
   CatRevId = put_cat(),
-  delete_cat(CatRevId),
-  ok = LoopFun(LoopFun, ClientRef),
-  {ok, ClientRef2} = hackney:get(Url, Headers, <<>>, Opts),
-  ok=  LoopFun(LoopFun, ClientRef2).
+  {ok, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, 0}),
+  true = NbHeartBeats1 >= 1,
 
-accept_get_longpoll_heartbeat(_Config) ->
-  {ok, Socket} = gen_tcp:connect({127,0,0,1}, 7080, [binary, {active,true}]),
-  Request = ["GET /dbs/testdb/docs?feed=longpoll&heartbeat=20 HTTP/1.1\r\n",
-             "Host:localhost:7080\r\n",
-             "Accept: application/json\r\n",
-             "A-IM: Incremental feed\r\n",
-             "\r\n"],
-  [ok = gen_tcp:send(Socket, L) || L <- Request],
-  timer:sleep(100),
-  CatRevId = put_cat(),
+  Url2 = <<Url/binary, "&since=1">>,
+  {ok, ClientRef2} = hackney:get(Url2, Headers, <<>>, Opts),
   delete_cat(CatRevId),
-  LoopFun = fun(Loop,Acc) ->
-                receive
-                  {tcp,_,<<"HTTP/1.1", _/binary>>} ->
-                    Loop(Loop, Acc);
-                  {tcp,_,Data} ->
-                    case Data of
-                      <<"1\r\n\n\r\n">> ->
-                        Loop(Loop, [heartbeat|Acc]);
-                      Other ->
-                        {ok, [Other|Acc]}
-                    end;
-                  {tcp_closed,_} ->
-                    %% cowboy does not close connection
-                    %% we dont expect to receive this one
-                    {error, unexpected_connection_close};
-                  Other ->
-                    {error, {tcp, Other}}
-                after 2000 ->
-                    {error, timeout}
-                end
-            end,
-  {ok, Data} = LoopFun(LoopFun, []),
-  HeartBeats = tl(Data),
-  true = length(HeartBeats) > 1,
-  [heartbeat = H || H <- HeartBeats],
+  {ok, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, 0}),
+  true = NbHeartBeats2 >= 1,
   ok.
 
 %%=======================================================================
