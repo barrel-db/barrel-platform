@@ -117,9 +117,14 @@ init([]) ->
   self() ! init_dbs,
   {ok, #{conf => Conf, db_pids => #{}}}.
 
-handle_call({create_db, Config}, _From, State) ->
-  {Reply, NState} = do_create_db(Config, State),
-  {reply, Reply, NState};
+handle_call({create_db, Config=#{<<"database_id">> := DbId}}, _From, State) ->
+  case whereis_db(DbId) of
+    undefined ->
+      {Reply, NState} = do_create_db(Config, State),
+      {reply, Reply, NState};
+    [_Db] ->
+      {reply, {error, db_exists}, State}
+  end;
 
 handle_call({delete_db, DbId}, _From, State) ->
   {Reply, NState} = do_delete_db(DbId, State),
@@ -181,6 +186,8 @@ do_create_db(Config, State = #{ conf := Conf, db_pids := DbPids }) ->
           ),
           {Error, State}
       end;
+    {error, {already_started, _Pid}} ->
+      {{error, db_exists}, State};
     Error ->
       lager:info(
         "error creating ~p with config ~p: ~p~n",
