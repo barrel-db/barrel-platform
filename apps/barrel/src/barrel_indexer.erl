@@ -16,7 +16,10 @@
 -author("Benoit Chesneau").
 -behaviour(gen_server).
 
--export([refresh_index/2]).
+-export([
+  refresh_index/2,
+  stop/1
+]).
 
 -export([start_link/2]).
 
@@ -36,6 +39,9 @@
 refresh_index(Indexer, Since) ->
   gen_server:call(Indexer, {refresh_index, Since}, infinity).
 
+stop(Indexer) ->
+  gen_server:call(Indexer, stop, infinity).
+
 start_link(Db, Opts) ->
   gen_server:start_link(?MODULE, [Db, Opts], []).
 
@@ -54,6 +60,9 @@ init([Db, Opts]) ->
 handle_call({refresh_index, Since}, _From, State) ->
   {Reply, NState} = do_refresh_index(Since, State),
   {reply, Reply, NState};
+
+handle_call(stop, _From, State) ->
+  {stop, normal, ok, State};
 
 handle_call(Req, _From, State) ->
   {reply, {badcall, Req}, State}.

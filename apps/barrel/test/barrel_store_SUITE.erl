@@ -26,7 +26,8 @@
 
 -export([
   store_exists/1,
-  create_db/1
+  create_db/1,
+  persist_db/1
 ]).
 
 -include("barrel.hrl").
@@ -34,7 +35,8 @@
 all() ->
   [
     store_exists,
-    create_db
+    create_db,
+    persist_db
   ].
 
 init_per_suite(Config) ->
@@ -70,4 +72,17 @@ create_db(_Config) ->
   [] = barrel_store:databases().
   
   
-
+persist_db(_Config) ->
+  {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
+  [<<"testdb">>] = barrel_store:databases(),
+  ok = application:stop(barrel),
+  timer:sleep(100),
+  {ok, _} = application:ensure_all_started(barrel),
+  [<<"testdb">>] = barrel_store:databases(),
+  ok = barrel_store:delete_db(<<"testdb">>),
+  timer:sleep(100),
+  [] = barrel_store:databases(),
+  ok = application:stop(barrel),
+  timer:sleep(100),
+  {ok, _} = application:ensure_all_started(barrel),
+  [] = barrel_store:databases().

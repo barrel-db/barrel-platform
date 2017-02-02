@@ -586,7 +586,8 @@ handle_call({update_doc, DocId, Fun}, _From, Db) ->
   {reply, Reply, NewDb};
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
-handle_call(delete_db, From, #db{id=Id, store=Store, conf=Conf } = Db) ->
+handle_call(delete_db, From, #db{id=Id, store=Store, indexer=Idx } = Db) ->
+  ok = barrel_indexer:stop(Idx),
   ok = rocksdb:close(Store),
   TempName = db_path(barrel_lib:uniqid()),
   file:rename(db_path(Id), TempName),
