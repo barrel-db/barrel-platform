@@ -1,5 +1,5 @@
 
--define(DOCS_DIR, "./docs").
+-define(DATA_DIR, "data").
 
 -define(default_fold_options,
   #{

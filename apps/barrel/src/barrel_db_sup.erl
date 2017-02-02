@@ -23,10 +23,6 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--export([open_db/2]).
-
--include("barrel.hrl").
-
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -42,25 +38,12 @@ start_link() ->
 -spec init(any()) ->
   {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-  {ok, {{one_for_one, 10, 60}, []}}.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%% @private
-
--spec open_db(binary(), map()) -> supervisor:startchild_ret().
-open_db(DbId, Config) ->
-  supervisor:start_child(?MODULE, db_spec(DbId, Config)).
-
-
-db_spec(Id, Config) ->
-  #{
-    id => Id,
-    start => {barrel_db, start_link, [Id, Config]},
+  Spec = #{
+    id => barrel_db,
+    start => {barrel_db, start_link, []},
     restart => temporary,
-    shutdown => 2000,
+    shutdown => 30000,
     type => worker,
     modules => [barrel_db]
-  }.
+  },
+  {ok, {{simple_one_for_one, 4, 3600}, [Spec]}}.

@@ -25,7 +25,6 @@
 ]).
 
 -export([
-  store_exists/1,
   create_db/1,
   persist_db/1
 ]).
@@ -34,7 +33,6 @@
 
 all() ->
   [
-    store_exists,
     create_db,
     persist_db
   ].
@@ -54,18 +52,14 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_Config) ->
   ok.
 
-store_exists(_Config) ->
-  true = filelib:is_dir("docs"),
-  ok.
-
 create_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
+  true = barrel_db:exists(<<"testdb">>),
   {error, db_exists} = barrel_store:create_db(<<"testdb">>, #{}),
   {ok, #{ <<"database_id">> := <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
   [<<"testdb">>, <<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb">>),
-  timer:sleep(100),
   [<<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb1">>),
   timer:sleep(100),
@@ -76,11 +70,11 @@ persist_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
   ok = application:stop(barrel),
-  timer:sleep(100),
+  io:format("stopped the database", []),
   {ok, _} = application:ensure_all_started(barrel),
   [<<"testdb">>] = barrel_store:databases(),
+  io:format("started the database", []),
   ok = barrel_store:delete_db(<<"testdb">>),
-  timer:sleep(100),
   [] = barrel_store:databases(),
   ok = application:stop(barrel),
   timer:sleep(100),

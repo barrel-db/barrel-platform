@@ -41,7 +41,8 @@
 -export([
   start_link/2,
   get_db/1,
-  exists/2
+  exists/2,
+  exists/1
 ]).
 
 %% gen_server callbacks
@@ -65,10 +66,11 @@
 %%% API
 %%%===================================================================
 
-exists(_DbId, #{ <<"in_memory">> := true }) ->
-  true;
-exists(DbId, _Config) ->
-  filelib:is_dir(db_path(DbId)).
+exists(_DbId, #{ <<"in_memory">> := true }) -> true;
+exists(DbId, _Config) -> filelib:is_dir(db_path(DbId)).
+
+exists(DbId) -> filelib:is_dir(db_path(DbId)).
+
 
 infos(DbName) ->
   with_db(
@@ -281,7 +283,7 @@ fold_by_id(DbName, Fun, Acc, Opts) ->
     Db -> fold_by_id_int(Db, Fun, Acc, Opts)
   end.
 
-fold_by_id_int(#db{ id=DbId, store=Store }=Db, UserFun, AccIn, Opts) ->
+fold_by_id_int(#db{ store=Store }=Db, UserFun, AccIn, Opts) ->
   Prefix = barrel_keys:prefix(doc),
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
@@ -312,7 +314,7 @@ changes_since(DbName, Since, Fun, AccIn, Opts) when is_binary(DbName), is_intege
     Db ->  changes_since_int(Db, Since, Fun, AccIn, Opts)
   end.
 
-changes_since_int(Db = #db{ id=DbId, store=Store}, Since0, Fun, AccIn, Opts) ->
+changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   Since = if
             Since0 > 0 -> Since0 + 1;
             true -> Since0
@@ -586,15 +588,30 @@ handle_call({update_doc, DocId, Fun}, _From, Db) ->
   {reply, Reply, NewDb};
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
-handle_call(delete_db, From, #db{id=Id, store=Store, indexer=Idx } = Db) ->
-  ok = barrel_indexer:stop(Idx),
-  ok = rocksdb:close(Store),
-  TempName = db_path(barrel_lib:uniqid()),
-  file:rename(db_path(Id), TempName),
-  gen_server:reply(From, ok),
-  rocksdb:destroy(TempName, []),
-  {stop, normal, Db#db{ store = nil}};
 
+handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) ->
+  if
+    Store /= nil ->
+      case is_pid(Idx) of
+        true ->
+          ok = barrel_indexer:stop(Idx);
+        false ->
+          ok
+      end,
+      ok = rocksdb:close(Store),
+      TempName = db_path(barrel_lib:uniqid()),
+      file:rename(db_path(Id), TempName),
+      %% deletion of the database happen asynchronously
+      spawn(
+        fun() ->
+          ok = rocksdb:destroy(TempName, []),
+          lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
+        end
+      );
+    true ->
+      ok
+  end,
+  {stop, deleted, ok, Db#db{ store=nil, indexer=nil}};
  
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
@@ -603,12 +620,19 @@ handle_cast(_Msg, State) -> {noreply, State}.
 
 handle_info(_Info, State) -> {noreply, State}.
 
-
-terminate(Reason, #db{ id = Id, store = Store }) ->
+terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
   if
     Store /= nil ->
-      _ = (catch (rocksdb:close(Store)) );
-    true -> ok
+      case is_pid(Idx) of
+        true ->
+          ok = barrel_indexer:stop(Idx);
+        false ->
+          ok
+      end,
+      ok = rocksdb:close(Store),
+      ok;
+    true ->
+      ok
   end,
   lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok.
