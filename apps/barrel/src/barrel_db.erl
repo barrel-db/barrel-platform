@@ -611,7 +611,7 @@ handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) -
     true ->
       ok
   end,
-  {stop, deleted, ok, Db#db{ store=nil, indexer=nil}};
+  {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
  
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
