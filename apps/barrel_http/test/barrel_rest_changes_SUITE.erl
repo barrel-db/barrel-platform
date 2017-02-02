@@ -151,12 +151,14 @@ accept_get_longpoll_heartbeat(_Config) ->
              {<<"A-IM">>, <<"Incremental feed">>}],
 
   {ok, ClientRef} = hackney:get(Url, Headers, <<>>, Opts),
+  timer:sleep(100),
   CatRevId = put_cat(),
   {ok, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, 0}),
   true = NbHeartBeats1 >= 1,
 
   Url2 = <<Url/binary, "&since=1">>,
   {ok, ClientRef2} = hackney:get(Url2, Headers, <<>>, Opts),
+  timer:sleep(100),
   delete_cat(CatRevId),
   {ok, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, 0}),
   true = NbHeartBeats2 >= 1,
