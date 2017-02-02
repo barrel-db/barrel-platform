@@ -68,7 +68,7 @@ uniqid(_) -> error(badarg).
 
 -spec data_dir() -> string().
 data_dir() ->
-  Dir = application:get_env(barrel, docs_dir, ?DOCS_DIR),
+  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
   filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
   Dir.
 
