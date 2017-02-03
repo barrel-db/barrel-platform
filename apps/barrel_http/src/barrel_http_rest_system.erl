@@ -106,7 +106,7 @@ check_database(Req, State) ->
       State2 = State#state{database=Database,  docid=DocId},
       route(Req3, State2);
     false ->
-      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State)
+      barrel_http_reply:error(404, <<"database not found: ", Database/binary>>, Req2, State)
   end.
 
 route(Req, #state{method= <<"PUT">>}=State) ->
