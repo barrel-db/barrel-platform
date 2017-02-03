@@ -94,7 +94,7 @@ check_database(Req, State) ->
   {Database, Req2} = cowboy_req:binding(database, Req),
   case barrel_http_lib:has_database(Database) of
     false ->
-      barrel_http_reply:error(400, "db not found", Req2, State);
+      barrel_http_reply:error(404, "db not found", Req2, State);
     true ->
       State2 = State#state{database=Database},
       get_resource(Req2, State2)
@@ -102,7 +102,7 @@ check_database(Req, State) ->
 
 get_resource(Req0, State = #state{database=Database}) ->
   {Path, _} = cowboy_req:path(Req0),
-  case binary:split(Path, << "/", Database/binary, "/_walk">>) of
+  case binary:split(Path, << "/dbs/", Database/binary, "/walk">>) of
     [<<>>, <<>>] ->
       fold_docs(Req0, State);
     [<<>>, <<"/">>] ->
