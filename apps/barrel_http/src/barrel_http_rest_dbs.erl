@@ -40,7 +40,7 @@ trails() ->
                     ]
                 }
      },
-  [trails:trail("/dbs/", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs", ?MODULE, [], Metadata)].
 
 -record(state, {method, body}).
 
