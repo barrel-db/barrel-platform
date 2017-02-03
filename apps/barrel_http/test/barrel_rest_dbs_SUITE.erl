@@ -12,27 +12,30 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_rest_db_SUITE).
+-module(barrel_rest_dbs_SUITE).
 
--export([
-  all/0,
-  end_per_suite/1,
-  init_per_suite/1,
-  init_per_testcase/2,
-  end_per_testcase/2
-]).
+-export(
+   [ all/0
+   , end_per_suite/1
+   , init_per_suite/1
+   , init_per_testcase/2
+   , end_per_testcase/2
+   ]).
 
--export([
-    db_info/1
-  , reject_unknown_store/1
-  , dbs/1
-]).
+-export(
+   [ db_info/1
+   , accept_post/1
+   , reject_bad_json/1
+   , reject_unknown_database/1
+   , dbs/1
+   ]).
 
 all() ->
-  [
-    db_info
-    , reject_unknown_store
-    , dbs
+  [ db_info
+  , accept_post
+  , reject_bad_json
+  , reject_unknown_database
+  , dbs
   ].
 
 init_per_suite(Config) ->
@@ -67,8 +70,25 @@ db_info(_Config) ->
     <<"last_index_seq">> := _} = Info,
   ok.
 
-reject_unknown_store(_Config) ->
+reject_unknown_database(_Config) ->
   {404, _} = test_lib:req(get, "/dbs/baddatabase"),
+  ok.
+
+accept_post(_Config) ->
+  DatabaseId = <<"testdabase">>,
+  D1 = #{<<"database_id">> => DatabaseId},
+
+  {201, R1} = test_lib:req(post, "/dbs", D1),
+  #{<<"database_id">> := DatabaseId} = jsx:decode(R1, [return_maps]),
+  ok = barrel_store:delete_db(DatabaseId),
+
+  {201, R2} = test_lib:req(post, "/dbs", #{}),
+  #{<<"database_id">> := DatabaseId2} = jsx:decode(R2, [return_maps]),
+  ok = barrel_store:delete_db(DatabaseId2),
+  ok.
+
+reject_bad_json(_Config) ->
+  {400, _} = test_lib:req(post, "/dbs", <<"{badjson">>),
   ok.
 
 dbs(_Config) ->

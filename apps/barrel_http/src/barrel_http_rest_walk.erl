@@ -71,7 +71,7 @@ trails() ->
       ]
     }
     },
-  [trails:trail("/:store/_walk/[...]", ?MODULE, [], Metadata)].
+  [trails:trail("/dbs/:store/walk/[...]", ?MODULE, [], Metadata)].
 
 -record(state, {method, store, dbid, start_seq, end_seq, max, conn}).
 

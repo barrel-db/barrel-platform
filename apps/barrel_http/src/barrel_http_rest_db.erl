@@ -33,16 +33,6 @@ trails() ->
                      , type => <<"string">>}
                    ]
                },
-      put => #{ summary => "Create a new database"
-        , produces => ["application/json"]
-        , parameters =>
-        [#{ name => <<"database">>
-          , description => <<"Database ID">>
-          , in => <<"path">>
-          , required => true
-          , type => <<"string">>}
-        ]
-      },
       delete => #{ summary => "Delete a database"
         , produces => ["application/json"]
         , parameters =>
@@ -78,17 +68,6 @@ route(Req, #state{method= <<"HEAD">>}=State) ->
   end;
 route(Req, #state{method= <<"GET">>}=State) ->
   check_database_exist(Req, State);
-route(Req, #state{method= <<"PUT">>}=State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
-  case barrel:create_db(Database, #{}) of
-    {ok, _} ->
-      barrel_http_reply:json(200, #{ ok => true }, Req2, State);
-    {error, db_exists} ->
-      barrel_http_reply:error(409, "db exists", Req2, State);
-    Error ->
-      lager:error("got server error ~p~n", [Error]),
-      barrel_http_reply:error(500, "db error", Req2, State)
-  end;
 route(Req, #state{method= <<"DELETE">>}=State) ->
   {Database, Req2} = cowboy_req:binding(database, Req),
   ok = barrel:delete_db(Database),
