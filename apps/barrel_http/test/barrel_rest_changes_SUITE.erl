@@ -170,8 +170,7 @@ accept_get_longpoll_heartbeat(_Config) ->
 
 accept_get_eventsource(_Config) ->
   Url = <<"http://localhost:7080/dbs/testdb/docs?feed=eventsource&since=1">>,
-  Headers = [{<<"Content-Type">>, <<"application/json">>},
-             {<<"A-IM">>, <<"Incremental feed">>}],
+  Headers = [{<<"Content-Type">>, <<"application/json">>}],
   test_eventsource(Url, Headers).
 
 accept_get_eventsource_headers(_Config) ->

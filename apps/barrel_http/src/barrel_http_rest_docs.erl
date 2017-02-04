@@ -168,16 +168,20 @@ trails() ->
 init(Type, Req, []) ->
   {Path, Req2} = cowboy_req:path(Req),
   {HeaderBin, Req3} = cowboy_req:header(<<"a-im">>, Req2, <<"undefined">>),
+  {FeedBin, Req4} = cowboy_req:qs_val(<<"feed">>, Req3, <<"undefined">>),
   Header = string:to_lower(binary_to_list(HeaderBin)),
+  Feed = string:to_lower(binary_to_list(FeedBin)),
   Route = binary:split(Path, <<"/">>, [global]),
   S1 = #state{path=Path},
-  case {Route, Header} of
-    {[<<>>,<<"dbs">>,_,<<"docs">>], "incremental feed"} ->
-      barrel_http_rest_docs_changes:init(Type, Req3, S1#state{handler=changes});
-    {[<<>>,<<"dbs">>,_,<<"docs">>],_} ->
-      barrel_http_rest_docs_id:init(Type, Req3, S1#state{handler=list});
+  case {Route, Header, Feed} of
+    {[<<>>,<<"dbs">>,_,<<"docs">>], "incremental feed", _} ->
+      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
+    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "eventsource"} ->
+      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
+    {[<<>>,<<"dbs">>,_,<<"docs">>],_,_} ->
+      barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=list});
     _ ->
-      barrel_http_rest_docs_id:init(Type, Req3, S1#state{handler=doc})
+      barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=doc})
   end.
 
 handle(Req, #state{handler=changes}=State) ->
