@@ -57,20 +57,18 @@ The generated release can be found in the folder `_build/prod/rel` .
 
 To start a barrel http server:
 
-    $ ./_build/prod/rel/barrel/bin/barrel_http start
+    $ ./_build/prod/rel/barrel/bin/barrel start
 
 To stop it:
 
-    $ ./_build/prod/rel/barrel/bin/barrel_http stop
+    $ ./_build/prod/rel/barrel/bin/barrel stop
 
 List of available commands:
 
-    $ ./_build/prod/rel/barrel/bin/barrel_http
+    $ ./_build/prod/rel/barrel/bin/barrel
 
 You can consult the embedded [Swagger](http://swagger.io/) page at
 http://localhost:7080/api-docs
-
-<img src="doc/swagger.png" width="800">
 
 ## Packaging an autonomous tar file
 
