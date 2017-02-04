@@ -169,85 +169,68 @@ accept_get_longpoll_heartbeat(_Config) ->
 %%=======================================================================
 
 accept_get_eventsource(_Config) ->
-  Self = self(),
-  Pid = spawn(fun () -> wait_response_from_hackney([], 5, Self) end),
-  Url = <<"http://localhost:7080/dbs/testdb/docs?feed=eventsource">>,
-  Opts = [async, {stream_to, Pid}],
+  Url = <<"http://localhost:7080/dbs/testdb/docs?feed=eventsource&since=1">>,
   Headers = [{<<"Content-Type">>, <<"application/json">>},
              {<<"A-IM">>, <<"Incremental feed">>}],
-  {ok, Ref} = hackney:get(Url, Headers, <<>>, Opts),
-  CatRevId = put_cat(),
-  delete_cat(CatRevId),
-  receive
-    {Ref, done} ->
-      ct:fail(expected_more_data);
-    {Msgs, received_as_expected} ->
-      [[200, <<"OK">>], _Headers, _, _CatPut, _CatDelete] = Msgs
-  after 2000 ->
-      ct:fail(eventsource_timeout)
-  end,
-  hackney:close(Ref),
-  ok.
+  test_eventsource(Url, Headers).
 
 accept_get_eventsource_headers(_Config) ->
-  %% We create 3 documents
-  put_anonymous(), % seq=1
-  Id2 = put_anonymous(), % seq=2
-  Id3 = put_anonymous(), % seq=3
-
-  %% We start feed the change, starting since 1 (ie, changes with seq>1)
-  Self = self(),
-  Pid = spawn(fun () -> wait_response_from_hackney([], 5, Self) end),
   Url = <<"http://localhost:7080/dbs/testdb/docs">>,
-  Opts = [async, {stream_to, Pid}],
   Headers = [{<<"Content-Accept">>, <<"text/event-stream">>},
              {<<"Last-Event-ID">>, <<"1">>},
              {<<"A-IM">>, <<"Incremental feed">>}],
+  test_eventsource(Url, Headers).
+
+
+test_eventsource(Url, Headers) ->
+  %% We create 3 documents
+  post_anonymous(), % seq=1
+  Id2 = post_anonymous(), % seq=2
+  Id3 = post_anonymous(), % seq=3
+
+  %% We start feed the change, starting since 1 (ie, changes with seq>1)
+  Opts = [async],
   {ok, Ref} = hackney:get(Url, Headers, <<>>, Opts),
 
   %% We add 2 more documents
-  Id4 = put_anonymous(), % seq=4
-  Id5 = put_anonymous(), % seq=5
+  Id4 = post_anonymous(), % seq=4
+  Id5 = post_anonymous(), % seq=5
 
-  receive
-    {Ref, done} ->
-      ct:fail(expected_more_data);
-    {Msgs, received_as_expected} ->
-      [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
-      {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
-      #{<<"last_seq">> := 3, <<"results">> := [Seq3, Seq2]} = FirstChanges,
-      #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
-      #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
-      {<<"4">>, #{<<"results">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
-      {<<"5">>, #{<<"results">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5)
-  after 2000 ->
-      ct:fail(eventsource_timeout)
-  end,
+  Msgs = collect_msgs_from_hackney([], 5),
+  [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
+
+  {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
+  #{<<"last_seq">> := 3, <<"results">> := [Seq3, Seq2]} = FirstChanges,
+  #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
+  #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
+  {<<"4">>, #{<<"results">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
+  {<<"5">>, #{<<"results">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5),
   hackney:close(Ref),
   ok.
 
-put_anonymous() ->
+post_anonymous() ->
   Doc = "{\"name\": \"anonymous\"}",
   {201, R} = test_lib:req(post, "/dbs/testdb/docs", Doc),
   J = jsx:decode(R, [return_maps]),
   maps:get(<<"id">>, J).
 
-wait_response_from_hackney(Msgs, 0, Parent) ->
-  Parent ! {lists:reverse(Msgs), received_as_expected};
-wait_response_from_hackney(Msgs, Expected, Parent) ->
+collect_msgs_from_hackney(Msgs, 0) ->
+  lists:reverse(Msgs);
+collect_msgs_from_hackney(Msgs, Expected) ->
   N = Expected - 1,
   receive
     {hackney_response, _Ref, {status, StatusInt, Reason}} ->
-      wait_response_from_hackney([[StatusInt,Reason]|Msgs], N, Parent);
+      collect_msgs_from_hackney([[StatusInt,Reason]|Msgs], N);
     {hackney_response, _Ref, {headers, Headers}} ->
-      wait_response_from_hackney([Headers|Msgs], N, Parent);
-    {hackney_response, Ref, done} ->
-      Parent ! {Ref, Msgs, done},
-      ok;
+      collect_msgs_from_hackney([Headers|Msgs], N);
+    {hackney_response, _Ref, done} ->
+      collect_msgs_from_hackney([done|Msgs], N);
     {hackney_response, _Ref, Bin} ->
-      wait_response_from_hackney([Bin|Msgs], N, Parent);
-    _Else ->
-      ok
+      collect_msgs_from_hackney([Bin|Msgs], N);
+    Else ->
+      {error, {unexpected_message, Else}}
+  after 2000 ->
+      {error, hackney_timeout_in_test}
   end.
 
 parse_event_source(Bin) ->
