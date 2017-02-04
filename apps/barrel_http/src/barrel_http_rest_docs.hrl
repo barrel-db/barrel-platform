@@ -28,6 +28,7 @@
           options=[],
 
           since,
+          timer,
           heartbeat,
           changes,
           last_seq,

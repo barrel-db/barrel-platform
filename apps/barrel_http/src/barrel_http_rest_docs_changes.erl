@@ -78,6 +78,7 @@ check_database_db(Req, State) ->
       {shutdown, Req3, S}
   end.
 
+
 check_params(Req, State) ->
   StateDefault = State#state{feed=normal, since=0},
   {Params, Req2} = cowboy_req:qs_vals(Req),
@@ -86,7 +87,7 @@ check_params(Req, State) ->
       {ok, Req3, S} = barrel_http_reply:error(400, "unknown parameter", Req2, State),
       {shutdown, Req3, S};
     {ok, State2} ->
-      init_feed(Req2, State2)
+      check_eventsource_headers(Req2, State2)
   end.
 
 parse_params([], State) ->
@@ -105,6 +106,21 @@ parse_params([{<<"history">>, <<"all">>}|Tail], State) ->
 parse_params([{Param, _Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
+
+check_eventsource_headers(Req, State) ->
+  {ContentTypeBin, Req2} = cowboy_req:header(<<"content-accept">>, Req, <<"undefined">>),
+  {LastEventIdBin, Req3} = cowboy_req:header(<<"last-event-id">>, Req2, <<"undefined">>),
+  ContentType = string:to_lower(binary_to_list(ContentTypeBin)),
+  route_evensource_headers(ContentType, LastEventIdBin, Req3, State).
+
+route_evensource_headers("text/event-stream", LastEventId, Req, State) ->
+  Since = case LastEventId of
+            <<"undefined">> -> 0;
+            Integer -> binary_to_integer(Integer)
+          end,
+  init_feed(Req, State#state{feed=eventsource, since=Since});
+route_evensource_headers(_,_, Req, State) ->
+  init_feed(Req, State).
 
 
 init_feed(Req, #state{database=Database, since=Since, options=Options}=State) ->
@@ -126,17 +142,18 @@ init_feed_changes(Req, #state{feed=longpoll}=S) ->
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
   ok = barrel_event:reg(S#state.database),
-  #state{database=Database} = S,
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
   {ok, Req2, S2} = init_chunked_reply_with_hearbeat(Headers, Req, S),
-  info({'$barrel_event', Database, db_updated}, Req2, S2#state{subscribed=true}).
+  Changes = S#state.changes,
+  LastSeq = S#state.last_seq,
+  db_updated(Changes, LastSeq, Req2, S2).
 
 init_chunked_reply_with_hearbeat(Headers, Req, State) ->
   {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
   HeartBeat = binary_to_integer(HeartBeatBin),
-  timer:send_interval(HeartBeat, self(), heartbeat),
+  Timer = timer:send_interval(HeartBeat, self(), heartbeat),
   {ok, Req3} = cowboy_req:chunked_reply(200, Headers, Req2),
-  {ok, Req3, State#state{heartbeat=HeartBeat}}.
+  {ok, Req3, State#state{timer=Timer, heartbeat=HeartBeat}}.
 
 
 handle(Req, S) ->
@@ -149,7 +166,7 @@ info(heartbeat, Req, S) ->
   ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
 
-info({'$barrel_event', _FromDbId, db_updated}, Req, S) ->
+info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId}=S) ->
   {LastSeq, Changes} = changes(S#state.database, S#state.last_seq, S#state.options),
   db_updated(Changes, LastSeq, Req, S);
 info(_Info, Req, S) ->
@@ -166,12 +183,17 @@ db_updated(Changes, LastSeq, Req, #state{feed=longpoll}=S) ->
 db_updated(Changes, LastSeq, Req, #state{feed=eventsource}=S) ->
   Json = to_json(LastSeq, Changes),
   %% format defined by https://www.w3.org/TR/eventsource/
-  ok = cowboy_req:chunk(["id: ", id(), "\ndata: ", Json, "\n\n"], Req),
+  ok = cowboy_req:chunk(["id: ", integer_to_list(LastSeq),
+                         "\ndata: ", Json, "\n\n"], Req),
   {loop, Req, S#state{last_seq=LastSeq}}.
 
 
+terminate(_Reason, _Req, State) ->
+  terminate_subscription(State),
+  terminate_timer(State),
+  ok.
 
-terminate(_Reason, _Req, #state{subscribed=true}) ->
+terminate_subscription(#state{subscribed=true}) ->
   %% TODO improve closing of streamed changes
   %% by default, cowboy does not close connection
   %% this will never be called as we will receive
@@ -179,10 +201,14 @@ terminate(_Reason, _Req, #state{subscribed=true}) ->
   %% Maybe add a timeout in the change_events_handler?
   ok = barrel_event:unreg(),
   ok;
-
-terminate(_Reason, _Req, _S) ->
+terminate_subscription(_) ->
   ok.
 
+terminate_timer(#state{timer=undefined}) ->
+  ok;
+terminate_timer(#state{timer=Timer}) ->
+  {ok, cancel} = timer:cancel(Timer),
+  ok.
 
 %% ----------
 
@@ -191,17 +217,9 @@ changes(Database, Since, Options) ->
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  lager:info("barrel:changes_since(~p,~p,_)", [Database, Since]),
-  barrel:changes_since(Database, Since, Fun, {Since, []}, Options).
-
+  C = barrel:changes_since(Database, Since, Fun, {Since, []}, Options),
+  C.
 to_json(LastSeq, Changes) ->
   Map = #{<<"last_seq">> => LastSeq,
           <<"results">> => Changes},
   jsx:encode(Map).
-
-
-id() ->
-  {Mega, Sec, Micro} = erlang:timestamp(),
-  Id = (Mega * 1000000 + Sec) * 1000000 + Micro,
-  integer_to_list(Id, 16).
-
