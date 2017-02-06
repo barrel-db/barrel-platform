@@ -101,8 +101,10 @@ parse_params([{<<"since">>, SinceBin}|Tail], State) ->
 parse_params([{<<"heartbeat">>, HeartBeatBin}|Tail], State) ->
   HeartBeat = binary_to_integer(HeartBeatBin),
   parse_params(Tail, State#state{heartbeat=HeartBeat});
-parse_params([{<<"history">>, <<"all">>}|Tail], State) ->
-  parse_params(Tail, State#state{options=[{history, all}]});
+parse_params([{<<"history">>, <<"all">>}|Tail], State=#state{options=Options}) ->
+  parse_params(Tail, State#state{options=[{history, all} | Options]});
+parse_params([{<<"include_doc">>, <<"true">>}|Tail], State=#state{options=Options}) ->
+  parse_params(Tail, State#state{options=[{include_doc, true} | Options]});
 parse_params([{Param, _Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
