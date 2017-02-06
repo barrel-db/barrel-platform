@@ -87,13 +87,13 @@ accept_get_normal(_Config) ->
   {200, R1} = req_changes("/dbs/testdb/docs"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
-  Results1 = maps:get(<<"results">>, A1),
+  Results1 = maps:get(<<"changes">>, A1),
   2 = length(Results1),
 
   {200, R2} = req_changes("/dbs/testdb/docs?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   2 = maps:get(<<"last_seq">>, A2),
-  Results2 = maps:get(<<"results">>, A2),
+  Results2 = maps:get(<<"changes">>, A2),
   1 = length(Results2),
   ok.
 
@@ -105,7 +105,7 @@ accept_get_history_all(_Config) ->
   {200, R1} = req_changes("/dbs/testdb/docs?history=all"),
   A1 = jsx:decode(R1, [return_maps]),
   3 = maps:get(<<"last_seq">>, A1),
-  Results1 = maps:get(<<"results">>, A1),
+  Results1 = maps:get(<<"changes">>, A1),
   2 = length(Results1),
   [_, #{<<"id">> := <<"cat">>, <<"changes">> := CatHistory}] = Results1,
   [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
@@ -113,7 +113,7 @@ accept_get_history_all(_Config) ->
   {200, R2} = req_changes("/dbs/testdb/docs?since=1"),
   A2 = jsx:decode(R2, [return_maps]),
   3 = maps:get(<<"last_seq">>, A2),
-  Results2 = maps:get(<<"results">>, A2),
+  Results2 = maps:get(<<"changes">>, A2),
   2 = length(Results2),
   ok.
 
@@ -137,7 +137,7 @@ accept_get_longpoll_heartbeat(_Config) ->
                     Loop(Loop, {Ref, N+1});
                   {hackney_response, Ref, Bin} ->
                     R = jsx:decode(Bin,[return_maps]),
-                    Results = maps:get(<<"results">>, R),
+                    Results = maps:get(<<"changes">>, R),
                     [_OnlyOneChange] = Results,
                     Loop(Loop, Acc);
 
@@ -198,11 +198,11 @@ test_eventsource(Url, Headers) ->
   [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
 
   {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
-  #{<<"last_seq">> := 3, <<"results">> := [Seq2, Seq3]} = FirstChanges,
+  #{<<"last_seq">> := 3, <<"changes">> := [Seq2, Seq3]} = FirstChanges,
   #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
   #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
-  {<<"4">>, #{<<"results">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
-  {<<"5">>, #{<<"results">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5),
+  {<<"4">>, #{<<"changes">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
+  {<<"5">>, #{<<"changes">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5),
   hackney:close(Ref),
   ok.
 

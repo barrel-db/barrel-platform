@@ -221,5 +221,5 @@ changes(Database, Since, Options) ->
   {LastSeq, lists:reverse(Changes)}.
 to_json(LastSeq, Changes) ->
   Map = #{<<"last_seq">> => LastSeq,
-          <<"results">> => Changes},
+          <<"changes">> => Changes},
   jsx:encode(Map).
