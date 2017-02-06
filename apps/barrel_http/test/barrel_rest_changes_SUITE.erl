@@ -182,7 +182,7 @@ accept_get_eventsource_headers(_Config) ->
 
 test_eventsource(Url, Headers) ->
   %% We create 3 documents
-  post_anonymous(), % seq=1
+  _Id1 = post_anonymous(), % seq=1
   Id2 = post_anonymous(), % seq=2
   Id3 = post_anonymous(), % seq=3
 
@@ -194,15 +194,13 @@ test_eventsource(Url, Headers) ->
   Id4 = post_anonymous(), % seq=4
   Id5 = post_anonymous(), % seq=5
 
-  Msgs = collect_msgs_from_hackney([], 5),
-  [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
+  Msgs = collect_msgs_from_hackney([], 6),
+  [[200, <<"OK">>], _Headers, ChangeSeq2, ChangeSeq3, ChangeSeq4, ChangeSeq5] = Msgs,
 
-  {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
-  #{<<"last_seq">> := 3, <<"changes">> := [Seq2, Seq3]} = FirstChanges,
-  #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
-  #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
-  {<<"4">>, #{<<"changes">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
-  {<<"5">>, #{<<"changes">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5),
+  {<<"2">>, #{<<"id">> := Id2}} = parse_event_source(ChangeSeq2),
+  {<<"3">>, #{<<"id">> := Id3}} = parse_event_source(ChangeSeq3),
+  {<<"4">>, #{<<"id">> := Id4}} = parse_event_source(ChangeSeq4),
+  {<<"5">>, #{<<"id">> := Id5}} = parse_event_source(ChangeSeq5),
   hackney:close(Ref),
   ok.
 
