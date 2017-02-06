@@ -110,7 +110,7 @@ parse_params([{Param, _Value}|_], _State) ->
 
 
 check_eventsource_headers(Req, State) ->
-  {ContentTypeBin, Req2} = cowboy_req:header(<<"content-accept">>, Req, <<"undefined">>),
+  {ContentTypeBin, Req2} = cowboy_req:header(<<"accept">>, Req, <<"undefined">>),
   {LastEventIdBin, Req3} = cowboy_req:header(<<"last-event-id">>, Req2, <<"undefined">>),
   ContentType = string:to_lower(binary_to_list(ContentTypeBin)),
   route_evensource_headers(ContentType, LastEventIdBin, Req3, State).

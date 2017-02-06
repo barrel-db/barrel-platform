@@ -174,7 +174,7 @@ accept_get_eventsource(_Config) ->
 
 accept_get_eventsource_headers(_Config) ->
   Url = <<"http://localhost:7080/dbs/testdb/docs">>,
-  Headers = [{<<"Content-Accept">>, <<"text/event-stream">>},
+  Headers = [{<<"Accept">>, <<"text/event-stream">>},
              {<<"Last-Event-ID">>, <<"1">>},
              {<<"A-IM">>, <<"Incremental feed">>}],
   test_eventsource(Url, Headers).
