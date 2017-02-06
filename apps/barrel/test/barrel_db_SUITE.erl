@@ -37,7 +37,8 @@
   change_since_include_doc/1,
   revdiff/1,
   get_revisions/1,
-  put_rev/1
+  put_rev/1,
+  change_deleted/1
 ]).
 
 all() ->
@@ -52,7 +53,8 @@ all() ->
     change_since_many,
     change_since_include_doc,
     revdiff,
-    put_rev
+    put_rev,
+    change_deleted
   ].
 
 init_per_suite(Config) ->
@@ -186,6 +188,28 @@ change_since(_Config) ->
   {ok, <<"cc">>, _RevId3} = barrel:put(<<"testdb">>, Doc3, []),
   [<<"cc">>] = barrel:changes_since(<<"testdb">>, 2, Fun, []),
   ok.
+
+change_deleted(_Config) ->
+  Fun = fun(_Seq, Change, Acc) ->
+          Id = maps:get(id, Change),
+          Del = maps:get(deleted, Change, false),
+          {ok, [{Id, Del}|Acc]}
+        end,
+  [] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _RevId} = barrel:put(<<"testdb">>, Doc, []),
+  [{<<"aa">>, false}] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
+  {ok, <<"bb">>, RevId2} = barrel:put(<<"testdb">>, Doc2, []),
+  {ok, _} = barrel:get(<<"testdb">>, <<"bb">>, []),
+  [{<<"bb">>, false}, {<<"aa">>, false}] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
+  [{<<"bb">>, false}] = barrel:changes_since(<<"testdb">>, 1, Fun, []),
+  {ok, <<"bb">>, _} = barrel:delete(<<"testdb">>, <<"bb">>, RevId2, []),
+  [{<<"bb">>, true}] = barrel:changes_since(<<"testdb">>, 2, Fun, []),
+  [{<<"bb">>, true}, {<<"aa">>, false}] = barrel:changes_since(<<"testdb">>, 0, Fun, []),
+  ok.
+
+
 
 change_since_include_doc(_Config) ->
   Fun =
