@@ -122,7 +122,7 @@ accept_get_history_all(_Config) ->
 accept_get_longpoll_heartbeat(_Config) ->
   Url = <<"http://localhost:7080/dbs/testdb/docs?feed=longpoll&heartbeat=10">>,
   Opts = [async, {recv_timeout, infinity}],
-  LoopFun = fun(Loop, {Ref, N}=Acc) ->
+  LoopFun = fun(Loop, {Ref, Chunks, N}=Acc) ->
                 receive
                   {hackney_response, Ref, {status, StatusInt, _Reason}} ->
                     200 = StatusInt,
@@ -130,16 +130,14 @@ accept_get_longpoll_heartbeat(_Config) ->
                   {hackney_response, Ref, {headers, _Headers}} ->
                     Loop(Loop, Acc);
                   {hackney_response, Ref, done} ->
-                    {ok, N};
+                    {ok, Chunks, N};
                   {hackney_response, Ref, <<>>} ->
                     Loop(Loop, Acc);
                   {hackney_response, Ref, <<"\n">>} ->
-                    Loop(Loop, {Ref, N+1});
+                    Loop(Loop, {Ref, Chunks, N+1});
                   {hackney_response, Ref, Bin} ->
-                    R = jsx:decode(Bin,[return_maps]),
-                    Results = maps:get(<<"changes">>, R),
-                    [_OnlyOneChange] = Results,
-                    Loop(Loop, Acc);
+                    ct:print("recv bin=~p",[Bin]),
+                    Loop(Loop, {Ref, <<Chunks/binary, Bin/binary>>, N});
 
                   Else ->
                     ct:fail("Unexpected answer from longpoll: ~p", [Else]),
@@ -154,14 +152,20 @@ accept_get_longpoll_heartbeat(_Config) ->
   {ok, ClientRef} = hackney:get(Url, Headers, <<>>, Opts),
   timer:sleep(100),
   CatRevId = put_cat(),
-  {ok, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, 0}),
+  {ok, Changes1Bin, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, <<>>, 0}),
+  Changes1 = jsx:decode(Changes1Bin, [return_maps]),
+  #{<<"changes">> := [#{<<"id">> := <<"cat">>, <<"seq">> := 1}]} = Changes1,
   true = NbHeartBeats1 >= 1,
 
   Url2 = <<Url/binary, "&since=1">>,
   {ok, ClientRef2} = hackney:get(Url2, Headers, <<>>, Opts),
   timer:sleep(100),
   delete_cat(CatRevId),
-  {ok, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, 0}),
+  {ok, Changes2Bin, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, <<>>, 0}),
+  Changes2 = jsx:decode(Changes2Bin, [return_maps]),
+  #{<<"changes">> := [#{<<"id">> := <<"cat">>,
+                        <<"deleted">> := true,
+                        <<"seq">> := 2}]} = Changes2,
   true = NbHeartBeats2 >= 1,
   ok.
 
