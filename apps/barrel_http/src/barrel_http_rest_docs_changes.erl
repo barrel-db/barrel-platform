@@ -217,8 +217,8 @@ changes(Database, Since, Options) ->
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  C = barrel:changes_since(Database, Since, Fun, {Since, []}, Options),
-  C.
+  {LastSeq, Changes} = barrel:changes_since(Database, Since, Fun, {Since, []}, Options),
+  {LastSeq, lists:reverse(Changes)}.
 to_json(LastSeq, Changes) ->
   Map = #{<<"last_seq">> => LastSeq,
           <<"results">> => Changes},

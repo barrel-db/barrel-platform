@@ -166,7 +166,7 @@ trails() ->
 
 
 init(Type, Req, []) ->
-  {Path, Req2} = cowboy_req:path(Req),
+  {Path, Req2} = cowboy_req:path(Req),
   {HeaderBin, Req3} = cowboy_req:header(<<"a-im">>, Req2, <<"undefined">>),
   {FeedBin, Req4} = cowboy_req:qs_val(<<"feed">>, Req3, <<"undefined">>),
   Header = string:to_lower(binary_to_list(HeaderBin)),

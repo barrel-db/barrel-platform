@@ -107,8 +107,7 @@ accept_get_history_all(_Config) ->
   3 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"results">>, A1),
   2 = length(Results1),
-  #{<<"id">> := <<"cat">>,
-    <<"changes">> := CatHistory} = hd(Results1),
+  [_, #{<<"id">> := <<"cat">>, <<"changes">> := CatHistory}] = Results1,
   [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
 
   {200, R2} = req_changes("/dbs/testdb/docs?since=1"),
@@ -199,7 +198,7 @@ test_eventsource(Url, Headers) ->
   [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
 
   {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
-  #{<<"last_seq">> := 3, <<"results">> := [Seq3, Seq2]} = FirstChanges,
+  #{<<"last_seq">> := 3, <<"results">> := [Seq2, Seq3]} = FirstChanges,
   #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
   #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
   {<<"4">>, #{<<"results">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
