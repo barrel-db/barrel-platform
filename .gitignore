@@ -16,4 +16,5 @@ log
 logs
 _build
 docs
+data
 *.iml

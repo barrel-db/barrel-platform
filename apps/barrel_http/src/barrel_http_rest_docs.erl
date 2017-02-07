@@ -105,7 +105,7 @@ trails() ->
                      , description => <<"Document to be added">>
                      , in => <<"body">>
                      , required => true
-                     , type => <<"json">>}
+                     , type => <<"string">>}
                    ,#{ name => <<"database">>
                      , description => <<"Database ID">>
                      , in => <<"path">>
@@ -117,7 +117,7 @@ trails() ->
                , produces => ["application/json"]
                , parameters =>
                   [#{ name => <<"feed">>
-                    , description => <<"longpoll/eventsource reply">>
+                    , description => <<"Get update feed">>
                     , in => <<"query">>
                     , required => false
                     , type => <<"string">>
@@ -189,6 +189,8 @@ init(Type, Req, []) ->
     {[<<>>,<<"dbs">>,_,<<"docs">>], _, "eventsource"} ->
       barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
     {[<<>>,<<"dbs">>,_,<<"docs">>], _, "longpoll"} ->
+      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
+    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "normal"} ->
       barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
     {[<<>>,<<"dbs">>,_,<<"docs">>],_,_} ->
       barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=list});

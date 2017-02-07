@@ -84,6 +84,14 @@ accept_get_normal(_Config) ->
   put_cat(),
   put_dog(),
 
+  %% using parameters
+  {200, R0} = test_lib:req(get, "/dbs/testdb/docs?feed=normal"),
+  A0 = jsx:decode(R0, [return_maps]),
+  2 = maps:get(<<"last_seq">>, A0),
+  Results0 = maps:get(<<"changes">>, A0),
+  2 = length(Results0),
+
+  %% using headers
   {200, R1} = req_changes("/dbs/testdb/docs"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
@@ -136,7 +144,6 @@ accept_get_longpoll_heartbeat(_Config) ->
                   {hackney_response, Ref, <<"\n">>} ->
                     Loop(Loop, {Ref, Chunks, N+1});
                   {hackney_response, Ref, Bin} ->
-                    ct:print("recv bin=~p",[Bin]),
                     Loop(Loop, {Ref, <<Chunks/binary, Bin/binary>>, N});
 
                   Else ->
@@ -225,6 +232,8 @@ collect_msgs_from_hackney(Msgs, Expected) ->
       collect_msgs_from_hackney([Headers|Msgs], N);
     {hackney_response, _Ref, done} ->
       collect_msgs_from_hackney([done|Msgs], N);
+    {hackney_response, _Ref, <<"\n">>} ->
+      collect_msgs_from_hackney(Msgs, N);
     {hackney_response, _Ref, Bin} ->
       collect_msgs_from_hackney([Bin|Msgs], N);
     Else ->
