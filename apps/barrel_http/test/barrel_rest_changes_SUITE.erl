@@ -223,19 +223,18 @@ post_anonymous() ->
 
 collect_msgs_from_hackney(Msgs, 0) ->
   lists:reverse(Msgs);
-collect_msgs_from_hackney(Msgs, Expected) ->
-  N = Expected - 1,
+collect_msgs_from_hackney(Msgs, N) ->
   receive
     {hackney_response, _Ref, {status, StatusInt, Reason}} ->
-      collect_msgs_from_hackney([[StatusInt,Reason]|Msgs], N);
+      collect_msgs_from_hackney([[StatusInt,Reason]|Msgs], N-1);
     {hackney_response, _Ref, {headers, Headers}} ->
-      collect_msgs_from_hackney([Headers|Msgs], N);
+      collect_msgs_from_hackney([Headers|Msgs], N-1);
     {hackney_response, _Ref, done} ->
       collect_msgs_from_hackney([done|Msgs], N);
     {hackney_response, _Ref, <<"\n">>} ->
       collect_msgs_from_hackney(Msgs, N);
     {hackney_response, _Ref, Bin} ->
-      collect_msgs_from_hackney([Bin|Msgs], N);
+      collect_msgs_from_hackney([Bin|Msgs], N-1);
     Else ->
       {error, {unexpected_message, Else}}
   after 2000 ->
