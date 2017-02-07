@@ -111,7 +111,7 @@ get_conf() -> gen_server:call(?MODULE, get_conf).
 
 -spec data_dir() -> string().
 data_dir() ->
-  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
+  Dir = application:get_env(barrel_store, data_dir, ?DATA_DIR),
   filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
   Dir.
 
@@ -154,7 +154,7 @@ handle_info(init_dbs, State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
   %% get databases from sys.config, we only create dbs not already persisted
-  Dbs0 = application:get_env(barrel, dbs, []),
+  Dbs0 = application:get_env(barrel_store, dbs, []),
   Dbs = lists:filter(
     fun(#{ <<"database_id">> := Id}) -> lists:member(Id, Loaded) /= true  end,
     Dbs0
