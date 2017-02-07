@@ -88,7 +88,7 @@ init([]) ->
   process_flag(trap_exit, true),
   _ = ets:new(replication_names, [ordered_set, named_table, public]),
   _ = ets:new(replication_ids, [set, named_table, public]),
-  
+
   self() ! init_config,
   {ok, #{ config => maps:new() }}.
 
@@ -214,7 +214,7 @@ register_replication(Name, RepId, Pid, Persisted, Config, #{ config := All} = St
     replication_ids,
     [{Pid, {Name, Persisted, RepId}}, {RepId, {Name, Persisted, Pid, MRef}}]
   ),
-  
+
   State2 = case Persisted of
              true ->
                All2 = All#{ Name => Config},
