@@ -42,7 +42,7 @@
   code_change/3]).
 
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 -define(CONF_VERSION, 1).
 

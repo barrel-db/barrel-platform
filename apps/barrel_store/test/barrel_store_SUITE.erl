@@ -29,7 +29,7 @@
   persist_db/1
 ]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 all() ->
   [
@@ -38,11 +38,11 @@ all() ->
   ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_store),
   Config.
 
 end_per_suite(Config) ->
-  application:stop(barrel),
+  application:stop(barrel_store),
   Config.
 
 
@@ -69,14 +69,14 @@ create_db(_Config) ->
 persist_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
-  ok = application:stop(barrel),
+  ok = application:stop(barrel_store),
   io:format("stopped the database", []),
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_store),
   [<<"testdb">>] = barrel_store:databases(),
   io:format("started the database", []),
   ok = barrel_store:delete_db(<<"testdb">>),
   [] = barrel_store:databases(),
-  ok = application:stop(barrel),
+  ok = application:stop(barrel_store),
   timer:sleep(100),
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_store),
   [] = barrel_store:databases().

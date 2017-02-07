@@ -17,7 +17,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(barrel_sup).
+-module(barrel_store_sup).
 
 -behaviour(supervisor).
 
@@ -27,7 +27,7 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 -define(SERVER, ?MODULE).
 

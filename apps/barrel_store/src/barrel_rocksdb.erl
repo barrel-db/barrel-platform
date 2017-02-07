@@ -21,7 +21,7 @@
   fold_prefix/5
 ]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   ReadOptions = proplists:get_value(read_options, Opts, []),

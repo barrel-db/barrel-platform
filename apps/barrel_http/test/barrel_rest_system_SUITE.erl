@@ -26,7 +26,7 @@ all() -> [system_doc].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_store),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -38,7 +38,7 @@ end_per_testcase(_, Config) ->
   Config.
 
 end_per_suite(_Config) ->
-  application:stop(barrel),
+  application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
   ok.
 
