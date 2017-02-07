@@ -54,7 +54,7 @@ handle(<<"POST">>, Database, Req, State) ->
   {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
-                         {ok, Missing, Possible} = barrel:revsdiff(Database, DocId, RevIds),
+    {ok, Missing, Possible} = barrel_local:revsdiff(Database, DocId, RevIds),
                          Acc#{DocId => #{<<"missing">> => Missing,
                                          <<"possible_ancestors">> => Possible}}
                      end,#{}, RequestedDocs),

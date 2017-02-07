@@ -70,7 +70,7 @@ route(Req, #state{method= <<"GET">>}=State) ->
   check_database_exist(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
   {Database, Req2} = cowboy_req:binding(database, Req),
-  ok = barrel:delete_db(Database),
+  ok = barrel_local:delete_db(Database),
   barrel_http_reply:json(200, #{ ok => true }, Req2, State);
 route(Req, #state{method= <<"POST">>}) ->
   barrel_http_rest_doc:handle_post(Req);
@@ -87,4 +87,4 @@ check_database_exist(Req, State) ->
   end.
 
 get_resource(Req, #state{database=Database}=State) ->
-  barrel_http_reply:doc(barrel:db_infos(Database), Req, State).
+  barrel_http_reply:doc(barrel_local:db_infos(Database), Req, State).

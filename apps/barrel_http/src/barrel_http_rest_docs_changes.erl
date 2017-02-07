@@ -136,7 +136,7 @@ handle(Req, S) ->
         LastSeq = max(Seq, PreviousLastSeq),
         {ok, {LastSeq, <<",">>}}
     end,
-  {LastSeq, _} = barrel:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
+  {LastSeq, _} = barrel_local:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
@@ -199,5 +199,5 @@ reply_eventsource_chunks(Database, Since, Options, Req) ->
         LastSeq = max(Seq, PreviousLastSeq),
         {ok, {LastSeq, <<"">>}}
     end,
-  {LastSeq, _} = barrel:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
+  {LastSeq, _} = barrel_local:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
   LastSeq.

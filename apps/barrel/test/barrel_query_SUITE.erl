@@ -67,12 +67,12 @@ order_by_key(_Config) ->
     <<"creationDate">> => 1431620472,
     <<"isRegistered">> => true
   },
-  {ok, <<"AndersenFamily">>, _Rev} = barrel:put(<<"testdb">>, Doc, []),
+  {ok, <<"AndersenFamily">>, _Rev} = barrel_local:put(<<"testdb">>, Doc, []),
   timer:sleep(400),
-  {ok, _Doc1} = barrel:get(<<"testdb">>, <<"AndersenFamily">>, []),
+  {ok, _Doc1} = barrel_local:get(<<"testdb">>, <<"AndersenFamily">>, []),
 
   Fun = fun(Id, _D, V, Acc) -> {ok, [{Id, V} | Acc]} end,
-  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel:query(<<"testdb">>, <<"id">>, Fun, [], []),
-  [{<<"AndersenFamily">>, null}] = barrel:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
+  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel_local:query(<<"testdb">>, <<"id">>, Fun, [], []),
+  [{<<"AndersenFamily">>, null}] = barrel_local:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
   ok.
 

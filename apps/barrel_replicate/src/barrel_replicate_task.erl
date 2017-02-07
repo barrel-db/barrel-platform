@@ -252,7 +252,7 @@ changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
 revsdiff({Mod, ModState}, DocId, History) ->
   Mod:revsdiff(ModState, DocId, History);
 revsdiff(Conn, DocId, History) ->
-  barrel:revsdiff(Conn, DocId, History).
+  barrel_local:revsdiff(Conn, DocId, History).
 
 %% =============================================================================
 %% Checkpoints management: when, where and what

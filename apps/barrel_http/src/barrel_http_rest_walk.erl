@@ -132,7 +132,7 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
     end,
   %% start the initial chunk
   ok = cowboy_req:chunk(<<"{\"docs\":[">>, Req),
-  {Count, _} = barrel:query(Database, Path, Fun, {0, <<"">>}, OrderBy, Options),
+  {Count, _} = barrel_local:query(Database, Path, Fun, {0, <<"">>}, OrderBy, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
@@ -162,7 +162,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
         ok = cowboy_req:chunk(Chunk, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
@@ -178,7 +178,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
 
 
 start_chunked_response(Req0, #state{database=Database}) ->
-  #{last_update_seq := Seq} = barrel:db_infos(Database),
+  #{last_update_seq := Seq} = barrel_local:db_infos(Database),
   {ok, Req} = cowboy_req:chunked_reply(
     200,
     [{<<"Content-Type">>, <<"application/json">>},
