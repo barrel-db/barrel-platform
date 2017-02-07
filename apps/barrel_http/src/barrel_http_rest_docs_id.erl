@@ -119,7 +119,7 @@ check_id_property(Req, #state{body=Json}=State) ->
 
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
   #state{ database=Database, docid=DocId, options=Options } = S,
-  case barrel:get(Database, DocId, Options) of
+  case barrel_local:get(Database, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
     {ok, Doc} ->
@@ -143,17 +143,17 @@ create_resource(Req, State) ->
   #state{ database=Database, body=Json, method=Method} = State,
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel:post(Database, Json, []), Req};
+                       {barrel_local:post(Database, Json, []), Req};
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           { barrel:put(Database, Json, []), Req3 };
+                           {barrel_local:put(Database, Json, []), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           { barrel:put_rev(Database, Doc, History, []), Req3 }
+                           {barrel_local:put_rev(Database, Doc, History, []), Req3 }
                        end
                    end,
   case Result of
@@ -172,7 +172,7 @@ create_resource(Req, State) ->
 
 delete_resource(Req, State) ->
   #state{ database=Database, docid=DocId, revid=RevId} = State,
-  {ok, DocId, RevId2} = barrel:delete(Database, DocId, RevId, []),
+  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, []),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},

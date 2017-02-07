@@ -43,23 +43,23 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel:create_db(<<"dba">>, #{}),
-  _ = barrel:create_db(<<"dbb">>, #{}),
-  _ = barrel:create_db(<<"dbaa">>, #{}),
-  _ = barrel:create_db(<<"dbbb">>, #{}),
-  _ = barrel:create_db(<<"dbaaa">>, #{}),
-  _ = barrel:create_db(<<"dbbbb">>, #{}),
-  _ = barrel:create_db(<<"testdb">>, #{}),
+  _ = barrel_local:create_db(<<"dba">>, #{}),
+  _ = barrel_local:create_db(<<"dbb">>, #{}),
+  _ = barrel_local:create_db(<<"dbaa">>, #{}),
+  _ = barrel_local:create_db(<<"dbbb">>, #{}),
+  _ = barrel_local:create_db(<<"dbaaa">>, #{}),
+  _ = barrel_local:create_db(<<"dbbbb">>, #{}),
+  _ = barrel_local:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"dba">>),
-  ok = barrel:delete_db(<<"dbb">>),
-  ok = barrel:delete_db(<<"dbaa">>),
-  ok = barrel:delete_db(<<"dbbb">>),
-  ok = barrel:delete_db(<<"dbaaa">>),
-  ok = barrel:delete_db(<<"dbbbb">>),
-  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel_local:delete_db(<<"dba">>),
+  ok = barrel_local:delete_db(<<"dbb">>),
+  ok = barrel_local:delete_db(<<"dbaa">>),
+  ok = barrel_local:delete_db(<<"dbbb">>),
+  ok = barrel_local:delete_db(<<"dbaaa">>),
+  ok = barrel_local:delete_db(<<"dbbbb">>),
+  ok = barrel_local:delete_db(<<"testdb">>),
   file:delete("data/replication.config"),
   Config.
 
@@ -91,7 +91,7 @@ accept_post_get(_Config) ->
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
   io:format("replication name ~p~n", [Name]),
-  ok = barrel:delete_replication(Name),
+  ok = barrel_local:delete_replication(Name),
   ok.
 
 accept_put_get(_Config) ->
@@ -114,7 +114,7 @@ accept_put_get(_Config) ->
   Metrics = jsx:decode(R2, [return_maps]),
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
-  barrel:delete_replication(<<"myreplication">>),
+  barrel_local:delete_replication(<<"myreplication">>),
   timer:sleep(100),
   ok.
 

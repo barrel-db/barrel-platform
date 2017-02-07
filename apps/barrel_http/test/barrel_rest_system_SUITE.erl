@@ -34,7 +34,7 @@ init_per_testcase(_, Config) ->
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel_local:delete_db(<<"testdb">>),
   Config.
 
 end_per_suite(_Config) ->

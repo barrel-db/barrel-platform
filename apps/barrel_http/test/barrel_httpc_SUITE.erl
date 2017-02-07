@@ -58,7 +58,7 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
   HttpConn = proplists:get_value(http_conn, Config),
   ok = barrel_httpc:disconnect(HttpConn),
-  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel_local:delete_db(<<"testdb">>),
   ok.
 
 end_per_suite(Config) ->

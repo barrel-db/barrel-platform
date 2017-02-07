@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel).
+-module(barrel_local).
 -author("benoitc").
 
 %% DOC API

@@ -80,7 +80,7 @@ check_body(Req, #state{body=Body}=S) ->
   end.
 
 create_resource(Req, #state{body=Json}=State) ->
-  case barrel:create_db(Json) of
+  case barrel_local:create_db(Json) of
     {ok, Config} ->
       barrel_http_reply:json(201, Config, Req, State);
     {error, db_exists} ->

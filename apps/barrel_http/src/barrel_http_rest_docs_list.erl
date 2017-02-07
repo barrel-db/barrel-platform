@@ -21,7 +21,7 @@
 
 get_resource(Database, Req0, State) ->
   Options = parse_params(Req0),
-  #{last_update_seq := Seq} = barrel:db_infos(Database),
+  #{last_update_seq := Seq} = barrel_local:db_infos(Database),
   {ok, Req} = cowboy_req:chunked_reply(
     200,
     [{<<"Content-Type">>, <<"application/json">>},
@@ -39,7 +39,7 @@ get_resource(Database, Req0, State) ->
         ok = cowboy_req:chunk(Chunk, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:chunk(
