@@ -84,6 +84,14 @@ accept_get_normal(_Config) ->
   put_cat(),
   put_dog(),
 
+  %% using parameters
+  {200, R0} = test_lib:req(get, "/dbs/testdb/docs?feed=normal"),
+  A0 = jsx:decode(R0, [return_maps]),
+  2 = maps:get(<<"last_seq">>, A0),
+  Results0 = maps:get(<<"changes">>, A0),
+  2 = length(Results0),
+
+  %% using headers
   {200, R1} = req_changes("/dbs/testdb/docs"),
   A1 = jsx:decode(R1, [return_maps]),
   2 = maps:get(<<"last_seq">>, A1),
@@ -122,7 +130,7 @@ accept_get_history_all(_Config) ->
 accept_get_longpoll_heartbeat(_Config) ->
   Url = <<"http://localhost:7080/dbs/testdb/docs?feed=longpoll&heartbeat=10">>,
   Opts = [async, {recv_timeout, infinity}],
-  LoopFun = fun(Loop, {Ref, N}=Acc) ->
+  LoopFun = fun(Loop, {Ref, Chunks, N}=Acc) ->
                 receive
                   {hackney_response, Ref, {status, StatusInt, _Reason}} ->
                     200 = StatusInt,
@@ -130,16 +138,13 @@ accept_get_longpoll_heartbeat(_Config) ->
                   {hackney_response, Ref, {headers, _Headers}} ->
                     Loop(Loop, Acc);
                   {hackney_response, Ref, done} ->
-                    {ok, N};
+                    {ok, Chunks, N};
                   {hackney_response, Ref, <<>>} ->
                     Loop(Loop, Acc);
                   {hackney_response, Ref, <<"\n">>} ->
-                    Loop(Loop, {Ref, N+1});
+                    Loop(Loop, {Ref, Chunks, N+1});
                   {hackney_response, Ref, Bin} ->
-                    R = jsx:decode(Bin,[return_maps]),
-                    Results = maps:get(<<"changes">>, R),
-                    [_OnlyOneChange] = Results,
-                    Loop(Loop, Acc);
+                    Loop(Loop, {Ref, <<Chunks/binary, Bin/binary>>, N});
 
                   Else ->
                     ct:fail("Unexpected answer from longpoll: ~p", [Else]),
@@ -154,14 +159,20 @@ accept_get_longpoll_heartbeat(_Config) ->
   {ok, ClientRef} = hackney:get(Url, Headers, <<>>, Opts),
   timer:sleep(100),
   CatRevId = put_cat(),
-  {ok, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, 0}),
+  {ok, Changes1Bin, NbHeartBeats1} = LoopFun(LoopFun, {ClientRef, <<>>, 0}),
+  Changes1 = jsx:decode(Changes1Bin, [return_maps]),
+  #{<<"changes">> := [#{<<"id">> := <<"cat">>, <<"seq">> := 1}]} = Changes1,
   true = NbHeartBeats1 >= 1,
 
   Url2 = <<Url/binary, "&since=1">>,
   {ok, ClientRef2} = hackney:get(Url2, Headers, <<>>, Opts),
   timer:sleep(100),
   delete_cat(CatRevId),
-  {ok, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, 0}),
+  {ok, Changes2Bin, NbHeartBeats2} =  LoopFun(LoopFun, {ClientRef2, <<>>, 0}),
+  Changes2 = jsx:decode(Changes2Bin, [return_maps]),
+  #{<<"changes">> := [#{<<"id">> := <<"cat">>,
+                        <<"deleted">> := true,
+                        <<"seq">> := 2}]} = Changes2,
   true = NbHeartBeats2 >= 1,
   ok.
 
@@ -182,7 +193,7 @@ accept_get_eventsource_headers(_Config) ->
 
 test_eventsource(Url, Headers) ->
   %% We create 3 documents
-  post_anonymous(), % seq=1
+  _Id1 = post_anonymous(), % seq=1
   Id2 = post_anonymous(), % seq=2
   Id3 = post_anonymous(), % seq=3
 
@@ -194,15 +205,13 @@ test_eventsource(Url, Headers) ->
   Id4 = post_anonymous(), % seq=4
   Id5 = post_anonymous(), % seq=5
 
-  Msgs = collect_msgs_from_hackney([], 5),
-  [[200, <<"OK">>], _Headers, ChangesSeq1, ChangeSeq4, ChangeSeq5] = Msgs,
+  Msgs = collect_msgs_from_hackney([], 6),
+  [[200, <<"OK">>], _Headers, ChangeSeq2, ChangeSeq3, ChangeSeq4, ChangeSeq5] = Msgs,
 
-  {<<"3">>, FirstChanges} = parse_event_source(ChangesSeq1),
-  #{<<"last_seq">> := 3, <<"changes">> := [Seq2, Seq3]} = FirstChanges,
-  #{<<"seq">> := 2, <<"id">> := Id2} = Seq2,
-  #{<<"seq">> := 3, <<"id">> := Id3} = Seq3,
-  {<<"4">>, #{<<"changes">> := [#{<<"id">>:= Id4}]}} = parse_event_source(ChangeSeq4),
-  {<<"5">>, #{<<"changes">> := [#{<<"id">>:= Id5}]}} = parse_event_source(ChangeSeq5),
+  {<<"2">>, #{<<"id">> := Id2}} = parse_event_source(ChangeSeq2),
+  {<<"3">>, #{<<"id">> := Id3}} = parse_event_source(ChangeSeq3),
+  {<<"4">>, #{<<"id">> := Id4}} = parse_event_source(ChangeSeq4),
+  {<<"5">>, #{<<"id">> := Id5}} = parse_event_source(ChangeSeq5),
   hackney:close(Ref),
   ok.
 
@@ -223,6 +232,8 @@ collect_msgs_from_hackney(Msgs, Expected) ->
       collect_msgs_from_hackney([Headers|Msgs], N);
     {hackney_response, _Ref, done} ->
       collect_msgs_from_hackney([done|Msgs], N);
+    {hackney_response, _Ref, <<"\n">>} ->
+      collect_msgs_from_hackney(Msgs, N);
     {hackney_response, _Ref, Bin} ->
       collect_msgs_from_hackney([Bin|Msgs], N);
     Else ->

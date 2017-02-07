@@ -105,7 +105,7 @@ trails() ->
                      , description => <<"Document to be added">>
                      , in => <<"body">>
                      , required => true
-                     , type => <<"json">>}
+                     , type => <<"string">>}
                    ,#{ name => <<"database">>
                      , description => <<"Database ID">>
                      , in => <<"path">>
@@ -116,50 +116,60 @@ trails() ->
       get => #{ summary => "Get list of all available documents."
                , produces => ["application/json"]
                , parameters =>
-                  [ #{ name => <<"A-IM">>
-                     , description => <<"Get update feed">>
-                     , in => <<"header">>
-                     , required => false
-                     , type => <<"string">>
-                     , enum => [ <<"Incremental feed">> ]}
-
-                   , #{ name => <<"gt">>
-                      , description => <<"greater than">>
-                      , in => <<"query">>
-                      , required => false
-                      , type => <<"string">>}
-
-                  , #{ name => <<"gte">>
-                     , description => <<"greater or equal to">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                  , #{ name => <<"lt">>
-                     , description => <<"lesser than">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                  , #{ name => <<"lte">>
-                     , description => <<"lesser or equal to">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>}
-
-                  , #{ name => <<"max">>
-                     , description => <<"maximum keys to return">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"integer">>}
-
-                  , #{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
+                  [#{ name => <<"feed">>
+                    , description => <<"Get update feed">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"string">>
+                    , enum => [ <<"normal">>
+                              , <<"longpoll">>
+                              , <<"eventsource">>
+                              ]
+                    }
+                  ,#{ name => <<"since">>
+                    , description => <<"Starting sequence">>
+                    , in => <<"path">>
+                    , required => false
+                    , type => <<"integer">>
+                    }
+                  ,#{ name => <<"A-IM">>
+                    , description => <<"Get update feed">>
+                    , in => <<"header">>
+                    , required => false
+                    , type => <<"string">>
+                    , enum => [ <<"Incremental feed">> ]}
+                  ,#{ name => <<"gt">>
+                    , description => <<"greater than">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"string">>}
+                  ,#{ name => <<"gte">>
+                    , description => <<"greater or equal to">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"string">>}
+                  ,#{ name => <<"lt">>
+                    , description => <<"lesser than">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"string">>}
+                  ,#{ name => <<"lte">>
+                    , description => <<"lesser or equal to">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"string">>}
+                  ,#{ name => <<"max">>
+                    , description => <<"maximum keys to return">>
+                    , in => <<"query">>
+                    , required => false
+                    , type => <<"integer">>}
+                  ,#{ name => <<"database">>
+                    , description => <<"Database ID">>
+                    , in => <<"path">>
+                    , required => true
+                    , type => <<"string">>}
+                  ]
+              }
      },
   [trails:trail("/dbs/:database/docs", ?MODULE, [], PostGetAllDocs),
    trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
@@ -177,6 +187,10 @@ init(Type, Req, []) ->
     {[<<>>,<<"dbs">>,_,<<"docs">>], "incremental feed", _} ->
       barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
     {[<<>>,<<"dbs">>,_,<<"docs">>], _, "eventsource"} ->
+      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
+    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "longpoll"} ->
+      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
+    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "normal"} ->
       barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
     {[<<>>,<<"dbs">>,_,<<"docs">>],_,_} ->
       barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=list});

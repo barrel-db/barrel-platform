@@ -20,41 +20,7 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/1]).
-
 -include("barrel_http_rest_docs.hrl").
-
-trails(Module) ->
-  Metadata =
-    #{ get => #{ summary => "Get changes which happened on the database."
-               , produces => ["application/json"]
-               , parameters =>
-                   [#{ name => <<"feed">>
-                     , description => <<"longpoll/eventsource reply">>
-                     , in => <<"query">>
-                     , required => false
-                     , type => <<"string">>
-                     , enum => [ <<"normal">>
-                               , <<"longpoll">>
-                               , <<"eventsource">>
-                               ]
-                     }
-                   ,#{ name => <<"since">>
-                     , description => <<"Starting sequence">>
-                     , in => <<"path">>
-                     , required => false
-                     , type => <<"integer">>
-                     }
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>
-                     }
-                   ]
-               }
-     },
-  [trails:trail("/dbs/:database/docs/_changes", Module, [], Metadata)].
 
 
 init(_Type, Req, State) ->
@@ -125,69 +91,78 @@ route_evensource_headers(_,_, Req, State) ->
   init_feed(Req, State).
 
 
-init_feed(Req, #state{database=Database, since=Since, options=Options}=State) ->
-  {LastSeq, Changes} = changes(Database, Since, Options),
-  init_feed_changes(Req, State#state{changes=Changes, last_seq=LastSeq}).
+init_feed(Req, #state{database=_Database, since=Since, options=_Options}=State) ->
+  init_feed_changes(Req, State#state{last_seq=Since}).
 
 init_feed_changes(Req, #state{feed=normal}=S) ->
-  {ok, Req, S};
-
-init_feed_changes(Req, #state{feed=longpoll, changes=[]}=S) ->
-  %% No changes available for reply. We register for db_updated events.
-  ok = barrel_event:reg(S#state.database),
-  {ok, Req2, S2} = init_chunked_reply_with_hearbeat([], Req, S),
-  {loop, Req2, S2#state{subscribed=true}};
+  Headers = [],
+  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
+  {ok, Req2, S};
 
 init_feed_changes(Req, #state{feed=longpoll}=S) ->
-  %% Changes available. We return them immediatly.
-  {ok, Req, S};
+  Headers = [],
+  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
+  {ok, Req3, S2} = init_hearbeat(Req2, S),
+  ok = barrel_event:reg(S2#state.database),
+  {loop, Req3, S2#state{subscribed=true}};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
-  ok = barrel_event:reg(S#state.database),
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
-  {ok, Req2, S2} = init_chunked_reply_with_hearbeat(Headers, Req, S),
-  Changes = S#state.changes,
-  LastSeq = S#state.last_seq,
-  db_updated(Changes, LastSeq, Req2, S2).
+  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
+  LastSeq = reply_eventsource_chunks(S#state.database, S#state.last_seq, S#state.options, Req2),
+  ok = barrel_event:reg(S#state.database),
+  {ok, Req3, S2} = init_hearbeat(Req2, S),
+  {loop, Req3, S2#state{last_seq=LastSeq, subscribed=true}}.
 
-init_chunked_reply_with_hearbeat(Headers, Req, State) ->
+init_hearbeat(Req, State) ->
   {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
   HeartBeat = binary_to_integer(HeartBeatBin),
-  Timer = timer:send_interval(HeartBeat, self(), heartbeat),
-  {ok, Req3} = cowboy_req:chunked_reply(200, Headers, Req2),
-  {ok, Req3, State#state{timer=Timer, heartbeat=HeartBeat}}.
+  {ok, Timer} = timer:send_interval(HeartBeat, self(), heartbeat),
+  {ok, Req2, State#state{timer=Timer, heartbeat=HeartBeat}}.
 
 
 handle(Req, S) ->
-  LastSeq = S#state.last_seq,
-  Changes = S#state.changes,
-  Json = to_json(LastSeq, Changes),
-  barrel_http_reply:json(Json, Req, S).
+  Database = S#state.database,
+  Since = S#state.since,
+  Options = S#state.options,
+
+  %% start the initial chunk
+  ok = cowboy_req:chunk(<<"{\"changes\":[">>, Req),
+  Fun =
+    fun
+      (Seq, Change, {PreviousLastSeq, Pre}) ->
+        Chunk = <<  Pre/binary, (jsx:encode(Change))/binary>>,
+        ok = cowboy_req:chunk(Chunk, Req),
+        LastSeq = max(Seq, PreviousLastSeq),
+        {ok, {LastSeq, <<",">>}}
+    end,
+  {LastSeq, _} = barrel:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
+
+  %% close the document list and return the calculated count
+  ok = cowboy_req:chunk(
+         iolist_to_binary([
+                           <<"],">>,
+                           <<"\"last_seq\":">>,
+                           integer_to_binary(LastSeq),
+                           <<"}">>
+                          ]),
+         Req
+        ),
+  {ok, Req, S}.
 
 info(heartbeat, Req, S) ->
   ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
 
-info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId}=S) ->
-  {LastSeq, Changes} = changes(S#state.database, S#state.last_seq, S#state.options),
-  db_updated(Changes, LastSeq, Req, S);
+info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId, feed=longpoll}=S) ->
+  handle(Req, S);
+
+info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId, feed=eventsource}=S) ->
+  LastSeq = reply_eventsource_chunks(S#state.database, S#state.last_seq, S#state.options, Req),
+  {loop, Req, S#state{last_seq=LastSeq}};
+
 info(_Info, Req, S) ->
   {loop, Req, S}.
-
-db_updated([], LastSeq, Req, #state{feed=longpoll}=S) ->
-  {loop, Req, S#state{last_seq=LastSeq, changes=[]}};
-
-db_updated(Changes, LastSeq, Req, #state{feed=longpoll}=S) ->
-  Json = to_json(LastSeq, Changes),
-  ok = cowboy_req:chunk(Json, Req),
-  {ok, Req, S};
-
-db_updated(Changes, LastSeq, Req, #state{feed=eventsource}=S) ->
-  Json = to_json(LastSeq, Changes),
-  %% format defined by https://www.w3.org/TR/eventsource/
-  ok = cowboy_req:chunk(["id: ", integer_to_list(LastSeq),
-                         "\ndata: ", Json, "\n\n"], Req),
-  {loop, Req, S#state{last_seq=LastSeq}}.
 
 
 terminate(_Reason, _Req, State) ->
@@ -212,16 +187,17 @@ terminate_timer(#state{timer=Timer}) ->
   {ok, cancel} = timer:cancel(Timer),
   ok.
 
-%% ----------
 
-changes(Database, Since, Options) ->
-  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
-            LastSeq = max(Seq, PreviousLastSeq),
-            {ok, {LastSeq, [Change|Changes1]}}
-        end,
-  {LastSeq, Changes} = barrel:changes_since(Database, Since, Fun, {Since, []}, Options),
-  {LastSeq, lists:reverse(Changes)}.
-to_json(LastSeq, Changes) ->
-  Map = #{<<"last_seq">> => LastSeq,
-          <<"changes">> => Changes},
-  jsx:encode(Map).
+reply_eventsource_chunks(Database, Since, Options, Req) ->
+  Fun =
+    fun
+      (Seq, Change, {PreviousLastSeq, Pre}) ->
+        Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
+                   "data: ", Pre/binary, (jsx:encode(Change))/binary, "\n",
+                   "\n">>,
+        ok = cowboy_req:chunk(Chunk, Req),
+        LastSeq = max(Seq, PreviousLastSeq),
+        {ok, {LastSeq, <<"">>}}
+    end,
+  {LastSeq, _} = barrel:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
+  LastSeq.
