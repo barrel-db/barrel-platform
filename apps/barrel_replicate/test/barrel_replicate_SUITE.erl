@@ -41,9 +41,9 @@ all() ->
   , source_not_empty
   , deleted_doc
   , persistent_replication
-%%  , restart_persistent_replication
-%%  , start_duplicate_replication
-%%  , start_replication_error
+  , restart_persistent_replication
+  , start_duplicate_replication
+  , start_replication_error
   , random_activity
   , checkpoints
   ].
