@@ -21,11 +21,13 @@
   fold_prefix/5
 ]).
 
+-include("barrel.hrl").
+
 fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   ReadOptions = proplists:get_value(read_options, Opts, []),
 
   {ok, Itr} = rocksdb:iterator(Db, ReadOptions),
-  try do_fold_prefix(Itr, Prefix, Fun, AccIn, barrel_lib:parse_fold_options(Opts))
+  try do_fold_prefix(Itr, Prefix, Fun, AccIn, parse_fold_options(Opts))
   after rocksdb:iterator_close(Itr)
   end.
 
@@ -105,3 +107,31 @@ match_prefix(Bin, Prefix) ->
     << Prefix:L/binary, _/binary >> -> true;
     _ -> false
   end.
+
+parse_fold_options(Opts) ->
+  parse_fold_options(Opts, ?default_fold_options).
+
+parse_fold_options([], Options) ->
+  Options;
+parse_fold_options([{start_key, Start} | Rest], Options)
+  when is_binary(Start) or (Start =:= first) ->
+  parse_fold_options(Rest, Options#{gte => Start});
+parse_fold_options([{end_key, End} | Rest], Options)
+  when is_binary(End) or (End == nil) ->
+  parse_fold_options(Rest, Options#{lte => End});
+parse_fold_options([{gt, GT} | Rest], Options)
+  when is_binary(GT) or (GT =:= first) ->
+  parse_fold_options(Rest, Options#{gt => GT});
+parse_fold_options([{gte, GT} | Rest], Options)
+  when is_binary(GT) or (GT =:= first) ->
+  parse_fold_options(Rest, Options#{gte =>  GT});
+parse_fold_options([{lt, LT} | Rest], Options)
+  when is_binary(LT) or (LT == nil) ->
+  parse_fold_options(Rest, Options#{lt => LT});
+parse_fold_options([{lte, LT} | Rest], Options)
+  when is_binary(LT) or (LT == nil) ->
+  parse_fold_options(Rest, Options#{lte => LT});
+parse_fold_options([{max, Max} | Rest], Options) ->
+  parse_fold_options(Rest, Options#{max => Max});
+parse_fold_options([_ | Rest], Options) ->
+  parse_fold_options(Rest, Options).

@@ -29,7 +29,8 @@
 -export([
   start_link/0,
   get_conf/0,
-  whereis_db/1
+  whereis_db/1,
+  data_dir/0
 ]).
 
 %% gen_server callbacks
@@ -107,6 +108,13 @@ whereis_db(DbId) ->
   end.
 
 get_conf() -> gen_server:call(?MODULE, get_conf).
+
+-spec data_dir() -> string().
+data_dir() ->
+  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
+  filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
+  Dir.
+
 
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -286,7 +294,7 @@ maybe_create_dbs_from_conf([], State) ->
   State.
 
 conf_path() ->
-  Path = filename:join(barrel_lib:data_dir(), "barrel_config"),
+  Path = filename:join(data_dir(), "barrel_config"),
   ok = filelib:ensure_dir(Path),
   Path.
   

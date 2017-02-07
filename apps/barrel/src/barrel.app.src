@@ -11,7 +11,8 @@
      crypto,
      rocksdb,
      uuid,
-     sext
+     sext,
+     barrel_common
     ]},
    {env, []},
    {modules, []},
