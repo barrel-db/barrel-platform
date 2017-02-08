@@ -5,8 +5,6 @@
 -export([
   start_link/0,
   start_replication/2,
-  start_replication/3,
-  start_replication/4,
   stop_replication/1,
   delete_replication/1,
   where/1,
@@ -33,49 +31,32 @@ start_link() ->
 
 
 %% replication API
-start_replication(Source, Target) ->
-  start_replication(Source, Target, []).
-
-%% TODO: maybe we should pass the calculated replication id in options?
-start_replication(Source, Target, Options) when is_list(Options) ->
-  Name = barrel_replicate_task:repid(Source, Target),
-  start_replication(Name, Source, Target, Options);
-
-start_replication(Name, Source, Target) ->
-  start_replication(Name, Source, Target, []).
-
-start_replication(Name, Source, Target, Options) ->
-  Config = #{source => Source, target => Target, options => Options},
-  case gen_server:call(?MODULE, {start_replication, Name, Config}) of
-    ok -> {ok, Name};
+start_replication(Config, Options) when is_map(Config) ->
+  Config2 = Config#{options => Options},
+  case gen_server:call(?MODULE, {start_replication, Config2}) of
+    ok -> {ok, Config2};
     Error -> Error
   end.
 
-stop_replication(Name) ->
-  gen_server:call(?MODULE, {stop_replication, Name}).
+stop_replication(RepId) ->
+  gen_server:call(?MODULE, {stop_replication, RepId}).
 
-delete_replication(Name) ->
-  gen_server:call(?MODULE, {delete_replication, Name}).
+delete_replication(RepId) ->
+  gen_server:call(?MODULE, {delete_replication, RepId}).
 
 
-replication_info(Name) ->
-  case barrel_replicate:where(Name) of
+replication_info(RepId) ->
+  case barrel_replicate:where(RepId) of
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
 
-where(Name) ->
-  case find(Name) of
+where(RepId) ->
+  case find_repid(RepId) of
     {ok, {_RepId, Pid, _Persisted}} -> Pid;
     undefined -> undefined
   end.
 
-
-find(Name) ->
-  case ets:lookup(replication_names, Name) of
-    [] -> undefined;
-    [{Name, RepInfo}] -> {ok, RepInfo}
-  end.
 
 find_repid(RepId) ->
   case ets:lookup(replication_ids, RepId) of
@@ -86,22 +67,22 @@ find_repid(RepId) ->
 
 init([]) ->
   process_flag(trap_exit, true),
-  _ = ets:new(replication_names, [ordered_set, named_table, public]),
+  %% _ = ets:new(replication_names, [ordered_set, named_table, public]),
   _ = ets:new(replication_ids, [set, named_table, public]),
 
   self() ! init_config,
   {ok, #{ config => maps:new() }}.
 
 
-handle_call({start_replication, Name, Config}, _From, State) ->
-  {Reply, State2} =  maybe_start_replication(Name, Config, State),
+handle_call({start_replication, Config}, _From, State) ->
+  {Reply, State2} =  maybe_start_replication(Config, State),
   {reply, Reply, State2};
 
-handle_call({stop_replication, Name}, _From, State) ->
-  Reply =  do_stop_replication(Name),
+handle_call({stop_replication, RepId}, _From, State) ->
+  Reply =  do_stop_replication(RepId),
   {reply, Reply, State};
-handle_call({delete_replication, Name}, _From, State) ->
-  {Reply, State2} =  do_delete_replication(Name, State),
+handle_call({delete_replication, RepId}, _From, State) ->
+  {Reply, State2} =  do_delete_replication(RepId, State),
   {reply, Reply, State2}.
 
 
@@ -127,7 +108,6 @@ terminate(_Reason, _State) ->
     fun(Pid) -> supervisor:terminate_child(barrel_replicate_task_sup, Pid) end,
     Pids
   ),
-  ets:delete(replication_names),
   ets:delete(replication_ids),
   ok.
 
@@ -140,10 +120,13 @@ config_file() ->
   case init:get_argument(replication_file) of
     {ok, [[P]]} -> P;
     _ ->
-      case application:get_env(barrel, replication_file) of
-        undefined -> filename:absname(?DEFAULT_CONFIG);
-        {ok, P} -> P
-      end
+      FileName = case application:get_env(barrel, replication_file) of
+                   undefined -> ?DEFAULT_CONFIG;
+                   {ok, P} -> P
+                 end,
+      FullPath = filename:join(barrel_lib:data_dir(), FileName),
+      ok = filelib:ensure_dir(FullPath),
+      FullPath
   end.
 
 init_config(State) ->
@@ -161,9 +144,8 @@ read_file(Name) ->
 
 process_config(Config, State) ->
   State2 = maps:fold(
-    fun(Name, RepConfig, St) ->
-      RepId = config_repid(RepConfig),
-      {ok, St2} = do_start_replication(Name, RepId, RepConfig, St),
+    fun(RepConfig, St) ->
+      {ok, St2} = do_start_replication(RepConfig, St),
       St2
     end,
     State,
@@ -172,52 +154,42 @@ process_config(Config, State) ->
   {ok, State2}.
 
 
-maybe_start_replication(Name, Config, State) ->
-  RepId = config_repid(Config),
-  case find(Name) of
+maybe_start_replication(Config, State) ->
+  #{<<"replication_id">> := RepId} = Config,
+  case find_repid(RepId) of
     undefined ->
-      case find_repid(RepId) of
-        undefined ->
-          do_start_replication(Name, RepId, Config, State);
-        {ok, {Name, true, nil, nil}} ->
-          do_start_replication(Name, RepId, Config, State);
-        {ok, {Name, true, _Pid, _Ref}} ->
-          {{error, {task_already_running, Name}}, State};
-        {ok, {Other, _, _, _}} ->
-          {{error, {task_already_registered, Other}}, State}
-      end;
-    {ok, {RepId, nil, true}} ->
-      do_start_replication(Name, RepId, Config, State);
-    {ok, {RepId, _Pid, _}} ->
-      {ok, State};
-    {ok, {_OtherRepId, Pid, _}} when is_pid(Pid) ->
-      {{error, {task_already_registered, Pid}}, State}
+      do_start_replication(Config, State);
+    {ok, {RepId, true, nil, nil}} ->
+      do_start_replication(Config, State);
+    {ok, {RepId, true, _Pid, _Ref}} ->
+      {{error, {task_already_running, RepId}}, State};
+    {ok, {Other, _, _, _}} ->
+      {{error, {task_already_registered, Other}}, State}
   end.
 
 
-config_repid(#{ source := Source, target := Target}) ->
-  barrel_replicate_task:repid(Source, Target).
-
-do_start_replication(Name, RepId, Config, State) ->
-  #{ source := Source, target := Target, options := Options} = Config,
+do_start_replication(Config, State) ->
+  #{<<"replication_id">> := RepId,
+    <<"source">> := Source,
+    <<"target">> := Target, options := Options} = Config,
   Persisted = proplists:get_value(persist, Options, false),
   {ok, Pid} = supervisor:start_child(
     barrel_replicate_task_sup,
-    [Name, Source, Target, Options]
+    [RepId, Source, Target, Options]
   ),
-  register_replication(Name, RepId, Pid, Persisted, Config, State).
+  register_replication(RepId, Pid, Persisted, Config, State).
 
-register_replication(Name, RepId, Pid, Persisted, Config, #{ config := All} = State) ->
+register_replication(RepId, Pid, Persisted, Config, #{ config := All} = State) ->
   MRef = erlang:monitor(process, Pid),
-  ets:insert(replication_names, {Name, {RepId, Pid, Persisted}}),
   ets:insert(
     replication_ids,
-    [{Pid, {Name, Persisted, RepId}}, {RepId, {Name, Persisted, Pid, MRef}}]
+    [{Pid, {Persisted, RepId}},
+     {RepId, {Persisted, Pid, MRef}}]
   ),
 
   State2 = case Persisted of
              true ->
-               All2 = All#{ Name => Config},
+               All2 = All#{ RepId => Config},
                ok = file:write_file(config_file(), io_lib:fwrite("~p.\n",[All2])),
                State#{ config := All2};
              false ->
@@ -226,41 +198,33 @@ register_replication(Name, RepId, Pid, Persisted, Config, #{ config := All} = St
   {ok, State2}.
 
 
-do_stop_replication(Name) ->
-  case find(Name) of
+do_stop_replication(RepId) ->
+  case find_repid(RepId) of
     undefined ->
       ok;
-    {ok, {_RepId, nil, _Persisted}} ->
+    {ok, {_, nil, _}} ->
       ok;
-    {ok, {RepId, Pid, Persisted}} ->
+    {ok, {true, Pid, MRef}} ->
       ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
-      case Persisted of
-        true ->
-          [{RepId, {Name, _, _, MRef}}] = ets:lookup(replication_ids, RepId),
-          erlang:demonitor(MRef, [flush]),
-          ets:delete(replication_ids, Pid),
-          ets:insert(replication_ids, {RepId, {Name, Persisted, nil, nil}}),
-          ets:insert(replication_names, {Name, {RepId, nil, Persisted}});
-        false ->
-          [{RepId, {Name, _, Pid, MRef}}] = ets:take(replication_ids, RepId),
-          erlang:demonitor(MRef, [flush]),
-          ets:delete(replication_ids, Pid),
-          ets:delete(replication_names, Name)
-      end,
+      true = erlang:demonitor(MRef, [flush]),
+      true = ets:delete(replication_ids, Pid),
+      true = ets:insert(replication_ids, {RepId, {true, nil, nil}}),
+      ok;
+    {ok, {false, Pid, MRef}} ->
+      ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
+      [{RepId, {_, Pid, MRef}}] = ets:take(replication_ids, RepId),
+      true = erlang:demonitor(MRef, [flush]),
+      true = ets:delete(replication_ids, Pid),
       ok
   end.
 
 
-do_delete_replication(Name, #{ config := Config} = State) ->
-  ok = do_stop_replication(Name),
-  case ets:take(replication_names, Name) of
-    [] -> {ok, State};
-    [{Name, {RepId, _, _}}] ->
-      ets:delete(replication_ids, RepId),
-      Config2 = maps:remove(Name, Config),
-      ok = file:write_file(config_file(), io_lib:fwrite("~p.\n",[Config2])),
-      {ok, State#{ config => Config2} }
-  end.
+do_delete_replication(RepId, #{ config := Config} = State) ->
+  ok = do_stop_replication(RepId),
+  ets:delete(replication_ids, RepId),
+  Config2 = maps:remove(RepId, Config),
+  ok = file:write_file(config_file(), io_lib:fwrite("~p.\n",[Config2])),
+  {ok, State#{ config => Config2} }.
 
 task_is_down(Pid) ->
   case ets:take(replication_ids, Pid) of
@@ -268,10 +232,8 @@ task_is_down(Pid) ->
     [{Pid, {Name, Persisted, RepId}}] ->
       case Persisted of
         true ->
-          ets:insert(replication_ids, {RepId, {Name, Persisted, nil, nil}}),
-          ets:insert(replication_names, {Name, {RepId, nil, Persisted}});
+          ets:insert(replication_ids, {RepId, {Name, Persisted, nil, nil}});
         false ->
-          ets:delete(replication_names, Name),
           ets:delete(replication_ids, RepId)
       end,
       ok

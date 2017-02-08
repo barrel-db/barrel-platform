@@ -35,16 +35,15 @@
 
 %% internal api
 -export([
-  repid/2,
+  %% repid/2,
   replication_key/1,
   clean/2
 ]).
 
 
--record(st, { name
+-record(st, { id          ::binary()  % replication id
             , source
             , target
-            , id          ::binary()  % replication id
             , session_id  ::binary()  % replication session (history) id
             , start_seq=0 ::integer() % start seq for current repl session
             , last_seq=0  ::integer() % last received seq from source
@@ -62,30 +61,19 @@ start_link(Name, Source, Target, Options) ->
 info(Pid) when is_pid(Pid)->
   gen_server:call(Pid, info).
 
-clean(Source, Target) ->
-  RepId = repid(Source, Target),
-  delete_checkpoint_doc(Source, RepId),
-  delete_checkpoint_doc(Target, RepId).
-
-%% @doc Compute a unique ID for replication
-%% function of Source, Target, and unique ID of the server
-%% TODO compute unique server ID
-repid(Source, Target) ->
-  {ok, HostName} = inet:gethostname(),
-  Term = {Source, Target, HostName},
-  H = erlang:phash2(Term),
-  Md5 = erlang:md5(integer_to_binary(H)),
-  barrel_lib:to_hex(Md5).
-
+clean(_RepId, _Target) ->
+  {error, not_implemented}.
+  %% RepId = repid(Source, Target),
+  %% delete_checkpoint_doc(Source, RepId),
+  %% delete_checkpoint_doc(Target, RepId).
 
 replication_key(Name) -> {n, l, {barrel_replicate, Name}}.
 
 
 %% gen_server callbacks
 
-init({Name, Source0, Target0, Options}) ->
+init({RepId, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
-  RepId = repid(Source0, Target0),
 
   {ok, Source} = maybe_connect(Source0),
   {ok, Target} = maybe_connect(Target0),
@@ -94,10 +82,9 @@ init({Name, Source0, Target0, Options}) ->
   StartSeq = checkpoint_start_seq(Source, Target, RepId),
   {ok, LastSeq, Metrics2} = replicate_change(Source, Target, StartSeq, Metrics),
   ok = barrel_event:reg(Source),
-  State = #st{name=Name,
+  State = #st{id=RepId,
               source=Source,
               target=Target,
-              id=RepId,
               session_id = barrel_lib:uniqid(binary),
               start_seq=StartSeq,
               last_seq=LastSeq,
@@ -117,8 +104,7 @@ handle_call(info, _From, State) ->
               _Other ->
                 []
             end,
-  Info = #{ name => State#st.name
-          , id => State#st.id
+  Info = #{ id => State#st.id
           , source => State#st.source
           , target => State#st.target
           , last_seq => State#st.last_seq
