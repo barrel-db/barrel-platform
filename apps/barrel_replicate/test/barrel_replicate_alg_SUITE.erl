@@ -29,7 +29,6 @@
    , source_not_empty/1
    , deleted_doc/1
    , random_activity/1
-   , checkpoints/1
    ]).
 
 all() ->
@@ -37,7 +36,6 @@ all() ->
   , source_not_empty
   , deleted_doc
   , random_activity
-  %% , checkpoints
   ].
 
 init_per_suite(Config) ->
@@ -119,55 +117,6 @@ random_activity(_Config) ->
   ok.
 
 %% =============================================================================
-%% Checkpoints
-%% =============================================================================
-
-checkpoints(_Config) ->
-  Scenario = scenario(),
-  [P1,P2,P3,P4] = split(4, Scenario),
-
-  %% start and stop replication 4 times
-  M1 = play_checkpoint(P1, maps:new()),
-  M2 = play_checkpoint(P2, M1),
-  M3 = play_checkpoint(P3, M2),
-  M4 = play_checkpoint(P4, M3),
-
-  SourceDbId = <<"source">>,
-  RepId = <<"checkpoints">>,
-  {ok, SourceCheckpoints} = read_checkpoint_doc(SourceDbId, RepId),
-  History = maps:get(<<"history">>, SourceCheckpoints),
-  4 = length(History),
-  LastSession = hd(History),
-  12 = maps:get(<<"source_last_seq">>, LastSession),
-
-  ok = purge_scenario(M4, <<"source">>),
-  ok = purge_scenario(M2, <<"testdb">>),
-  ok.
-
-play_checkpoint(Scenario, M) ->
-  RepId = <<"checkpoints">>,
-  Options = [],
-  RepConfig = #{<<"replication_id">> => RepId,
-                <<"source">> => <<"source">>,
-                <<"target">> => <<"testdb">>},
-  {ok, #{<<"replication_id">> := RepId}} =
-    barrel_replicate:start_replication(RepConfig, Options),
-  Expected = play_scenario(Scenario, <<"source">>, M),
-  timer:sleep(200),
-  ok = check_all(Expected, <<"source">>, <<"testdb">>),
-  ok = barrel_replicate:stop_replication(RepId),
-  Expected.
-
-split(2, L) ->
-  {L1,L2} = lists:split(2, L),
-  [L1,L2];
-split(N, L) ->
-  [L1, L2] = split(N div 2,L),
-  S1 = split(N div 2, L1),
-  S2 = split(N div 2, L2),
-  S1 ++ S2.
-
-%% =============================================================================
 %% Scenario helpers
 %% =============================================================================
 
@@ -245,9 +194,3 @@ scenario() ->
   , {put, "g", 1}
   , {put, "f", 4}
   ].
-
-read_checkpoint_doc(Db, RepId) ->
-  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
-
-checkpoint_docid(RepId) ->
-  <<"replication-checkpoint-", RepId/binary>>.
