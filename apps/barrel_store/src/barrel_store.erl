@@ -29,7 +29,8 @@
 -export([
   start_link/0,
   get_conf/0,
-  whereis_db/1
+  whereis_db/1,
+  data_dir/0
 ]).
 
 %% gen_server callbacks
@@ -41,7 +42,7 @@
   code_change/3]).
 
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 -define(CONF_VERSION, 1).
 
@@ -108,6 +109,13 @@ whereis_db(DbId) ->
 
 get_conf() -> gen_server:call(?MODULE, get_conf).
 
+-spec data_dir() -> string().
+data_dir() ->
+  Dir = application:get_env(barrel_store, data_dir, ?DATA_DIR),
+  filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
+  Dir.
+
+
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -146,7 +154,7 @@ handle_info(init_dbs, State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
   %% get databases from sys.config, we only create dbs not already persisted
-  Dbs0 = application:get_env(barrel, dbs, []),
+  Dbs0 = application:get_env(barrel_store, dbs, []),
   Dbs = lists:filter(
     fun(#{ <<"database_id">> := Id}) -> lists:member(Id, Loaded) /= true  end,
     Dbs0
@@ -286,7 +294,7 @@ maybe_create_dbs_from_conf([], State) ->
   State.
 
 conf_path() ->
-  Path = filename:join(barrel_lib:data_dir(), "barrel_config"),
+  Path = filename:join(data_dir(), "barrel_config"),
   ok = filelib:ensure_dir(Path),
   Path.
   

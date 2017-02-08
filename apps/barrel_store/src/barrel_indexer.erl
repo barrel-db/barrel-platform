@@ -33,7 +33,7 @@
   code_change/3
 ]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 
 refresh_index(Indexer, Since) ->

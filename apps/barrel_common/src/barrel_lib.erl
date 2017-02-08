@@ -19,14 +19,9 @@
   to_binary/1,
   to_hex/1,
   hex_to_binary/1,
-  report_overrun/1,
   uniqid/0, uniqid/1,
-  parse_fold_options/1,
-  data_dir/0,
   binary_join/2
 ]).
-
--include("barrel.hrl").
 
 to_atom(V) when is_atom(V) -> V;
 to_atom(V) when is_list(V) -> list_to_atom(V);
@@ -55,8 +50,6 @@ to_digit(N)             -> $a + N-10.
 hex_to_binary(Bin) when is_binary(Bin) ->
   << <<(binary_to_integer( <<H, L>>, 16))>> || << H, L >> <= Bin >>.
 
-report_overrun(Report) ->
-  lager:error("~p", [Report]).
 
 uniqid() -> uniqid(binary).
 
@@ -66,46 +59,10 @@ uniqid(integer)   -> <<Id:128>> = uuid:get_v4(), Id;
 uniqid(float)     -> <<Id:128>> = uuid:get_v4(), Id * 1.0;
 uniqid(_) -> error(badarg).
 
--spec data_dir() -> string().
-data_dir() ->
-  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
-  filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
-  Dir.
-
-parse_fold_options(Opts) ->
-  parse_fold_options(Opts, ?default_fold_options).
-
-parse_fold_options([], Options) ->
-  Options;
-parse_fold_options([{start_key, Start} | Rest], Options)
-  when is_binary(Start) or (Start =:= first) ->
-  parse_fold_options(Rest, Options#{gte => Start});
-parse_fold_options([{end_key, End} | Rest], Options)
-  when is_binary(End) or (End == nil) ->
-  parse_fold_options(Rest, Options#{lte => End});
-parse_fold_options([{gt, GT} | Rest], Options)
-  when is_binary(GT) or (GT =:= first) ->
-  parse_fold_options(Rest, Options#{gt => GT});
-parse_fold_options([{gte, GT} | Rest], Options)
-  when is_binary(GT) or (GT =:= first) ->
-  parse_fold_options(Rest, Options#{gte =>  GT});
-parse_fold_options([{lt, LT} | Rest], Options)
-  when is_binary(LT) or (LT == nil) ->
-  parse_fold_options(Rest, Options#{lt => LT});
-parse_fold_options([{lte, LT} | Rest], Options)
-  when is_binary(LT) or (LT == nil) ->
-  parse_fold_options(Rest, Options#{lte => LT});
-parse_fold_options([{max, Max} | Rest], Options) ->
-  parse_fold_options(Rest, Options#{max => Max});
-parse_fold_options([_ | Rest], Options) ->
-  parse_fold_options(Rest, Options).
-
 
 -spec binary_join([binary()], binary()) -> binary().
-binary_join([], _Sep) ->
-  <<>>;
-binary_join([Part], _Sep) ->
-  to_binary(Part);
+binary_join([], _Sep) -> <<>>;
+binary_join([Part], _Sep) -> to_binary(Part);
 binary_join([Head|Tail], Sep) ->
   lists:foldl(
     fun (Value, Acc) -> <<Acc/binary, Sep/binary, (to_binary(Value))/binary>> end,

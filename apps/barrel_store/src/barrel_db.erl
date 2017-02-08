@@ -55,7 +55,7 @@
   code_change/3
 ]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 %% internal processes
 -define(default_timeout, 5000).
@@ -501,7 +501,7 @@ get_db(DbPid) when is_pid(DbPid) ->
 
 
 db_dir() ->
-  Dir = filename:join(barrel_lib:data_dir(), "dbs"),
+  Dir = filename:join(barrel_store:data_dir(), "dbs"),
   ok = filelib:ensure_dir([Dir, "dummy"]),
   Dir.
 
