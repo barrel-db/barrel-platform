@@ -16,7 +16,7 @@
 
 -export([query/6]).
 
--include("barrel.hrl").
+-include("barrel_store.hrl").
 
 
 query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_key, FilterOpts) ->

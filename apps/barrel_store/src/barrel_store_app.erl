@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_app).
+-module(barrel_store_app).
 
 -behaviour(application).
 
@@ -24,7 +24,7 @@
 %%====================================================================
 
 start(_StartType, _StartArgs) ->
-  barrel_sup:start_link().
+  barrel_store_sup:start_link().
 
 %%--------------------------------------------------------------------
 stop(_State) ->

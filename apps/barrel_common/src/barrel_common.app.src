@@ -1,12 +1,10 @@
-{application, barrel_replicate,
- [{description, "An OTP application"},
+{application, barrel_common,
+ [{description, "An OTP library"},
   {vsn, "0.1.0"},
   {registered, []},
-  {mod, { barrel_replicate_app, []}},
   {applications,
    [kernel,
-    stdlib,
-    barrel_store
+    stdlib
    ]},
   {env,[]},
   {modules, []},
