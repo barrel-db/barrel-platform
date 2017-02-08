@@ -29,11 +29,16 @@
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-
 %% replication API
 start_replication(Config, Options) when is_map(Config) ->
-  Config2 = Config#{options => Options},
-  case gen_server:call(?MODULE, {start_replication, Config2}) of
+  Config2 = case maps:find(<<"replication_id">>, Config) of
+              error ->
+                RepId = barrel_lib:uniqid(),
+                Config#{<<"replication_id">> => RepId};
+              {ok, _} -> Config
+            end,
+  Config3 = Config2#{options => Options},
+  case gen_server:call(?MODULE, {start_replication, Config3}) of
     ok -> {ok, Config2};
     Error -> Error
   end.

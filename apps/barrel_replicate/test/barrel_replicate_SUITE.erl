@@ -73,9 +73,7 @@ end_per_suite(Config) ->
 
 one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
-  RepId = <<"onedoc">>,
-  RepConfig = #{<<"replication_id">> => RepId,
-                <<"source">> => <<"source">>,
+  RepConfig = #{<<"source">> => <<"source">>,
                 <<"target">> => <<"testdb">>},
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, Options),
