@@ -31,7 +31,6 @@
    , persistent_replication/1
    , restart_persistent_replication/1
    , start_duplicate_replication/1
-   , start_replication_error/1
    , random_activity/1
    , checkpoints/1
    ]).
@@ -41,9 +40,8 @@ all() ->
   , source_not_empty
   , deleted_doc
   , persistent_replication
-  %% , restart_persistent_replication
-  %% , start_duplicate_replication
-  %% , start_replication_error
+  , restart_persistent_replication
+  , start_duplicate_replication
   , random_activity
   , checkpoints
   ].
@@ -158,12 +156,15 @@ persistent_replication(_Config) ->
   ok.
 
 restart_persistent_replication(_Config) ->
-  Name = <<"a">>,
+  RepId = <<"restart">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel_replicate:start_replication(Name, <<"source">>, <<"testdb">>, Options),
-  {ok, [AllConfig]} = file:consult("replication.config"),
-  RepConfig = maps:get(<<"a">>, AllConfig),
-  #{ source := <<"source">>, target := <<"testdb">>, options := Options} = RepConfig,
+  RepConfig = #{<<"replication_id">> => RepId,
+                <<"source">> => <<"source">>,
+                <<"target">> => <<"testdb">>},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, Options),
+  %% {ok, [AllConfig]} = file:consult("data/replication.config"),
+  %% RepConfig = maps:get(RepId, AllConfig),
   Manager = whereis(barrel_replicate),
   MRef = erlang:monitor(process, Manager),
   try
@@ -175,35 +176,26 @@ restart_persistent_replication(_Config) ->
   after
     erlang:demonitor(MRef, [flush])
   end,
-  {'EXIT', {badarg, _}} = (catch ets:lookup(replication_names, <<"a">>)),
+  {'EXIT', {badarg, _}} = (catch ets:lookup(replication_ids, RepId)),
   timer:sleep(200),
-  RepId = barrel_replicate_task:repid(<<"source">>, <<"testdb">>),
-  [{<<"a">>, {RepId, Pid, true}}] = ets:lookup(replication_names, <<"a">>),
-  true = is_pid(Pid),
-  ok = barrel_replicate:delete_replication(<<"a">>),
-  {ok, [AllConfig3]} = file:consult("replication.config"),
-  undefined = maps:get(<<"a">>, AllConfig3, undefined),
-  [] = ets:lookup(replication_names, <<"a">>),
+  ok = barrel_replicate:delete_replication(RepId),
+  {ok, [AllConfig3]} = file:consult("data/replication.config"),
+  undefined = maps:get(RepId, AllConfig3, undefined),
   [] = ets:lookup(replication_ids, RepId),
   ok.
 
 
 start_duplicate_replication(_Config) ->
-  Name = <<"a">>,
+  RepId = <<"duplicate">>,
   Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel_replicate:start_replication(Name, <<"source">>, <<"testdb">>, Options),
-  {ok, Name} = barrel_replicate:start_replication(Name, <<"source">>, <<"testdb">>, Options),
-  ok = barrel_replicate:delete_replication(<<"a">>),
-  ok.
-
-start_replication_error(_Config) ->
-  Name = <<"a">>,
-  Options = [{metrics_freq, 100}, {persist, true}],
-  {ok, Name} = barrel_replicate:start_replication(Name, <<"source">>, <<"testdb">>, Options),
-  {error, {task_already_registered, <<"a">>}} = barrel_replicate:start_replication(<<"b">>, <<"source">>, <<"testdb">>, Options),
-  ok = barrel_replicate:stop_replication(<<"a">>),
-  {error, {task_already_registered, <<"a">>}} = barrel_replicate:start_replication(<<"b">>, <<"source">>, <<"testdb">>, Options),
-  ok = barrel_replicate:delete_replication(<<"a">>),
+  RepConfig = #{<<"replication_id">> => RepId,
+                <<"source">> => <<"source">>,
+                <<"target">> => <<"testdb">>},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, Options),
+  {error, {task_already_running, RepId}} =
+    barrel_replicate:start_replication(RepConfig, Options),
+  ok = barrel_replicate:delete_replication(RepId),
   ok.
 
 

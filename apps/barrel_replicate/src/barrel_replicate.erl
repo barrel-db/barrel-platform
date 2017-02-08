@@ -144,9 +144,9 @@ read_file(Name) ->
 
 process_config(Config, State) ->
   State2 = maps:fold(
-    fun(RepConfig, St) ->
-      {ok, St2} = do_start_replication(RepConfig, St),
-      St2
+    fun(_RepId, RepConfig, St) ->
+        {ok, St2} = do_start_replication(RepConfig, St),
+        St2
     end,
     State,
     Config
@@ -159,12 +159,10 @@ maybe_start_replication(Config, State) ->
   case find_repid(RepId) of
     undefined ->
       do_start_replication(Config, State);
-    {ok, {RepId, true, nil, nil}} ->
+    {ok, {true, nil, nil}} ->
       do_start_replication(Config, State);
-    {ok, {RepId, true, _Pid, _Ref}} ->
-      {{error, {task_already_running, RepId}}, State};
-    {ok, {Other, _, _, _}} ->
-      {{error, {task_already_registered, Other}}, State}
+    {ok, {true, _Pid, _Ref}} ->
+      {{error, {task_already_running, RepId}}, State}
   end.
 
 
