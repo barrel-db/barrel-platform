@@ -35,7 +35,7 @@ init([]) ->
       shutdown => 2000,
       type => worker,
       modules => [barrel_replicate]},
-    
+
   TaskSup =
     #{id => barrel_replicate_sup,
       start => {barrel_replicate_task_sup, start_link, []},
@@ -43,7 +43,7 @@ init([]) ->
       shutdown => 2000,
       type => supervisor,
       modules => [barrel_replicate_sup]},
-    
+
     {ok, {{one_for_all, 10000, 1}, [Manager, TaskSup]}}.
 
 %%====================================================================

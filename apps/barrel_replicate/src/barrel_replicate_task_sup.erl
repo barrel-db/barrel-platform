@@ -19,5 +19,5 @@ init([]) ->
       shutdown => 2000,
       type => worker,
       modules => [barrel_replicate_task]},
-  
+
   {ok, {{simple_one_for_one, 5, 10}, [Spec]}}.
