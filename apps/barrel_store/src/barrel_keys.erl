@@ -29,12 +29,12 @@
 ]).
 
 prefix(db_meta) ->  << 0, 0, 0 >>;
-prefix(doc) ->  <<  0, 0, 50 >>;
-prefix(seq) ->  <<  0, 0, 100>>;
-prefix(sys_doc) ->  << 0, 0, 200 >>;
-prefix(idx_last_doc) ->  <<  0, 0, 400 >>;
-prefix(idx_forward_path) ->  <<  0, 0, 410, 0 >>;
-prefix(idx_reverse_path) ->  <<  0, 0, 420, 0 >>;
+prefix(doc) ->  <<  0, 50, 0 >>;
+prefix(seq) ->  <<  0, 100, 0>>;
+prefix(sys_doc) ->  << 0, 200, 0 >>;
+prefix(idx_last_doc) ->  <<  0, 400, 0 >>;
+prefix(idx_forward_path) ->  <<  0, 410, 0 >>;
+prefix(idx_reverse_path) ->  <<  0, 420, 0 >>;
 prefix(_) ->  erlang:error(badarg).
 
 %% metadata keys
