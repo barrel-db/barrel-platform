@@ -28,7 +28,7 @@
   idx_reverse_path_key/1
 ]).
 
-prefix(db_meta) ->  << 0, 0 >>;
+prefix(db_meta) ->  << 0, 0, 0 >>;
 prefix(doc) ->  <<  0, 0, 50 >>;
 prefix(seq) ->  <<  0, 0, 100>>;
 prefix(sys_doc) ->  << 0, 0, 200 >>;

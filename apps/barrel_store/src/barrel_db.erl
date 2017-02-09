@@ -71,7 +71,6 @@ exists(DbId, _Config) -> filelib:is_dir(db_path(DbId)).
 
 exists(DbId) -> filelib:is_dir(db_path(DbId)).
 
-
 infos(DbName) ->
   with_db(
     DbName,
@@ -383,7 +382,6 @@ changes_with_deleted(Change, RevId, RevTree) ->
     _ -> Change
   end.
 
-
 revsdiff(DbName, DocId, RevIds) ->
   case get_doc_info(DbName, DocId, []) of
     {ok, #{revtree := RevTree}} -> revsdiff1(RevTree, RevIds);
@@ -514,46 +512,46 @@ db_path(DbId) ->
 init([DbId, Config]) ->
   process_flag(trap_exit, true),
   {ok, Store} = open_db(DbId, Config),
-  case rocksdb:get(Store, barrel_keys:db_meta_key(0), []) of
-    {ok, MetaBin} ->
-      #{updated_seq := Updated,
-        indexed_seq := Indexed,
-        docs_count := DocsCount,
-        deleted_count := DeletedCount,
-        system_docs_count := SystemDocsCount} = binary_to_term(MetaBin),
+  #{<<"updated_seq">> := Updated,
+    <<"indexed_seq">> := Indexed,
+    <<"docs_count">> := DocsCount,
+    <<"deleted_count">> := DeletedCount,
+    <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
   
-      %% init the db object with them
-      Db =
-        #db{id=DbId,
-            store=Store,
-            pid=self(),
-            conf = Config,
-            updated_seq = Updated,
-            indexed_seq = Indexed,
-            docs_count = DocsCount,
-            deleted_count = DeletedCount,
-            system_docs_count = SystemDocsCount},
+  Db =
+    #db{id=DbId,
+        store=Store,
+        pid=self(),
+        conf = Config,
+        updated_seq = Updated,
+        indexed_seq = Indexed,
+        docs_count = DocsCount,
+        deleted_count = DeletedCount,
+        system_docs_count = SystemDocsCount},
   
-      {ok, Indexer} = barrel_indexer:start_link(Db, Config),
-      Db2 = Db#db{indexer = Indexer},
-      {ok, Db2};
-    not_found ->
-      Meta =
-        #{updated_seq => 0,
-          indexed_seq => 0,
-          docs_count => 0,
-          deleted_count => 0,
-          system_docs_count => 0 },
-      Db = #db{id=DbId, store=Store, pid=self(), conf=Config},
-      {ok, Indexer} = barrel_indexer:start_link(Db, Config),
-      %% initialize the metadata on the disk
-      ok = rocksdb:put(Store, barrel_keys:db_meta_key(0), term_to_binary(Meta), [{sync, true}]),
-      Db2 = Db#db{indexer = Indexer},
-      {ok, Db2};
-    Error ->
-      lager:error("error while initializing ~p: ~p~n", [DbId, Error]),
-      erlang:error(Error)
-  end.
+  {ok, Indexer} = barrel_indexer:start_link(Db, Config),
+  Db2 = Db#db{indexer = Indexer},
+  {ok, Db2}.
+
+
+%% TODO: use a specific column to store the counters
+init_meta(Store) ->
+  Prefix = barrel_keys:prefix(db_meta),
+  barrel_rocksdb:fold_prefix(
+    Store,
+    Prefix,
+    fun(<< _:3/binary, Key >>, ValBin, Meta) ->
+      Val = binary_to_term(ValBin),
+      {ok, Meta#{ Key => Val }}
+    end,
+    #{<<"updated_seq">> => 0,
+      <<"indexed_seq">> => 0,
+      <<"docs_count">> => 0,
+      <<"deleted_count">> => 0,
+      <<"system_docs_count">> => 0},
+    []
+  ).
+
   
 
 open_db(DbId, Config) ->
@@ -679,27 +677,16 @@ do_update(DocId, Fun, Db = #db{ id=DbId, store=Store, indexer=Idx }) ->
       {error, Conflict}
   end.
 
-
-%% TODO: use information in ram?
-%% do we really need to read from disk? Why not just overriding the full
-%% doc from the content in memory?
-bin_infos(#db{store=Store}) ->
-  {ok, OldDbInfoBin} = rocksdb:get(Store, barrel_keys:db_meta_key(0), []),
-  binary_to_term(OldDbInfoBin).
-
-write_doc(Db=#db{store=Store}, DocId, LastSeq, Inc, DocInfo, Body) ->
+write_doc(#db{store=Store, docs_count = Count}, DocId, LastSeq, Inc, DocInfo, Body) ->
   #{update_seq := Seq} = DocInfo,
   #{<<"_rev">> := Rev} = Body,
-  OldDbInfo = bin_infos(Db),
-  #{ docs_count := Count } = OldDbInfo,
-  DbInfo = OldDbInfo#{ docs_count => Count + Inc, updated_seq => Seq },
   DocInfoBin = term_to_binary(DocInfo),
-  
   Batch = [
             {put, barrel_keys:rev_key(DocId, Rev), term_to_binary(Body)},
             {put, barrel_keys:doc_key(DocId), DocInfoBin},
             {put, barrel_keys:seq_key(Seq), DocInfoBin},
-            {put, barrel_keys:db_meta_key(0), term_to_binary(DbInfo)}
+            {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Count + Inc)},
+            {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Seq)}
           ] ++ case LastSeq of
                  undefined -> [];
                  _ -> [{delete, barrel_keys:seq_key(LastSeq)}]
@@ -707,12 +694,10 @@ write_doc(Db=#db{store=Store}, DocId, LastSeq, Inc, DocInfo, Body) ->
   rocksdb:write(Store, Batch, [{sync, true}]).
 
 
-do_put(K, V, Db = #db{ id=DbId, store=Store}) ->
-  #{ system_docs_count := Count} = OldDbInfo = bin_infos(Db),
-  DbInfo = OldDbInfo#{ system_docs_count => Count + 1 },
+do_put(K, V, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
   Batch = [
     {put, K, V},
-    {put, barrel_keys:db_meta_key(0), term_to_binary(DbInfo)}
+    {put, barrel_keys:db_meta_key(<<"system_docs_count">>), term_to_binary(Count + 1)}
   ],
   case rocksdb:write(Store, Batch, [{sync, true}]) of
     ok ->
@@ -722,12 +707,10 @@ do_put(K, V, Db = #db{ id=DbId, store=Store}) ->
       Error
   end.
 
-do_delete(K, Db = #db{ id=DbId, store=Store}) ->
-  #{ system_docs_count := Count} = OldDbInfo = bin_infos(Db),
-  DbInfo = OldDbInfo#{ system_docs_count => Count -1 },
+do_delete(K, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
   Batch = [
     {delete, K},
-    {put, barrel_keys:db_meta_key(0), term_to_binary(DbInfo)}
+    {put, barrel_keys:db_meta_key(<<"system_docs_count">>), term_to_binary(Count - 1)}
   ],
   case rocksdb:write(Store, Batch, [{sync, true}]) of
     ok ->
@@ -738,10 +721,8 @@ do_delete(K, Db = #db{ id=DbId, store=Store}) ->
   end.
 
 do_update_index_seq(Seq, Db = #db{ store=Store}) ->
-  OldDbInfo = bin_infos(Db),
-  DbInfo = OldDbInfo#{ last_index_seq => Seq },
   ok = rocksdb:put(
-    Store, barrel_keys:db_meta_key(0), term_to_binary(DbInfo),  [{sync, true}]
+    Store, barrel_keys:db_meta_key(<<"last_index_seq">>), term_to_binary(Seq),  [{sync, true}]
   ),
   ets:insert(barrel_dbs, Db#db{indexed_seq=Seq}),
   Db.
