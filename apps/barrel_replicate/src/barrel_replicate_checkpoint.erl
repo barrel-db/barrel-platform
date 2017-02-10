@@ -17,7 +17,9 @@
 
 %% gen_server API
 -export([ new/4
-        , last_seq/2
+        , set_last_seq/2
+        , get_last_seq/1
+        , get_start_seq/1
         , maybe_write_checkpoint/1
         , write_checkpoint/1
         , read_checkpoint_doc/2
@@ -50,14 +52,17 @@ new(RepId, Source, Target, Options) ->
              },
   set_next_target_seq(State).
 
-%% @doc Set a new last_seq position
-last_seq(LastSeq, State) ->
+set_last_seq(LastSeq, State) ->
   State#st{last_seq=LastSeq}.
+get_last_seq(State) ->
+  State#st.last_seq.
+get_start_seq(State) ->
+  State#st.start_seq.
 
 %% @doc Decide it we should write checkpoints, and do it.
 maybe_write_checkpoint(#st{last_seq=LastSeq, target_seq=TargetSeq}=State)
   when LastSeq >= TargetSeq ->
-  write_checkpoint(State),
+  ok = write_checkpoint(State),
   set_next_target_seq(State);
 maybe_write_checkpoint(State) ->
   State.
@@ -117,7 +122,6 @@ checkpoint_start_seq(Source, Target, RepId) ->
   min(LastSeqTarget, LastSeqSource).
 
 read_last_seq(Db, RepId) ->
-  lager:info("read_checkpoint_doc(~p,~p)", [Db, RepId]),
   case catch read_checkpoint_doc(Db, RepId) of
     {ok, Doc} ->
       History = maps:get(<<"history">>, Doc),
