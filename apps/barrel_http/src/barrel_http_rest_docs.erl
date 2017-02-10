@@ -175,27 +175,47 @@ trails() ->
    trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
 
 
+accepted_feed(Req) ->
+  case cowboy_req:header(<<"accept">>, Req) of
+    {undefined, _} -> aim_feed(Req);
+    {Accept, _} ->
+      case hackney_bstr:to_lower(Accept) of
+        <<"text/event-stream">> -> << "eventsource">>;
+        _ ->
+          aim_feed(Req)
+      end
+  end.
+
+aim_feed(Req) ->
+  case cowboy_req:header(<<"a-im">>, Req) of
+    {undefined, _} -> param_feed(Req);
+    {AIM, _} ->
+      case hackney_bstr:to_lower(AIM) of
+        <<"incremental feed">> -> <<"normal">>;
+        _ -> param_feed(Req)
+      end
+  end.
+
+param_feed(Req) ->
+  case cowboy_req:qs_val(<<"feed">>, Req) of
+    {undefined, _} -> undefined;
+    {Feed, _} -> hackney_bstr:to_lower(Feed)
+  end.
+
 init(Type, Req, []) ->
   {Path, Req2} = cowboy_req:path(Req),
-  {HeaderBin, Req3} = cowboy_req:header(<<"a-im">>, Req2, <<"undefined">>),
-  {FeedBin, Req4} = cowboy_req:qs_val(<<"feed">>, Req3, <<"undefined">>),
-  Header = string:to_lower(binary_to_list(HeaderBin)),
-  Feed = string:to_lower(binary_to_list(FeedBin)),
+  Feed = accepted_feed(Req2),
+  IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>, <<"longpoll">>]),
+  
   Route = binary:split(Path, <<"/">>, [global]),
   S1 = #state{path=Path},
-  case {Route, Header, Feed} of
-    {[<<>>,<<"dbs">>,_,<<"docs">>], "incremental feed", _} ->
-      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
-    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "eventsource"} ->
-      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
-    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "longpoll"} ->
-      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
-    {[<<>>,<<"dbs">>,_,<<"docs">>], _, "normal"} ->
-      barrel_http_rest_docs_changes:init(Type, Req4, S1#state{handler=changes});
-    {[<<>>,<<"dbs">>,_,<<"docs">>],_,_} ->
-      barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=list});
+  case {Route,  IsChangesFeed} of
+    {[<<>>,<<"dbs">>,_,<<"docs">>], false} ->
+      barrel_http_rest_docs_id:init(Type, Req2, S1#state{handler=list});
+    {[<<>>,<<"dbs">>,_,<<"docs">>], true} ->
+      barrel_http_rest_docs_changes:init(Type, Req2, S1#state{handler=changes});
     _ ->
-      barrel_http_rest_docs_id:init(Type, Req4, S1#state{handler=doc})
+      barrel_http_rest_docs_id:init(Type, Req2, S1#state{handler=doc})
   end.
 
 handle(Req, #state{handler=changes}=State) ->
