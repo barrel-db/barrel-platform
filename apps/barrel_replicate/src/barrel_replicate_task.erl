@@ -36,7 +36,7 @@
 %% internal api
 -export([
   replication_key/1,
-  clean/2
+  delete/3
 ]).
 
 
@@ -50,20 +50,19 @@
 
 
 
-start_link(Name, Source, Target, Options) ->
-  gen_server:start_link(?MODULE, {Name, Source, Target, Options}, []).
+start_link(RepId, Source, Target, Options) ->
+  gen_server:start_link(?MODULE, {RepId, Source, Target, Options}, []).
 
 
 info(Pid) when is_pid(Pid)->
   gen_server:call(Pid, info).
 
-clean(_RepId, _Target) ->
-  {error, not_implemented}.
-  %% RepId = repid(Source, Target),
-  %% delete_checkpoint_doc(Source, RepId),
-  %% delete_checkpoint_doc(Target, RepId).
+delete(RepId, Source, Target) ->
+  Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, []),
+  ok = barrel_replicate_checkpoint:delete(Checkpoint),
+  ok.
 
-replication_key(Name) -> {n, l, {barrel_replicate, Name}}.
+replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
 
 
 %% gen_server callbacks

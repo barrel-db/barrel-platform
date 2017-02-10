@@ -79,9 +79,13 @@ checkpoints(_Config) ->
   [{0,5}] = read_start_last_seq(Target, RepId),
 
   C7 = barrel_replicate_checkpoint:set_last_seq(12, C6),
-  _C8 = barrel_replicate_checkpoint:maybe_write_checkpoint(C7),
+  C8 = barrel_replicate_checkpoint:maybe_write_checkpoint(C7),
   [{0,12}] = read_start_last_seq(Source, RepId),
   [{0,12}] = read_start_last_seq(Target, RepId),
+
+  ok = barrel_replicate_checkpoint:delete(C8),
+  {error, not_found} = barrel_replicate_checkpoint:read_checkpoint_doc(Source, RepId),
+  {error, not_found} = barrel_replicate_checkpoint:read_checkpoint_doc(Target, RepId),
   ok.
 
 history_size(_Config) ->
