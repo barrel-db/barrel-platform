@@ -354,7 +354,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
       RevTree,
       WithRevtree
     ),
-    Fun(Seq, Change, Acc)
+    Fun(Change, Acc)
   end,
   
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOpts)

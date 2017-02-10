@@ -170,9 +170,9 @@ fold_by_id(_Config) ->
   ok.
 
 change_since(_Config) ->
-  Fun = fun(_Seq, Change, Acc) ->
-                  Id = maps:get(id, Change),
-                  {ok, [Id|Acc]}
+  Fun = fun(Change, Acc) ->
+          Id = maps:get(id, Change),
+          {ok, [Id|Acc]}
         end,
   [] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
@@ -190,7 +190,7 @@ change_since(_Config) ->
   ok.
 
 change_deleted(_Config) ->
-  Fun = fun(_Seq, Change, Acc) ->
+  Fun = fun(Change, Acc) ->
           Id = maps:get(id, Change),
           Del = maps:get(deleted, Change, false),
           {ok, [{Id, Del}|Acc]}
@@ -213,8 +213,8 @@ change_deleted(_Config) ->
 
 change_since_include_doc(_Config) ->
   Fun =
-    fun(Seq, Change, Acc) ->
-      {ok, [{Seq, maps:get(doc, Change)} |Acc]}
+    fun(Change, Acc) ->
+      {ok, [{maps:get(seq, Change), maps:get(doc, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
@@ -224,8 +224,8 @@ change_since_include_doc(_Config) ->
   ok.
 
 change_since_many(_Config) ->
-  Fun = fun(Seq, Change, Acc) ->
-            {ok, [{Seq, Change}|Acc]}
+  Fun = fun(Change, Acc) ->
+            {ok, [{maps:get(seq, Change), Change}|Acc]}
         end,
 
   %% No changes. Database is empty.

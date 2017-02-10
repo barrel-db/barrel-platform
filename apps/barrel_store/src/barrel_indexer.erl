@@ -89,7 +89,7 @@ do_refresh_index(Since, State) ->
 
 fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
   Fun = fun
-          (_Seq, Change, {N, Acc}) ->
+          (Change, {N, Acc}) ->
             N2 = N + 1,
             if
               N2 < Max -> {ok, {N2, [Change | Acc]}};

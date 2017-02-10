@@ -74,7 +74,9 @@ write_doc(Target, Doc, History, Metrics) ->
   end.
 
 changes(Source, Since) ->
-  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
+  Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
+            Seq = maps:get(seq, Change),
+            
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
