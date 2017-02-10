@@ -23,6 +23,7 @@
         , maybe_write_checkpoint/1
         , write_checkpoint/1
         , read_checkpoint_doc/2
+        , delete/1
         ]).
 
 
@@ -154,6 +155,15 @@ read_system_doc({Mod, ModState}, Id) ->
   Mod:read_system_doc(ModState, Id);
 read_system_doc(Db, Id) when is_binary(Db) ->
   barrel_db:read_system_doc(Db, Id).
+
+
+delete(Checkpoint) ->
+  RepId = Checkpoint#st.repid,
+  Source = Checkpoint#st.source,
+  Target = Checkpoint#st.target,
+  ok = delete_checkpoint_doc(Source, RepId),
+  ok = delete_checkpoint_doc(Target, RepId),
+  ok.
 
 delete_checkpoint_doc(Db, RepId) ->
   delete_system_doc(Db, checkpoint_docid(RepId)).
