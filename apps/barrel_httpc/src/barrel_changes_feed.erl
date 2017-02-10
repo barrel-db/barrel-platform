@@ -138,7 +138,6 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     {hackney_response, Ref, done} ->
       exit(normal);
     {hackney_response, Ref, Data} when is_binary(Data) ->
-      io:format("got data ~p~n", [Data]),
       decode_data(Data, State);
     {hackney_response, Ref, Error} ->
       lager:error(
