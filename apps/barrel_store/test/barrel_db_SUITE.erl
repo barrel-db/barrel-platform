@@ -35,7 +35,7 @@
   change_since/1,
   change_since_many/1,
   change_since_include_doc/1,
-  revdiff/1,
+  revsdiff/1,
   get_revisions/1,
   put_rev/1,
   change_deleted/1
@@ -52,7 +52,7 @@ all() ->
     change_since,
     change_since_many,
     change_since_include_doc,
-    revdiff,
+    revsdiff,
     put_rev,
     change_deleted
   ].
@@ -260,10 +260,10 @@ change_since_many(_Config) ->
   [] = barrel_local:changes_since(<<"testdb">>, 21, Fun, []),
   ok.
 
-revdiff(_Config) ->
-  Doc = #{ <<"id">> => <<"revdiff">>, <<"v">> => 1},
-  {ok, <<"revdiff">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+revsdiff(_Config) ->
+  Doc = #{ <<"id">> => <<"revsdiff">>, <<"v">> => 1},
+  {ok, <<"revsdiff">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
-  {ok, <<"revdiff">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {ok, [<<"1-missing">>], []} = barrel_local:revsdiff(<<"testdb">>, <<"revdiff">>, [<<"1-missing">>]),
+  {ok, <<"revsdiff">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {ok, [<<"1-missing">>], []} = barrel_local:revsdiff(<<"testdb">>, <<"revsdiff">>, [<<"1-missing">>]),
   ok.
