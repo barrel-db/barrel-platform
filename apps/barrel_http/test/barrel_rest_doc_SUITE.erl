@@ -166,7 +166,7 @@ put_cat() ->
 revsdiff(_Config) ->
   CatRevId = put_cat(),
   Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = test_lib:req(post, "/dbs/testdb/docs/_revs_diff", Request),
+  {200, R} = test_lib:req(post, "/dbs/testdb/revsdiff", Request),
   A = jsx:decode(R, [return_maps]),
   CatDiffs = maps:get(<<"cat">>, A),
   Missing = maps:get(<<"missing">>, CatDiffs),

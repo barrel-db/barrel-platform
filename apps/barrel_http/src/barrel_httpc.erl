@@ -152,7 +152,7 @@ handle_call({delete, DocId, RevId, _Options}, _From, State) ->
 
 handle_call({revsdiff, DocId, RevIds}, _From, State) ->
   DbUrl = State#state.dbid,
-  RevsDiff = <<"/_revs_diff">>,
+  RevsDiff = <<"/revsdiff">>,
   Url = <<DbUrl/binary, RevsDiff/binary>>,
   Request = #{DocId => RevIds},
   {200, R} = req(post, Url, Request),
