@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_changes_feed).
+-module(barrel_httpc_changes).
 
 -export([
   start_link/2,
