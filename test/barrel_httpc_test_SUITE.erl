@@ -71,16 +71,20 @@ all() ->
   ].
 
 init_per_suite(Config) ->
+  {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel_store),
   {ok, _} = application:ensure_all_started(barrel_httpc),
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_httpc:create_database(?DB_URL),
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  _ = barrel_store:create_db(<<"source">>, #{}),
   {ok, Conn} = barrel_httpc:connect(?DB_URL),
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
-  _ = barrel_httpc:delete_database(?DB_URL),
+  ok = barrel_local:delete_db(<<"testdb">>),
+  ok = barrel_local:delete_db(<<"source">>),
   ok.
 
 end_per_suite(Config) ->
