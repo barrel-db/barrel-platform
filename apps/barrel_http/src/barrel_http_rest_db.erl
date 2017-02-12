@@ -72,8 +72,6 @@ route(Req, #state{method= <<"DELETE">>}=State) ->
   {Database, Req2} = cowboy_req:binding(database, Req),
   ok = barrel_local:delete_db(Database),
   barrel_http_reply:json(200, #{ ok => true }, Req2, State);
-route(Req, #state{method= <<"POST">>}) ->
-  barrel_http_rest_doc:handle_post(Req);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
