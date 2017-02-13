@@ -41,7 +41,7 @@
 
 -export([
   get_system_doc/2,
-  put_system_doc/2,
+  put_system_doc/3,
   delete_system_doc/2
 ]).
 
@@ -331,7 +331,7 @@ get_system_doc(Conn, DocId) ->
     Error -> Error
   end.
 
-put_system_doc(Conn, #{ <<"id">> := DocId } = Doc) ->
+put_system_doc(Conn, DocId, Doc) when is_map(Doc) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"system">>, DocId], []),
   Body = jsx:encode(Doc),
   case request(Conn, <<"PUT">>, Url, [], Body) of
@@ -342,7 +342,7 @@ put_system_doc(Conn, #{ <<"id">> := DocId } = Doc) ->
       end;
     Error -> Error
   end;
-put_system_doc(_, _) -> erlang:error({bad_doc, invalid_docid}).
+put_system_doc(_, _, _) -> erlang:error(bad_doc).
 
 delete_system_doc(Conn, DocId) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"system">>, DocId], []),

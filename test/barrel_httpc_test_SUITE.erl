@@ -424,8 +424,8 @@ change_since_many(Config) ->
   ok.
 
 system_docs(_Config) ->
-  Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
-  ok = barrel_httpc:put_system_doc(<<"testdb">>, Doc),
+  Doc = #{<<"v">> => 1},
+  ok = barrel_httpc:put_system_doc(<<"testdb">>, <<"a">>, Doc),
   {ok, Doc} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
   ok = barrel_db:delete_system_doc(<<"testdb">>, <<"a">>),
   {error, not_found} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
