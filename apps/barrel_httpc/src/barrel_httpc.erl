@@ -317,7 +317,6 @@ delete_attachment(Db, DocId, AttId, Options) ->
 attachments(Db, DocId, Options) ->
   barrel_httpc_attachments:attachments(Db, DocId, Options).
 
-
 %% internal
 
   

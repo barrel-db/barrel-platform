@@ -347,7 +347,7 @@ scenario() ->
   ].
 
 read_checkpoint_doc(Db, RepId) ->
-  barrel_db:read_system_doc(Db, checkpoint_docid(RepId)).
+  barrel_db:get_system_doc(Db, checkpoint_docid(RepId)).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.

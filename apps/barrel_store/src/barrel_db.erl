@@ -30,8 +30,8 @@
   changes_since/5,
   changes_since_int/5,
   revsdiff/3,
-  write_system_doc/3,
-  read_system_doc/2,
+  put_system_doc/3,
+  get_system_doc/2,
   delete_system_doc/2,
   query/5,
   query/6,
@@ -419,7 +419,7 @@ update_doc(DbName, DocId, Fun) ->
       gen_server:call(Pid, {update_doc, DocId, Fun})
   end.
 
-write_system_doc(DbName, DocId, Doc) ->
+put_system_doc(DbName, DocId, Doc) ->
   with_db(
     DbName,
     fun(#db{pid=Pid}) ->
@@ -429,7 +429,7 @@ write_system_doc(DbName, DocId, Doc) ->
     end
   ).
 
-read_system_doc(DbName, DocId) ->
+get_system_doc(DbName, DocId) ->
   with_db(
     DbName,
     fun(#db{store=Store}) ->
