@@ -76,8 +76,8 @@ init({RepId, Source0, Target0, Options}) ->
   Metrics = barrel_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-
-  {ok, LastSeq, Metrics2} = barrel_replicate_alg:replicate(Source, Target, StartSeq, Metrics),
+  {LastSeq, Changes} = changes(Source, StartSeq),
+  {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
   Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
   ok = barrel_event:reg(Source),
   State = #st{id=RepId,
@@ -123,7 +123,8 @@ handle_info({'$barrel_event', _, db_updated}, S) ->
   From = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
   Metrics = S#st.metrics,
 
-  {ok, LastSeq, Metrics2} = barrel_replicate_alg:replicate(Source, Target, From, Metrics),
+  {LastSeq, Changes} = changes(Source, From),
+  {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
   Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
   Checkpoint3 = barrel_replicate_checkpoint:maybe_write_checkpoint(Checkpoint2),
 
@@ -148,10 +149,22 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 
 %% TODO: check if the backend is registered or the db exists
-maybe_connect({Backend, Uri}) -> Backend:connect(Uri, []);
-maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri, Options);
+maybe_connect({Backend, Uri}) -> Backend:connect(Uri);
+%% maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri);
 maybe_connect(Db) -> {ok, Db}.
 
 maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.
 
+
+%% =============================================================================
+%% Helper to collect changes since given seq
+%% =============================================================================
+
+changes(Source, Since) ->
+  Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
+            Seq = maps:get(seq, Change),
+            LastSeq = max(Seq, PreviousLastSeq),
+            {ok, {LastSeq, [Change|Changes1]}}
+        end,
+  barrel_db:changes_since(Source, Since, Fun, {Since, []}, [{history, all}]).

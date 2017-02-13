@@ -32,8 +32,7 @@
    ]).
 
 all() ->
-  [
-  %%   one_doc
+  [ %one_doc
   %% , target_not_empty
   %% , deleted_doc
   %% , random_activity
@@ -62,13 +61,13 @@ end_per_suite(Config) ->
 
 
 source_url() ->
-  <<"http://localhost:7080/source">>.
+  <<"http://localhost:7080/dbs/source">>.
 
 source() ->
   {barrel_httpc, source_url()}.
 
 target_url() ->
-  <<"http://localhost:7080/testdb">>.
+  <<"http://localhost:7080/dbs/testdb">>.
 
 target() ->
   {barrel_httpc, target_url()}.
@@ -81,7 +80,11 @@ one_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
+  %% {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(Source, Doc, []),
   {1, [_]} = changes(Source, 0),
@@ -89,7 +92,7 @@ one_doc(Config) ->
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_local:get(Target, <<"a">>, []),
-  ok = barrel_replicate:stop_replication(Pid),
+  ok = barrel_replicate:stop_replication(RepId),
   ok.
 
 changes(Conn, Since) ->

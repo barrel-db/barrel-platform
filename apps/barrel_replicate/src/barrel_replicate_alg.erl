@@ -21,13 +21,11 @@
 ]).
 
 
-replicate(Source, Target, StartSeq, Metrics) ->
-  {LastSeq, Changes} = changes(Source, StartSeq),
-  Results = maps:get(<<"results">>, Changes) ,
+replicate(Source, Target, Changes, Metrics) ->
   {ok, Metrics2} = lists:foldl(fun(C, {ok, Acc}) ->
                            sync_change(Source, Target, C, Acc)
-                       end, {ok, Metrics}, Results),
-  {ok, LastSeq, Metrics2}.
+                       end, {ok, Metrics}, Changes),
+  {ok, Metrics2}.
 
 sync_change(Source, Target, Change, Metrics) ->
   #{id := DocId, changes := History} = Change,
@@ -73,17 +71,6 @@ write_doc(Target, Doc, History, Metrics) ->
       barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
 
-changes(Source, Since) ->
-  Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
-            Seq = maps:get(seq, Change),
-            
-            LastSeq = max(Seq, PreviousLastSeq),
-            {ok, {LastSeq, [Change|Changes1]}}
-        end,
-  {LastSeq, Changes} = changes_since(Source, Since, Fun, {Since, []}),
-  {LastSeq, #{<<"last_seq">> => LastSeq,
-              <<"results">> => Changes}}.
-
 get({Mod, ModState}, Id, Opts) ->
   Mod:get(ModState, Id, Opts);
 get(Db, Id, Opts) when is_binary(Db) ->
@@ -93,11 +80,6 @@ put_rev({Mod, ModState}, Doc, History, Opts) ->
   Mod:put_rev(ModState, Doc, History, Opts);
 put_rev(Db, Doc, History, Opts) when is_binary(Db) ->
   barrel_db:put_rev(Db, Doc, History, Opts).
-
-changes_since({Mod, ModState}, Since, Fun, Acc) ->
-  Mod:changes_since(ModState, Since, Fun, Acc, [{history, all}]);
-changes_since(Db, Since, Fun, Acc) when is_binary(Db) ->
-  barrel_db:changes_since(Db, Since, Fun, Acc, [{history, all}]).
 
 revsdiff({Mod, ModState}, DocId, History) ->
   Mod:revsdiff(ModState, DocId, History);
