@@ -39,7 +39,6 @@ end_per_testcase(_, Config) ->
 
 end_per_suite(_Config) ->
   application:stop(barrel_store),
-  _ = (catch rocksdb:destroy("docs", [])),
   ok.
 
 %% ----------

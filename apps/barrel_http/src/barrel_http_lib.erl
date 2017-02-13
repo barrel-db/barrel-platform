@@ -38,7 +38,6 @@ req(Method, Url, Body) when is_binary(Body) ->
     Error -> Error
   end.
 
-
 has_database(Database) ->
   has_store(Database).
 has_store(Store) ->
