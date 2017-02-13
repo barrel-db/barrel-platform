@@ -169,23 +169,3 @@ maybe_connect(Db) -> {ok, Db}.
 
 maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.
-
-
-%% =============================================================================
-%% Helper to collect changes since a given seq
-%% =============================================================================
-
-changes(Source, Since) ->
-  Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
-            Seq = maps:get(<<"seq">>, Change),
-            LastSeq = max(Seq, PreviousLastSeq),
-            {ok, {LastSeq, [Change|Changes1]}}
-        end,
-  changes_since(Source, Since, Fun, {Since, []}, [{history, all}]).
-
-
-changes_since(Source, Since, Fun, Acc, Options) when is_binary(Source)->
-  barrel_db:changes_since(Source, Since, Fun, Acc, Options);
-changes_since({Mod, Uri}, Since, Fun, Acc, Options) ->
-  {ok, Reply} = Mod:changes_since(Uri, Since, Fun, Acc , Options),
-  Reply.
