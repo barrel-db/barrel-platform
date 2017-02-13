@@ -63,13 +63,7 @@ deleted => boolean()
 %% TODO: to define
 -type fold_options() :: list().
 
--type change() :: #{
-id := docid(),
-seq := non_neg_integer(),
-changes := [revid()],
-revtree => revtree(),
-doc => doc()
-}.
+-type change() :: #{}.
 
 -export_type([
   conn/0,
