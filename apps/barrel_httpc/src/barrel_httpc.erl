@@ -49,9 +49,9 @@
 -type revid() :: binary().
 
 -type revinfo() :: #{
-id := revid(),
-parent := revid(),
-deleted => boolean()
+  id := revid(),
+  parent := revid(),
+  deleted => boolean()
 }.
 
 -type revtree() :: #{ revid() => revinfo() }.
@@ -69,13 +69,7 @@ deleted => boolean()
 %% TODO: to define
 -type fold_options() :: list().
 
--type change() :: #{
-id := docid(),
-seq := non_neg_integer(),
-changes := [revid()],
-revtree => revtree(),
-doc => doc()
-}.
+-type change() :: #{ binary() => any() }.
 
 -export_type([
   conn/0,
