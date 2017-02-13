@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 13. Feb 2017 08:53
 %%%-------------------------------------------------------------------
--module(barreL_peer).
+-module(barrel_peer).
 -author("benoitc").
 
 %% API

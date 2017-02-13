@@ -14,7 +14,7 @@
 
 %% Created by benoitc on 03/09/16.
 
--module(barrel_peer_test_SUITE).
+-module(barrel_peer_SUITE).
 -author("benoitc").
 
 
@@ -37,7 +37,6 @@
   bad_doc/1,
   create_doc/1,
   get_revisions/1,
-  put_rev/1,
   fold_by_id/1,
   order_by_key/1,
   multiple_put/1,
@@ -46,8 +45,7 @@
   change_since/1,
   change_deleted/1,
   change_since_include_doc/1,
-  change_since_many/1,
-  revsdiff/1
+  change_since_many/1
 ]).
 
 all() ->
@@ -58,7 +56,6 @@ all() ->
     bad_doc,
     create_doc,
     get_revisions,
-    put_rev,
     fold_by_id,
     order_by_key,
     multiple_put,
@@ -67,8 +64,7 @@ all() ->
     change_since,
     change_deleted,
     change_since_include_doc,
-    change_since_many,
-    revsdiff
+    change_since_many
   ].
 
 init_per_suite(Config) ->
@@ -82,8 +78,8 @@ init_per_testcase(_, Config) ->
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_peer:delete(?DB_URL),
-  ok = arrel_peer:delete(?DB_URL2),
+  _ = barrel_peer:delete_database(?DB_URL),
+  _ = barrel_peer:delete_database(?DB_URL2),
   ok.
 
 end_per_suite(Config) ->
@@ -153,31 +149,6 @@ get_revisions(Config) ->
   {ok, Doc4} = barrel_peer:get(db(Config), DocId, [{history, true}]),
   Revisions = parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
-
-put_rev(Config) ->
-  Doc = #{<<"v">> => 1},
-  {ok, DocId, RevId} = barrel_peer:post(db(Config), Doc, []),
-  {ok, Doc2} = barrel_peer:get(db(Config), DocId, []),
-  Doc3 = Doc2#{ <<"v">> => 2},
-  {ok, DocId, RevId2} = barrel_peer:put(db(Config), Doc3, []),
-  Doc4_0 = Doc2#{ <<"v">> => 3 },
-  {Pos, _} = parse_revision(RevId),
-  NewRev = revid(Pos +1, RevId, Doc4_0),
-  Doc4 = Doc4_0#{<<"_rev">> => NewRev},
-  io:format("doc is ~p~n", [Doc4]),
-  History = [NewRev, RevId],
-  {ok, DocId, _RevId3} = barrel_peer:put_rev(db(Config), Doc4, History, []),
-  {ok, Doc5} = barrel_peer:get(db(Config), DocId, [{history, true}]),
-  Revisions = parse_revisions(Doc5),
-  Revisions == [RevId2, RevId].
-
-revsdiff(Config) ->
-  Doc = #{ <<"id">> => <<"revsdiff">>, <<"v">> => 1},
-  {ok, <<"revsdiff">>, RevId} = barrel_peer:put(db(Config), Doc, []),
-  Doc2 = Doc#{<<"_rev">> => RevId, <<"v">> => 2},
-  {ok, <<"revsdiff">>, _RevId3} = barrel_peer:put(db(Config), Doc2, []),
-  {ok, [<<"1-missing">>], []} = barrel_peer:revsdiff(db(Config), <<"revsdiff">>, [<<"1-missing">>]),
-  ok.
 
 fold_by_id(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
