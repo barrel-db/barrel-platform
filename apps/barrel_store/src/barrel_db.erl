@@ -30,8 +30,8 @@
   changes_since/5,
   changes_since_int/5,
   revsdiff/3,
-  write_system_doc/3,
-  read_system_doc/2,
+  put_system_doc/3,
+  get_system_doc/2,
   delete_system_doc/2,
   query/5,
   query/6,
@@ -327,7 +327,6 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   WithHistory = proplists:get_value(history, Opts, last) =:= all,
-  WithRevtree =  proplists:get_value(revtree, Opts, false) =:= true,
   
   WrapperFun =
   fun(Key, BinDocInfo, Acc) ->
@@ -337,22 +336,17 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
     RevId = maps:get(current_rev, DocInfo),
     DocId = maps:get(id, DocInfo),
     RevTree = maps:get(revtree, DocInfo),
-    
     Changes = case WithHistory of
                 false -> [RevId];
-                true ->  barrel_revtree:history(RevId, RevTree)
+                true -> barrel_revtree:history(RevId, RevTree)
               end,
     
     %% create change
-    Change = change_with_revtree(
-      change_with_doc(
-        changes_with_deleted(
-          #{ id => DocId, seq => Seq, changes => Changes}, RevId, RevTree
-        ),
-        DocId, RevId, Db, ReadOptions, IncludeDoc
+    Change = change_with_doc(
+      changes_with_deleted(
+        #{ <<"id">> => DocId, <<"seq">> => Seq, <<"changes">> => Changes}, RevId, RevTree
       ),
-      RevTree,
-      WithRevtree
+      DocId, RevId, Db, ReadOptions, IncludeDoc
     ),
     Fun(Change, Acc)
   end,
@@ -361,15 +355,10 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   after rocksdb:release_snapshot(Snapshot)
   end.
 
-change_with_revtree(Change, DocInfo, true) ->
-  Change#{revtree => maps:get(revtree, DocInfo)};
-change_with_revtree(Change, _DocInfo, false) ->
-  Change.
-
 change_with_doc(Change, DocId, RevId, Db, ReadOptions, true) ->
   case get_doc_rev(Db, DocId, RevId, ReadOptions) of
-    {ok, Doc} -> Change#{ doc => Doc };
-    {error, not_found} -> Change#{ doc => {error, missing} }
+    {ok, Doc} -> Change#{ <<"doc">> => Doc };
+    {error, not_found} -> Change#{ <<"doc">> => #{ <<"error">> => <<"missing">> } }
   end;
 
 change_with_doc(Change, _DocId, _RevId, _Ref, _ReadOptions, false) ->
@@ -378,7 +367,7 @@ change_with_doc(Change, _DocId, _RevId, _Ref, _ReadOptions, false) ->
 changes_with_deleted(Change, RevId, RevTree) ->
   {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
   case RevInfo of
-    #{ deleted := true} -> Change#{deleted => true};
+    #{ deleted := true} -> Change#{<<"deleted">> => true};
     _ -> Change
   end.
 
@@ -430,7 +419,7 @@ update_doc(DbName, DocId, Fun) ->
       gen_server:call(Pid, {update_doc, DocId, Fun})
   end.
 
-write_system_doc(DbName, DocId, Doc) ->
+put_system_doc(DbName, DocId, Doc) ->
   with_db(
     DbName,
     fun(#db{pid=Pid}) ->
@@ -440,7 +429,7 @@ write_system_doc(DbName, DocId, Doc) ->
     end
   ).
 
-read_system_doc(DbName, DocId) ->
+get_system_doc(DbName, DocId) ->
   with_db(
     DbName,
     fun(#db{store=Store}) ->

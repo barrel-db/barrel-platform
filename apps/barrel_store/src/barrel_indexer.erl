@@ -107,7 +107,7 @@ fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
 
 process_changes(Changes, State0 = #{ db := Db }) ->
   #{ update_seq := LastSeq } = State2 = lists:foldl(
-    fun(Change = #{ seq := Seq }, State = #{ update_seq := OldSeq}) ->
+    fun(Change = #{ <<"seq">> := Seq }, State = #{ update_seq := OldSeq}) ->
       {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Db),
       lager:debug(
         "~s: processed changed in ~p, ~n - to add:~n~p~n - to del:~n~p",
@@ -212,8 +212,8 @@ merge([], _DocId, _Op, _Fun, _Db, Acc) ->
   Acc.
 
 analyze(Change, Db) ->
-  Doc = maps:get(doc, Change),
-  Del = maps:get(deleted, Change, false),
+  Doc = maps:get(<<"doc">>, Change),
+  Del = maps:get(<<"deleted">>, Change, false),
   DocId = barrel_doc:id(Doc),
   OldPaths = case get_last_doc(Db, DocId) of
                {ok, OldPaths1} -> OldPaths1;

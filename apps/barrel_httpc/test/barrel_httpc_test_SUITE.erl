@@ -46,7 +46,8 @@
   change_deleted/1,
   change_since_include_doc/1,
   change_since_many/1,
-  revsdiff/1
+  revsdiff/1,
+  system_docs/1
 ]).
 
 all() ->
@@ -421,6 +422,15 @@ change_since_many(Config) ->
         {20, #{<<"id">> := <<"doc20">>}}]} = barrel_httpc:changes_since(db(Config), 19, Fun, [], []),
   {ok, []} = barrel_httpc:changes_since(db(Config), 21, Fun, [], []),
   ok.
+
+system_docs(_Config) ->
+  Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  ok = barrel_httpc:put_system_doc(<<"testdb">>, Doc),
+  {ok, Doc} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
+  ok = barrel_db:delete_system_doc(<<"testdb">>, <<"a">>),
+  {error, not_found} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
+  ok.
+
 
 %% internal
 

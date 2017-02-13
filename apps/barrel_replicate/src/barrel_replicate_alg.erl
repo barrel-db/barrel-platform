@@ -28,7 +28,7 @@ replicate(Source, Target, Changes, Metrics) ->
   {ok, Metrics2}.
 
 sync_change(Source, Target, Change, Metrics) ->
-  #{id := DocId, changes := History} = Change,
+  #{<<"id">> := DocId, <<"changes">> := History} = Change,
   {ok, MissingRevisions, _PossibleAncestors} = revsdiff(Target, DocId, History),
   Metrics2 = lists:foldr(fun(Revision, Acc) ->
                              sync_revision(Source, Target, DocId, Revision, Acc)

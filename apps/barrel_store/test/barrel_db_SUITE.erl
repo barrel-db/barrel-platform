@@ -171,7 +171,7 @@ fold_by_id(_Config) ->
 
 change_since(_Config) ->
   Fun = fun(Change, Acc) ->
-          Id = maps:get(id, Change),
+          Id = maps:get(<<"id">>, Change),
           {ok, [Id|Acc]}
         end,
   [] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
@@ -191,8 +191,8 @@ change_since(_Config) ->
 
 change_deleted(_Config) ->
   Fun = fun(Change, Acc) ->
-          Id = maps:get(id, Change),
-          Del = maps:get(deleted, Change, false),
+          Id = maps:get(<<"id">>, Change),
+          Del = maps:get(<<"deleted">>, Change, false),
           {ok, [{Id, Del}|Acc]}
         end,
   [] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
@@ -214,7 +214,7 @@ change_deleted(_Config) ->
 change_since_include_doc(_Config) ->
   Fun =
     fun(Change, Acc) ->
-      {ok, [{maps:get(seq, Change), maps:get(doc, Change)} |Acc]}
+      {ok, [{maps:get(<<"seq">>, Change), maps:get(<<"doc">>, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
@@ -225,7 +225,7 @@ change_since_include_doc(_Config) ->
 
 change_since_many(_Config) ->
   Fun = fun(Change, Acc) ->
-            {ok, [{maps:get(seq, Change), Change}|Acc]}
+            {ok, [{maps:get(<<"seq">>, Change), Change}|Acc]}
         end,
 
   %% No changes. Database is empty.
@@ -249,14 +249,14 @@ change_since_many(_Config) ->
   All = barrel_local:changes_since(<<"testdb">>, 0, Fun, [], [{history, all}]),
   20 = length(All),
   %% History for doc1 includes creation and deletion
-  {21, #{changes := HistoryDoc1}} = hd(All),
+  {21, #{<<"changes">> := HistoryDoc1}} = hd(All),
   2 = length(HistoryDoc1),
   
-  [{21, #{id := <<"doc1">>}},
-   {20, #{id := <<"doc20">>}},
-   {19, #{id := <<"doc19">>}}] = barrel_local:changes_since(<<"testdb">>, 18, Fun, []),
-  [{21, #{id := <<"doc1">>}},
-   {20, #{id := <<"doc20">>}}] = barrel_local:changes_since(<<"testdb">>, 19, Fun, []),
+  [{21, #{<<"id">> := <<"doc1">>}},
+   {20, #{<<"id">> := <<"doc20">>}},
+   {19, #{<<"id">> := <<"doc19">>}}] = barrel_local:changes_since(<<"testdb">>, 18, Fun, []),
+  [{21, #{<<"id">> := <<"doc1">>}},
+   {20, #{<<"id">> := <<"doc20">>}}] = barrel_local:changes_since(<<"testdb">>, 19, Fun, []),
   [] = barrel_local:changes_since(<<"testdb">>, 21, Fun, []),
   ok.
 
