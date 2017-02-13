@@ -13,7 +13,7 @@
 %% the License.
 
 
--module(barrel_peer_changes_test_SUITE).
+-module(barrel_peer_changes_SUITE).
 -author("benoitc").
 
 
