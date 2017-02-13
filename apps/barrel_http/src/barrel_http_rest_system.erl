@@ -134,16 +134,11 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 get_resource(Req, #state{doc=Doc}=State) ->
   barrel_http_reply:doc(Doc, Req, State).
 
-create_resource(Req, State = #state{database=Database}) ->
+create_resource(Req, State = #state{database=Database, docid=DocId}) ->
   {ok, Body, Req2} = cowboy_req:body(Req),
   Doc = jsx:decode(Body, [return_maps]),
-  case maps:find(<<"id">>, Doc) of
-    {ok, _} ->
-      ok = barrel_db:put_system_doc(Database, Doc),
-      barrel_http_reply:doc(#{ok => true}, Req2, State);
-    error ->
-      barrel_http_reply:error(400, Req2, State)
-  end.
+  ok = barrel_db:put_system_doc(Database, DocId, Doc),
+  barrel_http_reply:doc(#{ok => true}, Req2, State).
 
 delete_resource(Req, State = #state{database=Database, docid=DocId}) ->
   ok = barrel_db:delete_system_doc(Database, DocId),

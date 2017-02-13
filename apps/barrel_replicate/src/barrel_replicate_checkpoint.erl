@@ -141,12 +141,12 @@ read_last_seq(Db, RepId) ->
   end.
 
 write_checkpoint_doc(Db, RepId, Checkpoint) ->
-  put_system_doc(Db, Checkpoint#{ <<"id">> => checkpoint_docid(RepId) }).
+  put_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
 
-put_system_doc({Mod, ModState}, Doc) ->
-  Mod:put_system_doc(ModState, Doc);
-put_system_doc(Db, Doc) when is_binary(Db) ->
-  barrel_db:put_system_doc(Db, Doc).
+put_system_doc({Mod, ModState}, Id, Doc) ->
+  Mod:put_system_doc(ModState, Id, Doc);
+put_system_doc(Db, Id, Doc) when is_binary(Db) ->
+  barrel_db:put_system_doc(Db, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
   get_system_doc(Db, checkpoint_docid(RepId)).
