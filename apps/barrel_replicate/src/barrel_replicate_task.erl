@@ -77,20 +77,22 @@ init({RepId, Source0, Target0, Options}) ->
   Metrics = barrel_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-  {ok, {LastSeq, Changes}} = changes(Source, StartSeq),
+  {LastSeq, Changes} = changes(Source, StartSeq),
   {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
   Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
 
-  %% ok = barrel_event:reg(Source),
   Self = self(),
   Callback =
     fun(Change) ->
         Self ! {change, Change}
     end,
-  SseOptions = #{since => 0, mode => sse, changes_cb => Callback },
-  %% TODO to refactore to accept also barrel_store module
-  {barrel_httpc, Conn} = Source,
-  {ok, Pid} = barrel_httpc_changes:start_link(Conn, SseOptions),
+  SseOptions = #{since => LastSeq, mode => sse, changes_cb => Callback },
+  {ok, Pid} = case Source of
+                {barrel_httpc, Conn} ->
+                  barrel_httpc_changes:start_link(Conn, SseOptions);
+                Db ->
+                  barrel_local_changes:start_link(Db, SseOptions)
+              end,
 
   State = #st{id=RepId,
               source=Source,
@@ -153,7 +155,6 @@ terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
     [RepId, _Reason]
   ),
   ok = barrel_replicate_checkpoint:write_checkpoint(State#st.checkpoint),
-  ok = barrel_event:unreg(),
   %% close the connections
   [maybe_close(Conn) || Conn <- [Source, Target]],
   ok.
@@ -189,4 +190,5 @@ changes(Source, Since) ->
 changes_since(Source, Since, Fun, Acc, Options) when is_binary(Source)->
   barrel_db:changes_since(Source, Since, Fun, Acc, Options);
 changes_since({Mod, Uri}, Since, Fun, Acc, Options) ->
-  Mod:changes_since(Uri, Since, Fun, Acc , Options).
+  {ok, Reply} = Mod:changes_since(Uri, Since, Fun, Acc , Options),
+  Reply.
