@@ -39,6 +39,12 @@
   attachments/3
 ]).
 
+-export([
+  get_system_doc/2,
+  put_system_doc/2,
+  delete_system_doc/2
+]).
+
 -include_lib("hackney/include/hackney_lib.hrl").
 
 
@@ -316,6 +322,35 @@ delete_attachment(Db, DocId, AttId, Options) ->
 
 attachments(Db, DocId, Options) ->
   barrel_httpc_attachments:attachments(Db, DocId, Options).
+
+
+get_system_doc(Conn, DocId) ->
+  Url = barrel_httpc_lib:make_url(Conn, [<<"system">>, DocId], []),
+  case request(Conn, <<"GET">>, Url) of
+    {ok, 200, _, JsonBody} -> {ok, jsx:decode(JsonBody, [return_maps])};
+    Error -> Error
+  end.
+
+put_system_doc(Conn, #{ <<"id">> := DocId } = Doc) ->
+  Url = barrel_httpc_lib:make_url(Conn, [<<"system">>, DocId], []),
+  Body = jsx:encode(Doc),
+  case request(Conn, <<"PUT">>, Url, [], Body) of
+    {ok, Status, _, _JsonBody}=Resp ->
+      case lists:member(Status, [200, 201]) of
+        true -> ok;
+        false -> {error, {bad_response, Resp}}
+      end;
+    Error -> Error
+  end;
+put_system_doc(_, _) -> erlang:error({bad_doc, invalid_docid}).
+
+delete_system_doc(Conn, DocId) ->
+  Url = barrel_httpc_lib:make_url(Conn, [<<"system">>, DocId], []),
+  case request(Conn, <<"DELETE">>, Url) of
+    {ok, 200, _, _JsonBody} -> ok;
+    Error -> Error
+  end.
+
 
 %% internal
 
