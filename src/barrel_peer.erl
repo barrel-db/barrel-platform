@@ -63,7 +63,14 @@ deleted => boolean()
 %% TODO: to define
 -type fold_options() :: list().
 
--type change() :: #{}.
+%% a change is under the following form
+%% #{
+%%   <<"id">> := binary(),  % id of the document updated
+%%   <<"seq">> := non_neg_integer(), % sequence of the change
+%%   <<"changes">> => [revid(], % revision id of the change or the full history if history is true (from last to first),
+%%   <<"deleted">> => true | false % present if deleted
+%%}
+-type change() :: #{ binary() => any() }.
 
 -export_type([
   conn/0,
@@ -164,6 +171,13 @@ fold_by_path(Conn, Path, Fun, AccIn, Options) ->
   barrel_httpc_fold:fold_by_path(Conn, Path, Fun, AccIn, Options).
 
 %% @doc fold all changes since last sequence
+%% a change given to the fold function is under the following form
+%% #{
+%%   <<"id">> := binary(),  % id of the document updated
+%%   <<"seq">> := non_neg_integer(), % sequence of the change
+%%   <<"changes">> => [revid(], % revision id of the change or the full history if history is true (from last to first),
+%%   <<"deleted">> => true | false % present if deleted
+%%}
 -spec changes_since(Conn, Since, Fun, AccIn, Opts) -> AccOut when
   Conn::conn(),
   Since :: non_neg_integer(),

@@ -21,6 +21,14 @@ change_cb => fun( (barrel_peer:change()) -> ok )
 %% If not callback is given, changes are queued in the process and need
 %% to be fetched using the `fetch_changes' function. When a callback is given,
 %% a change is passed to the function, no state is kept in the process.
+%% %% a change given to the callback or in the list is under the following form
+%% #{
+%%   <<"id">> := binary(),  % id of the document updated
+%%   <<"seq">> := non_neg_integer(), % sequence of the change
+%%   <<"changes">> => [revid(], % revision id of the change or
+%%                              % the full history if history is true (from last to first),
+%%   <<"deleted">> => true | false % present if deleted
+%%}
 -spec start_listener(Conn, ListenerOptions) -> Res when
   Conn :: barrel:conn(),
   ListenerOptions :: listener_options(),
