@@ -1,0 +1,17 @@
+{application, barrel_peer,
+ [{description, "barrel embedded in clients"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { barrel_peer_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    barrel_httpc
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.
