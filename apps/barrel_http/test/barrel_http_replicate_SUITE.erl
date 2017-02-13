@@ -32,11 +32,10 @@
    ]).
 
 all() ->
-  [
-  %%   one_doc
-  %% , target_not_empty
-  %% , deleted_doc
-  %% , random_activity
+  [ one_doc
+  , target_not_empty
+  , deleted_doc
+  , random_activity
   ].
 
 init_per_suite(Config) ->
@@ -62,13 +61,13 @@ end_per_suite(Config) ->
 
 
 source_url() ->
-  <<"http://localhost:7080/source">>.
+  <<"http://localhost:7080/dbs/source">>.
 
 source() ->
   {barrel_httpc, source_url()}.
 
 target_url() ->
-  <<"http://localhost:7080/testdb">>.
+  <<"http://localhost:7080/dbs/testdb">>.
 
 target() ->
   {barrel_httpc, target_url()}.
@@ -81,23 +80,28 @@ one_doc(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
-  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
+  %% {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(Source, Doc, []),
-  {1, [_]} = changes(Source, 0),
+  {1, [_]} = source_changes(0),
   {ok, _} = barrel_local:get(Source, <<"a">>, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
   timer:sleep(200),
   {ok, Doc2} = barrel_local:get(Target, <<"a">>, []),
-  ok = barrel_replicate:stop_replication(Pid),
+  ok = barrel_replicate:stop_replication(RepId),
   ok.
 
-changes(Conn, Since) ->
-  Fun = fun(Seq, Change, {PreviousLastSeq, Changes1}) ->
+source_changes(Since) ->
+  Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
+            Seq  = maps:get(<<"seq">>, Change),
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  barrel_local:changes_since(Conn, Since, Fun, {Since, []}).
+  barrel_local:changes_since(<<"source">>, Since, Fun, {Since, []}).
 
 target_not_empty(Config) ->
   {Source, Target} = repctx(Config),
@@ -107,11 +111,14 @@ target_not_empty(Config) ->
   {ok, <<"targetnotempty">>, RevId} = barrel_local:put(Source, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
 
-  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
   timer:sleep(200),
-  
+
   {ok, Doc2} = barrel_local:get(Target, <<"targetnotempty">>, []),
-  ok = barrel_local:stop_replication(Pid),
+  ok = barrel_local:stop_replication(RepId),
   ok.
 
 deleted_doc(Config) ->
@@ -122,22 +129,28 @@ deleted_doc(Config) ->
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   {ok, DocId, RevId} = barrel_local:put(Source, Doc, []),
 
-  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
   barrel_local:delete(Source, DocId, RevId, []),
   timer:sleep(200),
   {error, not_found} = barrel_local:get(Target, DocId, []),
-  ok = barrel_local:stop_replication(Pid),
+  ok = barrel_local:stop_replication(RepId),
   ok.
 
 random_activity(Config) ->
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Scenario = generate_scenario(),
-  {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
   ExpectedResults = play_scenario(Scenario, Config),
   timer:sleep(1000),
   ok = check_all(ExpectedResults, Config),
-  ok = barrel_replicate:stop_replication(Pid),
+  ok = barrel_replicate:stop_replication(RepId),
   ok.
 
 play_scenario(Scenario, Config) ->
