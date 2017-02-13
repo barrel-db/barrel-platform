@@ -44,6 +44,7 @@
             , source
             , target
             , checkpoint              % checkpoint object
+            , changes_since_pid
             , metrics
             , options
             }).
@@ -76,14 +77,26 @@ init({RepId, Source0, Target0, Options}) ->
   Metrics = barrel_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-  {LastSeq, Changes} = changes(Source, StartSeq),
+  {ok, {LastSeq, Changes}} = changes(Source, StartSeq),
   {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
   Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
-  ok = barrel_event:reg(Source),
+
+  %% ok = barrel_event:reg(Source),
+  Self = self(),
+  Callback =
+    fun(Change) ->
+        Self ! {change, Change}
+    end,
+  SseOptions = #{since => 0, mode => sse, changes_cb => Callback },
+  %% TODO to refactore to accept also barrel_store module
+  {barrel_httpc, Conn} = Source,
+  {ok, Pid} = barrel_httpc_changes:start_link(Conn, SseOptions),
+
   State = #st{id=RepId,
               source=Source,
               target=Target,
               checkpoint=Checkpoint2,
+              changes_since_pid=Pid,
               metrics=Metrics2,
               options=Options},
   ok = barrel_metrics:create_task(Metrics2, Options),
@@ -116,15 +129,15 @@ handle_call(stop, _From, State) ->
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
-handle_info({'$barrel_event', _, db_updated}, S) ->
+handle_info({change, Change}, S) ->
   Source = S#st.source,
   Target = S#st.target,
   Checkpoint = S#st.checkpoint,
-  From = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
   Metrics = S#st.metrics,
+  LastSeq = maps:get(<<"seq">>, Change),
+  true = LastSeq > barrel_replicate_checkpoint:get_last_seq(Checkpoint),
 
-  {LastSeq, Changes} = changes(Source, From),
-  {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
+  {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, [Change], Metrics),
   Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
   Checkpoint3 = barrel_replicate_checkpoint:maybe_write_checkpoint(Checkpoint2),
 
@@ -149,7 +162,10 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 
 %% TODO: check if the backend is registered or the db exists
-maybe_connect({Backend, Uri}) -> Backend:connect(Uri);
+maybe_connect({Backend, Uri}) ->
+  {ok, Conn} = Backend:connect(Uri),
+  {ok, {Backend, Conn}};
+
 %% maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri);
 maybe_connect(Db) -> {ok, Db}.
 
@@ -158,13 +174,19 @@ maybe_close(_) -> ok.
 
 
 %% =============================================================================
-%% Helper to collect changes since given seq
+%% Helper to collect changes since a given seq
 %% =============================================================================
 
 changes(Source, Since) ->
   Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
-            Seq = maps:get(seq, Change),
+            Seq = maps:get(<<"seq">>, Change),
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  barrel_db:changes_since(Source, Since, Fun, {Since, []}, [{history, all}]).
+  changes_since(Source, Since, Fun, {Since, []}, [{history, all}]).
+
+
+changes_since(Source, Since, Fun, Acc, Options) when is_binary(Source)->
+  barrel_db:changes_since(Source, Since, Fun, Acc, Options);
+changes_since({Mod, Uri}, Since, Fun, Acc, Options) ->
+  Mod:changes_since(Uri, Since, Fun, Acc , Options).

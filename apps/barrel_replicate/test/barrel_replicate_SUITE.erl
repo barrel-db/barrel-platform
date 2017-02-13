@@ -35,16 +35,19 @@
    , checkpoints/1
    ]).
 
+
 all() ->
-  [ one_doc
-  , source_not_empty
-  , deleted_doc
-  , persistent_replication
-  , restart_persistent_replication
-  , start_duplicate_replication
-  , random_activity
-  , checkpoints
-  ].
+   [].
+%% all() ->
+%%   [ one_doc
+%%   , source_not_empty
+%%   , deleted_doc
+%%   , persistent_replication
+%%   , restart_persistent_replication
+%%   , start_duplicate_replication
+%%   , random_activity
+%%   , checkpoints
+%%   ].
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_replicate),
