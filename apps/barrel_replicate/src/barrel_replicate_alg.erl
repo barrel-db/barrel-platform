@@ -30,7 +30,7 @@ replicate(Source, Target, StartSeq, Metrics) ->
   {ok, LastSeq, Metrics2}.
 
 sync_change(Source, Target, Change, Metrics) ->
-  #{id := DocId, changes := History} = Change,
+  #{<<"id">> := DocId, <<"changes">> := History} = Change,
   {ok, MissingRevisions, _PossibleAncestors} = revsdiff(Target, DocId, History),
   Metrics2 = lists:foldr(fun(Revision, Acc) ->
                              sync_revision(Source, Target, DocId, Revision, Acc)
@@ -75,7 +75,7 @@ write_doc(Target, Doc, History, Metrics) ->
 
 changes(Source, Since) ->
   Fun = fun(Change, {PreviousLastSeq, Changes1}) ->
-            Seq = maps:get(seq, Change),
+            Seq = maps:get(<<"seq">>, Change),
             
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}

@@ -131,7 +131,7 @@ handle(Req, S) ->
   Fun =
     fun
       (Change, {PreviousLastSeq, Pre}) ->
-        Seq = maps:get(seq, Change),
+        Seq = maps:get(<<"seq">>, Change),
         Chunk = <<  Pre/binary, (jsx:encode(Change))/binary>>,
         ok = cowboy_req:chunk(Chunk, Req),
         LastSeq = max(Seq, PreviousLastSeq),
@@ -193,7 +193,7 @@ reply_eventsource_chunks(Database, Since, Options, Req) ->
   Fun =
     fun
       (Change, {PreviousLastSeq, Pre}) ->
-        Seq = maps:get(seq, Change),
+        Seq = maps:get(<<"seq">>, Change),
         Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
                    "data: ", Pre/binary, (jsx:encode(Change))/binary, "\n",
                    "\n">>,
