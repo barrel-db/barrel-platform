@@ -21,7 +21,7 @@ change_cb => fun( (barrel_peer:change()) -> ok )
 %% If not callback is given, changes are queued in the process and need
 %% to be fetched using the `fetch_changes' function. When a callback is given,
 %% a change is passed to the function, no state is kept in the process.
-%% %% a change given to the callback or in the list is under the following form
+%% a change given to the callback or in the list is under the following form
 %% #{
 %%   <<"id">> := binary(),  % id of the document updated
 %%   <<"seq">> := non_neg_integer(), % sequence of the change
