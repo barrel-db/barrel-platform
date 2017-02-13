@@ -46,8 +46,8 @@ end_per_suite(Config) ->
   Config.
 
 write_and_get(_Config) ->
-  Doc = #{<<"v">> => 1},
-  ok = barrel_db:put_system_doc(<<"testdb">>, <<"a">>, Doc),
+  Doc = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  ok = barrel_db:put_system_doc(<<"testdb">>, Doc),
   {ok, Doc} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
   ok = barrel_db:delete_system_doc(<<"testdb">>, <<"a">>),
   {error, not_found} = barrel_db:get_system_doc(<<"testdb">>, <<"a">>),
