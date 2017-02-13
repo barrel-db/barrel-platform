@@ -1,6 +1,6 @@
 {application, barrel_httpc,
   [{description, "barrel HTTP client"},
-    {vsn, "0.3.0"},
+    {vsn, "0.4.0"},
     {registered, []},
     {mod, {barrel_httpc_app, []}},
     {applications, [
@@ -12,7 +12,7 @@
     ]},
     {env,[]},
     {modules, []},
-    
+
     {maintainers, ["Benoit Chesneau"]},
     {licenses, ["Apache 2"]},
     {links, [
