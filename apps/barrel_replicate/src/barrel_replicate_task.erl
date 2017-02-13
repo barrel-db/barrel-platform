@@ -77,16 +77,13 @@ init({RepId, Source0, Target0, Options}) ->
   Metrics = barrel_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-  {LastSeq, Changes} = changes(Source, StartSeq),
-  {ok, Metrics2} = barrel_replicate_alg:replicate(Source, Target, Changes, Metrics),
-  Checkpoint2 = barrel_replicate_checkpoint:set_last_seq(LastSeq, Checkpoint),
 
   Self = self(),
   Callback =
     fun(Change) ->
         Self ! {change, Change}
     end,
-  SseOptions = #{since => LastSeq, mode => sse, changes_cb => Callback },
+  SseOptions = #{since => StartSeq, mode => sse, changes_cb => Callback },
   {ok, Pid} = case Source of
                 {barrel_httpc, Conn} ->
                   barrel_httpc_changes:start_link(Conn, SseOptions);
@@ -97,12 +94,12 @@ init({RepId, Source0, Target0, Options}) ->
   State = #st{id=RepId,
               source=Source,
               target=Target,
-              checkpoint=Checkpoint2,
+              checkpoint=Checkpoint,
               changes_since_pid=Pid,
-              metrics=Metrics2,
+              metrics=Metrics,
               options=Options},
-  ok = barrel_metrics:create_task(Metrics2, Options),
-  barrel_metrics:update_task(Metrics2),
+  ok = barrel_metrics:create_task(Metrics, Options),
+  barrel_metrics:update_task(Metrics),
   {ok, State}.
 
 handle_call(info, _From, State) ->
