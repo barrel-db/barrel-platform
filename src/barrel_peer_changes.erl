@@ -30,7 +30,7 @@ change_cb => fun( (barrel_peer:change()) -> ok )
 %%   <<"deleted">> => true | false % present if deleted
 %%}
 -spec start_listener(Conn, ListenerOptions) -> Res when
-  Conn :: barrel:conn(),
+  Conn :: barrel_peer:conn(),
   ListenerOptions :: listener_options(),
   ListenerPid :: pid(),
   Res :: {ok, ListenerPid} | {error, any()}.
@@ -49,12 +49,12 @@ stop_listener(ListenerPid) ->
 %% Otherwise the list will always be empty.
 -spec fetch_changes(ListenerPid) -> Changes when
   ListenerPid :: pid(),
-  Changes :: [barrel:change()].
+  Changes :: [barrel_peer:change()].
 fetch_changes(ListenerPid) ->
   barrel_httpc_changes:changes(ListenerPid).
 
 
 %% @doc parse a binary change fetched when start_listener mod is binary
--spec parse_change(binary()) -> barrel:change().
+-spec parse_change(binary()) -> barrel_peer:change().
 parse_change(Change) ->
   barrel_httpc_changes:parse_change(Change).
