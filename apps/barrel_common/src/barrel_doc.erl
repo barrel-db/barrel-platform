@@ -20,7 +20,10 @@
   , encode_revisions/1
   , parse_revisions/1
   , trim_history/3
-  , compare/2]).
+  , compare/2
+  , doc_from_obj/1]).
+
+-include("barrel_common.hrl").
 
 -export([id/1, rev/1, id_rev/1]).
 -export([deleted/1]).
@@ -45,6 +48,9 @@ revid(Pos, Parent, Body0) ->
                      end, Ctx0, [BinPos, Parent, term_to_binary(Body)]),
   Digest = crypto:hash_final(Ctx2),
   << BinPos/binary, "-", (barrel_lib:to_hex(Digest))/binary >>.
+
+
+
 
 parse_revision(<<"">>) -> {0, <<"">>};
 parse_revision(Rev) when is_binary(Rev) ->
@@ -122,6 +128,32 @@ id_rev(_) -> erlang:error(bad_doc).
 deleted(#{ <<"_deleted">> := Del}) when is_boolean(Del) -> Del;
 deleted(_) -> false.
 
+%% @doc return a doc record from a objecy
+%% this is used internally to handle docs
+-spec doc_from_obj(Obj) -> Doc when
+  Obj :: map(),
+  Doc :: #doc{}.
+doc_from_obj(Obj) when is_map(Obj) ->
+  %% normalize the body
+  Body = maps:filter(fun
+                       (<<"">>, _) -> false;
+                       (<<"_deleted">> , _) -> true;
+                       (<<"_", _/binary>>, _) -> false;
+                       (_, _) -> true
+                     end, Obj),
+  Id = case maps:find(<<"id">>, Obj) of
+            {ok, Id0} -> Id0;
+            error -> barrel_lib:uniqid()
+          end,
+  Rev = rev(Obj),
+  Deleted = deleted(Obj),
+  
+  #doc{ id = Id,
+        revs = [Rev],
+        body = Body,
+        deleted = Deleted }.
+
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -167,6 +199,22 @@ parse_revisions_test() ->
     }
   },
   ?assertEqual(Revs, parse_revisions(Body)).
+
+
+doc_from_obj_test() ->
+  Obj = #{ <<"id">> => <<"a">>,
+           <<"_rev">> => <<"rev">>,
+           <<"_deleted">> => true,
+           <<"_rid">> => <<"rid">>,
+           <<"field">> => <<"f">>},
+  Doc =
+    #doc{id = <<"a">>,
+         revs = [<<"rev">>],
+         body = #{ <<"id">> => <<"a">>, <<"_deleted">> => true, <<"field">> => <<"f">> },
+         deleted = true},
+  
+  ?assertEqual(Doc, doc_from_obj(Obj)).
+  
 
   
 -endif.
