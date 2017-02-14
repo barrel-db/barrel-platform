@@ -116,17 +116,7 @@ trails() ->
       get => #{ summary => "Get list of all available documents."
                , produces => ["application/json"]
                , parameters =>
-                  [#{ name => <<"feed">>
-                    , description => <<"Get update feed">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"string">>
-                    , enum => [ <<"normal">>
-                              , <<"longpoll">>
-                              , <<"eventsource">>
-                              ]
-                    }
-                  ,#{ name => <<"since">>
+                  [#{ name => <<"since">>
                     , description => <<"Starting sequence">>
                     , in => <<"path">>
                     , required => false
@@ -205,8 +195,7 @@ param_feed(Req) ->
 init(Type, Req, []) ->
   {Path, Req2} = cowboy_req:path(Req),
   Feed = accepted_feed(Req2),
-  IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>, <<"longpoll">>]),
-  
+  IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>]),
   Route = binary:split(Path, <<"/">>, [global]),
   S1 = #state{path=Path},
   case {Route,  IsChangesFeed} of

@@ -1,4 +1,4 @@
-%% Copyright 2016, Bernard Notarianni
+%% Copyright 2017, Bernard Notarianni
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -58,9 +58,6 @@ check_params(Req, State) ->
 
 parse_params([], State) ->
   {ok, State};
-parse_params([{<<"feed">>, FeedBin}|Tail], State) ->
-  Feed = binary_to_atom(FeedBin, utf8),
-  parse_params(Tail, State#state{feed=Feed});
 parse_params([{<<"since">>, SinceBin}|Tail], State) ->
   Since = binary_to_integer(SinceBin),
   parse_params(Tail, State#state{since=Since});
@@ -98,13 +95,6 @@ init_feed_changes(Req, #state{feed=normal}=S) ->
   Headers = [],
   {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
   {ok, Req2, S};
-
-init_feed_changes(Req, #state{feed=longpoll}=S) ->
-  Headers = [],
-  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
-  {ok, Req3, S2} = init_hearbeat(Req2, S),
-  ok = barrel_event:reg(S2#state.database),
-  {loop, Req3, S2#state{subscribed=true}};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
@@ -154,9 +144,6 @@ handle(Req, S) ->
 info(heartbeat, Req, S) ->
   ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
-
-info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId, feed=longpoll}=S) ->
-  handle(Req, S);
 
 info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId, feed=eventsource}=S) ->
   LastSeq = reply_eventsource_chunks(S#state.database, S#state.last_seq, S#state.options, Req),
