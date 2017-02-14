@@ -72,7 +72,6 @@ find_repid(RepId) ->
 
 init([]) ->
   process_flag(trap_exit, true),
-  %% _ = ets:new(replication_names, [ordered_set, named_table, public]),
   _ = ets:new(replication_ids, [set, named_table, public]),
 
   self() ! init_config,
@@ -94,7 +93,8 @@ handle_call({delete_replication, RepId}, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({'DOWN', _MRef, process, Pid, _Reason}, State) ->
+handle_info({'DOWN', _MRef, process, Pid, Reason}, State) ->
+  lager:info("[~p] replication down pid=~p reason=~p",[?MODULE, Pid, Reason]),
   _ = task_is_down(Pid),
   {noreply, State};
 
@@ -232,10 +232,10 @@ do_delete_replication(RepId, #{ config := Config} = State) ->
 task_is_down(Pid) ->
   case ets:take(replication_ids, Pid) of
     [] -> ok;
-    [{Pid, {Name, Persisted, RepId}}] ->
+    [{Pid, {Persisted, RepId}}] ->
       case Persisted of
         true ->
-          ets:insert(replication_ids, {RepId, {Name, Persisted, nil, nil}});
+          ets:insert(replication_ids, {RepId, {Persisted, nil, nil}});
         false ->
           ets:delete(replication_ids, RepId)
       end,
