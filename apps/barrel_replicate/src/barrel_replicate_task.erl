@@ -78,18 +78,7 @@ init({RepId, Source0, Target0, Options}) ->
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
 
-  Self = self(),
-  Callback =
-    fun(Change) ->
-        Self ! {change, Change}
-    end,
-  SseOptions = #{since => StartSeq, mode => sse, changes_cb => Callback },
-  {ok, Pid} = case Source of
-                {barrel_httpc, Conn} ->
-                  barrel_httpc_changes:start_link(Conn, SseOptions);
-                Db ->
-                  barrel_local_changes:start_link(Db, SseOptions)
-              end,
+  {ok, Pid} = start_changes_feed_process(Source, StartSeq),
 
   State = #st{id=RepId,
               source=Source,
@@ -101,6 +90,21 @@ init({RepId, Source0, Target0, Options}) ->
   ok = barrel_metrics:create_task(Metrics, Options),
   barrel_metrics:update_task(Metrics),
   {ok, State}.
+
+
+start_changes_feed_process(Source, StartSeq) ->
+  Self = self(),
+  Callback =
+    fun(Change) ->
+        Self ! {change, Change}
+    end,
+  SseOptions = #{since => StartSeq, mode => sse, changes_cb => Callback },
+  case Source of
+    {barrel_httpc, Conn} ->
+      barrel_httpc_changes:start_link(Conn, SseOptions);
+    Db ->
+      barrel_local_changes:start_link(Db, SseOptions)
+  end.
 
 handle_call(info, _From, State) ->
   RepId = State#st.id,
@@ -122,6 +126,7 @@ handle_call(info, _From, State) ->
 
   {reply, Info, State};
 
+
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, State}.
 
@@ -142,7 +147,22 @@ handle_info({change, Change}, S) ->
 
   S2 = S#st{checkpoint=Checkpoint3, metrics=Metrics2},
   barrel_metrics:update_task(Metrics2),
-  {noreply, S2}.
+  {noreply, S2};
+
+
+handle_info({'EXIT', Pid, Reason}, #st{changes_since_pid=Pid}=State) ->
+  lager:info("[~p] changes process exited pid=~p reason=~p",[?MODULE, Pid, Reason]),
+  Source = State#st.source,
+  Checkpoint = State#st.checkpoint,
+  LastSeq = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
+  {ok, NewPid} = start_changes_feed_process(Source, LastSeq),
+  lager:info("[~p] changes process restarted pid=~p",[?MODULE, NewPid]),
+  {noreply, State};
+
+handle_info({'EXIT', Pid, Reason}, State) ->
+  lager:info("[~p] exit from process pid=~p reason=~p",[?MODULE, Pid, Reason]),
+  {stop, Reason, State}.
+
 
 %% default gen_server callback
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
