@@ -49,9 +49,6 @@ revid(Pos, Parent, Body0) ->
   Digest = crypto:hash_final(Ctx2),
   << BinPos/binary, "-", (barrel_lib:to_hex(Digest))/binary >>.
 
-
-
-
 parse_revision(<<"">>) -> {0, <<"">>};
 parse_revision(Rev) when is_binary(Rev) ->
   case binary:split(Rev, <<"-">>) of
@@ -214,7 +211,4 @@ doc_from_obj_test() ->
          deleted = true},
   
   ?assertEqual(Doc, doc_from_obj(Obj)).
-  
-
-  
 -endif.

@@ -275,7 +275,6 @@ post(StoreName, Doc, Options) ->
           end,
   put(StoreName, Doc#{<<"id">> => DocId}, Options).
 
-
 fold_by_id(DbName, Fun, Acc, Opts) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, not_found};
