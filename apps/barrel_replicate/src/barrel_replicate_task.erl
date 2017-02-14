@@ -151,16 +151,22 @@ handle_info({change, Change}, S) ->
 
 
 handle_info({'EXIT', Pid, Reason}, #st{changes_since_pid=Pid}=State) ->
-  lager:info("[~p] changes process exited pid=~p reason=~p",[?MODULE, Pid, Reason]),
+  lager:warning("[~s] changes process exited pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   Source = State#st.source,
   Checkpoint = State#st.checkpoint,
   LastSeq = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
-  {ok, NewPid} = start_changes_feed_process(Source, LastSeq),
-  lager:info("[~p] changes process restarted pid=~p",[?MODULE, NewPid]),
-  {noreply, State};
+  case database_exist(Source) of
+    true ->
+      {ok, NewPid} = start_changes_feed_process(Source, LastSeq),
+      lager:warning("[~s] changes process restarted pid=~p",[?MODULE_STRING, NewPid]),
+      {noreply, State};
+    false ->
+      lager:warning("[~s] database ~p does not exist anymore. Stop task pid=~p", [?MODULE_STRING, Source, self()]),
+      {stop, Reason, State}
+  end;
 
 handle_info({'EXIT', Pid, Reason}, State) ->
-  lager:info("[~p] exit from process pid=~p reason=~p",[?MODULE, Pid, Reason]),
+  lager:info("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   {stop, Reason, State}.
 
 
@@ -189,3 +195,19 @@ maybe_connect(Db) -> {ok, Db}.
 
 maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.
+
+
+database_exist(Db) when is_binary(Db) ->
+  case barrel_store:whereis_db(Db) of
+    undefined ->
+      false;
+    _ ->
+      true
+  end;
+database_exist({Backend, Uri}) ->
+  case Backend:database_infos(Uri) of
+    {ok, _} ->
+      true;
+    _ ->
+      false
+  end.
