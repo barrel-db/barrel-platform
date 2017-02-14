@@ -158,7 +158,9 @@ wait_changes(State = #{ parent := Parent , db_ref := Ref}) ->
       sys:handle_system_msg(
         Request, From, Parent, ?MODULE, [],
         {wait_changes, State});
-    {'DOWN', Ref, process, _Pid, _Reason} ->
+    {'DOWN', Ref, process, _Pid, Reason} ->
+      #{ db := #db{ id = DbId } } = State,
+      lager:info("[~p] database down dbid=~p reason=~p (listener pid=~p)", [?MODULE, DbId, Reason, self()]),
       exit(normal)
   end.
 
