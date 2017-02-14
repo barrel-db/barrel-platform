@@ -187,5 +187,5 @@ maybe_connect({Backend, Uri}) ->
 %% maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri);
 maybe_connect(Db) -> {ok, Db}.
 
-maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
+%% maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.

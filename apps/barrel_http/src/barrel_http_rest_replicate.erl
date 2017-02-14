@@ -28,8 +28,8 @@ trails() ->
     #{ get => #{ summary => "Get metics about a replication tasks"
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"name">>
-                     , description => <<"Replication task name">>
+                   [#{ repid => <<"repid">>
+                     , description => <<"Replication task repid">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -38,13 +38,13 @@ trails() ->
        put => #{ summary => "Create a replication task"
                , produces => ["application/json"]
                , parameters =>
-                   [#{ name => <<"body">>
+                   [#{ repid => <<"body">>
                      , description => <<"Parameters for the replication task">>
                      , in => <<"body">>
                      , required => true
                      , type => <<"json">>},
-                    #{ name => <<"name">>
-                     , description => <<"Replication task name">>
+                    #{ repid => <<"repid">>
+                     , description => <<"Replication task repid">>
                      , in => <<"path">>
                      , required => true
                      , type => <<"string">>}
@@ -53,8 +53,8 @@ trails() ->
        delete => #{ summary => "Delete a replication task"
                   , produces => ["application/json"]
                   , parameters =>
-                      [#{ name => <<"name">>
-                        , description => <<"Replication task name">>
+                      [#{ repid => <<"repid">>
+                        , description => <<"Replication task repid">>
                         , in => <<"path">>
                         , required => true
                         , type => <<"string">>}
@@ -65,7 +65,7 @@ trails() ->
     #{ post => #{ summary => "Create a replication tasks"
                 , produces => ["application/json"]
                 , parameters =>
-                     [#{ name => <<"body">>
+                     [#{ repid => <<"body">>
                        , description => <<"Parameters for the replication task">>
                        , in => <<"body">>
                        , required => true
@@ -73,10 +73,10 @@ trails() ->
                     ]
                }
      },
-  [trails:trail("/_replicate", ?MODULE, [], Post),
-   trails:trail("/_replicate/:name", ?MODULE, [], GetPutDelete)].
+  [trails:trail("/replicate", ?MODULE, [], Post),
+   trails:trail("/replicate/:repid", ?MODULE, [], GetPutDelete)].
 
--record(state, {method, name, body, source, target, persisted, started}).
+-record(state, {method, repid, body, source, target, persisted, started}).
 
 init(_Type, Req, []) ->
   {ok, Req, #state{}}.
@@ -95,19 +95,19 @@ route(Req, #state{method= <<"POST">>}=State) ->
 route(Req, #state{method= <<"PUT">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_name(Req, State);
+  check_repid(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  check_name(Req, State);
+  check_repid(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
-check_name(Req, State) ->
-  {Name, Req2} = cowboy_req:binding(name, Req),
-  case barrel_replicate:replication_info(Name) of
+check_repid(Req, State) ->
+  {Repid, Req2} = cowboy_req:binding(repid, Req),
+  case barrel_replicate:replication_info(Repid) of
     {error, not_found} ->
-      barrel_http_reply:error(404, <<"unknown replication task: ", Name/binary>>, Req2, State);
+      barrel_http_reply:error(404, <<"unknown replication task: ", Repid/binary>>, Req2, State);
     _ ->
-      check_body(Req2, State#state{name=Name})
+      check_body(Req2, State#state{repid=Repid})
   end.
 
 check_body(Req, #state{method= <<"POST">>}=State) ->
@@ -170,8 +170,8 @@ check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
 
 
 get_resource(Req, State) ->
-  {Name, Req2} = cowboy_req:binding(name, Req),
-  case barrel_replicate:replication_info(Name) of
+  {Repid, Req2} = cowboy_req:binding(repid, Req),
+  case barrel_replicate:replication_info(Repid) of
     {error, not_found} ->
       barrel_http_reply:error(404, "replication task not found", Req2, State);
     Infos ->
@@ -180,20 +180,26 @@ get_resource(Req, State) ->
   end.
 
 create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
-  {ReqName, Req2} = cowboy_req:binding(name, Req),
+  {ReqRepid, Req2} = cowboy_req:binding(repid, Req),
   SourceConn = {barrel_httpc, SourceUrl},
   TargetConn = {barrel_httpc, TargetUrl},
-  {ok, Name} = case ReqName of
-                 undefined ->
-                   barrel_replicate:start_replication(SourceConn, TargetConn, []);
-                 _ ->
-                   barrel_replicate:start_replication(ReqName, SourceConn, TargetConn, [])
-               end,
-  Doc = #{name => Name},
+  {ok, Rep} = case ReqRepid of
+                undefined ->
+                  RepConfig = #{<<"source">> => SourceConn,
+                                <<"target">> => TargetConn},
+                  barrel_replicate:start_replication(RepConfig, []);
+                _ ->
+                  RepConfig = #{<<"replication_id">> => ReqRepid,
+                                <<"source">> => SourceConn,
+                                <<"target">> => TargetConn},
+                  barrel_replicate:start_replication(RepConfig, [])
+              end,
+  #{<<"replication_id">> := RepId} = Rep,
+  Doc = #{<<"replication_id">> => RepId},
   barrel_http_reply:doc(Doc, Req2, State).
 
-delete_resource(Req, #state{name=Name}=State) ->
-  ok = barrel_replicate:delete_replication(Name),
+delete_resource(Req, #state{repid=Repid}=State) ->
+  ok = barrel_replicate:delete_replication(Repid),
   barrel_http_reply:code(200, Req, State).
 
 %% =============================================================================
