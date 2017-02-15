@@ -161,23 +161,22 @@ handle_info({'EXIT', Pid, Reason}, #st{changes_since_pid=Pid}=State) ->
       lager:warning("[~s] changes process restarted pid=~p",[?MODULE_STRING, NewPid]),
       {noreply, State};
     false ->
-      lager:warning("[~s] database ~p does not exist anymore. Stop task pid=~p", [?MODULE_STRING, Source, self()]),
-      {stop, Reason, State}
+      lager:warning("[~s] database ~p does not exist anymore. Stop task pid=~p",
+                    [?MODULE_STRING, Source, self()]),
+      {stop, normal, State}
   end;
 
 handle_info({'EXIT', Pid, Reason}, State) ->
-  lager:info("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
+  lager:error("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   {stop, Reason, State}.
 
-
-%% default gen_server callback
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_metrics:update_task(State#st.metrics),
   lager:debug(
     "barrel_replicate(~p} terminated: ~p",
     [RepId, _Reason]
   ),
-  ok = barrel_replicate_checkpoint:write_checkpoint(State#st.checkpoint),
+  (catch barrel_replicate_checkpoint:write_checkpoint(State#st.checkpoint)),
   %% close the connections
   [maybe_close(Conn) || Conn <- [Source, Target]],
   ok.
@@ -205,9 +204,7 @@ database_exist(Db) when is_binary(Db) ->
       true
   end;
 database_exist({Backend, Uri}) ->
-  case Backend:database_infos(Uri) of
-    {ok, _} ->
-      true;
-    _ ->
-      false
+  case catch Backend:database_infos(Uri) of
+    {ok, _} -> true;
+    _Else -> false
   end.
