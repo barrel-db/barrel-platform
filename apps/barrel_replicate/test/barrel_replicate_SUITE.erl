@@ -31,6 +31,7 @@
    , persistent_replication/1
    , restart_persistent_replication/1
    , start_duplicate_replication/1
+   , delete_database_being_replicated/1
    , random_activity/1
    , checkpoints/1
    ]).
@@ -43,6 +44,7 @@
    , persistent_replication
    , restart_persistent_replication
    , start_duplicate_replication
+   , delete_database_being_replicated
    , random_activity
    , checkpoints
    ].
@@ -197,6 +199,24 @@ start_duplicate_replication(_Config) ->
   ok = barrel_replicate:delete_replication(RepId),
   ok.
 
+
+delete_database_being_replicated(_Config) ->
+  {ok, _} = barrel_store:create_db(<<"tobedeleted">>, #{}),
+  RepId = <<"sourcedatabasedeleted">>,
+  Options = [],
+  RepConfig = #{<<"replication_id">> => RepId,
+                <<"source">> => <<"tobedeleted">>,
+                <<"target">> => <<"testdb">>},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, Options),
+  Manager = whereis(barrel_replicate),
+  [{<<"sourcedatabasedeleted">>, {false, _Pid, _}}] = ets:lookup(replication_ids, RepId),
+  ok = barrel_store:delete_db(<<"tobedeleted">>),
+  timer:sleep(200),
+  Manager = whereis(barrel_replicate),
+  [] = ets:lookup(replication_ids, RepId),
+  ok = barrel_replicate:delete_replication(RepId),
+  ok.
 
 %% =============================================================================
 %% Complex scenarios

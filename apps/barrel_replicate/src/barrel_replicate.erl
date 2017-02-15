@@ -71,7 +71,6 @@ find_repid(RepId) ->
 
 
 init([]) ->
-  process_flag(trap_exit, true),
   _ = ets:new(replication_ids, [set, named_table, public]),
 
   self() ! init_config,
@@ -94,7 +93,7 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info({'DOWN', _MRef, process, Pid, Reason}, State) ->
-  lager:info("[~p] replication down pid=~p reason=~p",[?MODULE, Pid, Reason]),
+  lager:info("[~s] replication down pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   _ = task_is_down(Pid),
   {noreply, State};
 
@@ -103,7 +102,7 @@ handle_info(init_config, State) ->
   {noreply, State2};
 
 handle_info(Info, State) ->
-  lager:error("received an unknown message, exiting ~p~n", [Info]),
+  lager:error("[~s] received an unknown message, exiting ~p", [?MODULE_STRING, Info]),
   {stop, normal, State}.
 
 terminate(_Reason, _State) ->
