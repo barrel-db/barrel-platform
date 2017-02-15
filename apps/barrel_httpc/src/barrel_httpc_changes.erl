@@ -148,20 +148,24 @@ wait_response(Parent, Ref, Options) ->
       wait_changes(State);
     {hackney_response, Ref, {status, 404, _}} ->
       lager:error("~s not_found ~n", [?MODULE_STRING]),
+      cleanup(Ref, not_found),
       exit(not_found);
     {hackney_response, Ref, {status, Status, Reason}} ->
       lager:error(
         "~s request bad status ~p(~p)~n",
         [?MODULE_STRING, Status, Reason]
       ),
+      cleanup(Ref, {http_error, Status, Reason}),
       exit({http_error, Status, Reason});
     {hackney_response, Ref, {error, Reason}} ->
       lager:error(
         "~s hackney error: ~p~n",
         [?MODULE_STRING, Reason]
       ),
+      cleanup(Ref, Reason),
       exit(Reason())
   after ?TIMEOUT ->
+    cleanup(Ref, timeout),
     exit(timeout)
   end.
 
@@ -173,9 +177,9 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
       Pid ! {changes, Tag, Events},
       wait_changes(NewState);
     {hackney_response, Ref, {headers, _Headers}} ->
-     
       wait_changes(State);
     {hackney_response, Ref, done} ->
+      cleanup(State, "remote stopped"),
       exit(normal);
     {hackney_response, Ref, Data} when is_binary(Data) ->
       decode_data(Data, State);
@@ -184,8 +188,10 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
         "~s hackney error: ~p~n",
         [?MODULE_STRING, Error]
       ),
+      cleanup(State, Error),
       exit(Error);
     stop ->
+      cleanup(State, "listener stopped"),
       exit(normal);
     {system, From, Request} ->
       sys:handle_system_msg(
@@ -193,6 +199,7 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
         {wait_changes, State})
   after ?TIMEOUT ->
     lager:error("~s timeout: ~n", [?MODULE_STRING]),
+    cleanup(State, timeout),
     exit(timeout)
   end.
 
@@ -211,6 +218,15 @@ system_terminate(Reason, _, _, #{ ref := Ref }) ->
 
 system_code_change(Misc, _, _, _) ->
   {ok, Misc}.
+
+
+cleanup(#{ ref := Ref }, Reason) ->
+  cleanup(Ref, Reason);
+cleanup(Ref, Reason) ->
+  lager:info("closing change feed connection: ~p", [Reason]),
+  (catch hackney:close(Ref)),
+  
+  ok.
 
 
 get_changes(State = #{ changes := Q }) ->
