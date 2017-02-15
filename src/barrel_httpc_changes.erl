@@ -127,7 +127,6 @@ init_feed(Parent, Conn, Options) ->
   proc_lib:init_ack(Parent, {ok, self()}),
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
-      io:format("wait response~n", []),
       wait_response(Parent, Ref, Options);
     Error ->
       lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
@@ -173,7 +172,6 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
       Pid ! {changes, Tag, Events},
       wait_changes(NewState);
     {hackney_response, Ref, {headers, _Headers}} ->
-     
       wait_changes(State);
     {hackney_response, Ref, done} ->
       exit(normal);
