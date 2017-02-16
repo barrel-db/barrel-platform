@@ -4,10 +4,9 @@ info:
  title: Barrel-db API
 
  description: A document oriented reactive platform.
- termsOfService: http://helloreverb.com/terms/
 
  contact:
-   email: contact@barre-db.org
+   email: contact@barrel-db.org
    url: https://docs.barrel-db.org
 
  license:
@@ -34,7 +33,7 @@ paths:
      description: Get list of available databases
      responses:
        200:
-         description: list of databases
+         description: List of databases
 
    post:
      tags:
@@ -51,9 +50,9 @@ paths:
             $ref: '#/definitions/DatabaseConfiguration'
      responses:
        201:
-         description: new database created
+         description: New database created
        409:
-         description: conflict - database already exists
+         description: Conflict - database already exists
 
  /dbs/{database}:
 
@@ -71,7 +70,7 @@ paths:
          type: string
      responses:
        200:
-         description: list of databases
+         description: List of databases
 
 
    delete:
@@ -114,9 +113,9 @@ paths:
             $ref: '#/definitions/NewDocument'
      responses:
        201:
-         description: new document created
+         description: New document created
        409:
-         description: conflict - database already exists
+         description: Conflict - database already exists
 
    get:
      tags:
@@ -195,9 +194,9 @@ paths:
          type: string
      responses:
        200:
-         description: document found
+         description: Document found
        404:
-         description: document not found
+         description: Document not found
 
    put:
      tags:
@@ -226,7 +225,7 @@ paths:
             $ref: '#/definitions/Document'
      responses:
        200:
-         description: document updated
+         description: Document updated
        409:
          description: conflict - last revision does not match
 
@@ -256,9 +255,9 @@ paths:
          type: string
      responses:
        200:
-         description: document deleted
+         description: Document deleted
        404:
-         description: document not found
+         description: Document not found
 
  /dbs/{database}/revsdiff:
 
@@ -283,9 +282,9 @@ paths:
             $ref: '#/definitions/Revsdiff'
      responses:
        201:
-         description: new document created
+         description: New document created
        409:
-         description: conflict - database already exists
+         description: Conflict - database already exists
 
  /dbs/{database}/system/{docid}:
 
@@ -309,9 +308,9 @@ paths:
          type: string
      responses:
        200:
-         description: document found
+         description: Document found
        404:
-         description: document not found
+         description: Document not found
 
    put:
      tags:
@@ -340,7 +339,7 @@ paths:
             $ref: '#/definitions/NewDocument'
      responses:
        200:
-         description: document updated
+         description: Document updated
 
  /replicate:
 
@@ -359,9 +358,9 @@ paths:
             $ref: '#/definitions/ReplicationTask'
      responses:
        200:
-         description: information about replication task
+         description: Information about replication task
        404:
-         description: replication task not found
+         description: Replication task not found
 
  /replicate/{repid}:
 
@@ -404,9 +403,9 @@ paths:
          type: string
      responses:
        200:
-         description: information about replication task
+         description: Information about replication task
        404:
-         description: replication task not found
+         description: Replication task not found
 
    delete:
      tags:
@@ -422,9 +421,9 @@ paths:
          type: string
      responses:
        200:
-         description: task deleted
+         description: Task deleted
        404:
-         description: replication task not found
+         description: Replication task not found
  /:
    get:
      tags:
@@ -440,6 +439,7 @@ paths:
        - Server
      procuces:
        - text/html
+     summary: Documentation of the Rest API (Swagger)
      description: Documentation of the Rest API (Swagger)
 
 
