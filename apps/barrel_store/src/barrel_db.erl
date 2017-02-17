@@ -506,11 +506,20 @@ init([DbId, Config]) ->
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
   
+  %% set indexer mode
+  IndexerMode = barrel_lib:to_atom(
+    maps:get(<<"indexer_mode">>, Config, consistent)
+  ),
+  
+  %% validate indexer mode
+  ok = validate_indexer_mode(IndexerMode),
+  
   Db =
     #db{id=DbId,
         store=Store,
         pid=self(),
         conf = Config,
+        indexer_mode = IndexerMode,
         last_rid = LastRid,
         updated_seq = Updated,
         indexed_seq = Indexed,
@@ -521,6 +530,9 @@ init([DbId, Config]) ->
   Db2 = Db#db{indexer = Indexer},
   {ok, Db2}.
 
+validate_indexer_mode(consistent) -> ok;
+validate_indexer_mode(lazy) -> ok;
+validate_indexer_mode(_) -> erlang:error(bad_indexer_mode).
 
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
