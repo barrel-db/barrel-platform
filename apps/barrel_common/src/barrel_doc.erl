@@ -34,11 +34,13 @@
 
 -export_types([docid/0, revid/0]).
 
+%% TODO: normalize the body. Handle deleted apart ?
 revid(Pos, Parent, Body0) ->
   Ctx0 = crypto:hash_init(md5),
   Body = maps:filter(fun
                        (<<"">>, _) -> false;
                        (<<"_deleted">> , _) -> true;
+                       (<<"_attachments">>, _) -> true;
                        (<<"_", _/binary>>, _) -> false;
                        (_, _) -> true
                      end, Body0),
@@ -125,6 +127,8 @@ id_rev(_) -> erlang:error(bad_doc).
 deleted(#{ <<"_deleted">> := Del}) when is_boolean(Del) -> Del;
 deleted(_) -> false.
 
+
+
 %% @doc return a doc record from a objecy
 %% this is used internally to handle docs
 -spec doc_from_obj(Obj) -> Doc when
@@ -134,7 +138,8 @@ doc_from_obj(Obj) when is_map(Obj) ->
   %% normalize the body
   Body = maps:filter(fun
                        (<<"">>, _) -> false;
-                       (<<"_deleted">> , _) -> true;
+                       (<<"_deleted">>, _) -> true;
+                       (<<"_attachments">>, _) -> true;
                        (<<"_", _/binary>>, _) -> false;
                        (_, _) -> true
                      end, Obj),
@@ -142,11 +147,17 @@ doc_from_obj(Obj) when is_map(Obj) ->
             {ok, Id0} -> Id0;
             error -> barrel_lib:uniqid()
           end,
-  Rev = rev(Obj),
-  Deleted = deleted(Obj),
+
+  % TODO: maybe directly handle json object coming
+  % from HTTP from revs? (to parse history)
+  Revs = case maps:find(<<"_rev">>, Obj) of
+           {ok, Rev} -> [Rev];
+           error -> [<<>>]
+         end,
   
+  Deleted = deleted(Obj),
   #doc{ id = Id,
-        revs = [Rev],
+        revs = Revs,
         body = Body,
         deleted = Deleted }.
 

@@ -18,6 +18,7 @@
 
 -export([
   refresh_index/2,
+  refresh_index/1,
   stop/1
 ]).
 
@@ -35,6 +36,8 @@
 
 -include("barrel_store.hrl").
 
+refresh_index(Indexer) ->
+  gen_server:call(Indexer, refresh_index).
 
 refresh_index(Indexer, Since) ->
   gen_server:call(Indexer, {refresh_index, Since}, infinity).
@@ -56,6 +59,10 @@ init([Db, Opts]) ->
   },
   self() ! refresh_index,
   {ok, State}.
+
+handle_call(refresh_index, _From, State = #{ update_seq := LastSeq }) ->
+  {_Reply, NState} = do_refresh_index(LastSeq, State),
+  {noreply, NState};
 
 handle_call({refresh_index, Since}, _From, State) ->
   {Reply, NState} = do_refresh_index(Since, State),
@@ -97,7 +104,7 @@ fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
             end
         end,
   {NChanges, Changes} = barrel_db:changes_since_int(
-    Db, Since, Fun, {0, []}, [{include_doc, true}]
+    Db, Since, Fun, {0, []}, [{include_doc, true}, {meta, true}]
   ),
   lager:debug(
     "~s: fetched ~p changes since ~p:~n~n~p",
@@ -108,24 +115,33 @@ fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
 process_changes(Changes, State0 = #{ db := Db }) ->
   #{ update_seq := LastSeq } = State2 = lists:foldl(
     fun(Change = #{ <<"seq">> := Seq }, State = #{ update_seq := OldSeq}) ->
-      {ToAdd, ToDel, DocId, FullPaths} = analyze(Change, Db),
+      {ToAdd, ToDel, Rid, FullPaths} = analyze(Change, Db),
       lager:debug(
         "~s: processed changed in ~p, ~n - to add:~n~p~n - to del:~n~p",
         [?MODULE_STRING, Db#db.name, ToAdd, ToDel]
       ),
-      ForwardOps = merge_forward_paths(ToAdd, ToDel, DocId, Db),
-      ReverseOps = merge_reverse_paths(ToAdd, ToDel, DocId, Db),
-
-      ok = update_index(Db, ForwardOps, ReverseOps, DocId, FullPaths),
+      ForwardOps = merge_forward_paths(ToAdd, ToDel, Rid, Db),
+      ReverseOps = merge_reverse_paths(ToAdd, ToDel, Rid, Db),
+      
+      ok = update_index(Db, ForwardOps, ReverseOps, Rid, FullPaths),
       State#{ update_seq => erlang:max(Seq, OldSeq) }
     end,
     State0,
     Changes
   ),
+  
+  %% update the index
+  ok = rocksdb:put(
+    Db#db.store, barrel_keys:db_meta_key("indexed_seq"), term_to_binary(LastSeq),
+    [{sync, true}]
+  ),
+  ets:update_element(barrel_dbs, Db#db.id, {#db.indexed_seq, LastSeq}),
+  Db#db.pid ! {index_updated, LastSeq},
+  
   {{ok, LastSeq}, State2}.
 
 
-update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, DocId, FullPaths) ->
+update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, Rid, FullPaths) ->
   Ops = prepare_index(
     ForwardOps, fun barrel_keys:idx_forward_path_key/1, DbId,
     prepare_index(
@@ -137,7 +153,7 @@ update_index(#db{id=DbId, store=Store}, ForwardOps, ReverseOps, DocId, FullPaths
     [] -> ok;
     _ ->
       Batch = [
-        {put, barrel_keys:idx_last_doc_key(DocId), term_to_binary(FullPaths)}
+        {put, barrel_keys:idx_last_doc_key(Rid), term_to_binary(FullPaths)}
       ] ++ Ops,
       rocksdb:write(Store, Batch, [{sync, true}])
   end.
@@ -155,8 +171,8 @@ prepare_index([], _KeyFun, _DbId, Acc) ->
 
 last_index_seq(#db{ indexed_seq = Seq}) -> Seq.
 
-get_last_doc(#db{store=Store}, DocId) ->
-  case rocksdb:get(Store, barrel_keys:idx_last_doc_key(DocId), []) of
+get_last_doc(#db{store=Store}, Rid) ->
+  case rocksdb:get(Store, barrel_keys:idx_last_doc_key(Rid), []) of
     {ok, BinVal} -> {ok, binary_to_term(BinVal)};
     Error -> Error
   end.
@@ -173,23 +189,23 @@ get_forward_path(#db{store=Store}, Path) ->
     Error -> Error
   end.
 
-merge_forward_paths(ToAdd, ToDel, DocId, Db) ->
+merge_forward_paths(ToAdd, ToDel, Rid, Db) ->
   ToAdd1 = lists:usort([lists:reverse(P) || P <- ToAdd]),
   ToDel1 = lists:usort([lists:reverse(P) || P <- ToDel]),
-  Ops0 = merge(ToAdd1,  DocId, add, fun get_forward_path/2, Db, []),
-  merge(ToDel1, DocId, del, fun get_forward_path/2, Db, Ops0).
+  Ops0 = merge(ToAdd1,  Rid, add, fun get_forward_path/2, Db, []),
+  merge(ToDel1, Rid, del, fun get_forward_path/2, Db, Ops0).
 
-merge_reverse_paths(ToAdd, ToDel, DocId, Db) ->
-  Ops0 = merge(ToAdd, DocId, add, fun get_reverse_path/2, Db, []),
-  merge(ToDel, DocId, del, fun get_reverse_path/2, Db, Ops0).
+merge_reverse_paths(ToAdd, ToDel, Rid, Db) ->
+  Ops0 = merge(ToAdd, Rid, add, fun get_reverse_path/2, Db, []),
+  merge(ToDel, Rid, del, fun get_reverse_path/2, Db, Ops0).
 
 
-merge([Path | Rest], DocId, Op, Fun, Db, Acc) ->
+merge([Path | Rest], Rid, Op, Fun, Db, Acc) ->
   case Fun(Db, Path) of
     {ok, Entries} ->
       Entries2 = case Op of
-                   add -> lists:usort([DocId | Entries]) ;
-                   del -> Entries -- [DocId]
+                   add -> lists:usort([Rid | Entries]) ;
+                   del -> Entries -- [Rid]
                  end,
       Sz = length(Entries2),
       Acc2 = if
@@ -198,35 +214,36 @@ merge([Path | Rest], DocId, Op, Fun, Db, Acc) ->
                true ->
                  [{delete, Path} | Acc]
              end,
-      merge(Rest, DocId, Op, Fun, Db, Acc2);
+      merge(Rest, Rid, Op, Fun, Db, Acc2);
     not_found ->
       Acc2 = case Op of
                add ->
-                 [{put, Path, [DocId]} | Acc];
+                 [{put, Path, [Rid]} | Acc];
                del ->
                  Acc
              end,
-      merge(Rest, DocId, Op, Fun, Db, Acc2)
+      merge(Rest, Rid, Op, Fun, Db, Acc2)
   end;
-merge([], _DocId, _Op, _Fun, _Db, Acc) ->
+merge([], _Rid, _Op, _Fun, _Db, Acc) ->
   Acc.
 
 analyze(Change, Db) ->
   Doc = maps:get(<<"doc">>, Change),
   Del = maps:get(<<"deleted">>, Change, false),
-  DocId = barrel_doc:id(Doc),
-  OldPaths = case get_last_doc(Db, DocId) of
+  Rid = barrel_db:decode_rid(maps:get(<<"_rid">>, Doc)),
+
+  OldPaths = case get_last_doc(Db, Rid) of
                {ok, OldPaths1} -> OldPaths1;
                not_found -> []
              end,
   case Del of
     true ->
-      {[], OldPaths, DocId, []};
+      {[], OldPaths, Rid, []};
     false ->
       Paths = barrel_json:flatten(Doc),
       Removed = OldPaths -- Paths,
       Added = Paths -- OldPaths,
-      {Added, Removed, DocId, Paths}
+      {Added, Removed, Rid, Paths}
   end.
 
 

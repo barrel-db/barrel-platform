@@ -21,6 +21,8 @@
   pid = nil,
   store = nil,
   indexer = nil,
+  indexer_mode = consistent,
+  last_rid = 0,
   updated_seq = 0,
   indexed_seq = 0,
   docs_count = 0,
