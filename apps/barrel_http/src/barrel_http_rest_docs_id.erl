@@ -141,19 +141,21 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 create_resource(Req, State) ->
   #state{ database=Database, body=Json, method=Method} = State,
+  {AsyncStr, _} = cowboy_req:qs_val(<<"async">>, Req),
+  Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel_local:post(Database, Json, []), Req};
+                       {barrel_local:post(Database, Json, [{async, Async}]), Req};
                      <<"PUT">> ->
                        {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           {barrel_local:put(Database, Json, []), Req3 };
+                           {barrel_local:put(Database, Json, [{async, Async}]), Req3 };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           {barrel_local:put_rev(Database, Doc, History, []), Req3 }
+                           {barrel_local:put_rev(Database, Doc, History, [{async, Async}]), Req3 }
                        end
                    end,
   case Result of

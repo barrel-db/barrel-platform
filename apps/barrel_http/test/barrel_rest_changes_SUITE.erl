@@ -138,6 +138,7 @@ test_eventsource(Url, Headers) ->
   Id5 = post_anonymous(), % seq=5
 
   Msgs = collect_msgs_from_hackney([], 6),
+  lager:info("messages are ~p~n", [Msgs]),
   [[200, <<"OK">>], _Headers, ChangeSeq2, ChangeSeq3, ChangeSeq4, ChangeSeq5] = Msgs,
 
   {<<"2">>, #{<<"id">> := Id2}} = parse_event_source(ChangeSeq2),
@@ -166,6 +167,7 @@ collect_msgs_from_hackney(Msgs, N) ->
     {hackney_response, _Ref, <<"\n">>} ->
       collect_msgs_from_hackney(Msgs, N);
     {hackney_response, _Ref, Bin} ->
+      lager:info("collected ~p~n", [Bin]),
       collect_msgs_from_hackney([Bin|Msgs], N-1);
     Else ->
       {error, {unexpected_message, Else}}

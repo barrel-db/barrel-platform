@@ -60,6 +60,7 @@ query(_, _, _, _, _, _) ->
 
 query1(#db{store=Store}=Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
   Max = proplists:get_value(limit_to_last, Opts, 0),
+  WithMeta = proplists:get_value(meta, Opts, 0),
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOptions =
@@ -71,28 +72,31 @@ query1(#db{store=Store}=Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
   WrapperFun =
     fun(_KeyBin, BinEntries, Acc) ->
       Entries = binary_to_term(BinEntries),
-      fold_entries(Entries, Fun, Path, Db, ReadOptions, Acc)
+      fold_entries(Entries, Fun, Path, WithMeta, Db, ReadOptions, Acc)
     end,
 
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOptions)
   after rocksdb:release_snapshot(Snapshot)
   end.
 
-fold_entries([DocId | Rest], Fun, Path, Db, ReadOptions, Acc) ->
-  Res = barrel_db:get_doc1(Db, DocId, <<>>, false, 0, [], ReadOptions),
+fold_entries([RID | Rest], Fun, Path, WithMeta, Db = #db{store=Store}, ReadOptions, Acc) ->
+  Res = rocksdb:get(Store, barrel_keys:res_key(RID), ReadOptions),
   case Res of
-    {ok, Doc} ->
+    {ok, Bin} ->
+      DocInfo = binary_to_term(Bin),
+      DocId = maps:get(id, DocInfo),
+      {ok, Doc} = barrel_db:get_current_revision(DocInfo, WithMeta),
       Val = barrel_json:get(Path, Doc),
       case Fun(DocId, Doc, Val, Acc) of
         {ok, Acc2} ->
-          fold_entries(Rest, Fun, Path, Db, ReadOptions, Acc2);
+          fold_entries(Rest, Fun, Path, WithMeta, Db, ReadOptions, Acc2);
         Else ->
           Else
       end;
-    _ ->
+    _Else ->
       {ok, Acc}
   end;
-fold_entries([], _Fun, _Path, _Ref, _ReadOptions, Acc) ->
+fold_entries([], _Fun, _Path, _WithMeta, _Db, _ReadOptions, Acc) ->
   {ok, Acc}.
 
 valid_path(<< $/, _/binary >> = Path) -> << $$, $/, Path/binary >>;

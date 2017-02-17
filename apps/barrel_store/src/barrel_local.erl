@@ -148,6 +148,8 @@
 
 -deprecated([create_db/2]).
 
+-include_lib("barrel_common/include/barrel_common.hrl").
+
 create_db(DbId, Config) ->
   lager:warning("barrel_db:create/2 is deprecated", []),
   barrel_store:create_db(Config#{ <<"database_id">> => DbId }).
@@ -185,8 +187,11 @@ get(Db, DocId, Options) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put(Db, Doc, Options) ->
-  barrel_db:put(Db, Doc, Options).
+put(Db, Doc, Options) when is_map(Doc) ->
+  ok = validate_docid(Doc),
+  barrel_db:update_doc(Db, barrel_doc:doc_from_obj(Doc), Options);
+put(_,  _, _) ->
+  erlang:error(badarg).
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
@@ -196,8 +201,12 @@ put(Db, Doc, Options) ->
   History :: [rev()],
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Db, Doc, History, Options) ->
-  barrel_db:put_rev(Db, Doc, History, Options).
+put_rev(Db, Doc, History, Options) when is_map(Doc) ->
+  ok = validate_docid(Doc),
+  Doc2 = barrel_doc:doc_from_obj(Doc),
+  barrel_db:update_doc(Db, Doc2#doc{ revs = History }, [{with_conflict, true} | Options]);
+put_rev(_, _, _, _) ->
+  erlang:error(badarg).
 
 %% @doc delete a document
 -spec delete(Db, DocId, RevId, Options) -> Res when
@@ -207,7 +216,7 @@ put_rev(Db, Doc, History, Options) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 delete(Db, DocId, RevId, Options) ->
-  barrel_db:delete(Db, DocId, RevId, Options).
+  put(Db, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
@@ -216,8 +225,13 @@ delete(Db, DocId, RevId, Options) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
+post(_Db, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
 post(Db, Doc, Options) ->
-  barrel_db:post(Db, Doc, Options).
+  DocId = case barrel_doc:id(Doc) of
+            undefined -> barrel_lib:uniqid();
+            Id -> Id
+          end,
+  put(Db, Doc#{<<"id">> => DocId }, Options).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
@@ -351,3 +365,8 @@ replication_info(Name) ->
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
+
+
+%% internal
+validate_docid(#{ <<"id">> := DocId }) -> ok;
+validate_docid(_) -> erlang:error({bad_doc, invalid_docid}).
