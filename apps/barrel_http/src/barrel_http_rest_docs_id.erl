@@ -173,8 +173,11 @@ create_resource(Req, State) ->
   end.
 
 delete_resource(Req, State) ->
+  {AsyncStr, _} = cowboy_req:qs_val(<<"async">>, Req),
+  Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
+  
   #state{ database=Database, docid=DocId, revid=RevId} = State,
-  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, []),
+  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, [{async, Async}]),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},
