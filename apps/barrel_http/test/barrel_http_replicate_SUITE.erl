@@ -134,7 +134,7 @@ deleted_doc(Config) ->
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, []),
   barrel_local:delete(Source, DocId, RevId, []),
-  timer:sleep(200),
+  timer:sleep(400),
   {error, not_found} = barrel_local:get(Target, DocId, []),
   ok = barrel_local:stop_replication(RepId),
   ok.

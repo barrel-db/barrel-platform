@@ -569,10 +569,8 @@ handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) -
   if
     Store /= nil ->
       case is_pid(Idx) of
-        true ->
-          ok = barrel_indexer:stop(Idx);
-        false ->
-          ok
+        true -> (catch barrel_indexer:stop(Idx));
+        false -> ok
       end,
       ok = rocksdb:close(Store),
       TempName = db_path(barrel_lib:uniqid()),
@@ -603,16 +601,18 @@ handle_info(_Info, State) -> {noreply, State}.
 terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
   if
     Store /= nil ->
+      %% close the index if any
       case is_pid(Idx) of
-        true ->
-          ok = barrel_indexer:stop(Idx);
-        false ->
-          ok
+        true -> (catch barrel_indexer:stop(Idx));
+        false -> ok
       end,
-      ok = rocksdb:close(Store),
-      ok;
-    true ->
-      ok
+      %% finally close the database and return its result
+      Result = (catch rocksdb:close(Store)),
+      lager:info(
+        "~s: ~p closed: ~p",
+        [?MODULE_STRING, Id, Result]
+      );
+    true ->  ok
   end,
   lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok.
