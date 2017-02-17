@@ -8,6 +8,10 @@ before_script:
 variables:
   ERL_AFLAGS: "-smp enable"
 
+artifacts:
+  paths:
+  - _build/test/logs
+
 test:
   script:
     - ./support/rebar3 eunit
