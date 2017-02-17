@@ -11,6 +11,7 @@ variables:
 
 test:
   artifacts:
+    when: always
     paths:
     - _build/test/logs
 
