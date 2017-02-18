@@ -97,12 +97,20 @@ init_feed_changes(Req, #state{feed=normal}=S) ->
   {ok, Req2, S};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
+  Self = self(),
+  Callback =
+    fun(Change) ->
+        Self ! {change, Change}
+    end,
+  Source = S#state.database,
+  Since = S#state.since,
+  SseOptions = #{since => Since, mode => sse, changes_cb => Callback },
+  {ok, Pid} = barrel_local_changes:start_link(Source, SseOptions),
+
   Headers = [{<<"content-type">>, <<"text/event-stream">>}],
   {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
-  LastSeq = reply_eventsource_chunks(S#state.database, S#state.last_seq, S#state.options, Req2),
-  ok = barrel_event:reg(S#state.database),
   {ok, Req3, S2} = init_hearbeat(Req2, S),
-  {loop, Req3, S2#state{last_seq=LastSeq, subscribed=true}}.
+  {loop, Req3, S2#state{changes_since_pid=Pid}}.
 
 init_hearbeat(Req, State) ->
   {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
@@ -145,28 +153,20 @@ info(heartbeat, Req, S) ->
   ok = cowboy_req:chunk(<<"\n">>, Req),
   {loop, Req, S};
 
-info({'$barrel_event', FromDbId, db_updated}, Req, #state{database=FromDbId, feed=eventsource}=S) ->
-  LastSeq = reply_eventsource_chunks(S#state.database, S#state.last_seq, S#state.options, Req),
-  {loop, Req, S#state{last_seq=LastSeq}};
+info({change, Change}, Req, #state{feed=eventsource}=S) ->
+  Seq = maps:get(<<"seq">>, Change),
+  Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
+             "data: ", (jsx:encode(Change))/binary, "\n",
+             "\n">>,
+  ok = cowboy_req:chunk(Chunk, Req),
+  {loop, Req, S#state{last_seq=Seq}};
 
 info(_Info, Req, S) ->
   {loop, Req, S}.
 
 
 terminate(_Reason, _Req, State) ->
-  terminate_subscription(State),
   terminate_timer(State),
-  ok.
-
-terminate_subscription(#state{subscribed=true}) ->
-  %% TODO improve closing of streamed changes
-  %% by default, cowboy does not close connection
-  %% this will never be called as we will receive
-  %% a continuous flow of database update
-  %% Maybe add a timeout in the change_events_handler?
-  ok = barrel_event:unreg(),
-  ok;
-terminate_subscription(_) ->
   ok.
 
 terminate_timer(#state{timer=undefined}) ->
@@ -174,19 +174,3 @@ terminate_timer(#state{timer=undefined}) ->
 terminate_timer(#state{timer=Timer}) ->
   {ok, cancel} = timer:cancel(Timer),
   ok.
-
-
-reply_eventsource_chunks(Database, Since, Options, Req) ->
-  Fun =
-    fun
-      (Change, {PreviousLastSeq, Pre}) ->
-        Seq = maps:get(<<"seq">>, Change),
-        Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
-                   "data: ", Pre/binary, (jsx:encode(Change))/binary, "\n",
-                   "\n">>,
-        ok = cowboy_req:chunk(Chunk, Req),
-        LastSeq = max(Seq, PreviousLastSeq),
-        {ok, {LastSeq, <<"">>}}
-    end,
-  {LastSeq, _} = barrel_local:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
-  LastSeq.

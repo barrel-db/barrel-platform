@@ -54,8 +54,9 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  %%application:stop(barrel_http),
-  application:stop(barrel_store),
+  ok = application:stop(barrel_http),
+  ok = application:stop(barrel_replicate),
+  ok = application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
@@ -133,7 +134,8 @@ deleted_doc(Config) ->
                 <<"target">> => TargetConn},
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, []),
-  barrel_local:delete(Source, DocId, RevId, []),
+  {ok, _, _} = barrel_local:delete(Source, DocId, RevId, []),
+  {error, not_found} = barrel_local:get(Source, DocId, []),
   timer:sleep(400),
   {error, not_found} = barrel_local:get(Target, DocId, []),
   ok = barrel_local:stop_replication(RepId),
