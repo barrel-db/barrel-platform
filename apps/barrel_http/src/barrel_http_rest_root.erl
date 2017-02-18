@@ -41,7 +41,7 @@ handle(Req, State) ->
   {ok, Description} = application:get_key(barrel_http, description),
   Doc=#{ description => list_to_binary(Description)
        , version => list_to_binary(Vsn)
-       , swagger => <<"/api-docs">>
+       , swagger => <<"/api-doc">>
        },
   barrel_http_reply:doc(Doc, Req, State).
 

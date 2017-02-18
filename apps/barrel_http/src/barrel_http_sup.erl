@@ -48,21 +48,24 @@ init(_Args) ->
   ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
 
-  Trails =
-    trails:trails([ cowboy_swagger_handler
-                  , barrel_http_rest_system
-                  , barrel_http_rest_replicate
-                  , barrel_http_rest_revsdiff
-                  %% , barrel_http_rest_changes
-                  , barrel_http_rest_walk
-                  , barrel_http_rest_dbs
-                  , barrel_http_rest_db
-                  , barrel_http_rest_docs
-                  , barrel_http_rest_root
-                  ]),
-  trails:store(Trails),
-  Dispatch = trails:single_host_compile(Trails),
+  Routes = [ {"/api-doc", barrel_http_redirect,
+              [{location, <<"/api-doc/index.html">>}]}
+           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel_http, "swagger",
+                                                [{mimetypes, cow_mimetypes, all}]}}
 
+           , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
+           , {"/replicate",                   barrel_http_rest_replicate, []}
+           , {"/replicate/:repid",            barrel_http_rest_replicate, []}
+           , {"/dbs/:database/revsdiff",      barrel_http_rest_revsdiff, []}
+           , {"/dbs/:database/walk/[...]",    barrel_http_rest_walk, []}
+           , {"/dbs",                         barrel_http_rest_dbs, []}
+           , {"/dbs/:database",               barrel_http_rest_db, []}
+           , {"/dbs/:database/docs",          barrel_http_rest_docs, []}
+           , {"/dbs/:database/docs/:docid",   barrel_http_rest_docs, []}
+           , {"/",                            barrel_http_rest_root, []}
+
+           ],
+  Dispatch = cowboy_router:compile([{'_', Routes}]),
   Http = ranch:child_spec(
     barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_protocol,
     [{env, [{dispatch, Dispatch}]}]
