@@ -63,7 +63,9 @@ end_per_testcase(_, Config) ->
   Config.
 
 end_per_suite(Config) ->
-  application:stop(barrel_store),
+  ok = application:stop(barrel_http),
+  ok = application:stop(barrel_replicate),
+  ok = application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
