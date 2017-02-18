@@ -154,8 +154,12 @@ info(heartbeat, Req, S) ->
   {loop, Req, S};
 
 info({change, Change}, Req, #state{feed=eventsource}=S) ->
-  LastSeq = reply_eventsource_chunks(S#state.last_seq, [Change], Req),
-  {loop, Req, S#state{last_seq=LastSeq}};
+  Seq = maps:get(<<"seq">>, Change),
+  Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
+             "data: ", (jsx:encode(Change))/binary, "\n",
+             "\n">>,
+  ok = cowboy_req:chunk(Chunk, Req),
+  {loop, Req, S#state{last_seq=Seq}};
 
 info(_Info, Req, S) ->
   {loop, Req, S}.
@@ -170,19 +174,3 @@ terminate_timer(#state{timer=undefined}) ->
 terminate_timer(#state{timer=Timer}) ->
   {ok, cancel} = timer:cancel(Timer),
   ok.
-
-
-reply_eventsource_chunks(Since, Changes, Req) ->
-  Fun =
-    fun
-      (Change, {PreviousLastSeq, Pre}) ->
-        Seq = maps:get(<<"seq">>, Change),
-        Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
-                   "data: ", Pre/binary, (jsx:encode(Change))/binary, "\n",
-                   "\n">>,
-        ok = cowboy_req:chunk(Chunk, Req),
-        LastSeq = max(Seq, PreviousLastSeq),
-        {ok, {LastSeq, <<"">>}}
-    end,
-  {LastSeq, _} = lists:foldl(Fun, {Since, <<"">>}, Changes),
-  LastSeq.
