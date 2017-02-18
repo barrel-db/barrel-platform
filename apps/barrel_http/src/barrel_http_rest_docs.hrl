@@ -31,5 +31,5 @@
           timer,
           heartbeat,
           last_seq,
-          subscribed
+          changes_since_pid
          }).
