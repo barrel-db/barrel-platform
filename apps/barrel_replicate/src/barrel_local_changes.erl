@@ -136,10 +136,14 @@ init_feed(Parent, Db, Options) ->
     change_fun => ChangeFun,
     changes => queue:new(),
     last_seq => Since},
-  State1 = get_changes(State0),
   
+  %% register to the changes
   barrel_event:reg(Db#db.id),
-  
+
+  %% get initial changes
+  State1 = get_changes(State0),
+
+  %% wait for events
   wait_changes(State1).
 
 
