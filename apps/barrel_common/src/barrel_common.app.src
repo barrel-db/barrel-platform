@@ -1,6 +1,6 @@
 {application, barrel_common,
- [{description, "An OTP library"},
-  {vsn, "0.1.0"},
+ [{description, "barrel-db common library"},
+  {vsn, "0.8.0"},
   {registered, []},
   {applications,
    [kernel,

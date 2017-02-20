@@ -1,6 +1,6 @@
 {application, barrel_replicate,
- [{description, "An OTP application"},
-  {vsn, "0.1.0"},
+ [{description, "barrel-db replication"},
+  {vsn, "0.8.0"},
   {registered, []},
   {mod, { barrel_replicate_app, []}},
   {applications,
