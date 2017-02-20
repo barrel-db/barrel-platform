@@ -29,7 +29,8 @@
 -export([
   basic_op/1,
   update_doc/1,
- async_update/1,
+  async_update/1,
+  revision_conflict/1,
   bad_doc/1,
   create_doc/1,
   docs_count/1,
@@ -49,6 +50,7 @@ all() ->
     basic_op,
     update_doc,
     async_update,
+    revision_conflict,
     bad_doc,
     create_doc,
     docs_count,
@@ -104,6 +106,16 @@ update_doc(_Config) ->
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, RevId2, []),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc, []).
+
+
+revision_conflict(_Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {ok, _, _} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, Doc1} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  Doc2 = Doc1#{ <<"v">> => 2 },
+  {ok, <<"a">>, _RevId} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {conflict, revision_conflict} = barrel_local:put(<<"testdb">>, Doc2, []),
+  ok.
 
 
 async_update(_Config) ->
