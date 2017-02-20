@@ -12,6 +12,7 @@
 %% API
 -export([
   create_database/1,
+  create_database/2,
   delete_database/1,
   database_names/1,
   database_infos/1,
@@ -86,12 +87,39 @@ deleted => boolean()
   change/0
 ]).
 
+%% @doc create a database from its URL
+-spec create_database(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 create_database(Url) ->
   barrel_httpc:create_database(Url).
 
+%% @doc create a database with a configuration
+%%
+%% Example of config:
+%% #{ <<"database_id'>> => << "DbName">>, <<"index_mode">> => <<"consistent">> }
+%%
+%% Index Mode can  be : <<"consistent">> | <<"lazy">>.
+-spec create_database(NodeUrl, Config) -> Res when
+  NodeUrl :: binary(),
+  DbUrl :: binary(),
+  Config :: #{},
+  Res :: {ok, DbUrl} | {error, any()}.
+create_database(Url, Config) ->
+  barrel_httpc:create_database(Url, Config).
+
+%% @doc delete a database from its URL
+-spec delete_database(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 delete_database(Url) ->
   barrel_httpc:delete_database(Url).
 
+%% @doc get all database names on the node
+-spec database_names(NodeUrl) -> Res when
+  NodeUrl :: binary(),
+  DbName :: binary(),
+  Res :: [DbName] | {error, any()}.
 database_names(Url) ->
   barrel_httpc:database_names(Url).
 
@@ -102,6 +130,11 @@ database_names(Url) ->
 database_infos(Url) ->
   barrel_httpc:database_infos(Url).
 
+%% @doc connect to a database from its URL.
+%% If the database is not found, an error is returned
+-spec connect(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 connect(Url) ->
   barrel_httpc:connect(Url).
 
