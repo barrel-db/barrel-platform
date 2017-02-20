@@ -53,7 +53,7 @@ init(_Args) ->
            , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel_http, "swagger",
                                                  [{mimetypes, cow_mimetypes, all}]}}
 
-           %% , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
+           , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
            %% , {"/replicate",                   barrel_http_rest_replicate, []}
            %% , {"/replicate/:repid",            barrel_http_rest_replicate, []}
            %% , {"/dbs/:database/revsdiff",      barrel_http_rest_revsdiff, []}
