@@ -54,10 +54,10 @@ init(_Args) ->
                                                  [{mimetypes, cow_mimetypes, all}]}}
 
            , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
-           %% , {"/replicate",                   barrel_http_rest_replicate, []}
-           %% , {"/replicate/:repid",            barrel_http_rest_replicate, []}
+           , {"/replicate",                   barrel_http_rest_replicate, []}
+           , {"/replicate/:repid",            barrel_http_rest_replicate, []}
            , {"/dbs/:database/revsdiff",      barrel_http_rest_revsdiff, []}
-           %% , {"/dbs/:database/walk/[...]",    barrel_http_rest_walk, []}
+           , {"/dbs/:database/walk/[...]",    barrel_http_rest_walk, []}
            , {"/dbs",                         barrel_http_rest_dbs, []}
            , {"/dbs/:database",               barrel_http_rest_db, []}
            , {"/dbs/:database/docs",          barrel_http_rest_docs, []}

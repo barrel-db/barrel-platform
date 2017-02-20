@@ -22,39 +22,40 @@
 get_resource(Database, Req0, State) ->
   Options = parse_params(Req0),
   #{last_update_seq := Seq} = barrel_local:db_infos(Database),
-  {ok, Req} = cowboy_req:chunked_reply(
+  Req = cowboy_req:stream_reply(
     200,
-    [{<<"Content-Type">>, <<"application/json">>},
-     {<<"ETag">>,  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>}],
+    #{<<"Content-Type">> => <<"application/json">>,
+      <<"ETag">> =>  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>},
     Req0
   ),
   %% start the initial chunk
-  ok = cowboy_req:chunk(<<"{\"docs\":[">>, Req),
+  ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
     fun
       (_DocId, _DocInfo, {ok, nil}, Acc) ->
         {ok, Acc};
       (_DocId, _DocInfo, {ok, Doc}, {N, Pre}) ->
         Chunk = << Pre/binary, (jsx:encode(Doc))/binary >>,
-        ok = cowboy_req:chunk(Chunk, Req),
+        ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,
   {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
-  ok = cowboy_req:chunk(
+  ok = cowboy_req:stream_body(
     iolist_to_binary([
       <<"],">>,
       <<"\"_count\":">>,
       integer_to_binary(Count),
       <<"}">>
       ]),
+    fin,
     Req
   ),
   {ok, Req, State}.
 
 parse_params(Req) ->
-  {Params, _} = cowboy_req:qs_vals(Req),
+  Params = cowboy_req:parse_qs(Req),
   Options = lists:foldl(fun({Param, Value}, Acc) ->
                             [param(Param, Value)|Acc]
                         end, [], Params),
