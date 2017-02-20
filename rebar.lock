@@ -12,11 +12,10 @@
  {<<"metrics">>,{pkg,<<"metrics">>,<<"1.0.1">>},1},
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.2">>},1},
  {<<"quickrand">>,{pkg,<<"quickrand">>,<<"1.6.0">>},1},
- {<<"ranch">>,{pkg,<<"ranch">>,<<"1.2.1">>},1},
+ {<<"ranch">>,{pkg,<<"ranch">>,<<"1.3.2">>},1},
  {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.6.1">>},0},
  {<<"sext">>,{pkg,<<"sext">>,<<"1.4.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
- {<<"trails">>,{pkg,<<"trails">>,<<"0.2.1">>},0},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.6.0">>},0}]}.
 [
 {pkg_hash,[
@@ -33,10 +32,9 @@
  {<<"metrics">>, <<"25F094DEA2CDA98213CECC3AEFF09E940299D950904393B2A29D191C346A8486">>},
  {<<"mimerl">>, <<"993F9B0E084083405ED8252B99460C4F0563E41729AB42D9074FD5E52439BE88">>},
  {<<"quickrand">>, <<"33A277A639C442D77AB5C1EEA4641A49E3F034FD13658BB57E192A6E083FE77D">>},
- {<<"ranch">>, <<"A6FB992C10F2187B46FFD17CE398DDF8A54F691B81768F9EF5F461EA7E28C762">>},
+ {<<"ranch">>, <<"E4965A144DC9FBE70E5C077C65E73C57165416A901BD02EA899CFD95AA890986">>},
  {<<"rocksdb">>, <<"9E29A5D1DC6F5DA6CEACD10C98C0CA64DB5271C1848D00AFFA114AADB7F8BAD9">>},
  {<<"sext">>, <<"2A9443A90C3164231A5E11C73133C4B1762B27FBF1647AA0DE06EF565C47B38B">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
- {<<"trails">>, <<"6769F7A2B777EC9CEAF07F22C23E5F3BE6A7F07E9A11B44725B102A832334D46">>},
  {<<"uuid">>, <<"1BA81515EEB37EEB7F1563B658E30CDF18BCAF1FD6A390BBF3838461753E69D8">>}]}
 ].

@@ -19,33 +19,6 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ get => #{ summary => "Get the database informations"
-               , produces => ["application/json"]
-               , parameters =>
-                   [#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               },
-      delete => #{ summary => "Delete a database"
-        , produces => ["application/json"]
-        , parameters =>
-        [#{ name => <<"database">>
-          , description => <<"Database ID">>
-          , in => <<"path">>
-          , required => true
-          , type => <<"string">>}
-        ]
-      }
-    },
-  [trails:trail("/dbs/:database", ?MODULE, [], Metadata)].
-
 -record(state, {method, database}).
 
 init(_Type, Req, []) ->

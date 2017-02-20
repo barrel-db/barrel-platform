@@ -21,16 +21,6 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ get => #{ summary => "Information about Barrel-DB version"
-               , produces => ["application/json"]
-               }
-     },
-  [trails:trail("/", ?MODULE, [], Metadata)].
-
 -record(state, {method, store, dbid, conn}).
 
 init(_Type, Req, []) ->

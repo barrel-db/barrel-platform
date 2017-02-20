@@ -19,29 +19,6 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ get => #{ summary => "Get list of available databases"
-               , produces => ["application/json"]
-               },
-       post => #{ summary => "Create a new database"
-                , produces => ["application/json"]
-                , responses =>
-                    #{ <<"200">> => #{ description => "Database created" }
-                       }
-                , parameters =>
-                    [#{ name => <<"body">>
-                      , description => <<"New database configuration">>
-                      , in => <<"body">>
-                      , required => true
-                      , type => <<"json">>}
-                    ]
-                }
-     },
-  [trails:trail("/dbs", ?MODULE, [], Metadata)].
-
 -record(state, {method, body}).
 
 init(_Type, Req, []) ->

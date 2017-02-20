@@ -19,28 +19,6 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ post => #{ summary => "Check for differences in documents history"
-               , produces => ["application/json"]
-               , parameters =>
-                    [#{ name => <<"body">>
-                      , description => <<"List of docid/revisions to be checked">>
-                      , in => <<"body">>
-                      , required => true
-                      , type => <<"json">>}
-                    ,#{ name => <<"database">>
-                      , description => <<"Database ID">>
-                      , in => <<"path">>
-                      , required => true
-                      , type => <<"string">>}
-                    ]
-                }
-     },
-  [trails:trail("/dbs/:database/revsdiff", ?MODULE, [], Metadata)].
-
 
 init(_Type, Req, []) ->
   {ok, Req, undefined}.
