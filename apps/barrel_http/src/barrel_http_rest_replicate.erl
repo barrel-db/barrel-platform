@@ -17,76 +17,14 @@
 
 
 %% API
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
-
--export([trails/0]).
-
-trails() ->
-  GetPutDelete =
-    #{ get => #{ summary => "Get metics about a replication tasks"
-               , produces => ["application/json"]
-               , parameters =>
-                   [#{ repid => <<"repid">>
-                     , description => <<"Replication task repid">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               },
-       put => #{ summary => "Create a replication task"
-               , produces => ["application/json"]
-               , parameters =>
-                   [#{ repid => <<"body">>
-                     , description => <<"Parameters for the replication task">>
-                     , in => <<"body">>
-                     , required => true
-                     , type => <<"json">>},
-                    #{ repid => <<"repid">>
-                     , description => <<"Replication task repid">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               },
-       delete => #{ summary => "Delete a replication task"
-                  , produces => ["application/json"]
-                  , parameters =>
-                      [#{ repid => <<"repid">>
-                        , description => <<"Replication task repid">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
-                      ]
-                  }
-     },
-  Post =
-    #{ post => #{ summary => "Create a replication tasks"
-                , produces => ["application/json"]
-                , parameters =>
-                     [#{ repid => <<"body">>
-                       , description => <<"Parameters for the replication task">>
-                       , in => <<"body">>
-                       , required => true
-                       , type => <<"json">>}
-                    ]
-               }
-     },
-  [trails:trail("/replicate", ?MODULE, [], Post),
-   trails:trail("/replicate/:repid", ?MODULE, [], GetPutDelete)].
+-export([init/2]).
 
 -record(state, {method, repid, body, source, target, persisted, started}).
 
-init(_Type, Req, []) ->
-  {ok, Req, #state{}}.
+init(Req, _Opts) ->
+  Method = cowboy_req:method(Req),
+  route(Req, #state{method=Method}).
 
-handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  route(Req2, State#state{method=Method}).
-
-terminate(_Reason, _Req, _State) ->
-  ok.
 
 
 
@@ -102,12 +40,12 @@ route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
 check_repid(Req, State) ->
-  {Repid, Req2} = cowboy_req:binding(repid, Req),
+  Repid = cowboy_req:binding(repid, Req),
   case barrel_replicate:replication_info(Repid) of
     {error, not_found} ->
-      barrel_http_reply:error(404, <<"unknown replication task: ", Repid/binary>>, Req2, State);
+      barrel_http_reply:error(404, <<"unknown replication task: ", Repid/binary>>, Req, State);
     _ ->
-      check_body(Req2, State#state{repid=Repid})
+      check_body(Req, State#state{repid=Repid})
   end.
 
 check_body(Req, #state{method= <<"POST">>}=State) ->
@@ -120,7 +58,7 @@ check_body(Req, #state{method= <<"DELETE">>}=State) ->
   delete_resource(Req, State).
 
 check_json_is_valid(Req, State) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
+  {ok, Body, Req2} = cowboy_req:read_body(Req),
   try jsx:decode(Body, [return_maps]) of
       Json ->
       check_json_properties(Req, State#state{body=Json})
@@ -170,17 +108,17 @@ check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
 
 
 get_resource(Req, State) ->
-  {Repid, Req2} = cowboy_req:binding(repid, Req),
+  Repid = cowboy_req:binding(repid, Req),
   case barrel_replicate:replication_info(Repid) of
     {error, not_found} ->
-      barrel_http_reply:error(404, "replication task not found", Req2, State);
+      barrel_http_reply:error(404, "replication task not found", Req, State);
     Infos ->
       #{metrics := Metrics} = Infos,
-      barrel_http_reply:doc(Metrics, Req2, State)
+      barrel_http_reply:doc(Metrics, Req, State)
   end.
 
 create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
-  {ReqRepid, Req2} = cowboy_req:binding(repid, Req),
+  ReqRepid = cowboy_req:binding(repid, Req),
   SourceConn = {barrel_httpc, SourceUrl},
   TargetConn = {barrel_httpc, TargetUrl},
   {ok, Rep} = case ReqRepid of
@@ -196,7 +134,7 @@ create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
               end,
   #{<<"replication_id">> := RepId} = Rep,
   Doc = #{<<"replication_id">> => RepId},
-  barrel_http_reply:doc(Doc, Req2, State).
+  barrel_http_reply:doc(Doc, Req, State).
 
 delete_resource(Req, #state{repid=Repid}=State) ->
   ok = barrel_replicate:delete_replication(Repid),

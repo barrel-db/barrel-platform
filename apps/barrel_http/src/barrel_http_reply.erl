@@ -36,12 +36,12 @@ json(Code, Obj, Req, State) when is_map(Obj) ->
 json(Code, Obj, Req, State) when is_list(Obj) ->
   json(Code, jsx:encode(Obj), Req, State);
 json(Code, Json, Req, State) when is_binary(Json) ->
-  Headers = [{<<"content-type">>, <<"application/json">>}],
+  Headers = #{<<"content-type">> => <<"application/json">>},
   reply(Code, Headers, Json, Req, State);
 json(Code, Json, _, _) -> erlang:error({badarg, {Code, Json}}).
 
 code(HttpCode, Req, State ) ->
-  reply(HttpCode, [], [], Req, State).
+  reply(HttpCode, #{}, [], Req, State).
 
 error(HttpCode, Req, State) ->
   error(HttpCode, message(HttpCode), Req, State).
@@ -50,14 +50,14 @@ error(HttpCode, Message, Req, State) when is_list(Message) ->
   error(HttpCode, list_to_binary(Message), Req, State);
 
 error(HttpCode, Message, Req, State) when is_binary(Message) ->
-  Headers = [{<<"content-type">>, <<"application/json">>}],
+  Headers = #{<<"content-type">> => <<"application/json">>},
   Doc = #{message => Message},
   Json = jsx:encode(Doc),
   reply(HttpCode, Headers, Json, Req, State).
 
 reply(HttpCode, Headers, Content, Req, State) ->
-  H = [{<<"server">>, <<"BarrelDB (Erlang/OTP)">>} | Headers],
-  {ok, Req2} = cowboy_req:reply(HttpCode, H, Content, Req),
+  H = Headers#{<<"server">> => <<"BarrelDB (Erlang/OTP)">>},
+  Req2 = cowboy_req:reply(HttpCode, H, Content, Req),
   {ok, Req2, State}.
 
 

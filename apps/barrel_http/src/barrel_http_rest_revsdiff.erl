@@ -15,43 +15,16 @@
 -module(barrel_http_rest_revsdiff).
 -author("Bernard Notarianni").
 
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
-
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ post => #{ summary => "Check for differences in documents history"
-               , produces => ["application/json"]
-               , parameters =>
-                    [#{ name => <<"body">>
-                      , description => <<"List of docid/revisions to be checked">>
-                      , in => <<"body">>
-                      , required => true
-                      , type => <<"json">>}
-                    ,#{ name => <<"database">>
-                      , description => <<"Database ID">>
-                      , in => <<"path">>
-                      , required => true
-                      , type => <<"string">>}
-                    ]
-                }
-     },
-  [trails:trail("/dbs/:database/revsdiff", ?MODULE, [], Metadata)].
+-export([init/2]).
 
 
-init(_Type, Req, []) ->
-  {ok, Req, undefined}.
+init(Req, Opts) ->
+  Method = cowboy_req:method(Req),
+  Database = cowboy_req:binding(database, Req),
+  route(Method, Database, Req, Opts).
 
-handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  {Database, Req3} = cowboy_req:binding(database, Req2),
-  handle(Method, Database, Req3, State).
-
-handle(<<"POST">>, Database, Req, State) ->
-  {ok, [{Body, _}], Req2} = cowboy_req:body_qs(Req),
+route(<<"POST">>, Database, Req, State) ->
+  {ok, Body, Req2} = cowboy_req:read_body(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
     {ok, Missing, Possible} = barrel_local:revsdiff(Database, DocId, RevIds),
@@ -61,8 +34,6 @@ handle(<<"POST">>, Database, Req, State) ->
   barrel_http_reply:doc(Result, Req2, State);
 
 
-handle(_, _, Req, State) ->
+route(_, _, Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
-terminate(_Reason, _Req, _State) ->
-  ok.

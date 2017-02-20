@@ -12,8 +12,6 @@
      barrel_store,
      barrel_replicate,
      cowboy,
-     trails,
-     cowboy_swagger,
      hackney
     ]},
    {env, [

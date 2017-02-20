@@ -15,49 +15,19 @@
 -module(barrel_http_rest_dbs).
 -author("Bernard Notarianni").
 
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
-
--export([trails/0]).
-
-trails() ->
-  Metadata =
-    #{ get => #{ summary => "Get list of available databases"
-               , produces => ["application/json"]
-               },
-       post => #{ summary => "Create a new database"
-                , produces => ["application/json"]
-                , responses =>
-                    #{ <<"200">> => #{ description => "Database created" }
-                       }
-                , parameters =>
-                    [#{ name => <<"body">>
-                      , description => <<"New database configuration">>
-                      , in => <<"body">>
-                      , required => true
-                      , type => <<"json">>}
-                    ]
-                }
-     },
-  [trails:trail("/dbs", ?MODULE, [], Metadata)].
+-export([init/2]).
 
 -record(state, {method, body}).
 
-init(_Type, Req, []) ->
-  {ok, Req, #state{}}.
+init(Req, _Opts) ->
+  Method = cowboy_req:method(Req),
+  route(Req, #state{method=Method}).
 
-handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  route(Req2, State#state{method=Method}).
-
-terminate(_Reason, _Req, _State) ->
-  ok.
 
 route(Req, #state{method= <<"GET">>}=State) ->
   get_resource(Req, State);
 route(Req, #state{method= <<"POST">>}=State) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
+  {ok, Body, Req2} = cowboy_req:read_body(Req),
   check_body(Req2, State#state{body=Body});
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).

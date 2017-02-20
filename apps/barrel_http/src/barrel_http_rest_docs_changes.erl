@@ -15,7 +15,7 @@
 -module(barrel_http_rest_docs_changes).
 -author("Bernard Notarianni").
 
--export([init/3]).
+-export([init/2]).
 -export([info/3]).
 -export([handle/2]).
 -export([terminate/3]).
@@ -23,9 +23,9 @@
 -include("barrel_http_rest_docs.hrl").
 
 
-init(_Type, Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  route(Req2, State#state{method=Method}).
+init(Req, State) ->
+  Method = cowboy_req:method(Req),
+  route(Req, State#state{method=Method}).
 
 route(Req, #state{method= <<"GET">>}=State) ->
   check_database_db(Req, State);
@@ -34,26 +34,26 @@ route(Req, State) ->
   {shutdown, Req2, State}.
 
 check_database_db(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
+  Database = cowboy_req:binding(database, Req),
   case barrel_http_lib:has_database(Database) of
     true ->
-      check_params(Req2, State#state{database=Database});
+      check_params(Req, State#state{database=Database});
     _Error ->
       lager:info("unknown database requested: ~p~n", [Database]),
-      {ok, Req3, S} = barrel_http_reply:error(400, "unknown database", Req2, State),
+      {ok, Req3, S} = barrel_http_reply:error(400, "unknown database", Req, State),
       {shutdown, Req3, S}
   end.
 
 
 check_params(Req, State) ->
   StateDefault = State#state{feed=normal, since=0},
-  {Params, Req2} = cowboy_req:qs_vals(Req),
+  Params = cowboy_req:parse_qs(Req),
   case parse_params(Params, StateDefault) of
     {error, {unknown_param, _}} ->
-      {ok, Req3, S} = barrel_http_reply:error(400, "unknown parameter", Req2, State),
-      {shutdown, Req3, S};
+      {ok, Req2, S} = barrel_http_reply:error(400, "unknown parameter", Req, State),
+      {shutdown, Req2, S};
     {ok, State2} ->
-      check_eventsource_headers(Req2, State2)
+      check_eventsource_headers(Req, State2)
   end.
 
 parse_params([], State) ->
@@ -73,10 +73,10 @@ parse_params([{Param, _Value}|_], _State) ->
 
 
 check_eventsource_headers(Req, State) ->
-  {ContentTypeBin, Req2} = cowboy_req:header(<<"accept">>, Req, <<"undefined">>),
-  {LastEventIdBin, Req3} = cowboy_req:header(<<"last-event-id">>, Req2, <<"undefined">>),
+  ContentTypeBin = cowboy_req:header(<<"accept">>, Req, <<"undefined">>),
+  LastEventIdBin = cowboy_req:header(<<"last-event-id">>, Req, <<"undefined">>),
   ContentType = string:to_lower(binary_to_list(ContentTypeBin)),
-  route_evensource_headers(ContentType, LastEventIdBin, Req3, State).
+  route_evensource_headers(ContentType, LastEventIdBin, Req, State).
 
 route_evensource_headers("text/event-stream", LastEventId, Req, State) ->
   Since = case LastEventId of
@@ -92,8 +92,7 @@ init_feed(Req, #state{database=_Database, since=Since, options=_Options}=State) 
   init_feed_changes(Req, State#state{last_seq=Since}).
 
 init_feed_changes(Req, #state{feed=normal}=S) ->
-  Headers = [],
-  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
+  Req2 = cowboy_req:stream_reply(200, Req),
   {ok, Req2, S};
 
 init_feed_changes(Req, #state{feed=eventsource}=S) ->
@@ -107,16 +106,16 @@ init_feed_changes(Req, #state{feed=eventsource}=S) ->
   SseOptions = #{since => Since, mode => sse, changes_cb => Callback },
   {ok, Pid} = barrel_local_changes:start_link(Source, SseOptions),
 
-  Headers = [{<<"content-type">>, <<"text/event-stream">>}],
-  {ok, Req2} = cowboy_req:chunked_reply(200, Headers, Req),
-  {ok, Req3, S2} = init_hearbeat(Req2, S),
-  {loop, Req3, S2#state{changes_since_pid=Pid}}.
+  Req3 = cowboy_req:stream_reply(200, #{<<"content">> => <<"text/event-stream">>}, Req),
+  {ok, Req4, S2} = init_hearbeat(Req3, S),
+  {cowboy_loop, Req4, S2#state{changes_since_pid=Pid}}.
 
 init_hearbeat(Req, State) ->
-  {HeartBeatBin, Req2} = cowboy_req:qs_val(<<"heartbeat">>, Req, <<"60000">>),
+  #{heartbeat := HeartBeatBin}
+    = cowboy_req:match_qs([{heartbeat, [], <<"60000">>}], Req),
   HeartBeat = binary_to_integer(HeartBeatBin),
   {ok, Timer} = timer:send_interval(HeartBeat, self(), heartbeat),
-  {ok, Req2, State#state{timer=Timer, heartbeat=HeartBeat}}.
+  {ok, Req, State#state{timer=Timer, heartbeat=HeartBeat}}.
 
 
 handle(Req, S) ->
@@ -125,44 +124,44 @@ handle(Req, S) ->
   Options = S#state.options,
 
   %% start the initial chunk
-  ok = cowboy_req:chunk(<<"{\"changes\":[">>, Req),
+  ok = cowboy_req:stream_body(<<"{\"changes\":[">>, nofin, Req),
   Fun =
     fun
       (Change, {PreviousLastSeq, Pre}) ->
         Seq = maps:get(<<"seq">>, Change),
         Chunk = <<  Pre/binary, (jsx:encode(Change))/binary>>,
-        ok = cowboy_req:chunk(Chunk, Req),
+        ok = cowboy_req:stream_body(Chunk, nofin, Req),
         LastSeq = max(Seq, PreviousLastSeq),
         {ok, {LastSeq, <<",">>}}
     end,
   {LastSeq, _} = barrel_local:changes_since(Database, Since, Fun, {Since, <<"">>}, Options),
 
   %% close the document list and return the calculated count
-  ok = cowboy_req:chunk(
+  ok = cowboy_req:stream_body(
          iolist_to_binary([
                            <<"],">>,
                            <<"\"last_seq\":">>,
                            integer_to_binary(LastSeq),
                            <<"}">>
                           ]),
-         Req
+         fin, Req
         ),
   {ok, Req, S}.
 
 info(heartbeat, Req, S) ->
-  ok = cowboy_req:chunk(<<"\n">>, Req),
-  {loop, Req, S};
+  ok = cowboy_req:stream_body(<<"\n">>, nofin, Req),
+  {ok, Req, S};
 
 info({change, Change}, Req, #state{feed=eventsource}=S) ->
   Seq = maps:get(<<"seq">>, Change),
   Chunk = << "id: ", (integer_to_binary(Seq))/binary, "\n",
              "data: ", (jsx:encode(Change))/binary, "\n",
              "\n">>,
-  ok = cowboy_req:chunk(Chunk, Req),
-  {loop, Req, S#state{last_seq=Seq}};
+  ok = cowboy_req:stream_body(Chunk, nofin, Req),
+  {ok, Req, S#state{last_seq=Seq}};
 
 info(_Info, Req, S) ->
-  {loop, Req, S}.
+  {ok, Req, S}.
 
 
 terminate(_Reason, _Req, State) ->

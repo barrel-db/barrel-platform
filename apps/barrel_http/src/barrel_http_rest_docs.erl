@@ -16,159 +16,16 @@
 -author("Bernard Notarianni").
 
 %% API
--export([init/3]).
--export([handle/2]).
+-export([init/2]).
 -export([info/3]).
 -export([terminate/3]).
 
--export([trails/0]).
-
 -include("barrel_http_rest_docs.hrl").
-
-trails() ->
-  GetPutDel =
-    #{ get => #{ summary => "Get a document"
-               , description => "Get a document."
-               , produces => ["application/json"]
-               , responses =>
-                   #{ <<"200">> => #{ description => "Document found." }
-                    , <<"404">> => #{ description => "Document not found." }
-                    }
-               , parameters =>
-                   [#{ name => <<"docid">>
-                     , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
-     , put => #{ summary => "Add/update a document."
-               , produces => ["application/json"]
-               , responses =>
-                   #{ <<"200">> => #{ description => "Document updated." }
-                    }
-               , parameters =>
-                   [#{ name => <<"body">>
-                     , description => <<"Document to be added">>
-                     , in => <<"body">>
-                     , required => true
-                     , type => <<"application/json">>}
-                   ,#{ name => <<"docid">>
-                     , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
-     , delete => #{ summary => "Delete a document."
-                  , produces => ["application/json"]
-                  , responses =>
-                      #{ <<"200">> => #{ description => "Document deleted." }
-                       }
-                  , parameters =>
-                      [#{ name => <<"rev">>
-                         , description => <<"Last document revision">>
-                         , in => <<"query">>
-                         , required => true
-                         , type => <<"string">>}
-                      , #{ name => <<"docid">>
-                        , description => <<"Document ID">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
-                      ,#{ name => <<"database">>
-                        , description => <<"Database ID">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
-                      ]
-                  }
-     },
-  PostGetAllDocs =
-    #{post => #{ summary => "Add a new document."
-               , produces => ["application/json"]
-               , responses =>
-                   #{ <<"200">> => #{ description => "Document added." }
-                    }
-               , parameters =>
-                   [#{ name => <<"body">>
-                     , description => <<"Document to be added">>
-                     , in => <<"body">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-                 },
-      get => #{ summary => "Get list of all available documents."
-               , produces => ["application/json"]
-               , parameters =>
-                  [#{ name => <<"since">>
-                    , description => <<"Starting sequence">>
-                    , in => <<"path">>
-                    , required => false
-                    , type => <<"integer">>
-                    }
-                  ,#{ name => <<"A-IM">>
-                    , description => <<"Get update feed">>
-                    , in => <<"header">>
-                    , required => false
-                    , type => <<"string">>
-                    , enum => [ <<"Incremental feed">> ]}
-                  ,#{ name => <<"gt">>
-                    , description => <<"greater than">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"string">>}
-                  ,#{ name => <<"gte">>
-                    , description => <<"greater or equal to">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"string">>}
-                  ,#{ name => <<"lt">>
-                    , description => <<"lesser than">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"string">>}
-                  ,#{ name => <<"lte">>
-                    , description => <<"lesser or equal to">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"string">>}
-                  ,#{ name => <<"max">>
-                    , description => <<"maximum keys to return">>
-                    , in => <<"query">>
-                    , required => false
-                    , type => <<"integer">>}
-                  ,#{ name => <<"database">>
-                    , description => <<"Database ID">>
-                    , in => <<"path">>
-                    , required => true
-                    , type => <<"string">>}
-                  ]
-              }
-     },
-  [trails:trail("/dbs/:database/docs", ?MODULE, [], PostGetAllDocs),
-   trails:trail("/dbs/:database/docs/:docid", ?MODULE, [], GetPutDel)].
-
 
 accepted_feed(Req) ->
   case cowboy_req:header(<<"accept">>, Req) of
-    {undefined, _} -> aim_feed(Req);
-    {Accept, _} ->
+    undefined -> aim_feed(Req);
+    Accept ->
       case hackney_bstr:to_lower(Accept) of
         <<"text/event-stream">> -> << "eventsource">>;
         _ ->
@@ -178,8 +35,8 @@ accepted_feed(Req) ->
 
 aim_feed(Req) ->
   case cowboy_req:header(<<"a-im">>, Req) of
-    {undefined, _} -> param_feed(Req);
-    {AIM, _} ->
+    undefined -> param_feed(Req);
+    AIM ->
       case hackney_bstr:to_lower(AIM) of
         <<"incremental feed">> -> <<"normal">>;
         _ -> param_feed(Req)
@@ -187,24 +44,33 @@ aim_feed(Req) ->
   end.
 
 param_feed(Req) ->
-  case cowboy_req:qs_val(<<"feed">>, Req) of
-    {undefined, _} -> undefined;
-    {Feed, _} -> hackney_bstr:to_lower(Feed)
+  case cowboy_req:qs(Req) of
+    #{feed := Feed} -> hackney_bstr:to_lower(Feed);
+    _ -> undefined
   end.
 
-init(Type, Req, []) ->
-  {Path, Req2} = cowboy_req:path(Req),
-  Feed = accepted_feed(Req2),
+init(Req, _Opts) ->
+  Path = cowboy_req:path(Req),
+  Feed = accepted_feed(Req),
   IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>]),
   Route = binary:split(Path, <<"/">>, [global]),
   S1 = #state{path=Path},
   case {Route,  IsChangesFeed} of
     {[<<>>,<<"dbs">>,_,<<"docs">>], false} ->
-      barrel_http_rest_docs_id:init(Type, Req2, S1#state{handler=list});
+      S2 = S1#state{handler=list},
+      {ok, Req2, S3} = barrel_http_rest_docs_id:init(Req, S2),
+      handle(Req2, S3);
     {[<<>>,<<"dbs">>,_,<<"docs">>], true} ->
-      barrel_http_rest_docs_changes:init(Type, Req2, S1#state{handler=changes});
+      S2 = S1#state{handler=changes},
+      {Loop, Req2, S3} = barrel_http_rest_docs_changes:init(Req, S2),
+      case Loop of
+        cowboy_loop -> {cowboy_loop, Req2, S3};
+        ok -> handle(Req2, S3)
+      end;
     _ ->
-      barrel_http_rest_docs_id:init(Type, Req2, S1#state{handler=doc})
+      S2 = S1#state{handler=list},
+      {ok, Req2, S3} = barrel_http_rest_docs_id:init(Req, S2),
+      handle(Req2, S3)
   end.
 
 handle(Req, #state{handler=changes}=State) ->
@@ -213,19 +79,19 @@ handle(Req, State) ->
   check_database_db(Req, State).
 
 check_database_db(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
+  Database = cowboy_req:binding(database, Req),
   case barrel_http_lib:has_database(Database) of
     false ->
-      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req2, State);
+      barrel_http_reply:error(400, <<"database not found: ", Database/binary>>, Req, State);
     true ->
-      {Method, Req3} = cowboy_req:method(Req2),
-      {DocId, Req4} = cowboy_req:binding(docid, Req3),
+      Method = cowboy_req:method(Req),
+      DocId = cowboy_req:binding(docid, Req),
       State2 =  State#state{
                   database=Database,
                   docid=DocId,
                   method=Method
                  },
-      route_all_docs(Req4, State2)
+      route_all_docs(Req, State2)
   end.
 
 route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->

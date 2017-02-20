@@ -15,98 +15,23 @@
 -module(barrel_http_rest_system).
 -author("Bernard Notarianni").
 
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
-
--export([trails/0]).
-
-trails() ->
-  GetPutDelete =
-    #{ get => #{ summary => "Get a system document"
-               , description => "Get a document from the system storage"
-               , produces => ["application/json"]
-               , responses =>
-                   #{ <<"200">> => #{ description => "Document found." }
-                    , <<"404">> => #{ description => "Document not found." }
-                    }
-               , parameters =>
-                   [#{ name => <<"docid">>
-                     , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
-     , delete => #{ summary => "Delete a system document"
-                  , description => "Delete a document from the system storage"
-                  , produces => ["application/json"]
-                  , parameters =>
-                      [#{ name => <<"docid">>
-                        , description => <<"Document ID">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
-                      ,#{ name => <<"database">>
-                        , description => <<"Database ID">>
-                        , in => <<"path">>
-                        , required => true
-                        , type => <<"string">>}
-                      ]
-                  }
-     , put => #{ summary => "Add/update a document."
-               , produces => ["application/json"]
-               , responses =>
-                   #{ <<"200">> => #{ description => "Document updated." }
-                    }
-               , parameters =>
-                   [#{ name => <<"body">>
-                     , description => <<"Document to be added">>
-                     , in => <<"body">>
-                     , required => true
-                     , type => <<"application/json">>}
-                   ,#{ name => <<"docid">>
-                     , description => <<"Document ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ,#{ name => <<"database">>
-                     , description => <<"Database ID">>
-                     , in => <<"path">>
-                     , required => true
-                     , type => <<"string">>}
-                   ]
-               }
-     },
-  [trails:trail("/dbs/:database/system/:docid", ?MODULE, [], GetPutDelete)].
-
+-export([init/2]).
 
 -record(state, {conn, method, database, docid, doc}).
 
-init(_Type, Req, []) ->
-  {ok, Req, #state{}}.
-
-handle(Req, State) ->
-  {Method, Req2} = cowboy_req:method(Req),
-  check_database(Req2, State#state{method=Method}).
-
-terminate(_Reason, _Req, _State) ->
-  ok.
+init(Req, _Opts) ->
+  Method = cowboy_req:method(Req),
+  check_database(Req, #state{method=Method}).
 
 check_database(Req, State) ->
-  {Database, Req2} = cowboy_req:binding(database, Req),
+  Database = cowboy_req:binding(database, Req),
   case barrel_http_lib:has_database(Database) of
     true ->
-      {DocId, Req3} = cowboy_req:binding(docid, Req),
+      DocId = cowboy_req:binding(docid, Req),
       State2 = State#state{database=Database,  docid=DocId},
-      route(Req3, State2);
+      route(Req, State2);
     false ->
-      barrel_http_reply:error(404, <<"database not found: ", Database/binary>>, Req2, State)
+      barrel_http_reply:error(404, <<"database not found: ", Database/binary>>, Req, State)
   end.
 
 route(Req, #state{method= <<"PUT">>}=State) ->
@@ -135,7 +60,7 @@ get_resource(Req, #state{doc=Doc}=State) ->
   barrel_http_reply:doc(Doc, Req, State).
 
 create_resource(Req, State = #state{database=Database, docid=DocId}) ->
-  {ok, Body, Req2} = cowboy_req:body(Req),
+  {ok, Body, Req2} = cowboy_req:read_body(Req),
   Doc = jsx:decode(Body, [return_maps]),
   ok = barrel_db:put_system_doc(Database, DocId, Doc),
   barrel_http_reply:doc(#{ok => true}, Req2, State).
