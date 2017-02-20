@@ -83,7 +83,6 @@ end_per_suite(Config) ->
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
-
 basic_op(_Config) ->
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
