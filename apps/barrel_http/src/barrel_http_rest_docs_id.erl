@@ -16,7 +16,7 @@
 -author("Bernard Notarianni").
 
 %% API
--export([init/3]).
+-export([init/2]).
 -export([handle/2]).
 -export([terminate/3]).
 
@@ -24,7 +24,7 @@
 
 -include("barrel_http_rest_docs.hrl").
 
-init(_Type, Req, State) ->
+init(Req, State) ->
   {ok, Req, State}.
 
 handle_post(Req) ->
@@ -38,12 +38,12 @@ terminate(_Reason, _Req, _State) ->
 
 
 check_params(Req, State) ->
-  {Params, Req2} = cowboy_req:qs_vals(Req),
+  Params = cowboy_req:parse_qs(Req),
   case parse_params(Params, State) of
     {error, {unknown_param, Unknown}} ->
-      barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req2, State);
+      barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req, State);
     {ok, S2} ->
-      {ok, Body, Req4} = cowboy_req:body(Req2),
+      {ok, Body, Req2} = cowboy_req:read_body(Req),
 
       Opts1 = case S2#state.revid of
                 undefined -> [];
@@ -53,7 +53,7 @@ check_params(Req, State) ->
                 true -> [{history, true}|Opts1];
                 _ -> Opts1
               end,
-      route(Req4, S2#state{body=Body, options=Opts2})
+      route(Req2, S2#state{body=Body, options=Opts2})
   end.
 
 parse_params([], State) ->
@@ -106,14 +106,14 @@ check_json_properties(Req, State) ->
 
 
 check_id_property(Req, #state{body=Json}=State) ->
-  {DocId, Req2} = cowboy_req:binding(docid, Req),
+  DocId = cowboy_req:binding(docid, Req),
   case Json of
     #{ <<"id">> := DocId} ->
-      route2(Req2, State);
+      route2(Req, State);
     #{ <<"id">> := _ } ->
-      barrel_http_reply:error(400, <<"id in document differs from the path">>, Req2, State);
+      barrel_http_reply:error(400, <<"id in document differs from the path">>, Req, State);
     _ ->
-      barrel_http_reply:error(400, <<"missing property id in document">>, Req2, State)
+      barrel_http_reply:error(400, <<"missing property id in document">>, Req, State)
   end.
 
 
@@ -141,21 +141,23 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 create_resource(Req, State) ->
   #state{ database=Database, body=Json, method=Method} = State,
-  {AsyncStr, _} = cowboy_req:qs_val(<<"async">>, Req),
+  #{async := AsyncStr}
+    = cowboy_req:match_qs([{async, [], undefined}], Req),
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
   {Result, Req4} = case Method of
                      <<"POST">> ->
                        {barrel_local:post(Database, Json, [{async, Async}]), Req};
                      <<"PUT">> ->
-                       {EditStr, Req3} = cowboy_req:qs_val(<<"edit">>, Req),
+                       #{edit := EditStr}
+                         = cowboy_req:match_qs([{edit, [], undefined}], Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           {barrel_local:put(Database, Json, [{async, Async}]), Req3 };
+                           {barrel_local:put(Database, Json, [{async, Async}]), Req };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           {barrel_local:put_rev(Database, Doc, History, [{async, Async}]), Req3 }
+                           {barrel_local:put_rev(Database, Doc, History, [{async, Async}]), Req }
                        end
                    end,
   case Result of
@@ -173,9 +175,10 @@ create_resource(Req, State) ->
   end.
 
 delete_resource(Req, State) ->
-  {AsyncStr, _} = cowboy_req:qs_val(<<"async">>, Req),
+  #{async := AsyncStr}
+    = cowboy_req:match_qs([{async, [], undefined}], Req),
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
-  
+
   #state{ database=Database, docid=DocId, revid=RevId} = State,
   {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, [{async, Async}]),
   Reply = #{<<"ok">> => true,
