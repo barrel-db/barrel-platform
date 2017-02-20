@@ -114,7 +114,7 @@ revision_conflict(_Config) ->
   {ok, Doc1} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc2 = Doc1#{ <<"v">> => 2 },
   {ok, <<"a">>, _RevId} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {conflict, revision_conflict} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {error, {conflict, revision_conflict}} = barrel_local:put(<<"testdb">>, Doc2, []),
   ok.
 
 

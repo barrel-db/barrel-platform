@@ -785,7 +785,7 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
                 {ok, DI2} ->
                   {DI2, [Req | Reqs1]};
                 Conflict ->
-                  send_result(Req, Conflict),
+                  send_result(Req, {error, Conflict}),
                   {DI1, Reqs1}
               end
           end
@@ -846,7 +846,8 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
                            conflict => Conflict,
                            deleted => barrel_revtree:is_deleted(WinningRevInfo)},
       {ok, DocInfo2};
-    Conflict -> Conflict
+    Conflict ->
+      Conflict
   end.
   
 
