@@ -15,15 +15,10 @@
 -module(barrel_http_redirect).
 -author("Bernard Notarianni").
 
--export([init/3, handle/2, terminate/3]).
+-export([init/2]).
 
-init(_Type, Req, Opts) ->
-  {ok, Req, Opts}.
-
-handle(Req, Opts) ->
+init(Req, Opts) ->
   Location = proplists:get_value(location, Opts),
-  {ok, Reply} = cowboy_req:reply(302, [{<<"Location">>, Location}], <<>>, Req),
+  Reply = cowboy_req:reply(302, #{<<"Location">> => Location}, <<>>, Req),
   {ok, Reply, Opts}.
 
-terminate(_Reason, _Req, _State) ->
-  ok.

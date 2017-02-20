@@ -17,25 +17,14 @@
 
 
 %% API
--export([init/3]).
--export([handle/2]).
--export([terminate/3]).
+-export([init/2]).
 
--record(state, {method, store, dbid, conn}).
-
-init(_Type, Req, []) ->
-  {ok, Req, #state{}}.
-
-handle(Req, State) ->
+init(Req, Opts) ->
   {ok, Vsn} = application:get_key(barrel_http, vsn),
   {ok, Description} = application:get_key(barrel_http, description),
   Doc=#{ description => list_to_binary(Description)
        , version => list_to_binary(Vsn)
        , swagger => <<"/api-doc">>
        },
-  barrel_http_reply:doc(Doc, Req, State).
-
-terminate(_Reason, _Req, _State) ->
-  ok.
-
+  barrel_http_reply:doc(Doc, Req, Opts).
 
