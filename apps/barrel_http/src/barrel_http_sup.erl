@@ -58,8 +58,8 @@ init(_Args) ->
            %% , {"/replicate/:repid",            barrel_http_rest_replicate, []}
            %% , {"/dbs/:database/revsdiff",      barrel_http_rest_revsdiff, []}
            %% , {"/dbs/:database/walk/[...]",    barrel_http_rest_walk, []}
-           %% , {"/dbs",                         barrel_http_rest_dbs, []}
-           %% , {"/dbs/:database",               barrel_http_rest_db, []}
+           , {"/dbs",                         barrel_http_rest_dbs, []}
+           , {"/dbs/:database",               barrel_http_rest_db, []}
            %% , {"/dbs/:database/docs",          barrel_http_rest_docs, []}
            %% , {"/dbs/:database/docs/:docid",   barrel_http_rest_docs, []}
            , {"/",                            barrel_http_rest_root, []}
