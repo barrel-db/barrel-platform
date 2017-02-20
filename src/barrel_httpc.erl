@@ -12,6 +12,7 @@
 %% API
 -export([
   create_database/1,
+  create_database/2,
   delete_database/1,
   database_names/1,
   database_infos/1,
@@ -91,19 +92,56 @@
   change/0
 ]).
 
+
+%% @doc create a database from its URL
+-spec create_database(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 create_database(Url0) ->
-  {Url1, DbName} = name_from_url(Url0), DbObj = jsx:encode(#{ <<"database_id">> => DbName }),
+  {Url1, DbName} = name_from_url(Url0),
+  DbObj = jsx:encode(#{ <<"database_id">> => DbName }),
   case hackney:request(<<"POST">>, Url1, [], DbObj, [with_body]) of
     {ok, 201, _, _} -> ok;
     Error -> Error
   end.
 
+%% @doc create a database with a configuration
+%%
+%% Example of config:
+%% #{ <<"database_id'>> => << "DbName">>, <<"index_mode">> => <<"consistent">> }
+%%
+%% Index Mode can  be : <<"consistent">> | <<"lazy">>.
+-spec create_database(NodeUrl, Config) -> Res when
+  NodeUrl :: binary(),
+  DbUrl :: binary(),
+  Config :: #{},
+  Res :: {ok, DbUrl} | {error, any()}.
+create_database(Url0, Config) ->
+  Url1 = hackney_url: make_url(Url0, <<"dbs">>, []),
+  DbObj = jsx:encode(Config),
+  case hackney:request(<<"POST">>, Url1, [], DbObj, [with_body]) of
+    {ok, 201, _, Obj} ->
+      #{ <<"database_id">> := DbId} = jsx:decode(Obj, [return_maps]),
+      DbUrl = hackney_url: make_url(Url0, [<<"dbs">>, DbId], []),
+      {ok, DbUrl};
+    Error -> Error
+  end.
+
+%% @doc delete a database from its URL
+-spec delete_database(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 delete_database(Url) ->
   case hackney:request(<<"DELETE">>, Url, [], <<>>, [with_body]) of
     {ok, 200, _, _} -> ok;
     Error -> Error
   end.
 
+%% @doc get all database names on the node
+-spec database_names(NodeUrl) -> Res when
+  NodeUrl :: binary(),
+  DbName :: binary(),
+  Res :: [DbName] | {error, any()}.
 database_names(Url0) ->
   Url1 = hackney_url: make_url(Url0, <<"dbs">>, []),
   case hackney:request(<<"GET">>, Url1, [], <<>>, [with_body]) of
@@ -121,6 +159,12 @@ database_infos(Url) ->
     Error -> Error
   end.
 
+
+%% @doc connect to a database from its URL.
+%% If the database is not found, an error is returned
+-spec connect(DbUrl) -> Res when
+  DbUrl :: binary(),
+  Res :: ok | {error, any()}.
 connect(Url) ->
   Max = application:get_env(barrel, max_connections, 12),
   {_, DbName} = name_from_url(Url),

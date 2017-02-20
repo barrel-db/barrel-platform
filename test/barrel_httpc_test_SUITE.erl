@@ -105,6 +105,12 @@ db_ops(_Config) ->
   ok = barrel_httpc:delete_database(<<"http://localhost:7080/dbs/testdb2">>),
   {error, not_found} = barrel_httpc:connect(<<"http://localhost:7080/dbs/testdb2">>),
   [<<"source">>, <<"testdb">>] = barrel_httpc:database_names(<<"http://localhost:7080">>),
+  DbUrl = <<"http://localhost:7080/dbs/testdb2">>,
+  {ok, DbUrl} = barrel_httpc:create_database(
+    <<"http://localhost:7080">>, #{ <<"database_id">> => <<"testdb2">>}
+  ),
+  [<<"source">>, <<"testdb">>, <<"testdb2">>] = barrel_httpc:database_names(<<"http://localhost:7080">>),
+  ok = barrel_httpc:delete_database(<<"http://localhost:7080/dbs/testdb2">>),
   ok.
 
 basic_op(Config) ->
