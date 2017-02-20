@@ -668,20 +668,11 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
   
   lists:foldl(
     fun({DocInfo, Reqs}, Db1) ->
-      #{ id := DocId, rid := Rid, revtree := RevTree} = DocInfo,
+      #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
       LastSeq = maps:get(update_seq, DocInfo, -1),
       
-      %% find winning revision and update doc infos with it
-      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree),
-      RevInfo = maps:get(WinningRev, RevTree),
-      Deleted = barrel_revtree:is_deleted(RevInfo),
-      DocInfo2 = DocInfo#{
-        current_rev => WinningRev,
-        update_seq => Db1#db.updated_seq + 1,
-        branched => Branched,
-        conflict => Conflict,
-        deleted => Deleted
-      },
+      %% increment local document seq
+      DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
   
       %% doc counter increment
       Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
@@ -841,9 +832,19 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
       NewRev = barrel_doc:revid(NewGen, Rev, Body1),
       RevInfo = #{  id => NewRev,  parent => ParentRev, deleted => Doc#doc.deleted },
       RevTree2 = barrel_revtree:add(RevInfo, RevTree),
+
+      %% find winning revision and update doc infos with it
+      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+      WinningRevInfo = maps:get(WinningRev, RevTree2),
+
+      %% update docinfo
       DocInfo2 = DocInfo#{ body_map => BodyMap#{ NewRev => Doc#doc.body },
                            revtree => RevTree2,
-                           local_seq => Seq + 1},
+                           local_seq => Seq + 1,
+                           current_rev => WinningRev,
+                           branched => Branched,
+                           conflict => Conflict,
+                           deleted => barrel_revtree:is_deleted(WinningRevInfo)},
       {ok, DocInfo2};
     Conflict -> Conflict
   end.
@@ -857,9 +858,19 @@ merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInf
     true ->
       ToAdd = lists:sublist(Revs, Idx),
       RevTree2 = edit_revtree(ToAdd, Parent, Doc#doc.deleted, RevTree),
+
+      %% find winning revision and update doc infos with it
+      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+      WinningRevInfo = maps:get(WinningRev, RevTree2),
+
+      %% update docinfo
       DocInfo2 = DocInfo#{ local_seq := Seq + 1,
                            body_map => BodyMap#{ NewRev => Body },
-                           revtree => RevTree2 },
+                           revtree => RevTree2,
+                           current_rev => WinningRev,
+                           branched => Branched,
+                           conflict => Conflict,
+                           deleted => barrel_revtree:is_deleted(WinningRevInfo) },
       {ok, DocInfo2}
   end.
 
