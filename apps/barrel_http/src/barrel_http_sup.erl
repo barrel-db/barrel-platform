@@ -69,7 +69,10 @@ init(_Args) ->
 
   Http = ranch:child_spec(
            barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_clear,
-           #{env => #{dispatch => Dispatch}}),
+           #{env => #{dispatch => Dispatch},
+             middlewares => [cowboy_router,
+                             barrel_http_access_log,
+                             cowboy_handler]}),
 
   Specs = [Http],
   SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
