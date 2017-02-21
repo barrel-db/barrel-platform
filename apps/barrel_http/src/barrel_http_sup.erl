@@ -71,8 +71,8 @@ init(_Args) ->
            barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_clear,
            #{env => #{dispatch => Dispatch},
              middlewares => [cowboy_router,
-                             barrel_http_access_log,
-                             cowboy_handler]}),
+                             cowboy_handler,
+                             barrel_http_access_log]}),
 
   Specs = [Http],
   SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},

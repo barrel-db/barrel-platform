@@ -19,12 +19,8 @@
 -export([execute/2]).
 
 execute(Req, Env) ->
-	Path = cowboy_req:path_info(Req),
-  Method = cowboy_req:method(Req),
-  Path2 = case Path of
-            undefined -> [];
-            Path -> Path
-          end,
-  access:info("~s ~s", [Method, [<<"/">>, barrel_lib:binary_join(Path2, <<"/">>)]]),
-	{ok, Req, Env}.
-
+  #{method := Method,
+    peer := {Ip, _},
+    path := Path} = Req,
+  access:info("~p ~s ~s", [Ip, Method, Path]),
+  {ok, Req, Env}.
