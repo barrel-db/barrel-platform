@@ -39,6 +39,7 @@ start_link() ->
 
 -define(DEFAULT_NB_ACCEPTORS, 100).
 -define(DEFAULT_PORT, 7080).
+-define(DEFAULT_ACCESS_LOG, false).
 
 %%====================================================================
 %% Supervisor callbacks
@@ -47,6 +48,7 @@ start_link() ->
 init(_Args) ->
   ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
+  AccessLog = application:get_env(barrel_http, access_log, ?DEFAULT_ACCESS_LOG),
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
@@ -67,12 +69,17 @@ init(_Args) ->
            ],
   Dispatch = cowboy_router:compile([{'_', Routes}]),
 
+  Options0 = #{env => #{dispatch => Dispatch}},
+  Options1 = case AccessLog of
+               true -> Options0#{stream_handlers => [barrel_http_access_log,
+                                                     cowboy_stream_h]};
+               _ -> Options0
+             end,
+
   Http = ranch:child_spec(
-           barrel_http, NbAcceptors, ranch_tcp, [{port, ListenPort}], cowboy_clear,
-           #{env => #{dispatch => Dispatch},
-             middlewares => [cowboy_router,
-                             cowboy_handler,
-                             barrel_http_access_log]}),
+           barrel_http, NbAcceptors,
+           ranch_tcp, [{port, ListenPort}],
+           cowboy_clear, Options1),
 
   Specs = [Http],
   SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},

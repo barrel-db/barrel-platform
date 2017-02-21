@@ -14,13 +14,56 @@
 
 -module(barrel_http_access_log).
 -author("Bernard Notarianni").
--behaviour(cowboy_middleware).
+-behavior(cowboy_stream).
 
--export([execute/2]).
+-export([init/3]).
+-export([data/4]).
+-export([info/3]).
+-export([terminate/3]).
 
-execute(Req, Env) ->
+-record(state, {
+          next,
+          status_code,
+          method,
+          path,
+          ip
+         }).
+
+
+init(StreamID, Req, Opts) ->
   #{method := Method,
     peer := {Ip, _},
     path := Path} = Req,
-  access:info("~p ~s ~s", [Ip, Method, Path]),
-  {ok, Req, Env}.
+	{Commands0, Next} = cowboy_stream:init(StreamID, Req, Opts),
+	fold(Commands0, #state{next=Next, method=Method, ip=Ip, path=Path}).
+
+data(StreamID, IsFin, Data, State0=#state{next=Next0}) ->
+	{Commands0, Next} = cowboy_stream:data(StreamID, IsFin, Data, Next0),
+	fold(Commands0, State0#state{next=Next}).
+
+info(StreamID, Info, State0=#state{next=Next0}) ->
+	{Commands0, Next} = cowboy_stream:info(StreamID, Info, Next0),
+	fold(Commands0, State0#state{next=Next}).
+
+terminate(StreamID, Reason, #state{next=Next}=State) ->
+  #state{status_code=StatusCode, ip=Ip, path=Path, method=Method} = State,
+  access:info("~p ~p ~s ~s", [Ip, StatusCode, Method, Path]),
+  cowboy_stream:terminate(StreamID, Reason, Next).
+
+fold(Commands, State) ->
+  fold(Commands, State, []).
+
+fold([], State, Acc) ->
+  {lists:reverse(Acc), State};
+
+fold([Command={response, Code, _Headers, _Body}|Tail], State, Acc) ->
+  fold(Tail, State#state{status_code=Code}, [Command|Acc]);
+
+fold([Command={headers, Code, _Headers}|Tail], State, Acc) ->
+  fold(Tail, State#state{status_code=Code}, [Command|Acc]);
+
+fold([Command={error_response, Code, _Headers, _}|Tail], State, Acc) ->
+  fold(Tail, State#state{status_code=Code}, [Command|Acc]);
+
+fold([Command|Tail], State, Acc) ->
+  fold(Tail, State, [Command|Acc]).
