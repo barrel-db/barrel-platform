@@ -164,13 +164,7 @@ handle_info(init_dbs, State) ->
 
 handle_info(_Info, State) ->  {noreply, State}.
 
-terminate(_Reason, State) ->
-  case maps:find(ref, State) of
-    {ok, Ref} ->
-      _ = (catch rocksdb:close(Ref));
-    error ->
-      ok
-  end,
+terminate(_Reason, _State) ->
   ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.

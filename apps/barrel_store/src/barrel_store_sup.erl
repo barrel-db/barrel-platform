@@ -53,7 +53,7 @@ init([]) ->
       id => barrel_store,
       start => {barrel_store, start_link, []},
       restart => permanent,
-      shutdown => 5000,
+      shutdown => 2000,
       type => worker,
       modules => [barrel_store]
     },
@@ -65,4 +65,4 @@ init([]) ->
     , ?sup(barrel_task_status)
   ],
 
-  {ok, { {one_for_one, 5, 10}, Specs} }.
+  {ok, { {one_for_one, 4, 3600}, Specs} }.
