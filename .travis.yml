@@ -22,6 +22,11 @@ cache:
   directories:
     - $HOME/.cache/rebar3
 
+after_failure:
+  - cat `ls -1 -d -t _build/test/logs/ct_run* | head -1`/log/error.log
+  - cat `ls -1 -d -t _build/test/logs/ct_run* | head -1`/log/crash.log
+  - tail -100 `ls -1 -d -t _build/test/logs/ct_run* | head -1`/log/console.log
+
 addons:
   artifacts: true
   paths:
