@@ -2,7 +2,10 @@
 <img src="https://raw.githubusercontent.com/barrel-db/media/master/banner/barrel-banner-groupfb.png">
 
 <p align="center">
-   [![Gitter](https://badges.gitter.im/barrel-db/barrel-platform.svg)](https://gitter.im/barrel-db/barrel-platform?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
+   <a href="https://gitter.im/barrel-db/barrel-platform?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge">
+        <img src="https://badges.gitter.im/barrel-db/barrel-platform.svg">
+    </a>
    
    <a href="https://travis-ci.org/barrel-db/barrel">
         <img src="https://gitlab.com/barrel-db/barrel/badges/master/build.svg">
