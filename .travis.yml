@@ -16,7 +16,6 @@ before_script:
 
 
 script:
-  - - ${CXX} --version
   - ./support/rebar3 eunit
   - ./support/rebar3 ct
 
