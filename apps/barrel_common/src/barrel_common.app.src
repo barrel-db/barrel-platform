@@ -1,10 +1,11 @@
 {application, barrel_common,
  [{description, "barrel-db common library"},
-  {vsn, "0.8.0"},
+  {vsn, "0.8.1"},
   {registered, []},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    jsx
    ]},
   {env,[]},
   {modules, []},
