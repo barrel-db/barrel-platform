@@ -12,7 +12,7 @@ otp_release:
 
 before_script:
   - kerl list installations
-  - CXX=g++-6; fi
+  - CXX=g++-6
 
 
 script:
