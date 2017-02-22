@@ -1,3 +1,20 @@
-We’re closing our issue tracker on GitHub so we can focus on the GitLab.com project and respond to issues more quickly.
+(REPLACE ALL UPPERCASE EXPRESSIONS AND DELETE THIS LINE TO SUBMIT)
 
-We encourage you to open an issue on [the GitLab.com issue tracker](https://gitlab.com/barrel-db/platform). You can log into GitLab.com using your GitHub account.
+#### Description :octocat:
+
+(DESCRIPTION OF THE PROBLEM)
+
+#### Reproduction guide :beetle:
+- Start Barrel
+- (REPRODUCTION STEPS)
+
+*Observed behaviour:* :eyes: :broken_heart:
+
+(DESCRIPTION OF THE OBSERVED BEHAVIOUR)
+
+*Expected behaviour:* :heart: :smile:
+
+(DESCRIPTION OF THE EXPECTED BEHAVIOUR)
+
+#### Backtrace :paw_prints:
+‡

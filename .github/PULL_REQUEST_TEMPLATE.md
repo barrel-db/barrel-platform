@@ -1,3 +1,7 @@
-Thank you for taking the time to contribute back to Barrel!
- 
- Please open a merge request on [GitLab.com](https://gitlab.com/barrel-db/platform), we look forward to reviewing your contribution! You can log into GitLab.com using your GitHub account.
+Thank you for contributing to Barrel!
+
+Before you submit this pull request, please ensure it is against the develop branch and not master.
+
+This message should be replaced with a description of your change.
+
+Thank you <3
