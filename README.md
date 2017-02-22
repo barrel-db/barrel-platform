@@ -7,8 +7,8 @@
         <img src="https://badges.gitter.im/barrel-db/barrel-platform.svg">
     </a>
    
-   <a href="https://travis-ci.org/barrel-db/barrel">
-        <img src="https://gitlab.com/barrel-db/barrel/badges/master/build.svg">
+   <a href="https://travis-ci.org/barrel-db/barrel-platform">
+        <img src="https://travis-ci.org/barrel-db/barrel-platform.svg?branch=master">
    </a>
    
    <a href="https://gitlab.com/barrel-db/barrel/blob/master/LICENSE">
