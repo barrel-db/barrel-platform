@@ -1,18 +1,30 @@
+sudo: false
+dist: trusty
 language: erlang
 
-otp_release:
-  - 19.2
+addons:
+   apt:
+      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
+      packages: ['g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
 
-before_install:
-  - sudo apt-get update -y
-  - sudo apt-get -y install g++-4.9
+otp_release:
+  - 19.2.3
+
+env:
+  - JOB_NAME=clang
 
 before_script:
-    - kerl list installations
-    - curl -L https://s3.amazonaws.com/rebar3/rebar3
-    - chmod +x rebar3
-    - export CXX=g++-4.9
+  - kerl list installations
+  - curl -L https://s3.amazonaws.com/rebar3/rebar3
+  - chmod +x rebar3
+  - CXX=g++-6; fi
+
 
 script:
-    - ./rebar3 eunit
-    - ./rebar3 ct
+  - - ${CXX} --version
+  - ./rebar3 eunit
+  - ./rebar3 ct
+
+notifications:
+  email:
+    - team@barrel-db.org
