@@ -18,10 +18,14 @@ script:
   - ./support/rebar3 eunit
   - ./support/rebar3 ct
 
+cache:
+  directories:
+    - $HOME/.cache/rebar3
+
 addons:
   artifacts: true
   paths:
-    - _build/test/logs
+  - _build/test/logs
 
 notifications:
   email:
