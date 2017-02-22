@@ -11,6 +11,10 @@
         <img src="https://travis-ci.org/barrel-db/barrel-platform.svg?branch=master">
    </a>
    
+   <a href="https://waffle.io/barrel-db/barrel-platform">
+    <img src="https://badge.waffle.io/barrel-db/barrel-platform.png?label=Merging...&title=Merging">
+   </a>
+      
    <a href="https://gitlab.com/barrel-db/barrel/blob/master/LICENSE">
         <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
    </a>
