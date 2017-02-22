@@ -8,7 +8,7 @@ addons:
       packages: ['g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
 
 otp_release:
-  - 19.2.3
+  - 19.2
 
 env:
   - JOB_NAME=clang
