@@ -14,10 +14,14 @@ before_script:
   - kerl list installations
   - CXX=g++-6
 
-
 script:
   - ./support/rebar3 eunit
   - ./support/rebar3 ct
+
+addons:
+  artifacts: true
+  paths:
+    - _build/test/logs
 
 notifications:
   email:
