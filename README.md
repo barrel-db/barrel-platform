@@ -2,6 +2,8 @@
 <img src="https://raw.githubusercontent.com/barrel-db/media/master/banner/barrel-banner-groupfb.png">
 
 <p align="center">
+   [![Gitter](https://badges.gitter.im/barrel-db/barrel-platform.svg)](https://gitter.im/barrel-db/barrel-platform?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+   
    <a href="https://travis-ci.org/barrel-db/barrel">
         <img src="https://gitlab.com/barrel-db/barrel/badges/master/build.svg">
    </a>
@@ -28,7 +30,7 @@ Because Barrel is built on an existing relatively small code base, it is possibl
 ## Requirements
 
 - OS supported: Linux, OSX, BSDs
-- Erlang 19.1
+- Erlang 19.2
 
 ## Prerequisites
 
