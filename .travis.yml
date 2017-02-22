@@ -10,9 +10,6 @@ addons:
 otp_release:
   - 19.2
 
-env:
-  - JOB_NAME=clang
-
 before_script:
   - kerl list installations
   - curl -L https://s3.amazonaws.com/rebar3/rebar3
