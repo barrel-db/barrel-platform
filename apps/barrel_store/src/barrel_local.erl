@@ -47,18 +47,6 @@
   db_infos/1
 ]).
 
-
--export([
-  attach/4,
-  attach/5,
-  get_attachment/4,
-  get_attachment_binary/4,
-  replace_attachment/5,
-  replace_attachment_binary/5,
-  delete_attachment/4,
-  attachments/3
-]).
-
 -export([
   start_replication/2,
   start_replication/3,
@@ -309,31 +297,6 @@ find_by_key(Db, Path, Fun, AccIn, Opts) ->
 revsdiff(Db, DocId, RevIds) ->
   barrel_db:revsdiff(Db, DocId, RevIds).
 
-
-
-attach(Db, DocId, AttDescription, Options) ->
-  barrel_attachments:attach(Db, DocId, AttDescription, Options).
-
-attach(Db, DocId, AttDescription, Binary, Options) ->
-  barrel_attachments:attach(Db, DocId, AttDescription, Binary, Options).
-
-get_attachment(Db, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment(Db, DocId, AttId, Options).
-
-get_attachment_binary(Db, DocId, AttId, Options) ->
-  barrel_attachments:get_attachment_binary(Db, DocId, AttId, Options).
-
-replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
-  barrel_attachments:replace_attachment(Db, DocId, AttId, AttDescription, Options).
-
-replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
-  barrel_attachments:replace_attachment_binary(Db, DocId, AttId, Binary, Options).
-
-delete_attachment(Db, DocId, AttId, Options) ->
-  barrel_attachments:delete_attachment(Db, DocId, AttId, Options).
-
-attachments(Db, DocId, Options) ->
-  barrel_attachments:attachments(Db, DocId, Options).
 
 %% replication API
 start_replication(Source, Target) ->
