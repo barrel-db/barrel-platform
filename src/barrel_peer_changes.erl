@@ -6,13 +6,7 @@
          parse_change/1]).
 
 
--type listener_options() :: #{
-since => non_neg_integer(),
-mode => binary | sse,
-include_doc => true | false,
-history => true | false,
-change_cb => fun( (barrel_peer:change()) -> ok )
-}.
+-type listener_options() :: #{}.
 
 -export_type([listener_options/0]).
 
