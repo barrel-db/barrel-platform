@@ -24,7 +24,8 @@
   include_doc/1,
   collect_changes/1,
   changes_feed_callback/1,
-  heartbeat_collect_change/1
+  heartbeat_collect_change/1,
+  multiple_put/1
 ]).
 
 -export([
@@ -41,7 +42,8 @@ all() ->
     include_doc,
     collect_changes,
     changes_feed_callback,
-    heartbeat_collect_change
+    heartbeat_collect_change,
+    multiple_put
   ].
 
 init_per_suite(Config) ->
@@ -110,10 +112,7 @@ collect_changes(Config) ->
     #{ <<"seq">> := 3, <<"id">> := <<"cc">>},
     #{ <<"seq">> := 4, <<"id">> := <<"dd">>}
   ] = barrel_httpc_changes:changes(Pid),
-  
   ok = barrel_httpc_changes:stop(Pid).
-
-
 
 changes_feed_callback(Config) ->
   Self = self(),
@@ -149,6 +148,55 @@ heartbeat_collect_change(Config) ->
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
   ok = barrel_httpc_changes:stop(Pid).
+
+multiple_put(Config) ->
+  Self = self(),
+  
+  %% spawn a change listener
+  spawn(
+    fun() ->
+      ChangePid = self(),
+      Callback =
+      fun(Change) ->
+        ChangePid ! {change, Change}
+      end,
+      Options = #{since => 0, mode => sse, changes_cb => Callback },
+      {ok, _Pid} = barrel_httpc_changes:start_link(db(Config), Options),
+      Changes = collect_changes(1000, queue:new()),
+      Self ! {changes, Changes}
+    end
+  ),
+
+  %% write docs
+  Pids = lists:foldl(
+    fun(I, Acc) ->
+      DocId = << "doc", (integer_to_binary(I))/binary >>,
+      Doc = #{ <<"id">> => DocId, <<"val">> => I},
+      Pid = spawn_link(
+        fun() ->
+          {ok, DocId, _} = barrel_httpc:put(db(Config), Doc, []),
+          Self ! {ok, self()},
+          timer:sleep(100)
+        end
+      ),
+      [Pid | Acc]
+    end,
+    [],
+    lists:seq(1, 1000)
+  ),
+
+  ok = wait_pids(Pids),
+
+  #{ <<"docs_count">> := 1000 } = barrel_httpc:database_infos(?DB_URL),
+  receive
+    {changes, Changes} ->
+      case length(Changes) of
+        1000 -> ok;
+        _ -> erlang:error(bad_changes_count)
+      end
+  end,
+  ok.
+
   
 collect_changes(0, Q) ->
   queue:to_list(Q);
@@ -156,4 +204,11 @@ collect_changes(I, Q) ->
   receive
     {change, Change} ->
       collect_changes(I-1, queue:in(Change, Q))
+  end.
+
+wait_pids([]) -> ok;
+wait_pids(Pids) ->
+  receive
+    {ok, Pid} -> wait_pids(Pids -- [Pid])
+  after 5000 -> {error, receive_pids}
   end.
