@@ -15,7 +15,7 @@
     <img src="https://badge.waffle.io/barrel-db/barrel-platform.png?label=Merging...&title=Merging">
    </a>
       
-   <a href="https://gitlab.com/barrel-db/barrel/blob/master/LICENSE">
+   <a href="https://github.com/barrel-db/barrel-platform/blob/master/LICENSE">
         <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
    </a>
 
