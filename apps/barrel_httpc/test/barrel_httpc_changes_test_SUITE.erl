@@ -21,6 +21,7 @@
 
 -export([
   collect_change/1,
+  include_doc/1,
   collect_changes/1,
   changes_feed_callback/1,
   heartbeat_collect_change/1
@@ -37,6 +38,7 @@
 all() ->
   [
     collect_change,
+    include_doc,
     collect_changes,
     changes_feed_callback,
     heartbeat_collect_change
@@ -72,6 +74,17 @@ collect_change(Config) ->
   [] = barrel_httpc_changes:changes(Pid),
   ok = barrel_httpc_changes:stop(Pid).
 
+include_doc(Config) ->
+  {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse, include_doc => true}),
+  [] = barrel_httpc_changes:changes(Pid),
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _RevId} = barrel_httpc:put(db(Config), Doc, []),
+  timer:sleep(100),
+  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>, <<"doc">> := Doc2}] = barrel_httpc_changes:changes(Pid),
+  #{ <<"id">> := <<"aa">>, <<"v">> := 1 } =  Doc2,
+  [] = barrel_httpc_changes:changes(Pid),
+  ok = barrel_httpc_changes:stop(Pid).
+
 collect_changes(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse}),
   [] = barrel_httpc_changes:changes(Pid),
@@ -99,6 +112,8 @@ collect_changes(Config) ->
   ] = barrel_httpc_changes:changes(Pid),
   
   ok = barrel_httpc_changes:stop(Pid).
+
+
 
 changes_feed_callback(Config) ->
   Self = self(),

@@ -95,7 +95,7 @@ init_feed_changes(Req, #state{feed=normal}=S) ->
   Req2 = cowboy_req:stream_reply(200, Req),
   {ok, Req2, S};
 
-init_feed_changes(Req, #state{feed=eventsource}=S) ->
+init_feed_changes(Req, #state{feed=eventsource, options=Options}=S) ->
   Self = self(),
   Callback =
     fun(Change) ->
@@ -103,7 +103,8 @@ init_feed_changes(Req, #state{feed=eventsource}=S) ->
     end,
   Source = S#state.database,
   Since = S#state.since,
-  SseOptions = #{since => Since, mode => sse, changes_cb => Callback },
+  IncludeDoc = proplists:get_value(include_doc, Options, false),
+  SseOptions = #{since => Since, mode => sse, changes_cb => Callback, include_doc => IncludeDoc },
   {ok, Pid} = barrel_local_changes:start_link(Source, SseOptions),
 
   Req3 = cowboy_req:stream_reply(200, #{<<"content">> => <<"text/event-stream">>}, Req),
