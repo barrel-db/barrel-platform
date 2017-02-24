@@ -159,18 +159,17 @@ get_revision(RevId, DocInfo, ReadOptions, Db) ->
   end.
 
 meta(RevId, DocInfo) ->
-  #{rid := Rid, current_rev := CurrentRev, revtree := RevTree} = DocInfo,
+  #{rid := Rid, revtree := RevTree} = DocInfo,
   {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
   Deleted = maps:get(deleted, RevInfo, false),
   maybe_add_deleted_meta(
     #{<<"rid">> => encode_rid(Rid),
       <<"rev">> => RevId },
-    RevId,
-    CurrentRev,
-    Deleted).
+    Deleted
+  ).
 
-maybe_add_deleted_meta(Meta, RevId, RevId, false) -> Meta;
-maybe_add_deleted_meta(Meta, _, _, Deleted) -> Meta#{ <<"deleted">> => Deleted}.
+maybe_add_deleted_meta(Meta, false) -> Meta;
+maybe_add_deleted_meta(Meta, Deleted) -> Meta#{ <<"deleted">> => Deleted}.
 
 
 get_persisted_rev(#db{store=Store}, DocId, RevId, ReadOptions) ->
