@@ -20,8 +20,8 @@
   get/3,
   put/3,
   post/3,
-  delete/4,
-  put_rev/4,
+  delete/3,
+  put_rev/5,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5,
@@ -69,7 +69,8 @@
 
 -type db_infos() :: #{}.
 
--type doc() :: term().
+-type doc() :: #{}.
+-type meta() :: #{}.
 
 -type read_options() :: [read_option()].
 
@@ -184,12 +185,27 @@ connect(Url) ->
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc(),
-  Res :: {ok, Doc} | {error, not_found} | {error, any()}.
+  Meta :: meta(),
+  Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options),
   case request(Conn, <<"GET">>, Url) of
-    {ok, 200, _, JsonBody} -> {ok, jsx:decode(JsonBody, [return_maps])};
-    Error -> Error
+    {ok, 200, _, JsonBody} ->
+      ReqObj = jsx:decode(JsonBody, [return_maps]),
+      %% extract metadata from the request object
+      {Doc, Meta} = maps:fold(
+        fun
+          (<<"_", MetaKey/binary >>, Value, {D, M}) ->
+            {D, M#{ MetaKey => Value }};
+          (DocKey, Value, {D, M}) ->
+            {D#{ DocKey => Value }, M}
+        end,
+        {#{}, #{}},
+        ReqObj
+      ),
+      {ok, Doc, Meta};
+    Error ->
+      Error
   end.
 
 %% @doc create or update a document. Return the new created revision
@@ -199,10 +215,19 @@ get(Conn, DocId, Options) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-put(Conn, #{ <<"id">> := DocId } = Doc, Options) ->
-  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options),
+put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
+  {Headers, Options1} = case proplists:get_value(rev, Options0) of
+                          undefined ->
+                            {[{<<"Content-Type">>, <<"application/json">>}], Options0};
+                          Rev ->
+                            Hdrs = [{<<"Content-Type">>, <<"application/json">>},
+                                    <<"ETag">>, Rev],
+                            {Hdrs, proplists:delete(rev, Options0)}
+                        end,
+
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   Body = jsx:encode(Doc),
-  case request(Conn, <<"PUT">>, Url, [], Body) of
+  case request(Conn, <<"PUT">>, Url, Headers, Body) of
     {ok, Status, _, JsonBody}=Resp ->
       case lists:member(Status, [200, 201]) of
         true ->
@@ -216,14 +241,32 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options) ->
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
 
 %% @doc delete a document
--spec delete(Conn, DocId, RevId, Options) -> Res when
+-spec delete(Conn, DocId, Options) -> Res when
   Conn::conn(),
   DocId :: docid(),
-  RevId :: rev(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-delete(Connect, DocId, RevId, Options) ->
-  put(Connect, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
+delete(Conn, DocId, Options0) ->
+  {Headers, Options1} = case proplists:get_value(rev, Options0) of
+                          undefined ->
+                            {[{<<"Content-Type">>, <<"application/json">>}], Options0};
+                          Rev ->
+                            Hdrs = [{<<"Content-Type">>, <<"application/json">>},
+                                    <<"ETag">>, Rev],
+                            {Hdrs, proplists:delete(rev, Options0)}
+                        end,
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  case request(Conn, <<"DELETE">>, Url, Headers, <<>>) of
+    {ok, Status, _, JsonBody}=Resp ->
+      case lists:member(Status, [200, 201]) of
+        true ->
+          Json = jsx:decode(JsonBody, [return_maps]),
+          {ok, maps:get(<<"id">>, Json), maps:get(<<"rev">>, Json)};
+        false ->
+          {error, {bad_response, Resp}}
+      end;
+    Error -> Error
+  end.
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
@@ -243,17 +286,19 @@ post(Conn, Doc, Options) ->
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Conn, Doc, History, Options) -> Res when
+-spec put_rev(Conn, Doc, History, Deleted, Options) -> Res when
   Conn::conn(),
   Doc :: doc(),
   History :: [rev()],
+  Deleted :: true | false,
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, _Options) ->
+put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, Deleted, _Options) ->
   Req =
     #{
       <<"document">> => Doc,
-      <<"history">> => History
+      <<"history">> => History,
+      <<"deleted">> => Deleted
     },
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], [{<<"edit">>, <<"true">>}]),
   Body = jsx:encode(Req),
@@ -268,7 +313,7 @@ put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, _Options) ->
       end;
     Error -> Error
   end;
-put_rev(_, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
+put_rev(_, _, _, __) -> erlang:error({bad_doc, invalid_docid}).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when
