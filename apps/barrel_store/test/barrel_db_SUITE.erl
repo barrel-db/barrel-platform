@@ -87,9 +87,8 @@ basic_op(_Config) ->
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
-  {ok, Doc, Meta} = barrel_local:get(<<"testdb">>, <<"a">>, []),
-  #{<<"deleted">> := false,
-    <<"rev">> := RevId} = Meta,
+  {ok, Doc, #{<<"rev">> := RevId}=Meta} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  false = maps:is_key(<<"deleted">>, Meta),
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, [{rev, RevId}]),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []).
 

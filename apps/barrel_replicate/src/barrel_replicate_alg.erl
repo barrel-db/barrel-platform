@@ -38,8 +38,7 @@ sync_change(Source, Target, Change, Metrics) ->
 sync_revision(Source, Target, DocId, Revision, Metrics) ->
   {Doc, Meta, Metrics2} = read_doc_with_history(Source, DocId, Revision, Metrics),
   History = barrel_doc:parse_revisions(Meta),
-  #{<<"deleted">> := Deleted} =  Meta,
-
+  Deleted = maps:get(<<"deleted">>, Meta, false),
   Metrics3 = write_doc(Target, Doc, History, Deleted, Metrics2),
   Metrics3.
 

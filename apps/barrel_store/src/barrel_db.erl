@@ -158,12 +158,19 @@ get_revision(RevId, DocInfo, ReadOptions, Db) ->
   end.
 
 meta(RevId, DocInfo) ->
-  #{rid := Rid, revtree := RevTree} = DocInfo,
+  #{rid := Rid, current_rev := CurrentRev, revtree := RevTree} = DocInfo,
   {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
   Deleted = maps:get(deleted, RevInfo, false),
-  #{<<"rid">> => encode_rid(Rid),
-    <<"deleted">> => Deleted,
-    <<"rev">> => RevId}.
+  maybe_add_deleted_meta(
+    #{<<"rid">> => encode_rid(Rid),
+      <<"rev">> => RevId },
+    RevId,
+    CurrentRev,
+    Deleted).
+
+maybe_add_deleted_meta(Meta, RevId, RevId, false) -> Meta;
+maybe_add_deleted_meta(Meta, _, _, Deleted) -> Meta#{ <<"deleted">> => Deleted}.
+
 
 get_persisted_rev(#db{store=Store}, DocId, RevId, ReadOptions) ->
   case rocksdb:get(Store, barrel_keys:rev_key(DocId, RevId), ReadOptions) of
