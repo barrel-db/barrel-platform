@@ -185,7 +185,7 @@ put_doc(DocName, Value, Db) ->
       {ok,_,_} = barrel_local:put(Db, Doc2, [{rev, RevId}]);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Db, Doc, [])
+      {ok,_,_} = barrel_local:post(Db, Doc, [])
   end.
 
 delete_doc(DocName, Db) ->
