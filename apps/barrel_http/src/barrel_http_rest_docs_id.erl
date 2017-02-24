@@ -53,9 +53,6 @@ check_params(Req, State) ->
 
 parse_params([], State) ->
   {ok, State};
-parse_params([{<<"rev">>, Rev}|Tail], #state{method = <<"GET">>,
-                                             options=Opts }=State) ->
-  parse_params(Tail, State#state{options=[{rev, Rev} | Opts]});
 parse_params([{<<"edit">>, Edit}|Tail], State) ->
   parse_params(Tail, State#state{edit=Edit});
 parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
