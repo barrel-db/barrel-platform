@@ -187,9 +187,10 @@ connect(Url) ->
   Doc :: doc(),
   Meta :: meta(),
   Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
-get(Conn, DocId, Options) ->
-  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options),
-  case request(Conn, <<"GET">>, Url) of
+get(Conn, DocId, Options0) ->
+  {Headers, Options1} = headers(Options0),
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  case request(Conn, <<"GET">>, Url, Headers, <<>>) of
     {ok, 200, _, JsonBody} ->
       ReqObj = jsx:decode(JsonBody, [return_maps]),
       {Meta, Doc} = maps:take(<<"_meta">>, ReqObj),
