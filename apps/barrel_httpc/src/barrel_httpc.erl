@@ -192,17 +192,7 @@ get(Conn, DocId, Options) ->
   case request(Conn, <<"GET">>, Url) of
     {ok, 200, _, JsonBody} ->
       ReqObj = jsx:decode(JsonBody, [return_maps]),
-      %% extract metadata from the request object
-      {Doc, Meta} = maps:fold(
-        fun
-          (<<"_", MetaKey/binary >>, Value, {D, M}) ->
-            {D, M#{ MetaKey => Value }};
-          (DocKey, Value, {D, M}) ->
-            {D#{ DocKey => Value }, M}
-        end,
-        {#{}, #{}},
-        ReqObj
-      ),
+      {Meta, Doc} = maps:take(<<"_meta">>, ReqObj),
       {ok, Doc, Meta};
     Error ->
       Error

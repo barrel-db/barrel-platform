@@ -43,14 +43,7 @@ fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options0) ->
   WrapperFun =
     fun(Obj, Acc) ->
       %% extract metadata.
-      {Doc, Meta} = maps:fold(
-        fun
-          (<< "_", Key/binary >>, Value, {D, M}) -> {D, M#{ Key => Value }};
-          (Key, Value, {D, M}) -> {D#{ Key => Value}, M}
-        end,
-        {#{}, #{}},
-        Obj
-      ),
+      {Meta, Doc} = maps:take(<<"_meta">>, Obj),
       UserFun(Doc, Meta, Acc)
     end,
   
