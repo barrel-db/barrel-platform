@@ -663,66 +663,72 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
   end,
 
   lists:foldl(
-    fun({DocInfo, Reqs}, Db1) ->
-      #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
-      LastSeq = maps:get(update_seq, DocInfo, -1),
-
-      %% increment local document seq
-      DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
-
-      %% doc counter increment
-      Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
-
-      %% update db object
-      Db2 = Db1#db{updated_seq = Db1#db.updated_seq + 1,
-                   docs_count = Db1#db.docs_count  + Inc},
-
-      %% revision has changed put the ancestor outside the value
-      {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
-
-      %% Create the changes index metadata
-      SeqMeta = maps:remove(body_map, DocInfo3),
-
-      %% finally write the batch
-      Batch =
-        maybe_update_changes(
-          LastSeq,
-          maybe_backup_ancestor(
-            Ancestor,
-            maybe_link_rid(
-              DocInfo3,
-              [
-                {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
-                {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
-                {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
-                {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
-              ]
+    fun
+      ({#{ local_seq := 0}, []}, Db1) ->
+        %% edge case, an update happened on a none existing doc
+        %% it should be safe there to return the db since the not_found
+        %% error has already be sent back to the requesters
+        Db1;
+      ({DocInfo, Reqs}, Db1) ->
+        #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
+        LastSeq = maps:get(update_seq, DocInfo, -1),
+  
+        %% increment local document seq
+        DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
+  
+        %% doc counter increment
+        Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
+  
+        %% update db object
+        Db2 = Db1#db{updated_seq = Db1#db.updated_seq + 1,
+                     docs_count = Db1#db.docs_count + Inc},
+  
+        %% revision has changed put the ancestor outside the value
+        {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
+  
+        %% Create the changes index metadata
+        SeqMeta = maps:remove(body_map, DocInfo3),
+  
+        %% finally write the batch
+        Batch =
+          maybe_update_changes(
+            LastSeq,
+            maybe_backup_ancestor(
+              Ancestor,
+              maybe_link_rid(
+                DocInfo3,
+                [
+                  {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
+                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
+                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
+                  {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
+                ]
+              )
             )
-          )
-        ),
-
-      case rocksdb:write(Store, Batch, [{sync, true}]) of
-        ok ->
-          lists:foreach(
-            fun(Req) -> send_result(Req, {ok, DocId, WinningRev}) end,
-            Reqs
           ),
-          ets:insert(barrel_dbs, Db2),
-          barrel_db_event:notify(Db2#db.id, db_updated),
-          Db2;
-        Error ->
-          lager:error(
-            "~s: error writing ~p: ~p",
-            [?MODULE_STRING, DocId, Error]
-          ),
-
-          lists:foreach(
-            fun(Req) -> send_result(Req, Error) end,
-            Reqs
-          ),
-          Db2
-      end
-    end,
+  
+        case rocksdb:write(Store, Batch, [{sync, true}]) of
+          ok ->
+            lists:foreach(
+              fun(Req) -> send_result(Req, {ok, DocId, WinningRev}) end,
+              Reqs
+            ),
+            ets:insert(barrel_dbs, Db2),
+            barrel_db_event:notify(Db2#db.id, db_updated),
+            Db2;
+          Error ->
+            lager:error(
+              "~s: error writing ~p: ~p",
+              [?MODULE_STRING, DocId, Error]
+            ),
+  
+            lists:foreach(
+              fun(Req) -> send_result(Req, Error) end,
+              Reqs
+            ),
+            Db2
+        end
+      end,
     Db#db{last_rid=NewRid},
     Updates
   ).
