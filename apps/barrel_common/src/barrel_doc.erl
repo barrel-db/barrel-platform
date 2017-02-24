@@ -21,7 +21,7 @@
   , parse_revisions/1
   , trim_history/3
   , compare/2
-  , doc_from_obj/1]).
+  , make_doc/3]).
 
 -include("barrel_common.hrl").
 
@@ -128,37 +128,22 @@ deleted(#{ <<"_deleted">> := Del}) when is_boolean(Del) -> Del;
 deleted(_) -> false.
 
 
-
-%% @doc return a doc record from a objecy
+%% @doc return a doc record from a objec
 %% this is used internally to handle docs
--spec doc_from_obj(Obj) -> Doc when
-  Obj :: map(),
-  Doc :: #doc{}.
-doc_from_obj(Obj) when is_map(Obj) ->
-  %% normalize the body
-  Body = maps:filter(fun
-                       (<<"">>, _) -> false;
-                       (<<"_deleted">>, _) -> true;
-                       (<<"_attachments">>, _) -> true;
-                       (<<"_", _/binary>>, _) -> false;
-                       (_, _) -> true
-                     end, Obj),
+-spec make_doc(Obj, Revs, Deleted) -> Doc when
+    Obj :: map(),
+    Revs :: [revid()],
+    Deleted :: boolean(),
+    Doc :: #doc{}.
+make_doc(Obj, Revs, Deleted) when is_map(Obj) ->
   Id = case maps:find(<<"id">>, Obj) of
-            {ok, Id0} -> Id0;
-            error -> barrel_lib:uniqid()
-          end,
+         {ok, Id0} -> Id0;
+         error -> barrel_lib:uniqid()
+       end,
 
-  % TODO: maybe directly handle json object coming
-  % from HTTP from revs? (to parse history)
-  Revs = case maps:find(<<"_rev">>, Obj) of
-           {ok, Rev} -> [Rev];
-           error -> [<<>>]
-         end,
-
-  Deleted = deleted(Obj),
   #doc{ id = Id,
         revs = Revs,
-        body = Body,
+        body = Obj,
         deleted = Deleted }.
 
 
@@ -201,7 +186,7 @@ encode_revisions_test() ->
 parse_revisions_test() ->
   Revs = [<<"2-b19b17d048f082aa4a62c8da1262a33a">>,<<"1-5c1f0a9d721f0731a46645d18b763047">>],
   Body = #{
-    <<"_revisions">> => #{
+    <<"revisions">> => #{
       <<"start">> => 2,
       <<"ids">> => [<<"b19b17d048f082aa4a62c8da1262a33a">>, <<"5c1f0a9d721f0731a46645d18b763047">>]
     }
@@ -209,17 +194,16 @@ parse_revisions_test() ->
   ?assertEqual(Revs, parse_revisions(Body)).
 
 
-doc_from_obj_test() ->
+make_doc_test() ->
   Obj = #{ <<"id">> => <<"a">>,
-           <<"_rev">> => <<"rev">>,
-           <<"_deleted">> => true,
-           <<"_rid">> => <<"rid">>,
            <<"field">> => <<"f">>},
+  Rev = <<"rev">>,
+  Deleted = true,
   Doc =
     #doc{id = <<"a">>,
          revs = [<<"rev">>],
-         body = #{ <<"id">> => <<"a">>, <<"_deleted">> => true, <<"field">> => <<"f">> },
+         body = #{ <<"id">> => <<"a">>, <<"field">> => <<"f">> },
          deleted = true},
-  
-  ?assertEqual(Doc, doc_from_obj(Obj)).
+
+  ?assertEqual(Doc, make_doc(Obj, [Rev], Deleted)).
 -endif.

@@ -129,7 +129,7 @@ deleted_doc(_Config) ->
     barrel_replicate:start_replication(RepConfig, []),
   timer:sleep(200),
   {ok, #{ <<"id">> := <<"a">>} ,#{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
-  {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, RevId, []),
+  {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, [{rev, RevId}]),
   {error, not_found} = barrel_local:get(<<"source">>, <<"a">>, []),
   timer:sleep(400),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
@@ -338,9 +338,10 @@ purge_scenario(Map, Db) ->
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
-    {ok, Doc, _} ->
+    {ok, Doc, Meta} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Db, Doc2, []);
+      RevId = maps:get(<<"rev">>, Meta),
+      {ok,_,_} = barrel_local:put(Db, Doc2, [{rev, RevId}]);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
       {ok,_,_} = barrel_local:put(Db, Doc, [])
@@ -350,9 +351,9 @@ delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
     {error, not_found} -> ok;
-    {ok, Doc, _} ->
-      RevId = maps:get(<<"_rev">>, Doc),
-      {ok, _, _} = barrel_local:delete(Db, Id, RevId, []),
+    {ok, _Doc, Meta} ->
+      RevId = maps:get(<<"rev">>, Meta),
+      {ok, _, _} = barrel_local:delete(Db, Id, [{rev, RevId}]),
       ok
   end.
 

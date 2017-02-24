@@ -141,10 +141,7 @@ maybe_get_revision(Rev, DocInfo, ReadOptions, Db) ->
   get_revision(RevId, DocInfo, ReadOptions, Db).
 
 get_body(RevId, #{ body_map := BodyMap}) ->
-  case maps:find(RevId, BodyMap) of
-    {ok, Body} -> {ok, Body#{ <<"_rev">> => RevId}};
-    error -> error
-  end.
+  maps:find(RevId, BodyMap).
 
 get_revision(RevId, DocInfo, ReadOptions, Db) ->
   case get_body(RevId, DocInfo) of
