@@ -208,17 +208,19 @@ update_doc(DbName, Doc, Options) ->
     [Res] -> Res
   end.
 
-prepare_docs([Doc | Rest], DocBuckets, Async, WithConflict, CreateIfMissing, Ref, Idx) ->
+prepare_docs(
+  [Doc | Rest], DocBuckets, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx
+) ->
   Req = {self(), Ref, Idx, Async},
-  Update = {Doc, WithConflict, CreateIfMissing, Req},
+  Update = {Doc, WithConflict, CreateIfMissing, ErrorIfExists, Req},
 
   DocBuckets2 = case maps:find(Doc#doc.id, DocBuckets) of
                   {ok, OldUpdates} -> maps:put(Doc#doc.id,  OldUpdates ++ [Update], DocBuckets);
                   error -> maps:put(Doc#doc.id,  [Update], DocBuckets)
                 end,
 
-  prepare_docs(Rest, DocBuckets2, Async, WithConflict, CreateIfMissing, Ref, Idx + 1);
-prepare_docs([], DocBuckets, _, _, _, _, Idx) ->
+  prepare_docs(Rest, DocBuckets2, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx + 1);
+prepare_docs([], DocBuckets, _, _, _, _, _, Idx) ->
   {DocBuckets, Idx}.
 
 update_docs(DbName, Docs, Options) ->
@@ -228,9 +230,13 @@ update_docs(DbName, Docs, Options) ->
       Async = proplists:get_value(async, Options, false),
       WithConflict = proplists:get_value(with_conflict, Options, false),
       CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
+      ErrorIfExists = proplists:get_value(error_if_exists, Options, false),
+      
       Ref = make_ref(),
       % group docs by docid, in case of duplicates
-      {DocBuckets, N} = prepare_docs(Docs, #{}, Async, WithConflict, CreateIfMissing, Ref, 0),
+      {DocBuckets, N} = prepare_docs(
+        Docs, #{}, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, 0
+      ),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
 
@@ -765,7 +771,8 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
                 end,
 
       Update = lists:foldl(
-        fun({Doc, WithConflict, CreateIfMissing, Req}, {#{ local_seq := Seq } = DI1, Reqs1}) ->
+        fun({Doc, WithConflict, CreateIfMissing, ErrorIfExists, Req}, {DI1, Reqs1}) ->
+          #{ local_seq := Seq } = DI1,
           case WithConflict of
             true ->
               {ok, DI2} = merge_revtree_with_conflict(Doc, DI1),
@@ -774,7 +781,7 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
               send_result(Req, {error, not_found}),
               {DI1, Reqs1};
             false ->
-              case merge_revtree(Doc, DI1) of
+              case merge_revtree(Doc, DI1, ErrorIfExists) of
                 {ok, DI2} ->
                   {DI2, [Req | Reqs1]};
                 Conflict ->
@@ -792,13 +799,13 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
     DocBuckets
   ).
 
-merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
+merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo, ErrorIfExists) ->
   #{ local_seq := Seq, current_rev := CurrentRev, revtree := RevTree, body_map := BodyMap } = DocInfo,
   {Gen, _}  = barrel_doc:parse_revision(Rev),
   Res = case Rev of
           <<>> ->
             if
-              CurrentRev /= <<>> ->
+              CurrentRev /= <<>>, ErrorIfExists =:= true ->
                 case maps:get(CurrentRev, RevTree) of
                   #{ deleted := true} ->
                     {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
@@ -806,6 +813,9 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
                   _ ->
                     {conflict, doc_exists}
                 end;
+              CurrentRev /= <<>> ->
+                {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                {ok, CurrentGen + 1, CurrentRev};
               true ->
                 {ok, Gen + 1, <<>>}
             end;

@@ -31,6 +31,7 @@
   update_doc/1,
   put_is_not_create/1,
   deletet_is_not_create/1,
+  last_write_win/1,
   async_update/1,
   revision_conflict/1,
   bad_doc/1,
@@ -53,6 +54,7 @@ all() ->
     update_doc,
     put_is_not_create,
     deletet_is_not_create,
+    last_write_win,
     async_update,
     revision_conflict,
     bad_doc,
@@ -117,6 +119,15 @@ put_is_not_create(_Config) ->
 deletet_is_not_create(_Config) ->
   {error, not_found} = barrel_local:delete(<<"testdb">>, <<"a">>, []).
 
+last_write_win(_Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  Doc2 = Doc#{ v => 2},
+  {ok, <<"a">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
+  Doc3 = Doc#{ v => 3},
+  {error, {conflict, revision_conflict}} = barrel_local:put(<<"testdb">>, Doc3, [{rev, RevId}]),
+  {ok, <<"a">>, << "3-", _/binary >>} = barrel_local:put(<<"testdb">>, Doc3, []).
+
 revision_conflict(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
@@ -125,7 +136,6 @@ revision_conflict(_Config) ->
   {ok, <<"a">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
   {error, {conflict, revision_conflict}} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
   ok.
-
 
 async_update(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
@@ -157,6 +167,7 @@ create_doc(_Config) ->
   {ok, DocId, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, CreatedDoc, _} = barrel_local:get(<<"testdb">>, DocId, []),
   {error, {conflict, doc_exists}} = barrel_local:post(<<"testdb">>, CreatedDoc, []),
+  {ok, _, _} = barrel_local:post(<<"testdb">>, CreatedDoc, [{is_upsert, true}]),
   Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []).
 
