@@ -71,6 +71,7 @@
 }.
 
 -type doc() :: map().
+-type meta() :: map().
 -type rev() :: binary().
 -type docid() :: binary().
 
@@ -237,7 +238,7 @@ post(Db, Doc, Options) ->
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
   Db::db(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((DocId :: docid(), DocInfo :: docinfo(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((Doc :: doc(), Meta :: meta(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),

@@ -191,11 +191,10 @@ fold_by_id(_Config) ->
   {ok, <<"b">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []),
   Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
   {ok, <<"c">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc3, []),
-  Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
-      DocId = barrel_doc:id(FoldDoc),
+  Fun = fun(#{ <<"id">> := DocId }, _Meta, Acc1) ->
       {ok, [DocId | Acc1]}
     end,
-  Acc = barrel_local:fold_by_id(<<"testdb">>, Fun, [], [{include_doc, true}]),
+  Acc = barrel_local:fold_by_id(<<"testdb">>, Fun, [], []),
   [<<"c">>, <<"b">>, <<"a">>] = Acc,
   Acc2 = barrel_local:fold_by_id(<<"testdb">>, Fun, [],
                                  [{include_doc, true}, {lt, <<"b">>}]),

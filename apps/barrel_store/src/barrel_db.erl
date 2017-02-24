@@ -268,23 +268,19 @@ fold_by_id_int(#db{ store=Store }, UserFun, AccIn, Opts) ->
   Prefix = barrel_keys:prefix(doc),
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
-  IncludeDoc = proplists:get_value(include_doc, Opts, false),
   Opts2 = [{read_options, ReadOptions} | Opts],
 
   WrapperFun =
   fun(_Key, << RID:64 >>, Acc) ->
     %% TODO: optimize it ?
     {ok, Bin} = rocksdb:get(Store, barrel_keys:res_key(RID), ReadOptions) ,
-    #{ id := DocId } = DocInfo =  binary_to_term(Bin),
-    Doc = case IncludeDoc of
-            true ->
-              case get_current_revision(DocInfo) of
-                {ok, Body, _Meta} -> {ok, Body};
-                error -> {ok, nil}
-              end;
-            false -> {ok, nil}
-          end,
-    UserFun(DocId, DocInfo, Doc, Acc)
+    DocInfo =  binary_to_term(Bin),
+    case get_current_revision(DocInfo) of
+      {ok, Doc, Meta} ->
+        UserFun(Doc, Meta, Acc);
+      error ->
+        Acc
+    end
   end,
 
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, Opts2)
