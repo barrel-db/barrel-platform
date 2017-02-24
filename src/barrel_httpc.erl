@@ -206,18 +206,14 @@ get(Conn, DocId, Options) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
 put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
-  {Headers, Options1} = case proplists:get_value(rev, Options0) of
-                          undefined ->
-                            {[{<<"Content-Type">>, <<"application/json">>}], Options0};
-                          Rev ->
-                            Hdrs = [{<<"Content-Type">>, <<"application/json">>},
-                                    <<"ETag">>, Rev],
-                            {Hdrs, proplists:delete(rev, Options0)}
-                        end,
-
+  {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  post_put(Conn, <<"PUT">>, Doc, Url, Headers);
+put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
-  case request(Conn, <<"PUT">>, Url, Headers, Body) of
+  case request(Conn, Method, Url, Headers, Body) of
     {ok, Status, _, JsonBody}=Resp ->
       case lists:member(Status, [200, 201]) of
         true ->
@@ -227,8 +223,8 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
           {error, {bad_response, Resp}}
       end;
     Error -> Error
-  end;
-put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+  end.
+
 
 %% @doc delete a document
 -spec delete(Conn, DocId, Options) -> Res when
@@ -237,14 +233,7 @@ put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
 delete(Conn, DocId, Options0) ->
-  {Headers, Options1} = case proplists:get_value(rev, Options0) of
-                          undefined ->
-                            {[{<<"Content-Type">>, <<"application/json">>}], Options0};
-                          Rev ->
-                            Hdrs = [{<<"Content-Type">>, <<"application/json">>},
-                                    <<"ETag">>, Rev],
-                            {Hdrs, proplists:delete(rev, Options0)}
-                        end,
+  {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   case request(Conn, <<"DELETE">>, Url, Headers, <<>>) of
     {ok, Status, _, JsonBody}=Resp ->
@@ -258,6 +247,17 @@ delete(Conn, DocId, Options0) ->
     Error -> Error
   end.
 
+headers(Options) ->
+  case proplists:get_value(rev, Options) of
+    undefined ->
+      {[{<<"Content-Type">>, <<"application/json">>}], Options};
+    Rev ->
+      Hdrs = [{<<"Content-Type">>, <<"application/json">>},
+              {<<"ETag">>, Rev}],
+      {Hdrs, proplists:delete(rev, Options)}
+  end.
+
+
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
 -spec post(Conn, Doc, Options) -> Res when
@@ -265,13 +265,16 @@ delete(Conn, DocId, Options0) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-post(_Conn, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
-post(Conn, Doc, Options) ->
-  DocId = case maps:find(<<"id">>, Doc) of
-            {ok, Id} -> Id;
-            error -> uuid:uuid_to_string(uuid:get_v4(), binary_standard)
-          end,
-  put(Conn, Doc#{<<"id">> => DocId}, Options).
+post(Conn, Doc, Options0) ->
+  DocWithId = case maps:find(<<"id">>, Doc) of
+                {ok, _Id} -> Doc;
+                error ->
+                  Id = uuid:uuid_to_string(uuid:get_v4(), binary_standard),
+                  Doc#{<<"id">> => Id}
+              end,
+  {Headers, Options1} = headers(Options0),
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], Options1),
+  post_put(Conn, <<"POST">>, DocWithId, Url, Headers).
 
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
@@ -433,7 +436,6 @@ delete_system_doc(Conn, DocId) ->
 
 %% internal
 
-  
 name_from_url(Url) ->
   #hackney_url{path=Path} = Parsed = hackney_url:parse_url(Url),
   Parts = binary:split(Path, <<"/">>, [global]),
