@@ -104,7 +104,7 @@ update_doc(_Config) ->
   {ok, <<"a">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, Doc, _Meta2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc2 = Doc#{ v => 2},
-  {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
+  {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
   true = (RevId =/= RevId2),
   {ok, Doc2, _Meta4} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, [{rev, RevId2}]),
