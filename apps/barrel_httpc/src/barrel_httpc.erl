@@ -303,7 +303,7 @@ put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, Deleted, _Options) ->
       end;
     Error -> Error
   end;
-put_rev(_, _, _, __) -> erlang:error({bad_doc, invalid_docid}).
+put_rev(_, _, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when
