@@ -36,28 +36,29 @@ sync_change(Source, Target, Change, Metrics) ->
   {ok, Metrics2}.
 
 sync_revision(Source, Target, DocId, Revision, Metrics) ->
-  {Doc, Metrics2} = read_doc_with_history(Source, DocId, Revision, Metrics),
-  History = barrel_doc:parse_revisions(Doc),
-  DocWithoutRevisions = maps:remove(<<"_revisions">>, Doc),
-  Metrics3 = write_doc(Target, DocWithoutRevisions, History, Metrics2),
+  {Doc, Meta, Metrics2} = read_doc_with_history(Source, DocId, Revision, Metrics),
+  History = barrel_doc:parse_revisions(Meta),
+  #{<<"deleted">> := Deleted} =  Meta,
+
+  Metrics3 = write_doc(Target, Doc, History, Deleted, Metrics2),
   Metrics3.
 
 read_doc_with_history(Source, Id, Rev, Metrics) ->
   Get = fun() -> get(Source, Id, [{rev, Rev}, {history, true}]) end,
   case timer:tc(Get) of
-    {Time, {ok, Doc}} ->
+    {Time, {ok, Doc, Meta}} ->
       Metrics2 = barrel_metrics:inc(docs_read, Metrics, 1),
       Metrics3 = barrel_metrics:update_times(doc_read_times, Time, Metrics2),
-      {Doc, Metrics3};
+      {Doc, Meta, Metrics3};
     _ ->
       Metrics2 = barrel_metrics:inc(doc_read_failures, Metrics, 1),
-      {undefined, Metrics2}
+      {undefined, undefined, Metrics2}
   end.
 
-write_doc(_, undefined, _, Metrics) ->
+write_doc(_, undefined, _, _, Metrics) ->
   Metrics;
-write_doc(Target, Doc, History, Metrics) ->
-  PutRev = fun() -> put_rev(Target, Doc, History, []) end,
+write_doc(Target, Doc, History, Deleted, Metrics) ->
+  PutRev = fun() -> put_rev(Target, Doc, History, Deleted, []) end,
   case timer:tc(PutRev) of
     {Time, {ok, _, _}} ->
       Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
@@ -76,10 +77,10 @@ get({Mod, ModState}, Id, Opts) ->
 get(Db, Id, Opts) when is_binary(Db) ->
   barrel_db:get(Db, Id, Opts).
 
-put_rev({Mod, ModState}, Doc, History, Opts) ->
-  Mod:put_rev(ModState, Doc, History, Opts);
-put_rev(Db, Doc, History, Opts) when is_binary(Db) ->
-  barrel_local:put_rev(Db, Doc, History, Opts).
+put_rev({Mod, ModState}, Doc, History, Deleted, Opts) ->
+  Mod:put_rev(ModState, Doc, History, Deleted, Opts);
+put_rev(Db, Doc, History, Deleted, Opts) when is_binary(Db) ->
+  barrel_local:put_rev(Db, Doc, History, Deleted, Opts).
 
 revsdiff({Mod, ModState}, DocId, History) ->
   Mod:revsdiff(ModState, DocId, History);

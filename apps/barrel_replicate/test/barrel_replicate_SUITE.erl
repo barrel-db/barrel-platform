@@ -87,8 +87,8 @@ one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
   timer:sleep(200),
-  {ok, Doc2} = barrel_local:get(<<"source">>, <<"a">>, []),
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok = barrel_replicate:stop_replication(RepId),
 
   %%[Stats] = barrel_task_status:all(),
@@ -106,14 +106,14 @@ source_not_empty(_Config) ->
   RepId = <<"source_notempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
-  {ok, Doc2} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
   RepConfig = #{<<"replication_id">> => RepId,
                 <<"source">> => <<"source">>,
                 <<"target">> => <<"testdb">>},
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, []),
   timer:sleep(200),
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok = barrel_replicate:stop_replication(RepId),
   ok.
 
@@ -128,8 +128,9 @@ deleted_doc(_Config) ->
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, []),
   timer:sleep(200),
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, #{ <<"id">> := <<"a">>} ,#{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, RevId, []),
+  {error, not_found} = barrel_local:get(<<"source">>, <<"a">>, []),
   timer:sleep(400),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok = barrel_replicate:stop_replication(RepId),
@@ -322,8 +323,8 @@ check(DocName, Map, Db1, Db2) ->
       {error, not_found} = barrel_local:get(Db1, Id, []),
       {error, not_found} = barrel_local:get(Db2, Id, []);
     Expected ->
-      {ok, DocSource} = barrel_local:get(Db1, Id, []),
-      {ok, DocTarget} = barrel_local:get(Db2, Id, []),
+      {ok, DocSource, _} = barrel_local:get(Db1, Id, []),
+      {ok, DocTarget, _} = barrel_local:get(Db2, Id, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -337,7 +338,7 @@ purge_scenario(Map, Db) ->
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
-    {ok, Doc} ->
+    {ok, Doc, _} ->
       Doc2 = Doc#{<<"v">> => Value},
       {ok,_,_} = barrel_local:put(Db, Doc2, []);
     {error, not_found} ->
@@ -349,7 +350,7 @@ delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
     {error, not_found} -> ok;
-    {ok, Doc} ->
+    {ok, Doc, _} ->
       RevId = maps:get(<<"_rev">>, Doc),
       {ok, _, _} = barrel_local:delete(Db, Id, RevId, []),
       ok

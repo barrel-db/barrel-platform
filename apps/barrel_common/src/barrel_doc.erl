@@ -60,7 +60,7 @@ parse_revision(Rev) when is_binary(Rev) ->
 parse_revision(Rev) when is_list(Rev) -> parse_revision(list_to_binary(Rev));
 parse_revision(Rev) -> error({bad_rev, Rev}).
 
-parse_revisions(#{ <<"_revisions">> := Revisions}) ->
+parse_revisions(#{ <<"revisions">> := Revisions}) ->
   case Revisions of
     #{ <<"start">> := Start, <<"ids">> := Ids} ->
       {Revs, _} = lists:foldl(
@@ -70,7 +70,7 @@ parse_revisions(#{ <<"_revisions">> := Revisions}) ->
         end, {[], Start}, Ids),
       lists:reverse(Revs);
     _ -> []
-      
+
   end;
 parse_revisions(#{<<"_rev">> := Rev}) -> [Rev];
 parse_revisions(_) -> [].
@@ -154,7 +154,7 @@ doc_from_obj(Obj) when is_map(Obj) ->
            {ok, Rev} -> [Rev];
            error -> [<<>>]
          end,
-  
+
   Deleted = deleted(Obj),
   #doc{ id = Id,
         revs = Revs,

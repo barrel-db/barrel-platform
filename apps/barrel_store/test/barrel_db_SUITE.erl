@@ -88,7 +88,9 @@ basic_op(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, Meta} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  #{<<"deleted">> := false,
+    <<"rev">> := RevId} = Meta,
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, RevId, []),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []).
 
@@ -96,12 +98,12 @@ update_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, _Meta2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc3 = Doc2#{ v => 2},
   {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc3, []),
   true = (RevId =/= RevId2),
   Doc4 = Doc3#{<<"_rev">> => RevId2},
-  {ok, Doc4} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc4, _Meta4} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, RevId2, []),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc, []).
@@ -110,7 +112,7 @@ update_doc(_Config) ->
 revision_conflict(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, _, _} = barrel_local:put(<<"testdb">>, Doc, []),
-  {ok, Doc1} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc1, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc2 = Doc1#{ <<"v">> => 2 },
   {ok, <<"a">>, _RevId} = barrel_local:put(<<"testdb">>, Doc2, []),
   {error, {conflict, revision_conflict}} = barrel_local:put(<<"testdb">>, Doc2, []),
@@ -121,18 +123,18 @@ async_update(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   ok= barrel_local:put(<<"testdb">>, Doc, [{async, true}]),
   timer:sleep(100),
-  {ok, #{ <<"id">> := <<"a">>, <<"v">> := 1}} = barrel_local:get(<<"testdb">>, <<"a">>, []).
+  {ok, #{ <<"id">> := <<"a">>, <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []).
 
 resource_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
-  {ok, #{ <<"_rev">> := RevId, <<"_rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
+  {ok, _, #{ <<"rev">> := RevId, <<"rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
   1 = barrel_db:decode_rid(Rid),
   {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc#{ <<"_rev">> => RevId}, []),
-  {ok, #{ <<"_rev">> := RevId2, <<"_rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
+  {ok, _, #{ <<"rev">> := RevId2, <<"rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {ok, #{ <<"_rid">> := Rid2}} = barrel_local:get(<<"testdb">>, <<"b">>, [{meta, true}]),
+  {ok, _, #{ <<"rid">> := Rid2}} = barrel_local:get(<<"testdb">>, <<"b">>, [{meta, true}]),
   2 = barrel_db:decode_rid(Rid2).
 
 bad_doc(_Config) ->
@@ -146,7 +148,7 @@ create_doc(_Config) ->
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   CreatedDoc = Doc#{ <<"id">> => DocId, <<"_rev">> => RevId},
-  {ok, CreatedDoc} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, CreatedDoc, _} = barrel_local:get(<<"testdb">>, DocId, []),
   {error, not_found} = barrel_local:post(<<"testdb">>, CreatedDoc, []),
   Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []).
@@ -162,17 +164,17 @@ docs_count(_Config) ->
 get_revisions(_Config) ->
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, DocId, []),
   Doc3 = Doc2#{ v => 2},
   {ok, DocId, RevId2} = barrel_local:put(<<"testdb">>, Doc3, []),
-  {ok, Doc4} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
+  {ok, Doc4, _} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
 
 put_rev(_Config) ->
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, DocId, []),
   Doc3 = Doc2#{ v => 2},
   {ok, DocId, RevId2} = barrel_local:put(<<"testdb">>, Doc3, []),
   Doc4_0 = Doc2#{ v => 3 },
@@ -180,8 +182,9 @@ put_rev(_Config) ->
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc4_0),
   Doc4 = Doc4_0#{<<"_rev">> => NewRev},
   History = [NewRev, RevId],
-  {ok, DocId, _RevId3} = barrel_local:put_rev(<<"testdb">>, Doc4, History, []),
-  {ok, Doc5} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
+  Deleted = false,
+  {ok, DocId, _RevId3} = barrel_local:put_rev(<<"testdb">>, Doc4, History, Deleted, []),
+  {ok, Doc5, _} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = barrel_doc:parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
 
@@ -224,7 +227,7 @@ change_since(_Config) ->
   [<<"aa">>] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {ok, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
+  {ok, _, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
   [<<"bb">>, <<"aa">>] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   [<<"bb">>] = barrel_local:changes_since(<<"testdb">>, 1, Fun, []),
   [] = barrel_local:changes_since(<<"testdb">>, 2, Fun, []),
@@ -245,7 +248,7 @@ change_deleted(_Config) ->
   [{<<"aa">>, false}] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {ok, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
+  {ok, _, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
   [{<<"bb">>, false}, {<<"aa">>, false}] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   [{<<"bb">>, false}] = barrel_local:changes_since(<<"testdb">>, 1, Fun, []),
   {ok, <<"bb">>, _} = barrel_local:delete(<<"testdb">>, <<"bb">>, RevId2, []),
@@ -260,7 +263,7 @@ change_since_include_doc(_Config) ->
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
-  {ok, Doc1} = barrel_local:get(<<"testdb">>, <<"aa">>, []),
+  {ok, Doc1, _} = barrel_local:get(<<"testdb">>, <<"aa">>, []),
   [Change] = barrel_local:changes_since(<<"testdb">>, 0, Fun, [], [{include_doc, true}]),
   {1, Doc1} = Change,
   ok.
@@ -283,8 +286,7 @@ change_since_many(_Config) ->
   [AddDoc(N) || N <- lists:seq(1,20)],
 
   %% Delete doc1
-  {ok, Doc1} = barrel_local:get(<<"testdb">>, <<"doc1">>, []),
-  #{<<"_rev">> := RevId} = Doc1,
+  {ok, _Doc1, #{<<"rev">> := RevId}} = barrel_local:get(<<"testdb">>, <<"doc1">>, []),
   {ok, <<"doc1">>, _} = barrel_local:delete(<<"testdb">>, <<"doc1">>, RevId, []),
 
   %% 20 changes (for doc1 to doc20)

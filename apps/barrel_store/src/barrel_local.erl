@@ -19,7 +19,7 @@
 
 -export([
   put/3,
-  put_rev/4,
+  put_rev/5,
   get/3,
   delete/4,
   post/3,
@@ -102,6 +102,7 @@
 -type write_options() :: [
   {async, boolean()}
   | {timeout, integer()}
+  | {rev, rev()}
 ].
 
 -type conflict() ::
@@ -183,17 +184,18 @@ put(_,  _, _) ->
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Db, Doc, History, Options) -> Res when
+-spec put_rev(Db, Doc, History, Deleted, Options) -> Res when
   Db::db(),
   Doc :: doc(),
   History :: [rev()],
+  Deleted :: boolean(),
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Db, Doc, History, Options) when is_map(Doc) ->
+put_rev(Db, Doc, History, Deleted, Options) when is_map(Doc) ->
   ok = validate_docid(Doc),
   Doc2 = barrel_doc:doc_from_obj(Doc),
-  barrel_db:update_doc(Db, Doc2#doc{ revs = History }, [{with_conflict, true} | Options]);
-put_rev(_, _, _, _) ->
+  barrel_db:update_doc(Db, Doc2#doc{ revs = History, deleted=Deleted }, [{with_conflict, true} | Options]);
+put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 
 %% @doc delete a document
@@ -331,5 +333,5 @@ replication_info(Name) ->
 
 
 %% internal
-validate_docid(#{ <<"id">> := DocId }) -> ok;
+validate_docid(#{ <<"id">> := _DocId }) -> ok;
 validate_docid(_) -> erlang:error({bad_doc, invalid_docid}).
