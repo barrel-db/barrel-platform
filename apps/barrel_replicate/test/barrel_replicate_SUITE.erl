@@ -85,7 +85,7 @@ one_doc(_Config) ->
     barrel_replicate:start_replication(RepConfig, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
   timer:sleep(200),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
@@ -105,7 +105,7 @@ one_doc(_Config) ->
 source_not_empty(_Config) ->
   RepId = <<"source_notempty">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
   RepConfig = #{<<"replication_id">> => RepId,
                 <<"source">> => <<"source">>,
@@ -120,7 +120,7 @@ source_not_empty(_Config) ->
 deleted_doc(_Config) ->
   RepId = <<"deleteddoc">>,
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"source">>, Doc, []),
 
   RepConfig = #{<<"replication_id">> => RepId,
                 <<"source">> => <<"source">>,
@@ -335,6 +335,7 @@ purge_scenario(Map, Db) ->
   [ok= delete_doc(K, Db) || K <- Keys],
   ok.
 
+%% todo: when the api ois ok prefer a post followed by a put if a conflict is returned
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
@@ -344,9 +345,10 @@ put_doc(DocName, Value, Db) ->
       {ok,_,_} = barrel_local:put(Db, Doc2, [{rev, RevId}]);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Db, Doc, [])
+      {ok,_,_} = barrel_local:post(Db, Doc, [])
   end.
 
+%% todo: only delete ? delete should return not_found if the resoure don't exist
 delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of

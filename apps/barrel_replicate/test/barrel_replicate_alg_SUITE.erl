@@ -79,7 +79,7 @@ changes() ->
 
 one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
 
   Metrics = barrel_metrics:new(),
   Changes = changes(),
@@ -94,7 +94,7 @@ one_doc(_Config) ->
 
 source_not_empty(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
 
   Metrics = barrel_metrics:new(),
@@ -106,7 +106,7 @@ source_not_empty(_Config) ->
 
 deleted_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, #{ <<"id">> := <<"a">>}, #{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, [{rev, RevId}]),
 
