@@ -204,7 +204,7 @@ put_rev(_Config) ->
   {ok, _Doc5, Meta} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = [RevId2, RevId],
   Revisions = barrel_doc:parse_revisions(Meta).
-  
+
 
 
 fold_by_id(_Config) ->

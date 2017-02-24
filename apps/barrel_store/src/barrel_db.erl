@@ -672,23 +672,23 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
       ({DocInfo, Reqs}, Db1) ->
         #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
         LastSeq = maps:get(update_seq, DocInfo, -1),
-  
+
         %% increment local document seq
         DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
-  
+
         %% doc counter increment
         Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
-  
+
         %% update db object
         Db2 = Db1#db{updated_seq = Db1#db.updated_seq + 1,
                      docs_count = Db1#db.docs_count + Inc},
-  
+
         %% revision has changed put the ancestor outside the value
         {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
-  
+
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
-  
+
         %% finally write the batch
         Batch =
           maybe_update_changes(
@@ -706,7 +706,7 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
               )
             )
           ),
-  
+
         case rocksdb:write(Store, Batch, [{sync, true}]) of
           ok ->
             lists:foreach(
