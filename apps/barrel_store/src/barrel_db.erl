@@ -19,6 +19,7 @@
 %% API
 -export([
   infos/1,
+  create_doc/3,
   update_doc/3,
   get/3,
   get_doc_info/3,
@@ -196,23 +197,28 @@ get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
       {error, not_found}
   end.
 
+
+create_doc(DbName, Doc, Options0) ->
+  Options1 = [{create_if_missing, true} | Options0],
+  update_doc(DbName, Doc, Options1).
+
 update_doc(DbName, Doc, Options) ->
   case update_docs(DbName, [Doc], Options) of
     ok -> ok;
     [Res] -> Res
   end.
 
-prepare_docs([Doc | Rest], DocBuckets, Async, WithConflict, Ref, Idx) ->
+prepare_docs([Doc | Rest], DocBuckets, Async, WithConflict, CreateIfMissing, Ref, Idx) ->
   Req = {self(), Ref, Idx, Async},
-  Update = {Doc, WithConflict, Req},
+  Update = {Doc, WithConflict, CreateIfMissing, Req},
 
   DocBuckets2 = case maps:find(Doc#doc.id, DocBuckets) of
                   {ok, OldUpdates} -> maps:put(Doc#doc.id,  OldUpdates ++ [Update], DocBuckets);
                   error -> maps:put(Doc#doc.id,  [Update], DocBuckets)
                 end,
 
-  prepare_docs(Rest, DocBuckets2, Async, WithConflict, Ref, Idx + 1);
-prepare_docs([], DocBuckets, _, _, _, Idx) ->
+  prepare_docs(Rest, DocBuckets2, Async, WithConflict, CreateIfMissing, Ref, Idx + 1);
+prepare_docs([], DocBuckets, _, _, _, _, Idx) ->
   {DocBuckets, Idx}.
 
 update_docs(DbName, Docs, Options) ->
@@ -221,9 +227,10 @@ update_docs(DbName, Docs, Options) ->
     Db = #db{pid=DbPid} ->
       Async = proplists:get_value(async, Options, false),
       WithConflict = proplists:get_value(with_conflict, Options, false),
+      CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
       Ref = make_ref(),
       % group docs by docid, in case of duplicates
-      {DocBuckets, N} = prepare_docs(Docs, #{}, Async, WithConflict, Ref, 0),
+      {DocBuckets, N} = prepare_docs(Docs, #{}, Async, WithConflict, CreateIfMissing, Ref, 0),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
 
@@ -758,11 +765,14 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
                 end,
 
       Update = lists:foldl(
-        fun({Doc, WithConflict, Req}, {DI1, Reqs1}) ->
+        fun({Doc, WithConflict, CreateIfMissing, Req}, {#{ local_seq := Seq } = DI1, Reqs1}) ->
           case WithConflict of
             true ->
               {ok, DI2} = merge_revtree_with_conflict(Doc, DI1),
               {DI2, [Req | Reqs1]};
+            false when CreateIfMissing =/= true, Seq =:= 0 ->
+              send_result(Req, {error, not_found}),
+              {DI1, Reqs1};
             false ->
               case merge_revtree(Doc, DI1) of
                 {ok, DI2} ->

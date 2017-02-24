@@ -222,14 +222,20 @@ delete(Db, DocId, Options) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-post(Db, Doc, Options) ->
+post(Db, Doc0, Options) ->
   case proplists:get_value(rev, Options) of
     undefined ->
-      DocId = case barrel_doc:id(Doc) of
+      DocId = case barrel_doc:id(Doc0) of
                 undefined -> barrel_lib:uniqid();
                 Id -> Id
               end,
-      put(Db, Doc#{<<"id">> => DocId }, Options);
+      %% create doc record
+      Doc1 = barrel_doc:make_doc(
+        maps:put(<<"id">>, DocId, Doc0),
+        [<<>>],
+        false
+      ),
+      barrel_db:create_doc(Db, Doc1, Options);
    _Rev ->
       erlang:error(badarg)
   end.
