@@ -186,11 +186,11 @@ put_rev(_Config) ->
 
 fold_by_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, <<"b">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {ok, <<"b">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []),
   Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
-  {ok, <<"c">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc3, []),
+  {ok, <<"c">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc3, []),
   Fun = fun(DocId, _DocInfo, {ok, FoldDoc}, Acc1) ->
       DocId = barrel_doc:id(FoldDoc),
       {ok, [DocId | Acc1]}
@@ -218,16 +218,16 @@ change_since(_Config) ->
         end,
   [] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   [<<"aa">>] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {ok, <<"bb">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []),
   {ok, _, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
   [<<"bb">>, <<"aa">>] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   [<<"bb">>] = barrel_local:changes_since(<<"testdb">>, 1, Fun, []),
   [] = barrel_local:changes_since(<<"testdb">>, 2, Fun, []),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
-  {ok, <<"cc">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc3, []),
+  {ok, <<"cc">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc3, []),
   [<<"cc">>] = barrel_local:changes_since(<<"testdb">>, 2, Fun, []),
   ok.
 
@@ -239,10 +239,10 @@ change_deleted(_Config) ->
         end,
   [] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   [{<<"aa">>, false}] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {ok, <<"bb">>, RevId2} = barrel_local:post(<<"testdb">>, Doc2, []),
   {ok, _, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
   [{<<"bb">>, false}, {<<"aa">>, false}] = barrel_local:changes_since(<<"testdb">>, 0, Fun, []),
   [{<<"bb">>, false}] = barrel_local:changes_since(<<"testdb">>, 1, Fun, []),
@@ -257,7 +257,7 @@ change_since_include_doc(_Config) ->
       {ok, [{maps:get(<<"seq">>, Change), maps:get(<<"doc">>, Change)} |Acc]}
     end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, Doc1, _} = barrel_local:get(<<"testdb">>, <<"aa">>, []),
   [Change] = barrel_local:changes_since(<<"testdb">>, 0, Fun, [], [{include_doc, true}]),
   {1, Doc1} = Change,
@@ -276,7 +276,7 @@ change_since_many(_Config) ->
                K = integer_to_binary(N),
                Key = <<"doc", K/binary>>,
                Doc = #{ <<"id">> => Key, <<"v">> => 1},
-    {ok, Key, _RevId} = barrel_local:put(<<"testdb">>, Doc, [])
+    {ok, Key, _RevId} = barrel_local:post(<<"testdb">>, Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
 
@@ -301,7 +301,7 @@ change_since_many(_Config) ->
 
 revsdiff(_Config) ->
   Doc = #{ <<"id">> => <<"revsdiff">>, <<"v">> => 1},
-  {ok, <<"revsdiff">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"revsdiff">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   Doc2 = Doc#{<<"v">> => 2},
   {ok, <<"revsdiff">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
   {ok, [<<"1-missing">>], []} = barrel_local:revsdiff(<<"testdb">>, <<"revsdiff">>, [<<"1-missing">>]),
