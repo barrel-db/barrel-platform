@@ -24,6 +24,7 @@
           feed,
           body,
           doc,
+          meta,
           conn,
           options=[],
 

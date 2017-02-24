@@ -122,8 +122,8 @@ check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
   case barrel_local:get(Database, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
-    {ok, Doc} ->
-      route2(Req, S#state{doc=Doc})
+    {ok, Doc, Meta} ->
+      route2(Req, S#state{doc=Doc, meta=Meta})
   end;
 check_resource_exists(Req, State) ->
   route2(Req, State).
@@ -157,7 +157,8 @@ create_resource(Req, State) ->
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           {barrel_local:put_rev(Database, Doc, History, [{async, Async}]), Req }
+                           Deleted = maps:get(<<"_deleted">>, Json, false),
+                           {barrel_local:put_rev(Database, Doc, History, Deleted, [{async, Async}]), Req }
                        end
                    end,
   case Result of
@@ -180,7 +181,7 @@ delete_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
 
   #state{ database=Database, docid=DocId, revid=RevId} = State,
-  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, [{async, Async}]),
+  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, [{rev, RevId}, {async, Async}]),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},
@@ -189,4 +190,6 @@ delete_resource(Req, State) ->
 
 get_resource(Req, State) ->
   Doc = State#state.doc,
-  barrel_http_reply:doc(Doc, Req, State).
+  Meta = State#state.meta,
+  DocWithMeta = Doc#{<<"_meta">> => Meta},
+  barrel_http_reply:doc(DocWithMeta, Req, State).

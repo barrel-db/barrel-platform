@@ -68,27 +68,27 @@ end_per_suite(Config) ->
 
 accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
 
   {200, R} = test_lib:req(get, "/dbs/testdb/docs/acceptget"),
   J = jsx:decode(R, [return_maps]),
-  #{<<"name">> := <<"tom">>} = J,
+  #{<<"name">> := <<"tom">>, <<"_meta">> := #{<<"rev">> := RevId}} = J,
   ok.
 
 accept_get_with_rev(_Config) ->
   DocId = <<"acceptgetrev">>,
   Doc1 = #{<<"id">> => DocId, <<"v">> => 1},
   {ok, _, RevId1} = barrel_local:put(<<"testdb">>, Doc1, []),
-  Doc2 = #{<<"id">> => DocId, <<"v">> => 2, <<"_rev">> => RevId1},
-  {ok, _, RevId2} = barrel_local:put(<<"testdb">>, Doc2, []),
-  {ok, _, _RevId3} = barrel_local:delete(<<"testdb">>, DocId, RevId2, []),
+  Doc2 = #{<<"id">> => DocId, <<"v">> => 2},
+  {ok, _, RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId1}]),
+  {ok, _, _RevId3} = barrel_local:delete(<<"testdb">>, DocId, [{rev, RevId2}]),
 
   {200, R1} = test_lib:req(get, "/dbs/testdb/docs/acceptgetrev?rev=" ++ binary_to_list(RevId1)),
   J1 = jsx:decode(R1, [return_maps]),
-  #{<<"v">> := 1} = J1,
+  #{<<"v">> := 1, <<"_meta">> := #{<<"rev">> := RevId1}} = J1,
   {200, R2} = test_lib:req(get, "/dbs/testdb/docs/acceptgetrev?rev=" ++ binary_to_list(RevId2)),
   J2 = jsx:decode(R2, [return_maps]),
-  #{<<"v">> := 2} = J2,
+  #{<<"v">> := 2, <<"_meta">> := #{<<"rev">> := RevId2}} = J2,
   ok.
 
 accept_get_with_history(_Config) ->
@@ -98,7 +98,7 @@ accept_get_with_history(_Config) ->
   {200, R} = test_lib:req(get, "/dbs/testdb/docs/acceptgethist?history=true"),
   J = jsx:decode(R, [return_maps]),
   #{<<"name">> := <<"tom">>,
-    <<"_revisions">> := Revisions} = J,
+    <<"_meta">> := #{<<"revisions">> := Revisions}} = J,
   #{<<"ids">> := [_], <<"start">> := 1} = Revisions,
   ok.
 
@@ -108,7 +108,7 @@ accept_post(_Config) ->
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, Doc, _} = barrel_local:get(<<"testdb">>, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
@@ -118,7 +118,7 @@ accept_put(_Config) ->
 
   J = jsx:decode(R, [return_maps]),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, Doc, _} = barrel_local:get(<<"testdb">>, DocId, []),
   #{<<"name">> := <<"tom">>} = Doc,
   ok.
 
@@ -175,7 +175,7 @@ revsdiff(_Config) ->
 
 put_rev(_Config) ->
   RevId = put_cat(),
-  {ok, Doc} = barrel_local:get(<<"testdb">>, <<"cat">>, []),
+  {ok, Doc, _Meta} = barrel_local:get(<<"testdb">>, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
   History = [NewRev, RevId],
