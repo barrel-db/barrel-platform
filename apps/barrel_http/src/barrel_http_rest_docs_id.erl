@@ -44,7 +44,6 @@ check_params(Req, State) ->
       barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req, State);
     {ok, S2} ->
       {ok, Body, Req2} = cowboy_req:read_body(Req),
-
       Opts = case S2#state.history of
                 true -> [{history, true}];
                 _ -> []
@@ -54,6 +53,9 @@ check_params(Req, State) ->
 
 parse_params([], State) ->
   {ok, State};
+parse_params([{<<"rev">>, Rev}|Tail], #state{method = <<"GET">>,
+                                             options=Opts }=State) ->
+  parse_params(Tail, State#state{options=[{rev, Rev} | Opts]});
 parse_params([{<<"edit">>, Edit}|Tail], State) ->
   parse_params(Tail, State#state{edit=Edit});
 parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
@@ -64,7 +66,7 @@ parse_params([{Param, __Value}|_], _State) ->
 
 parse_headers(Req, State) ->
   Headers = cowboy_req:headers(Req),
-  State2 = maps:fold(fun(<<"etag">>, Etag, S) -> 
+  State2 = maps:fold(fun(<<"etag">>, Etag, S) ->
                          Opt = S#state.options,
                          S#state{options=[{rev, Etag}|Opt]};
                         (_, _, S) -> S

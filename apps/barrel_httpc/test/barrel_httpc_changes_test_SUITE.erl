@@ -82,7 +82,7 @@ collect_changes(Config) ->
   [] = barrel_httpc_changes:changes(Pid),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
   timer:sleep(100),
   [#{ <<"seq">> := 2, <<"id">> := <<"bb">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
@@ -97,7 +97,7 @@ collect_changes(Config) ->
     #{ <<"seq">> := 3, <<"id">> := <<"cc">>},
     #{ <<"seq">> := 4, <<"id">> := <<"dd">>}
   ] = barrel_httpc_changes:changes(Pid),
-  
+
   ok = barrel_httpc_changes:stop(Pid).
 
 changes_feed_callback(Config) ->
@@ -108,7 +108,7 @@ changes_feed_callback(Config) ->
     end,
   Options = #{since => 0, mode => sse, changes_cb => Callback },
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
-  
+
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
@@ -134,7 +134,7 @@ heartbeat_collect_change(Config) ->
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
   ok = barrel_httpc_changes:stop(Pid).
-  
+
 collect_changes(0, Q) ->
   queue:to_list(Q);
 collect_changes(I, Q) ->
