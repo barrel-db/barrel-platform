@@ -51,7 +51,7 @@ fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options0) ->
         {#{}, #{}},
         Obj
       ),
-      Fun(Doc, Meta, Acc)
+      UserFun(Doc, Meta, Acc)
     end,
   
   case hackney:request(Method, Url, Headers, Body, ReqOpts) of
