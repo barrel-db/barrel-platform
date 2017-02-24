@@ -86,7 +86,7 @@ end_per_suite(Config) ->
 basic_op(_Config) ->
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, Doc, #{<<"rev">> := RevId}=Meta} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   false = maps:is_key(<<"deleted">>, Meta),
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, [{rev, RevId}]),
@@ -94,7 +94,7 @@ basic_op(_Config) ->
 
 update_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, Doc, _Meta2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc2 = Doc#{ v => 2},
   {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
@@ -102,12 +102,12 @@ update_doc(_Config) ->
   {ok, Doc2, _Meta4} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, [{rev, RevId2}]),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
-  {ok, <<"a">>, _RevId3} = barrel_local:put(<<"testdb">>, Doc, []).
+  {ok, <<"a">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc, []).
 
 
 revision_conflict(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, _, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, Doc1, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   Doc2 = Doc1#{ <<"v">> => 2 },
   {ok, <<"a">>, _RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId}]),
@@ -117,19 +117,19 @@ revision_conflict(_Config) ->
 
 async_update(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  ok= barrel_local:put(<<"testdb">>, Doc, [{async, true}]),
+  ok= barrel_local:post(<<"testdb">>, Doc, [{async, true}]),
   timer:sleep(100),
   {ok, #{ <<"id">> := <<"a">>, <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []).
 
 resource_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"testdb">>, Doc, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   {ok, _, #{ <<"rev">> := RevId, <<"rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
   1 = barrel_db:decode_rid(Rid),
   {ok, <<"a">>, RevId2} = barrel_local:put(<<"testdb">>, Doc, [{rev, RevId}]),
   {ok, _, #{ <<"rev">> := RevId2, <<"rid">> := Rid}} = barrel_local:get(<<"testdb">>, <<"a">>, [{meta, true}]),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, <<"b">>, _} = barrel_local:put(<<"testdb">>, Doc2, []),
+  {ok, <<"b">>, _} = barrel_local:post(<<"testdb">>, Doc2, []),
   {ok, _, #{ <<"rid">> := Rid2}} = barrel_local:get(<<"testdb">>, <<"b">>, [{meta, true}]),
   2 = barrel_db:decode_rid(Rid2).
 
@@ -162,9 +162,9 @@ get_revisions(_Config) ->
   {ok, Doc2, _} = barrel_local:get(<<"testdb">>, DocId, []),
   Doc3 = Doc2#{ v => 2},
   {ok, DocId, RevId2} = barrel_local:put(<<"testdb">>, Doc3, [{rev, RevId}]),
-  {ok, Doc4, _} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
-  Revisions = barrel_doc:parse_revisions(Doc4),
-  Revisions == [RevId2, RevId].
+  {ok, Doc3, Meta} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
+  Revisions = [RevId2, RevId],
+  Revisions = barrel_doc:parse_revisions(Meta).
 
 put_rev(_Config) ->
   Doc = #{<<"v">> => 1},
@@ -179,9 +179,10 @@ put_rev(_Config) ->
   History = [NewRev, RevId],
   Deleted = false,
   {ok, DocId, _RevId3} = barrel_local:put_rev(<<"testdb">>, Doc4, History, Deleted, []),
-  {ok, Doc5, _} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
-  Revisions = barrel_doc:parse_revisions(Doc5),
-  Revisions == [RevId2, RevId].
+  {ok, _Doc5, Meta} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
+  Revisions = [RevId2, RevId],
+  Revisions = barrel_doc:parse_revisions(Meta).
+  
 
 
 fold_by_id(_Config) ->
