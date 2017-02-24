@@ -29,6 +29,8 @@
 -export([
   basic_op/1,
   update_doc/1,
+  put_is_not_create/1,
+  deletet_is_not_create/1,
   async_update/1,
   revision_conflict/1,
   bad_doc/1,
@@ -49,6 +51,8 @@ all() ->
   [
     basic_op,
     update_doc,
+    put_is_not_create,
+    deletet_is_not_create,
     async_update,
     revision_conflict,
     bad_doc,
@@ -74,6 +78,7 @@ init_per_testcase(_, Config) ->
   [{db, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
+  timer:sleep(10),
   ok = barrel_store:delete_db(<<"testdb">>),
   timer:sleep(200),
   ok.
@@ -104,6 +109,13 @@ update_doc(_Config) ->
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc, []).
 
+
+put_is_not_create(_Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {error, not_found} = barrel_local:put(<<"testdb">>, Doc, []).
+
+deletet_is_not_create(_Config) ->
+  {error, not_found} = barrel_local:delete(<<"testdb">>, <<"a">>, []).
 
 revision_conflict(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
