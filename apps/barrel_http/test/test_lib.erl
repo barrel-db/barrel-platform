@@ -14,7 +14,7 @@
 
 -module(test_lib).
 
--export([req/2, req/3]).
+-export([req/2, req/3, req/4]).
 -export([log/2]).
 
 
@@ -34,6 +34,10 @@ req(Method, Route, Body) when is_binary(Body) ->
   Path = list_to_binary(Server ++ Route),
   barrel_http_lib:req(Method, Path, Body).
 
+req(Method, Route, Body, Rev) when is_binary(Body), is_binary(Rev) ->
+  Server = "http://localhost:7080",
+  Path = list_to_binary(Server ++ Route),
+  barrel_http_lib:req(Method, Path, Body, Rev).
 
 log(String, Params) ->
   Line = io_lib:fwrite(String, Params),

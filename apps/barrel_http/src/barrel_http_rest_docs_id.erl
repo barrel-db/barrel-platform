@@ -44,22 +44,15 @@ check_params(Req, State) ->
       barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req, State);
     {ok, S2} ->
       {ok, Body, Req2} = cowboy_req:read_body(Req),
-
-      Opts1 = case S2#state.revid of
-                undefined -> [];
-                RevId -> [{rev, RevId}]
+      Opts = case S2#state.history of
+                true -> [{history, true}];
+                _ -> []
               end,
-      Opts2 = case S2#state.history of
-                true -> [{history, true}|Opts1];
-                _ -> Opts1
-              end,
-      route(Req2, S2#state{body=Body, options=Opts2})
+      parse_headers(Req2, S2#state{body=Body, options=Opts})
   end.
 
 parse_params([], State) ->
   {ok, State};
-parse_params([{<<"rev">>, RevId}|Tail], State) ->
-  parse_params(Tail, State#state{revid=RevId});
 parse_params([{<<"edit">>, Edit}|Tail], State) ->
   parse_params(Tail, State#state{edit=Edit});
 parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
@@ -67,6 +60,15 @@ parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
 parse_params([{Param, __Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
+
+parse_headers(Req, State) ->
+  Headers = cowboy_req:headers(Req),
+  State2 = maps:fold(fun(<<"etag">>, Etag, S) ->
+                         Opt = S#state.options,
+                         S#state{options=[{rev, Etag}|Opt]};
+                        (_, _, S) -> S
+                     end, State, Headers),
+  route(Req, State2).
 
 
 route(Req, #state{method= <<"POST">>}=State) ->
@@ -76,16 +78,16 @@ route(Req, #state{method= <<"PUT">>}=State) ->
 route(Req, #state{method= <<"GET">>}=State) ->
   check_resource_exists(Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  check_request_revid(Req, State);
+  check_resource_exists(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
 
-check_request_revid(Req, #state{method= <<"DELETE">>, revid=undefined}=S) ->
-  barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
-check_request_revid(Req, S) ->
-  Body = S#state.body,
-  check_resource_exists(Req, S#state{body=Body}).
+%% check_request_revid(Req, #state{method= <<"DELETE">>, etag=undefined}=S) ->
+%%   barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
+%% check_request_revid(Req, S) ->
+%%   Body = S#state.body,
+%%   check_resource_exists(Req, S#state{body=Body}).
 
 
 check_body(Req, #state{body= <<>>}=S) ->
@@ -117,16 +119,21 @@ check_id_property(Req, #state{body=Json}=State) ->
   end.
 
 
+check_resource_exists(Req, #state{method= <<"DELETE">>}=S) ->
+  check_resource_exists2(Req, S);
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
+  check_resource_exists2(Req, S);
+check_resource_exists(Req, S) ->
+  route2(Req, S).
+
+check_resource_exists2(Req, S) ->
   #state{ database=Database, docid=DocId, options=Options } = S,
   case barrel_local:get(Database, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
-    {ok, Doc} ->
-      route2(Req, S#state{doc=Doc})
-  end;
-check_resource_exists(Req, State) ->
-  route2(Req, State).
+    {ok, Doc, Meta} ->
+      route2(Req, S#state{doc=Doc, meta=Meta})
+  end.
 
 
 route2(Req, #state{method= <<"POST">>}=State) ->
@@ -140,7 +147,7 @@ route2(Req, #state{method= <<"DELETE">>}=State) ->
 
 
 create_resource(Req, State) ->
-  #state{ database=Database, body=Json, method=Method} = State,
+  #state{ database=Database, body=Json, method=Method, options=Options} = State,
   #{async := AsyncStr}
     = cowboy_req:match_qs([{async, [], undefined}], Req),
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
@@ -153,11 +160,12 @@ create_resource(Req, State) ->
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           {barrel_local:put(Database, Json, [{async, Async}]), Req };
+                           {barrel_local:put(Database, Json, [{async, Async}|Options]), Req };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           {barrel_local:put_rev(Database, Doc, History, [{async, Async}]), Req }
+                           Deleted = maps:get(<<"deleted">>, Json, false),
+                           {barrel_local:put_rev(Database, Doc, History, Deleted, [{async, Async}|Options]), Req }
                        end
                    end,
   case Result of
@@ -179,8 +187,8 @@ delete_resource(Req, State) ->
     = cowboy_req:match_qs([{async, [], undefined}], Req),
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
 
-  #state{ database=Database, docid=DocId, revid=RevId} = State,
-  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, RevId, [{async, Async}]),
+  #state{ database=Database, docid=DocId, options=Options} = State,
+  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, [{async, Async}|Options]),
   Reply = #{<<"ok">> => true,
             <<"id">> => DocId,
             <<"rev">> => RevId2},
@@ -189,4 +197,8 @@ delete_resource(Req, State) ->
 
 get_resource(Req, State) ->
   Doc = State#state.doc,
-  barrel_http_reply:doc(Doc, Req, State).
+  Meta = State#state.meta,
+  RevId = maps:get(<<"rev">>, Meta),
+  DocWithMeta = Doc#{<<"_meta">> => Meta},
+  Req2 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req),
+  barrel_http_reply:doc(DocWithMeta, Req2, State).

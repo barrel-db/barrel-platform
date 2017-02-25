@@ -70,7 +70,7 @@ changes() ->
             {ok, [Change|Acc]}
         end,
   Changes = barrel_db:changes_since(Db, Since, Fun, [], [{history, all}]),
-  Changes.
+  lists:reverse(Changes).
 
 
 %% =============================================================================
@@ -79,14 +79,14 @@ changes() ->
 
 one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
 
   Metrics = barrel_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
-  {ok, Doc2} = barrel_local:get(<<"source">>, <<"a">>, []),
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
 
   ok = delete_doc("a", <<"source">>),
   ok = delete_doc("a", <<"testdb">>),
@@ -94,21 +94,21 @@ one_doc(_Config) ->
 
 source_not_empty(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_local:put(<<"source">>, Doc, []),
-  {ok, Doc2} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
+  {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
 
   Metrics = barrel_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
-  {ok, Doc2} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok.
 
 deleted_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:put(<<"source">>, Doc, []),
-  {ok, #{ <<"id">> := <<"a">>, <<"_rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
-  {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, RevId, []),
+  {ok, <<"a">>, RevId} = barrel_local:post(<<"source">>, Doc, []),
+  {ok, #{ <<"id">> := <<"a">>}, #{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
+  {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, [{rev, RevId}]),
 
   Metrics = barrel_metrics:new(),
   Changes = changes(),
@@ -164,8 +164,8 @@ check(DocName, Map, Db1, Db2) ->
       {error, not_found} = barrel_local:get(Db1, Id, []),
       {error, not_found} = barrel_local:get(Db2, Id, []);
     Expected ->
-      {ok, DocSource} = barrel_local:get(Db1, Id, []),
-      {ok, DocTarget} = barrel_local:get(Db2, Id, []),
+      {ok, DocSource, _} = barrel_local:get(Db1, Id, []),
+      {ok, DocTarget, _} = barrel_local:get(Db2, Id, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -179,21 +179,22 @@ purge_scenario(Map, Db) ->
 put_doc(DocName, Value, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
-    {ok, Doc} ->
+    {ok, Doc, Meta} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Db, Doc2, []);
+      RevId = maps:get(<<"rev">>, Meta),
+      {ok,_,_} = barrel_local:put(Db, Doc2, [{rev, RevId}]);
     {error, not_found} ->
       Doc = #{<<"id">> => Id, <<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Db, Doc, [])
+      {ok,_,_} = barrel_local:post(Db, Doc, [])
   end.
 
 delete_doc(DocName, Db) ->
   Id = list_to_binary(DocName),
   case barrel_local:get(Db, Id, []) of
     {error, not_found} -> ok;
-    {ok, Doc} ->
-      RevId = maps:get(<<"_rev">>, Doc),
-      {ok, _, _} = barrel_local:delete(Db, Id, RevId, []),
+    {ok, _Doc, Meta} ->
+      RevId = maps:get(<<"rev">>, Meta),
+      {ok, _, _} = barrel_local:delete(Db, Id, [{rev, RevId}]),
       ok
   end.
 

@@ -85,7 +85,7 @@ fold_entries([RID | Rest], Fun, Path, WithMeta, Db = #db{store=Store}, ReadOptio
     {ok, Bin} ->
       DocInfo = binary_to_term(Bin),
       DocId = maps:get(id, DocInfo),
-      {ok, Doc} = barrel_db:get_current_revision(DocInfo, WithMeta),
+      {ok, Doc, _Meta} = barrel_db:get_current_revision(DocInfo),
       Val = barrel_json:get(Path, Doc),
       case Fun(DocId, Doc, Val, Acc) of
         {ok, Acc2} ->

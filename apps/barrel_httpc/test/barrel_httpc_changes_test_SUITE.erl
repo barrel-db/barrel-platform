@@ -70,7 +70,7 @@ collect_change(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse}),
   [] = barrel_httpc_changes:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_httpc:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
@@ -80,7 +80,7 @@ include_doc(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse, include_doc => true}),
   [] = barrel_httpc_changes:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_httpc:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>, <<"doc">> := Doc2}] = barrel_httpc_changes:changes(Pid),
   #{ <<"id">> := <<"aa">>, <<"v">> := 1 } =  Doc2,
@@ -91,22 +91,22 @@ collect_changes(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse}),
   [] = barrel_httpc_changes:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _} = barrel_httpc:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _} = barrel_httpc:put(db(Config), Doc2, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
+  {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
   timer:sleep(100),
   [#{ <<"seq">> := 2, <<"id">> := <<"bb">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
   Doc4 = #{ <<"id">> => <<"dd">>, <<"v">> => 1},
-  {ok, <<"cc">>, _} = barrel_httpc:put(db(Config), Doc3, []),
-  {ok, <<"dd">>, _} = barrel_httpc:put(db(Config), Doc4, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"cc">>, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"dd">>, []),
+  {ok, <<"cc">>, _} = barrel_httpc:post(db(Config), Doc3, []),
+  {ok, <<"dd">>, _} = barrel_httpc:post(db(Config), Doc4, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"cc">>, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"dd">>, []),
   timer:sleep(100),
   [
     #{ <<"seq">> := 3, <<"id">> := <<"cc">>},
@@ -122,13 +122,13 @@ changes_feed_callback(Config) ->
     end,
   Options = #{since => 0, mode => sse, changes_cb => Callback },
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
-  
+
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"aa">>, _} = barrel_httpc:put(db(Config), Doc1, []),
-  {ok, <<"bb">>, _} = barrel_httpc:put(db(Config), Doc2, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"aa">>, []),
-  {ok, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
+  {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
+  {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"aa">>, []),
+  {ok, _, _} = barrel_httpc:get(db(Config), <<"bb">>, []),
   timer:sleep(100),
   [
     #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
@@ -143,7 +143,7 @@ heartbeat_collect_change(Config) ->
   timer:sleep(500),
   [] = barrel_httpc_changes:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_httpc:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
@@ -174,7 +174,7 @@ multiple_put(Config) ->
       Doc = #{ <<"id">> => DocId, <<"val">> => I},
       Pid = spawn_link(
         fun() ->
-          {ok, DocId, _} = barrel_httpc:put(db(Config), Doc, []),
+          {ok, DocId, _} = barrel_httpc:post(db(Config), Doc, []),
           Self ! {ok, self()},
           timer:sleep(100)
         end
@@ -197,7 +197,7 @@ multiple_put(Config) ->
   end,
   ok.
 
-  
+
 collect_changes(0, Q) ->
   queue:to_list(Q);
 collect_changes(I, Q) ->

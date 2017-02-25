@@ -63,7 +63,7 @@ db(Config) -> proplists:get_value(db, Config).
 attachment_doc(Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_httpc:put(db(Config) , Doc, []),
+  {ok, <<"a">>, R1} = barrel_httpc:post(db(Config) , Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
@@ -86,7 +86,7 @@ attachment_doc(Config) ->
 binary_attachment(Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_httpc:put(db(Config) , Doc, []),
+  {ok, <<"a">>, R1} = barrel_httpc:post(db(Config) , Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,

@@ -112,7 +112,6 @@ parse_change(ChangeBin) ->
   ).
 
 
-
 init_feed(Parent, Conn, Options) ->
   Headers = case maps:get(since, Options, 0) of
     0 -> 

@@ -27,7 +27,7 @@
 
 -define(TIMEOUT, 5000).
 
-fold_by_id(#{pool := Pool} = Conn, Fun, AccIn, Options0) ->
+fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options0) ->
   {Method, Body, Options2} = case proplists:get_value(docids, Options0) of
                                undefined ->
                                  {<<"GET">>, <<>>, Options0};
@@ -39,9 +39,17 @@ fold_by_id(#{pool := Pool} = Conn, Fun, AccIn, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, Options2),
   Headers = [{<<"Content-Type">>, <<"application/json">>}],
   ReqOpts = [{async, once}, {pool, Pool}],
+  
+  WrapperFun =
+    fun(Obj, Acc) ->
+      %% extract metadata.
+      {Meta, Doc} = maps:take(<<"_meta">>, Obj),
+      UserFun(Doc, Meta, Acc)
+    end,
+  
   case hackney:request(Method, Url, Headers, Body, ReqOpts) of
     {ok, Ref} ->
-      wait_fold_response(Ref, Fun, AccIn);
+      wait_fold_response(Ref, WrapperFun, AccIn);
     Error ->
       Error
   end.

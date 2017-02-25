@@ -31,11 +31,9 @@ get_resource(Database, Req0, State) ->
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
-    fun
-      (_DocId, _DocInfo, {ok, nil}, Acc) ->
-        {ok, Acc};
-      (_DocId, _DocInfo, {ok, Doc}, {N, Pre}) ->
-        Chunk = << Pre/binary, (jsx:encode(Doc))/binary >>,
+    fun (Doc, Meta, {N, Pre}) ->
+        DocWithMeta = Doc#{<<"_meta">> => Meta},
+        Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,

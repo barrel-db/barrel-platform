@@ -61,16 +61,19 @@ accept_get(_Config) ->
   0 = length(Rows1),
 
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, CatRevId} = barrel_local:put(<<"testdb">>, D1, []),
+  {ok, _, CatRevId} = barrel_local:post(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
-  {ok, _, _DogRevId} = barrel_local:put(<<"testdb">>, D2, []),
+  {ok, _, DogRevId} = barrel_local:post(<<"testdb">>, D2, []),
 
   {200, R2} = test_lib:req(get, "/dbs/testdb/docs"),
   A2 = jsx:decode(R2, [return_maps]),
   Rows2 = maps:get(<<"docs">>, A2),
-  2 = length(Rows2),
-  Row = hd(Rows2),
-  #{<<"id">> := <<"cat">>, <<"_rev">> := CatRevId} = Row,
+  [#{<<"_meta">> := #{<<"rev">> := CatRevId},
+     <<"id">> := <<"cat">>,
+     <<"name">> := <<"tom">>},
+   #{<<"_meta">> := #{<<"rev">> := DogRevId},
+     <<"id">> := <<"dog">>,
+     <<"name">> := <<"dingo">>}] = Rows2,
   ok.
 
 accept_start_key(_Config) ->
@@ -101,7 +104,7 @@ create_docs(Prefix, N, Conn) ->
   B = list_to_binary(S),
   Key = <<Prefix/binary, B/binary>>,
   Doc = #{<<"id">> => Key, <<"v">> => 1},
-  {ok, _, _} = barrel_local:put(Conn, Doc, []),
+  {ok, _, _} = barrel_local:post(Conn, Doc, []),
   create_docs(Prefix, N-1, Conn).
 
 

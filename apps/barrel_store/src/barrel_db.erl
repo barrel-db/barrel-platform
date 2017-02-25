@@ -19,6 +19,7 @@
 %% API
 -export([
   infos/1,
+  create_doc/3,
   update_doc/3,
   get/3,
   get_doc_info/3,
@@ -32,7 +33,7 @@
   delete_system_doc/2,
   query/5,
   query/6,
-  get_doc1/8
+  get_doc1/7
 ]).
 
 -export([
@@ -42,7 +43,7 @@
   exists/1,
   encode_rid/1,
   decode_rid/1,
-  get_current_revision/2
+  get_current_revision/1
 ]).
 
 %% gen_server callbacks
@@ -97,88 +98,78 @@ get(DbName, DocId, Options) ->
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
       Ancestors = proplists:get_value(ancestors, Options, []),
-      WithMeta = proplists:get_value(meta, Options, false),
       %% initialize a snapshot for reads
       {ok, Snapshot} = rocksdb:snapshot(Db#db.store),
       ReadOptions = [{snapshot, Snapshot}],
       %% finally retieve the doc
-      try get_doc1(Db, DocId, Rev, WithMeta, WithHistory, MaxHistory, Ancestors, ReadOptions)
+      try get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions)
       after rocksdb:release_snapshot(Snapshot)
       end
   end.
 
-get_doc1(Db, DocId, Rev, WithMeta, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
+get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
   case get_doc_info_int(Db, DocId, ReadOptions) of
     {ok, #{deleted := true}} when Rev =:= <<"">> ->
       {error, not_found};
     {ok, DocInfo = #{ revtree := RevTree }} ->
-      case maybe_get_revision(Rev, DocInfo, WithMeta, ReadOptions, Db) of
-        {ok, Body} ->
+      case maybe_get_revision(Rev, DocInfo, ReadOptions, Db) of
+        {ok, Body, Meta} ->
           case WithHistory of
             false ->
-              {ok, Body};
+              {ok, Body, Meta};
             true ->
-              RevId = maps:get(<<"_rev">>, Body),
+              RevId = maps:get(<<"rev">>, Meta),
               History = barrel_revtree:history(RevId, RevTree),
               EncodedRevs = barrel_doc:encode_revisions(History),
               Revisions = barrel_doc:trim_history(EncodedRevs, Ancestors, MaxHistory),
-              {ok, Body#{<<"_revisions">> => Revisions}}
+              {ok, Body, Meta#{<<"revisions">> => Revisions}}
           end;
         Error ->
           Error
-      
+
       end;
     Error ->
       Error
   end.
 
-maybe_get_revision(<<>>, #{ deleted := true}, _WithMeta, _ReadOptions, _Db) ->
+maybe_get_revision(<<>>, #{ deleted := true}, _ReadOptions, _Db) ->
   {error, not_found};
-maybe_get_revision(Rev, DocInfo, WithMeta, ReadOptions, Db) ->
+maybe_get_revision(Rev, DocInfo, ReadOptions, Db) ->
   RevId = case Rev of
             <<"">> -> maps:get(current_rev, DocInfo);
             _ -> Rev
           end,
-  get_revision(RevId, DocInfo, WithMeta, ReadOptions, Db).
+  get_revision(RevId, DocInfo, ReadOptions, Db).
 
 get_body(RevId, #{ body_map := BodyMap}) ->
-  case maps:find(RevId, BodyMap) of
-    {ok, Body} -> {ok, Body#{ <<"_rev">> => RevId}};
-    error -> error
-  end.
+  maps:find(RevId, BodyMap).
 
-get_revision(RevId, DocInfo, WithMeta, ReadOptions, Db) ->
+get_revision(RevId, DocInfo, ReadOptions, Db) ->
   case get_body(RevId, DocInfo) of
-    {ok, Body0} ->
-      Body1 = maybe_add_meta(Body0, RevId, DocInfo, WithMeta),
-      {ok, Body1};
+    {ok, Body} ->
+      {ok, Body, meta(RevId, DocInfo)};
     error ->
       DocId = maps:get(id, DocInfo),
       case get_persisted_rev(Db, DocId, RevId, ReadOptions) of
-        {ok, Body0} ->
-          Body1 = maybe_add_meta(
-            Body0#{ <<"_rev">> => RevId}, RevId, DocInfo, WithMeta
-          ),
-          {ok, Body1};
+        {ok, Body} ->
+          {ok, Body, meta(RevId, DocInfo)};
         Error ->
           Error
       end
   end.
 
-
-maybe_add_meta(Body, RevId, DocInfo, true) ->
-  #{ rid := Rid, revtree := RevTree} = DocInfo,
+meta(RevId, DocInfo) ->
+  #{rid := Rid, revtree := RevTree} = DocInfo,
   {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
-  maybe_add_deleted(
-    Body#{ <<"_rid">> => encode_rid(Rid) },
-    RevInfo
-  );
-maybe_add_meta(Body, RevId, #{ revtree := RevTree }, _) ->
-  {ok, RevInfo} = barrel_revtree:info(RevId, RevTree),
-  maybe_add_deleted(Body, RevInfo).
+  Deleted = maps:get(deleted, RevInfo, false),
+  maybe_add_deleted_meta(
+    #{<<"rid">> => encode_rid(Rid),
+      <<"rev">> => RevId },
+    Deleted
+  ).
 
-maybe_add_deleted(Body, #{ deleted := true }) ->  Body#{ <<"_deleted">> => true};
-maybe_add_deleted(Body, _) -> Body.
+maybe_add_deleted_meta(Meta, false) -> Meta;
+maybe_add_deleted_meta(Meta, Deleted) -> Meta#{ <<"deleted">> => Deleted}.
 
 
 get_persisted_rev(#db{store=Store}, DocId, RevId, ReadOptions) ->
@@ -187,7 +178,6 @@ get_persisted_rev(#db{store=Store}, DocId, RevId, ReadOptions) ->
     not_found -> {error, not_found};
     Error -> Error
   end.
-
 
 get_doc_info(DbName, DocId, ReadOptions) when is_binary(DbName) ->
   case barrel_store:whereis_db(DbName) of
@@ -206,23 +196,30 @@ get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
       {error, not_found}
   end.
 
+
+create_doc(DbName, Doc, Options0) ->
+  Options1 = [{create_if_missing, true} | Options0],
+  update_doc(DbName, Doc, Options1).
+
 update_doc(DbName, Doc, Options) ->
   case update_docs(DbName, [Doc], Options) of
     ok -> ok;
     [Res] -> Res
   end.
 
-prepare_docs([Doc | Rest], DocBuckets, Async, WithConflict, Ref, Idx) ->
+prepare_docs(
+  [Doc | Rest], DocBuckets, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx
+) ->
   Req = {self(), Ref, Idx, Async},
-  Update = {Doc, WithConflict, Req},
-  
+  Update = {Doc, WithConflict, CreateIfMissing, ErrorIfExists, Req},
+
   DocBuckets2 = case maps:find(Doc#doc.id, DocBuckets) of
                   {ok, OldUpdates} -> maps:put(Doc#doc.id,  OldUpdates ++ [Update], DocBuckets);
                   error -> maps:put(Doc#doc.id,  [Update], DocBuckets)
                 end,
-  
-  prepare_docs(Rest, DocBuckets2, Async, WithConflict, Ref, Idx + 1);
-prepare_docs([], DocBuckets, _, _, _, Idx) ->
+
+  prepare_docs(Rest, DocBuckets2, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx + 1);
+prepare_docs([], DocBuckets, _, _, _, _, _, Idx) ->
   {DocBuckets, Idx}.
 
 update_docs(DbName, Docs, Options) ->
@@ -231,12 +228,17 @@ update_docs(DbName, Docs, Options) ->
     Db = #db{pid=DbPid} ->
       Async = proplists:get_value(async, Options, false),
       WithConflict = proplists:get_value(with_conflict, Options, false),
+      CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
+      ErrorIfExists = proplists:get_value(error_if_exists, Options, false),
+      
       Ref = make_ref(),
       % group docs by docid, in case of duplicates
-      {DocBuckets, N} = prepare_docs(Docs, #{}, Async, WithConflict, Ref, 0),
+      {DocBuckets, N} = prepare_docs(
+        Docs, #{}, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, 0
+      ),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
-      
+
       case Async of
         false ->
           collect_updates(Db, Ref, MRef, [], N);
@@ -266,7 +268,7 @@ collect_updates(Db, _Ref, MRef, Results, 0) ->
     fun({_, Result}) -> Result end,
     lists:keysort(1, Results)
   ).
-  
+
 
 fold_by_id(DbName, Fun, Acc, Opts) ->
   case barrel_store:whereis_db(DbName) of
@@ -278,26 +280,21 @@ fold_by_id_int(#db{ store=Store }, UserFun, AccIn, Opts) ->
   Prefix = barrel_keys:prefix(doc),
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
-  IncludeDoc = proplists:get_value(include_doc, Opts, false),
-  WithMeta = proplists:get_value(meta, Opts, false),
   Opts2 = [{read_options, ReadOptions} | Opts],
 
   WrapperFun =
   fun(_Key, << RID:64 >>, Acc) ->
     %% TODO: optimize it ?
     {ok, Bin} = rocksdb:get(Store, barrel_keys:res_key(RID), ReadOptions) ,
-    #{ id := DocId } = DocInfo =  binary_to_term(Bin),
-    Doc = case IncludeDoc of
-            true ->
-              case get_current_revision(DocInfo, WithMeta) of
-                {ok, Body} -> {ok, Body};
-                error -> {ok, nil}
-              end;
-            false -> {ok, nil}
-          end,
-    UserFun(DocId, DocInfo, Doc, Acc)
+    DocInfo =  binary_to_term(Bin),
+    case get_current_revision(DocInfo) of
+      {ok, Doc, Meta} ->
+        UserFun(Doc, Meta, Acc);
+      error ->
+        Acc
+    end
   end,
-  
+
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, Opts2)
   after rocksdb:release_snapshot(Snapshot)
   end.
@@ -322,8 +319,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
   WithHistory = proplists:get_value(history, Opts, last) =:= all,
-  WithMeta = proplists:get_value(meta, Opts, false),
-  
+
   WrapperFun =
   fun(Key, BinDocInfo, Acc) ->
     DocInfo = binary_to_term(BinDocInfo),
@@ -338,46 +334,47 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
                 false -> [RevId];
                 true -> barrel_revtree:history(RevId, RevTree)
               end,
-    
+
     %% create change
     Change = change_with_doc(
       changes_with_deleted(
-        #{ <<"id">> => DocId, <<"seq">> => Seq, <<"changes">> => Changes },
+        #{ <<"id">> => DocId, <<"seq">> => Seq,
+           <<"rev">> => RevId, <<"changes">> => Changes,
+           <<"rid">> => encode_rid(Rid) },
         Deleted
       ),
-      Rid, WithMeta, Db, ReadOptions, IncludeDoc
+      Rid, Db, ReadOptions, IncludeDoc
     ),
     Fun(Change, Acc)
   end,
-  
+
   try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOpts)
   after rocksdb:release_snapshot(Snapshot)
   end.
 
-change_with_doc(Change, Rid, WithMeta, #db{store=Store}, ReadOptions, true) ->
+change_with_doc(Change, Rid, #db{store=Store}, ReadOptions, true) ->
   case rocksdb:get(Store, barrel_keys:res_key(Rid), ReadOptions) of
     {ok, Bin} ->
       DocInfo = binary_to_term(Bin),
-      case get_current_revision(DocInfo, WithMeta) of
-        {ok, Doc} -> Change#{ <<"doc">> => Doc};
+      case get_current_revision(DocInfo) of
+        {ok, Doc, _Meta} -> Change#{ <<"doc">> => Doc };
         error ->
           Change#{ <<"doc">> => #{ <<"error">> => <<"missing">> } }
       end;
     not_found ->
       Change#{ <<"doc">> => #{ <<"error">> => <<"missing">> } }
   end;
-change_with_doc(Change, _Rid, _WithMeta, _Db, _ReadOptions, false) ->
+change_with_doc(Change, _Rid, _Db, _ReadOptions, false) ->
   Change.
 
 changes_with_deleted(Change, true) -> Change#{<<"deleted">> => true};
 changes_with_deleted(Change, _) -> Change.
 
-get_current_revision(DocInfo, WithMeta) ->
+get_current_revision(DocInfo) ->
   RevId = maps:get(current_rev, DocInfo),
   case get_body(RevId, DocInfo) of
-    {ok, Body0} ->
-      Body1 = maybe_add_meta(Body0, RevId, DocInfo, WithMeta),
-      {ok, Body1};
+    {ok, Body} ->
+      {ok, Body, meta(RevId, DocInfo)};
     error ->
       error
   end.
@@ -505,15 +502,15 @@ init([DbId, Config]) ->
     <<"indexed_seq">> := Indexed,
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
-  
+
   %% set indexer mode
   IndexerMode = barrel_lib:to_atom(
     maps:get(<<"indexer_mode">>, Config, consistent)
   ),
-  
+
   %% validate indexer mode
   ok = validate_indexer_mode(IndexerMode),
-  
+
   Db =
     #db{id=DbId,
         store=Store,
@@ -525,7 +522,7 @@ init([DbId, Config]) ->
         indexed_seq = Indexed,
         docs_count = DocsCount,
         system_docs_count = SystemDocsCount},
-  
+
   {ok, Indexer} = barrel_indexer:start_link(Db, Config),
   Db2 = Db#db{indexer = Indexer},
   {ok, Db2}.
@@ -598,7 +595,7 @@ handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) -
       ok
   end,
   {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
- 
+
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
 
@@ -650,10 +647,8 @@ send_result(_, _) ->
 do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
   %% try to collect a maximum of updates at once
   DocBuckets2 = collect_updates(DocBuckets),
-  
-  %% merge all revisions tree
   {Updates, NewRid, _} = merge_revtrees(DocBuckets2, Db),
-  
+
   %% update resource counter
   if
     NewRid /= LastRid ->
@@ -665,68 +660,74 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
       );
     true -> ok
   end,
-  
+
   lists:foldl(
-    fun({DocInfo, Reqs}, Db1) ->
-      #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
-      LastSeq = maps:get(update_seq, DocInfo, -1),
-      
-      %% increment local document seq
-      DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
-  
-      %% doc counter increment
-      Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
-  
-      %% update db object
-      Db2 = Db1#db{updated_seq = Db1#db.updated_seq + 1,
-                   docs_count = Db1#db.docs_count  + Inc},
-  
-      %% revision has changed put the ancestor outside the value
-      {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
-      
-      %% Create the changes index metadata
-      SeqMeta = maps:remove(body_map, DocInfo3),
-      
-      %% finally write the batch
-      Batch =
-        maybe_update_changes(
-          LastSeq,
-          maybe_backup_ancestor(
-            Ancestor,
-            maybe_link_rid(
-              DocInfo3,
-              [
-                {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
-                {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
-                {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
-                {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
-              ]
+    fun
+      ({#{ local_seq := 0}, []}, Db1) ->
+        %% edge case, an update happened on a none existing doc
+        %% it should be safe there to return the db since the not_found
+        %% error has already be sent back to the requesters
+        Db1;
+      ({DocInfo, Reqs}, Db1) ->
+        #{ id := DocId, rid := Rid, current_rev := WinningRev} = DocInfo,
+        LastSeq = maps:get(update_seq, DocInfo, -1),
+
+        %% increment local document seq
+        DocInfo2 = DocInfo#{update_seq => Db1#db.updated_seq + 1},
+
+        %% doc counter increment
+        Inc = case DocInfo2 of #{ deleted := true } -> -1; _ -> 1 end,
+
+        %% update db object
+        Db2 = Db1#db{updated_seq = Db1#db.updated_seq + 1,
+                     docs_count = Db1#db.docs_count + Inc},
+
+        %% revision has changed put the ancestor outside the value
+        {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
+
+        %% Create the changes index metadata
+        SeqMeta = maps:remove(body_map, DocInfo3),
+
+        %% finally write the batch
+        Batch =
+          maybe_update_changes(
+            LastSeq,
+            maybe_backup_ancestor(
+              Ancestor,
+              maybe_link_rid(
+                DocInfo3,
+                [
+                  {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
+                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
+                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
+                  {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
+                ]
+              )
             )
-          )
-        ),
-      
-      case rocksdb:write(Store, Batch, [{sync, true}]) of
-        ok ->
-          lists:foreach(
-            fun(Req) -> send_result(Req, {ok, DocId, WinningRev}) end,
-            Reqs
           ),
-          ets:insert(barrel_dbs, Db2),
-          barrel_db_event:notify(Db2#db.id, db_updated),
-          Db2;
-        Error ->
-          lager:error(
-            "~s: error writing ~p: ~p",
-            [?MODULE_STRING, DocId, Error]
-          ),
-          
-          lists:foreach(
-            fun(Req) -> send_result(Req, Error) end,
-            Reqs
-          ),
-          Db2
-      end
-    end,
+
+        case rocksdb:write(Store, Batch, [{sync, true}]) of
+          ok ->
+            lists:foreach(
+              fun(Req) -> send_result(Req, {ok, DocId, WinningRev}) end,
+              Reqs
+            ),
+            ets:insert(barrel_dbs, Db2),
+            barrel_db_event:notify(Db2#db.id, db_updated),
+            Db2;
+          Error ->
+            lager:error(
+              "~s: error writing ~p: ~p",
+              [?MODULE_STRING, DocId, Error]
+            ),
+  
+            lists:foreach(
+              fun(Req) -> send_result(Req, Error) end,
+              Reqs
+            ),
+            Db2
+        end
+      end,
     Db#db{last_rid=NewRid},
     Updates
   ).
@@ -773,15 +774,19 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
                         {DI, Rid +1, DocInfos#{ DocId => DI}}
                     end
                 end,
-      
+
       Update = lists:foldl(
-        fun({Doc, WithConflict, Req}, {DI1, Reqs1}) ->
+        fun({Doc, WithConflict, CreateIfMissing, ErrorIfExists, Req}, {DI1, Reqs1}) ->
+          #{ local_seq := Seq } = DI1,
           case WithConflict of
             true ->
               {ok, DI2} = merge_revtree_with_conflict(Doc, DI1),
               {DI2, [Req | Reqs1]};
+            false when CreateIfMissing =/= true, Seq =:= 0 ->
+              send_result(Req, {error, not_found}),
+              {DI1, Reqs1};
             false ->
-              case merge_revtree(Doc, DI1) of
+              case merge_revtree(Doc, DI1, ErrorIfExists) of
                 {ok, DI2} ->
                   {DI2, [Req | Reqs1]};
                 Conflict ->
@@ -799,13 +804,13 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
     DocBuckets
   ).
 
-merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
+merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo, ErrorIfExists) ->
   #{ local_seq := Seq, current_rev := CurrentRev, revtree := RevTree, body_map := BodyMap } = DocInfo,
   {Gen, _}  = barrel_doc:parse_revision(Rev),
   Res = case Rev of
           <<>> ->
             if
-              CurrentRev /= <<>> ->
+              CurrentRev /= <<>>, ErrorIfExists =:= true ->
                 case maps:get(CurrentRev, RevTree) of
                   #{ deleted := true} ->
                     {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
@@ -813,6 +818,9 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
                   _ ->
                     {conflict, doc_exists}
                 end;
+              CurrentRev /= <<>> ->
+                {CurrentGen, _} = barrel_doc:parse_revision(CurrentRev),
+                {ok, CurrentGen + 1, CurrentRev};
               true ->
                 {ok, Gen + 1, <<>>}
             end;
@@ -824,12 +832,7 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
         end,
   case Res of
     {ok, NewGen, ParentRev} ->
-      #doc{body=Body0} = Doc,
-      Body1 = case Doc#doc.deleted of
-                true -> Body0#{ <<"_deleted" >> => Doc#doc.deleted };
-                false -> Body0
-              end,
-      NewRev = barrel_doc:revid(NewGen, Rev, Body1),
+      NewRev = barrel_doc:revid(NewGen, Rev, Doc),
       RevInfo = #{  id => NewRev,  parent => ParentRev, deleted => Doc#doc.deleted },
       RevTree2 = barrel_revtree:add(RevInfo, RevTree),
 
@@ -849,30 +852,40 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo) ->
     Conflict ->
       Conflict
   end.
-  
+
 
 merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInfo) ->
-  #{local_seq := Seq, revtree := RevTree, body_map := BodyMap} = DocInfo,
+  #{current_rev := CurrentRev, local_seq := Seq, revtree := RevTree, body_map := BodyMap} = DocInfo,
+  {OldPos, _}  = barrel_doc:parse_revision(CurrentRev),
   {Idx, Parent} = find_parent(Revs, RevTree, 0),
   if
-    Idx =:= 0 -> {ok, DocInfo};
+    Idx =:= 0 -> 
+      {ok, DocInfo};
     true ->
       ToAdd = lists:sublist(Revs, Idx),
-      RevTree2 = edit_revtree(ToAdd, Parent, Doc#doc.deleted, RevTree),
-
-      %% find winning revision and update doc infos with it
-      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-      WinningRevInfo = maps:get(WinningRev, RevTree2),
-
+      RevTree2 = edit_revtree(lists:reverse(ToAdd), Parent, Doc#doc.deleted, RevTree),
+  
       %% update docinfo
       DocInfo2 = DocInfo#{ local_seq := Seq + 1,
                            body_map => BodyMap#{ NewRev => Body },
-                           revtree => RevTree2,
-                           current_rev => WinningRev,
-                           branched => Branched,
-                           conflict => Conflict,
-                           deleted => barrel_revtree:is_deleted(WinningRevInfo) },
-      {ok, DocInfo2}
+                           revtree => RevTree2},
+
+      %% find winning revision and update doc infos with it
+      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+      {NewPos, _}  = barrel_doc:parse_revision(WinningRev),
+  
+      %% if the new winning revision is at the same position we keep the current
+      %% one as winner. Else we update the doc info.
+      if
+         NewPos /= OldPos ->
+           WinningRevInfo = maps:get(WinningRev, RevTree2),
+           {ok, DocInfo2#{current_rev => WinningRev,
+                          branched => Branched,
+                          conflict => Conflict,
+                          deleted => barrel_revtree:is_deleted(WinningRevInfo)}};
+        true ->
+          {ok, DocInfo2}
+      end
   end.
 
 edit_revtree([RevId], Parent, Deleted, Tree) ->
@@ -883,13 +896,8 @@ edit_revtree([RevId], Parent, Deleted, Tree) ->
       barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
   end;
 edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
-  Tree2 = case Deleted of
-            true ->
-              barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
-            false ->
-              barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
-          end,
-  edit_revtree(Rest, Parent, Deleted, Tree2);
+  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
+  edit_revtree(Rest, RevId, Deleted, Tree2);
 edit_revtree([], _Parent, _Deleted, Tree) ->
   Tree.
 

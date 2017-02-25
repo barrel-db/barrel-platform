@@ -24,9 +24,10 @@
           feed,
           body,
           doc,
+          meta,
           conn,
           options=[],
-
+          rev,
           since,
           timer,
           heartbeat,

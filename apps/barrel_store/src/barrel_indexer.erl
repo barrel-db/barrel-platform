@@ -104,7 +104,7 @@ fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
             end
         end,
   {NChanges, Changes} = barrel_db:changes_since_int(
-    Db, Since, Fun, {0, []}, [{include_doc, true}, {meta, true}]
+    Db, Since, Fun, {0, []}, [{include_doc, true}]
   ),
   lager:debug(
     "~s: fetched ~p changes since ~p:~n~n~p",
@@ -230,7 +230,7 @@ merge([], _Rid, _Op, _Fun, _Db, Acc) ->
 analyze(Change, Db) ->
   Doc = maps:get(<<"doc">>, Change),
   Del = maps:get(<<"deleted">>, Change, false),
-  Rid = barrel_db:decode_rid(maps:get(<<"_rid">>, Doc)),
+  Rid = barrel_db:decode_rid(maps:get(<<"rid">>, Change)),
 
   OldPaths = case get_last_doc(Db, Rid) of
                {ok, OldPaths1} -> OldPaths1;
@@ -240,7 +240,7 @@ analyze(Change, Db) ->
     true ->
       {[], OldPaths, Rid, []};
     false ->
-      Paths = barrel_json:flatten(Doc),
+      Paths = barrel_index_json:flatten(Doc),
       Removed = OldPaths -- Paths,
       Added = Paths -- OldPaths,
       {Added, Removed, Rid, Paths}

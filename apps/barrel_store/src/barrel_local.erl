@@ -19,9 +19,9 @@
 
 -export([
   put/3,
-  put_rev/4,
+  put_rev/5,
   get/3,
-  delete/4,
+  delete/3,
   post/3,
   fold_by_id/4,
   changes_since/4,
@@ -71,6 +71,7 @@
 }.
 
 -type doc() :: map().
+-type meta() :: map().
 -type rev() :: binary().
 -type docid() :: binary().
 
@@ -102,6 +103,7 @@
 -type write_options() :: [
   {async, boolean()}
   | {timeout, integer()}
+  | {rev, rev()}
 ].
 
 -type conflict() ::
@@ -177,55 +179,77 @@ get(Db, DocId, Options) ->
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put(Db, Doc, Options) when is_map(Doc) ->
   ok = validate_docid(Doc),
-  barrel_db:update_doc(Db, barrel_doc:doc_from_obj(Doc), Options);
+  Rev = proplists:get_value(rev, Options, <<>>),
+  Deleted = false,
+  barrel_db:update_doc(Db, barrel_doc:make_doc(Doc, [Rev], Deleted), Options);
 put(_,  _, _) ->
   erlang:error(badarg).
 
+
+
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
--spec put_rev(Db, Doc, History, Options) -> Res when
+-spec put_rev(Db, Doc, History, Deleted, Options) -> Res when
   Db::db(),
   Doc :: doc(),
   History :: [rev()],
+  Deleted :: boolean(),
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-put_rev(Db, Doc, History, Options) when is_map(Doc) ->
+put_rev(Db, Doc, History, Deleted, Options) when is_map(Doc) ->
   ok = validate_docid(Doc),
-  Doc2 = barrel_doc:doc_from_obj(Doc),
-  barrel_db:update_doc(Db, Doc2#doc{ revs = History }, [{with_conflict, true} | Options]);
-put_rev(_, _, _, _) ->
+  Doc2 = barrel_doc:make_doc(Doc, History, Deleted),
+  barrel_db:update_doc(Db, Doc2, [{with_conflict, true} | Options]);
+put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 
 %% @doc delete a document
--spec delete(Db, DocId, RevId, Options) -> Res when
+-spec delete(Db, DocId, Options) -> Res when
   Db::db(),
   DocId :: docid(),
-  RevId :: rev(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-delete(Db, DocId, RevId, Options) ->
-  put(Db, #{ <<"id">> => DocId, <<"_rev">> => RevId, <<"_deleted">> => true }, Options).
+delete(Db, DocId, Options) ->
+  Doc = #{<<"id">> => DocId},
+  Rev = proplists:get_value(rev, Options, <<>>),
+  Deleted = true,
+  barrel_db:update_doc(Db, barrel_doc:make_doc(Doc, [Rev], Deleted), Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
-%% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
+%% Optionally the document ID can be set in the doc.
 -spec post(Db, Doc, Options) -> Res when
   Db::db(),
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-post(_Db, #{<<"_rev">> := _Rev}, _Options) -> {error, not_found};
-post(Db, Doc, Options) ->
-  DocId = case barrel_doc:id(Doc) of
-            undefined -> barrel_lib:uniqid();
-            Id -> Id
-          end,
-  put(Db, Doc#{<<"id">> => DocId }, Options).
+post(Db, Doc0, Options0) ->
+  case proplists:get_value(rev, Options0) of
+    undefined ->
+      DocId = case barrel_doc:id(Doc0) of
+                undefined -> barrel_lib:uniqid();
+                Id -> Id
+              end,
+      %% create doc record
+      Doc1 = barrel_doc:make_doc(
+        maps:put(<<"id">>, DocId, Doc0),
+        [<<>>],
+        false
+      ),
+      
+      Options1 = case proplists:get_value(is_upsert, Options0, false) of
+                   false -> [{error_if_exists, true} | Options0];
+                   _ -> Options0
+                 end,
+      barrel_db:create_doc(Db, Doc1, Options1);
+   _Rev ->
+      erlang:error(badarg)
+  end.
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
   Db::db(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((DocId :: docid(), DocInfo :: docinfo(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((Doc :: doc(), Meta :: meta(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),
@@ -331,5 +355,5 @@ replication_info(Name) ->
 
 
 %% internal
-validate_docid(#{ <<"id">> := DocId }) -> ok;
+validate_docid(#{ <<"id">> := _DocId }) -> ok;
 validate_docid(_) -> erlang:error({bad_doc, invalid_docid}).
