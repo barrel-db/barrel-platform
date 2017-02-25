@@ -80,7 +80,7 @@ include_doc(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), #{since => 0, mode => sse, include_doc => true}),
   [] = barrel_httpc_changes:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_httpc:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>, <<"doc">> := Doc2}] = barrel_httpc_changes:changes(Pid),
   #{ <<"id">> := <<"aa">>, <<"v">> := 1 } =  Doc2,
@@ -174,7 +174,7 @@ multiple_put(Config) ->
       Doc = #{ <<"id">> => DocId, <<"val">> => I},
       Pid = spawn_link(
         fun() ->
-          {ok, DocId, _} = barrel_httpc:put(db(Config), Doc, []),
+          {ok, DocId, _} = barrel_httpc:post(db(Config), Doc, []),
           Self ! {ok, self()},
           timer:sleep(100)
         end
