@@ -18,6 +18,7 @@
           database,
           handler :: list | changes | doc,
           docid,
+          idmatch,
           revid,
           edit,
           history,

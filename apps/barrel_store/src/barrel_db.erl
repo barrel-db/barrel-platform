@@ -22,7 +22,7 @@
   create_doc/3,
   update_doc/3,
   get/3,
-  mget/4,
+  mget/5,
   get_doc_info/3,
   get_doc_info_int/3,
   fold_by_id/4,
@@ -89,12 +89,11 @@ infos(DbName) ->
     end
   ).
 
-mget(DbName, Fun, DocIds, Options) when is_list(DocIds) ->
+mget(DbName, Fun, AccIn, DocIds, Options) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, not_found};
     Db ->
       %% parse options
-      %% Rev = proplists:get_value(rev, Options, <<"">>),
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
       Ancestors = proplists:get_value(ancestors, Options, []),
@@ -102,16 +101,15 @@ mget(DbName, Fun, DocIds, Options) when is_list(DocIds) ->
       {ok, Snapshot} = rocksdb:snapshot(Db#db.store),
       ReadOptions = [{snapshot, Snapshot}],
       Rev = <<"">>,
-      GetRevs = fun(DocId) ->
+      GetRevs = fun(DocId, Acc) ->
                     Res = get_doc1(Db, DocId, Rev,
                                    WithHistory, MaxHistory,
                                    Ancestors, ReadOptions),
-                    Fun(Res)
+                    Fun(Res, Acc)
                 end,
       %% finally retieve the doc
       try
-        [ GetRevs(Id) || Id <- DocIds]
-        %% get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions)
+        lists:foldl(GetRevs, AccIn, DocIds)
       after rocksdb:release_snapshot(Snapshot)
       end
   end.

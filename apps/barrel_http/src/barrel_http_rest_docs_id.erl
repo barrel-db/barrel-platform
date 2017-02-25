@@ -44,11 +44,12 @@ check_params(Req, State) ->
       barrel_http_reply:error(400, <<"unknown query parameter: ", Unknown/binary>>, Req, State);
     {ok, S2} ->
       {ok, Body, Req2} = cowboy_req:read_body(Req),
+      Options = State#state.options,
       Opts = case S2#state.history of
-                true -> [{history, true}];
-                _ -> []
+                true -> [{history, true}|Options];
+                _ -> Options
               end,
-      parse_headers(Req2, S2#state{body=Body, options=Opts})
+      route(Req2, S2#state{body=Body, options=Opts})
   end.
 
 parse_params([], State) ->
@@ -61,16 +62,6 @@ parse_params([{Param, __Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
 
-parse_headers(Req, State) ->
-  Headers = cowboy_req:headers(Req),
-  State2 = maps:fold(fun(<<"etag">>, Etag, S) ->
-                         Opt = S#state.options,
-                         S#state{options=[{rev, Etag}|Opt]};
-                        (_, _, S) -> S
-                     end, State, Headers),
-  route(Req, State2).
-
-
 route(Req, #state{method= <<"POST">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
@@ -81,13 +72,6 @@ route(Req, #state{method= <<"DELETE">>}=State) ->
   check_resource_exists(Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
-
-
-%% check_request_revid(Req, #state{method= <<"DELETE">>, etag=undefined}=S) ->
-%%   barrel_http_reply:error(400, <<"mising rev parameter">>, Req, S);
-%% check_request_revid(Req, S) ->
-%%   Body = S#state.body,
-%%   check_resource_exists(Req, S#state{body=Body}).
 
 
 check_body(Req, #state{body= <<>>}=S) ->

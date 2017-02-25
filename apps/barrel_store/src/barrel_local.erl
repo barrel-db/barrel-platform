@@ -21,7 +21,7 @@
   put/3,
   put_rev/5,
   get/3,
-  mget/4,
+  mget/5,
   delete/3,
   post/3,
   fold_by_id/4,
@@ -171,15 +171,16 @@ get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
--spec mget(Db, Fun, DocIds, Options) -> [Res] when
+-spec mget(Db, Fun, AccIn, DocIds, Options) -> [Res] when
     Db::db(),
     Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+    AccIn :: any(),
     DocIds :: [docid()],
     Options :: read_options(),
     Doc :: doc(),
     Res :: any().
-mget(Db, Fun, DocIds, Options) ->
-  barrel_db:mget(Db, Fun, DocIds, Options).
+mget(Db, Fun, AccIn, DocIds, Options) ->
+  barrel_db:mget(Db, Fun, AccIn, DocIds, Options).
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.

@@ -126,21 +126,22 @@ multi_get(_Config) ->
   Mget = [ Id || {Id, _} <- Kvs],
 
   %% a fun to parse the results
-  Fun=fun({ok, Doc, Meta}) ->
+  %% the parameter is the same format as the regular get function output
+  Fun=fun({ok, Doc, Meta}, Acc) ->
           #{<<"id">> := DocId} = Doc,
           #{<<"rev">> := RevId} = Meta,
-          #{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }
+          [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]
       end,
 
   %% let's process it
-  Results = barrel_local:mget(<<"testdb">>, Fun, Mget, []),
+  Results = barrel_local:mget(<<"testdb">>, Fun, [], Mget, []),
 
   %% check results
   [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1},
      <<"id">> := <<"a">>,
      <<"rev">> := _},
    #{<<"doc">> := #{<<"id">> := <<"b">>, <<"v">> := 2}},
-   #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = Results.
+   #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = lists:reverse(Results).
 
 
 put_is_not_create(_Config) ->
