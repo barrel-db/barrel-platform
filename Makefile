@@ -24,6 +24,13 @@ clean:
 distclean: clean ## Clean all build and releases artifacts
 	rm -rf _build
 
+cleantest:
+	@rm -rf _build/test
+
+test: cleantest
+	@$(REBAR) eunit
+	@$(REBAR) ct
+
 help: ## This documentation
 	@echo Build commands for barrel platform:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
