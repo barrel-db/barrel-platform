@@ -240,7 +240,7 @@ analyze(Change, Db) ->
     true ->
       {[], OldPaths, Rid, []};
     false ->
-      Paths = barrel_json:flatten(Doc),
+      Paths = barrel_index_json:flatten(Doc),
       Removed = OldPaths -- Paths,
       Added = Paths -- OldPaths,
       {Added, Removed, Rid, Paths}

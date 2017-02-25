@@ -859,12 +859,7 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo, ErrorIfExists) ->
         end,
   case Res of
     {ok, NewGen, ParentRev} ->
-      #doc{body=Body0} = Doc,
-      Body1 = case Doc#doc.deleted of
-                true -> Body0#{ <<"_deleted" >> => Doc#doc.deleted };
-                false -> Body0
-              end,
-      NewRev = barrel_doc:revid(NewGen, Rev, Body1),
+      NewRev = barrel_doc:revid(NewGen, Rev, Doc),
       RevInfo = #{  id => NewRev,  parent => ParentRev, deleted => Doc#doc.deleted },
       RevTree2 = barrel_revtree:add(RevInfo, RevTree),
 
@@ -887,28 +882,37 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo, ErrorIfExists) ->
 
 
 merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInfo) ->
-  #{local_seq := Seq, revtree := RevTree, body_map := BodyMap} = DocInfo,
+  #{current_rev := CurrentRev, local_seq := Seq, revtree := RevTree, body_map := BodyMap} = DocInfo,
+  {OldPos, _}  = barrel_doc:parse_revision(CurrentRev),
   {Idx, Parent} = find_parent(Revs, RevTree, 0),
   if
     Idx =:= 0 -> 
       {ok, DocInfo};
     true ->
       ToAdd = lists:sublist(Revs, Idx),
-      RevTree2 = edit_revtree(ToAdd, Parent, Doc#doc.deleted, RevTree),
-
-      %% find winning revision and update doc infos with it
-      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
-      WinningRevInfo = maps:get(WinningRev, RevTree2),
-
+      RevTree2 = edit_revtree(lists:reverse(ToAdd), Parent, Doc#doc.deleted, RevTree),
+  
       %% update docinfo
       DocInfo2 = DocInfo#{ local_seq := Seq + 1,
                            body_map => BodyMap#{ NewRev => Body },
-                           revtree => RevTree2,
-                           current_rev => WinningRev,
-                           branched => Branched,
-                           conflict => Conflict,
-                           deleted => barrel_revtree:is_deleted(WinningRevInfo) },
-      {ok, DocInfo2}
+                           revtree => RevTree2},
+
+      %% find winning revision and update doc infos with it
+      {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
+      {NewPos, _}  = barrel_doc:parse_revision(WinningRev),
+  
+      %% if the new winning revision is at the same position we keep the current
+      %% one as winner. Else we update the doc info.
+      if
+         NewPos /= OldPos ->
+           WinningRevInfo = maps:get(WinningRev, RevTree2),
+           {ok, DocInfo2#{current_rev => WinningRev,
+                          branched => Branched,
+                          conflict => Conflict,
+                          deleted => barrel_revtree:is_deleted(WinningRevInfo)}};
+        true ->
+          {ok, DocInfo2}
+      end
   end.
 
 edit_revtree([RevId], Parent, Deleted, Tree) ->
@@ -919,13 +923,8 @@ edit_revtree([RevId], Parent, Deleted, Tree) ->
       barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
   end;
 edit_revtree([RevId | Rest], Parent, Deleted, Tree) ->
-  Tree2 = case Deleted of
-            true ->
-              barrel_revtree:add(#{ id => RevId, parent => Parent, deleted => true}, Tree);
-            false ->
-              barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree)
-          end,
-  edit_revtree(Rest, Parent, Deleted, Tree2);
+  Tree2 = barrel_revtree:add(#{ id => RevId, parent => Parent}, Tree),
+  edit_revtree(Rest, RevId, Deleted, Tree2);
 edit_revtree([], _Parent, _Deleted, Tree) ->
   Tree.
 

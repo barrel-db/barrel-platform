@@ -229,12 +229,14 @@ put_rev(_Config) ->
   {ok, DocId, RevId2} = barrel_local:put(<<"testdb">>, Doc3, [{rev, RevId}]),
   Doc4 = Doc2#{ v => 3 },
   {Pos, _} = barrel_doc:parse_revision(RevId),
-  NewRev = barrel_doc:revid(Pos +1, RevId, Doc4),
+  NewRev = barrel_doc:revid(Pos +1, RevId, barrel_doc:make_doc(Doc4, RevId, false)),
   History = [NewRev, RevId],
   Deleted = false,
   {ok, DocId, _RevId3} = barrel_local:put_rev(<<"testdb">>, Doc4, History, Deleted, []),
   {ok, _Doc5, Meta} = barrel_local:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = [RevId2, RevId],
+  io:format("revisions: ~p~nparsed:~p~n", [Revisions, barrel_doc:parse_revisions(Meta)]),
+  
   Revisions = barrel_doc:parse_revisions(Meta).
 
 

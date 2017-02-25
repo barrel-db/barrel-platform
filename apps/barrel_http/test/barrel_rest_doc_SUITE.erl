@@ -244,7 +244,7 @@ put_rev(_Config) ->
   RevId = post_cat(),
   {ok, Doc, _Meta} = barrel_local:get(<<"testdb">>, <<"cat">>, []),
   {Pos, _} = barrel_doc:parse_revision(RevId),
-  NewRev = barrel_doc:revid(Pos +1, RevId, Doc),
+  NewRev = barrel_doc:revid(Pos +1, RevId, barrel_doc:make_doc(Doc, <<>>, false)),
   History = [NewRev, RevId],
   Request = #{<<"id">> => cat,
               <<"document">> => Doc,

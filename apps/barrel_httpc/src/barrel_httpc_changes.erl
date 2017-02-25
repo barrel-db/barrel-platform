@@ -37,7 +37,7 @@
   mode => binary | sse,
   include_doc => true | false,
   history => true | false,
-  change_cb => fun( (barrel_peer:change()) -> ok )
+  changes_cb => fun( (barrel_peer:change()) -> ok )
 }.
 
 -export_type([listener_options/0]).
