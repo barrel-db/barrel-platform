@@ -199,6 +199,7 @@ do_create_db(Config, State = #{ conf := Conf, db_pids := DbPids }) ->
   end.
 
 do_delete_db(DbId, State = #{ conf := Conf, db_pids := DbPids }) ->
+  lager:info("~s: deleting database ~p ~n", [?MODULE_STRING, DbId]),
   case ets:take(barrel_dbs, DbId) of
     [] ->
       lager:info("no database ~p ~n", [DbId]),
@@ -208,7 +209,7 @@ do_delete_db(DbId, State = #{ conf := Conf, db_pids := DbPids }) ->
       case gen_server:call(Pid, delete_db) of
         ok ->
           lager:info("database ~p deleted ~n", [DbId]),
-          {DbId, DbPids2} = maps:take(Pid, DbPids),
+          DbPids2 = maps:remove(Pid, DbPids),
           #{ <<"databases">> := Dbs } = Conf,
           Dbs2 = lists:filter(
             fun
@@ -234,7 +235,7 @@ db_is_down(Pid, State = #{ db_pids := DbPids }) ->
       case ets:take(barrel_dbs, DbId) of
         [] -> State;
         [_Db] ->
-          lager:warning("database ~p is down~n", [DbId]),
+          lager:warning("~s: database ~p is down~n", [?MODULE_STRING, DbId]),
           ets:delete(barrel_dbs, DbId),
           State#{db_pids => DbPids2}
       end
