@@ -29,6 +29,7 @@
 -export([
   basic_op/1,
   update_doc/1,
+  multi_get/1,
   put_is_not_create/1,
   deletet_is_not_create/1,
   last_write_win/1,
@@ -52,6 +53,7 @@ all() ->
   [
     basic_op,
     update_doc,
+    multi_get,
     put_is_not_create,
     deletet_is_not_create,
     last_write_win,
@@ -110,6 +112,35 @@ update_doc(_Config) ->
   {ok, <<"a">>, _RevId2} = barrel_local:delete(<<"testdb">>, <<"a">>, [{rev, RevId2}]),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_local:post(<<"testdb">>, Doc, []).
+
+
+multi_get(_Config) ->
+  %% create some docs
+  Kvs = [{<<"a">>, 1},
+         {<<"b">>, 2},
+         {<<"c">>, 3}],
+  Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
+  [ {ok,_,_} = barrel_local:post(<<"testdb">>, D, []) || D <- Docs ],
+
+  %% the "query" to get the id/rev
+  Mget = [ Id || {Id, _} <- Kvs],
+
+  %% a fun to parse the results
+  Fun=fun({ok, Doc, Meta}) ->
+          #{<<"id">> := DocId} = Doc,
+          #{<<"rev">> := RevId} = Meta,
+          #{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }
+      end,
+
+  %% let's process it
+  Results = barrel_local:mget(<<"testdb">>, Fun, Mget, []),
+
+  %% check results
+  [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1},
+     <<"id">> := <<"a">>,
+     <<"rev">> := _},
+   #{<<"doc">> := #{<<"id">> := <<"b">>, <<"v">> := 2}},
+   #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = Results.
 
 
 put_is_not_create(_Config) ->
