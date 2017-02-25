@@ -164,7 +164,7 @@ create_resource(Req, State) ->
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
-                           Deleted = maps:get(<<"_deleted">>, Json, false),
+                           Deleted = maps:get(<<"deleted">>, Json, false),
                            {barrel_local:put_rev(Database, Doc, History, Deleted, [{async, Async}|Options]), Req }
                        end
                    end,
