@@ -130,7 +130,7 @@ accept_delete(_Config) ->
 
   %% put one doc in source db
   Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
-  {201, _} = test_lib:req(put, "/dbs/dbaaa/docs/mouse", Mouse),
+  {201, _} = test_lib:req(post, "/dbs/dbaaa/docs/mouse", Mouse),
   timer:sleep(500),
   %% retrieve it replicated in target db
   {200, _} = test_lib:req(get, "/dbs/dbbbb/docs/mouse"),
@@ -142,7 +142,7 @@ accept_delete(_Config) ->
 
   %% put another doc in source db
   Cat = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, _} = test_lib:req(put, "/dbs/dbaaa/docs/cat", Cat),
+  {201, _} = test_lib:req(post, "/dbs/dbaaa/docs/cat", Cat),
   timer:sleep(500),
 
   %% it has not been replicated

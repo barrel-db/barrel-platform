@@ -14,7 +14,7 @@
 
 -module(barrel_http_lib).
 
--export([req/2, req/3]).
+-export([req/2, req/3, req/4]).
 -export([has_store/1]).
 -export([has_database/1]).
 
@@ -37,6 +37,17 @@ req(Method, Url, Body) when is_binary(Body) ->
       {Code, Answer};
     Error -> Error
   end.
+
+req(Method, Url, Body, Rev) when is_binary(Body), is_binary(Rev) ->
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"ETag">>, Rev}],
+  case hackney:request(Method, Url, Headers, Body, []) of
+    {ok, Code, _Headers, Ref} ->
+      {ok, Answer} = hackney:body(Ref),
+      {Code, Answer};
+    Error -> Error
+  end.
+
 
 has_database(Database) ->
   has_store(Database).

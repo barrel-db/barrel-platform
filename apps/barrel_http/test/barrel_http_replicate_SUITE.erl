@@ -179,8 +179,8 @@ check(DocName, Map, Config) ->
       {error, not_found} = barrel_local:get(Source, DocId, []),
       {error, not_found} = barrel_local:get(Target, DocId, []);
     Expected ->
-      {ok, DocSource} = barrel_local:get(Source, DocId, []),
-      {ok, DocTarget} = barrel_local:get(Target, DocId, []),
+      {ok, DocSource, _} = barrel_local:get(Source, DocId, []),
+      {ok, DocTarget, _} = barrel_local:get(Target, DocId, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -195,15 +195,15 @@ put_doc(DocName, Value, Config) ->
       {ok,_,_} = barrel_local:put(Source, Doc2, [{rev, maps:get(<<"rev">>, Meta)}]);
     {error, not_found} ->
       Doc = #{<<"id">> => DocId, <<"v">> => Value},
-      {ok,_,_} = barrel_local:ppost(Source, Doc, [])
+      {ok,_,_} = barrel_local:post(Source, Doc, [])
   end.
 
 delete_doc(DocName, Config) ->
   {Source, _Target} = repctx(Config),
   Id = list_to_binary(DocName),
-  {ok, Doc} = barrel_local:get(Source, Id, []),
-  RevId = maps:get(<<"_rev">>, Doc),
-  barrel_local:delete(Source, Id, RevId, []).
+  {ok, Doc, Meta} = barrel_local:get(Source, Id, []),
+  RevId = maps:get(<<"rev">>, Meta),
+  barrel_local:delete(Source, Id, [{rev, RevId}]).
 
 generate_scenario() ->
   [ {put, "a", 1}

@@ -56,20 +56,20 @@ end_per_suite(Config) ->
 
 put_cat() ->
   Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat", Doc),
+  {201, R} = test_lib:req(post, "/dbs/testdb/docs/cat", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
 
 delete_cat(CatRevId) ->
-  {200, R3} = test_lib:req(delete, "/dbs/testdb/docs/cat?rev=" ++ CatRevId),
+  {200, R3} = test_lib:req(delete, "/dbs/testdb/docs/cat", CatRevId),
   A3 = jsx:decode(R3, [return_maps]),
   true = maps:get(<<"ok">>, A3),
   binary_to_list(maps:get(<<"rev">>, A3)).
 
 put_dog() ->
   Doc = "{\"id\": \"dog\", \"name\": \"spike\"}",
-  {201, R} = test_lib:req(put, "/dbs/testdb/docs/dog", Doc),
+  {201, R} = test_lib:req(post, "/dbs/testdb/docs/dog", Doc),
   J = jsx:decode(R, [return_maps]),
   binary_to_list(maps:get(<<"rev">>, J)).
 
