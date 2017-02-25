@@ -833,11 +833,8 @@ merge_revtree(Doc = #doc{ revs = [Rev|_]}, DocInfo, ErrorIfExists) ->
   case Res of
     {ok, NewGen, ParentRev} ->
       #doc{body=Body0} = Doc,
-      Body1 = case Doc#doc.deleted of
-                true -> Body0#{ <<"_deleted" >> => Doc#doc.deleted };
-                false -> Body0
-              end,
-      NewRev = barrel_doc:revid(NewGen, Rev, Body1),
+      
+      NewRev = barrel_doc:revid(NewGen, Rev, Doc),
       RevInfo = #{  id => NewRev,  parent => ParentRev, deleted => Doc#doc.deleted },
       RevTree2 = barrel_revtree:add(RevInfo, RevTree),
 

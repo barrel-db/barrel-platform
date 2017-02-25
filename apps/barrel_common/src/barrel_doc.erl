@@ -23,7 +23,7 @@
   , compare/2
   , make_doc/3]).
 
--include("barrel_common.hrl").
+
 
 -export([id/1, rev/1, id_rev/1]).
 -export([deleted/1]).
@@ -34,20 +34,35 @@
 
 -export_types([docid/0, revid/0]).
 
-%% TODO: normalize the body. Handle deleted apart ?
-revid(Pos, Parent, Body0) ->
-  Ctx0 = crypto:hash_init(md5),
-  Body = maps:filter(fun
-                       (<<"">>, _) -> false;
-                       (<<"_deleted">> , _) -> true;
-                       (<<"_attachments">>, _) -> true;
-                       (<<"_", _/binary>>, _) -> false;
-                       (_, _) -> true
-                     end, Body0),
-  BinPos = integer_to_binary(Pos),
+-include("barrel_common.hrl").
+
+%% @doc generate a unique revision id for a document.
+%%
+%% the algorithm to generate a revision ID is the following:
+%%
+%% 1) We first create a canonical form of the JSON body following the draft here:
+%%    https://tools.ietf.org/html/draft-staykov-hu-json-canonical-form-00
+%%
+%%    Note: every keys at first level of the document object prefixed with "_" are removed
+%%
+%% 2) we create a SHA 256 hash by appending the following value in order:
+%%      - Gen: the new generation of the client (integer encoded to json)
+%%      - Parent Id: string
+%%      - Deleted: true or false (boolean encoded as json)
+%%      - Canonical Json
+-spec revid(Pos, Parent, Doc) -> RevId when
+  Pos :: non_neg_integer(),
+  Parent :: binary(),
+  Doc :: #doc{},
+  RevId :: binary().
+revid(Pos, Parent, Doc) ->
+  Ctx0 = crypto:hash_init(sha256),
+  CanonicalJson = jsone:encode(Doc#doc.body, [canonical_form]),
+  BinPos = jsone:encode(Pos),
+  BinDel = jsone:encode(Doc#doc.deleted),
   Ctx2 = lists:foldl(fun(V, C) ->
                          crypto:hash_update(C, V)
-                     end, Ctx0, [BinPos, Parent, term_to_binary(Body)]),
+                     end, Ctx0, [BinPos, Parent, BinDel, CanonicalJson]),
   Digest = crypto:hash_final(Ctx2),
   << BinPos/binary, "-", (barrel_lib:to_hex(Digest))/binary >>.
 
@@ -151,15 +166,17 @@ make_doc(Obj, Revs, Deleted) when is_map(Obj) ->
 -include_lib("eunit/include/eunit.hrl").
 
 revid_test() ->
-	Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
-													<<"hello">> => <<"yo">>}),
-	?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev),
-  Rev = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
-    <<"hello">> => <<"yo">>, <<"_hello">> => ok}),
-  ?assertEqual(<<"10-88197ae5119917ebb5bda615a4cab3e8">>, Rev),
-  Rev2 = revid(10, <<"9-test">>, #{<<"id">> => <<"test">>,
-    <<"hello">> => <<"yo">>, <<"_deleted">> => true }),
-  ?assertEqual(<<"10-0a824dd48f4e552ba168a8dd6a2cc98c">>, Rev2).
+  Doc = make_doc(#{<<"id">> => <<"test">>,
+                   <<"hello">> => <<"yo">>}, <<>>, false),
+	Rev = revid(10, <<"9-test">>, Doc),
+	?assertEqual(<<"10-7a5c147096d3fdbd537847bfb8708646caedb1bab8deb07c7865157874ca91bf">>, Rev),
+  Doc1 = make_doc(#{<<"hello">> => <<"yo">>,
+                    <<"id">> => <<"test">>}, <<>>, false),
+  ?assertEqual(Rev, revid(10, <<"9-test">>, Doc1)),
+  Doc2 = make_doc(#{<<"id">> => <<"test">>,
+                   <<"hello">> => <<"yo">>}, <<>>, true),
+  Rev2 = revid(10, <<"9-test">>, Doc2),
+  ?assertEqual(<<"10-5500c3bc2a38219e6b417aecb8061e39159ba7a462dbd1ad89e534f22a904d57">>, Rev2).
 
 parse_test() ->
 	Parsed = parse_revision(<<"10-2f25ea96da3fed514795b0ced028d58a">>),
