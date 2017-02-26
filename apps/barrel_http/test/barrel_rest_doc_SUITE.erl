@@ -121,16 +121,20 @@ accept_get_with_id_match(_Config) ->
   %% query the HTTP API with x-barrel-id-match header
   Url = <<"http://localhost:7080/dbs/testdb/docs">>,
   Headers = [{<<"Content-Type">>, <<"application/json">>},
-             {<<"x-barrel-id-match">>, <<" a , b,c ">>}, %% skipped by cowboy
-             {<<"x-barrel-id-match">>, <<"e,f, g">>}], %% only this one is accepted
+             {<<"x-barrel-id-match">>, <<"a, b, c">>},
+             {<<"x-barrel-id-match">>, <<"e,f, g">>}],
   {ok, 200, _RespHeaders, Ref} =  hackney:request(get, Url, Headers, <<>>, []),
   {ok, Body} = hackney:body(Ref),
   Json = jsx:decode(Body, [return_maps]),
-  #{<<"docs">> := [D1,D2,D3],
-    <<"count">> := 3} = Json,
-  #{<<"id">> := <<"e">>} = D1,
-  #{<<"id">> := <<"f">>} = D2,
-  #{<<"id">> := <<"g">>} = D3,
+
+  %% we receive the 6 id we asked for
+  %% they are in same order as requested
+  #{<<"docs">> := [D1,D2,D3,D4|_],
+    <<"count">> := 6} = Json,
+  #{<<"id">> := <<"a">>} = D1,
+  #{<<"id">> := <<"b">>} = D2,
+  #{<<"id">> := <<"c">>} = D3,
+  #{<<"id">> := <<"e">>} = D4,
   ok.
 
 accept_post(_Config) ->
