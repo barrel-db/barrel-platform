@@ -374,7 +374,7 @@ fold_by_path(Conn, Path, Fun, AccIn, Options) ->
   Conn::conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any(),
   Opts :: list().
