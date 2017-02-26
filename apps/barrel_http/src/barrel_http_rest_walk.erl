@@ -78,7 +78,7 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
   ok = cowboy_req:stream_body(
     iolist_to_binary([
       <<"],">>,
-      <<"\"_count\":">>,
+      <<"\"count\":">>,
       integer_to_binary(Count),
       <<"}">>
     ]),
@@ -109,7 +109,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
   ok = cowboy_req:chunk(
     iolist_to_binary([
       <<"],">>,
-      <<"\"_count\":">>,
+      <<"\"count\":">>,
       integer_to_binary(Count),
       <<"}">>
     ]),
