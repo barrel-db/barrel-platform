@@ -91,8 +91,36 @@ check_database_db(Req, State) ->
                   docid=DocId,
                   method=Method
                  },
-      route_all_docs(Req, State2)
+      parse_headers(Req, State2)
   end.
+
+
+parse_headers(Req, State) ->
+  Headers = cowboy_req:headers(Req),
+  F = fun
+        (<<"etag">>, Etag, S) ->
+          Opt = S#state.options,
+          S#state{options=[{rev, Etag}|Opt]};
+        (<<"x-barrel-id-match">>, IdsMatch, #state{idmatch=DocIds}=S) ->
+          WithParsed = parse_header_match_id(IdsMatch, DocIds),
+          S#state{idmatch=WithParsed};
+        (_, _, S) -> S
+      end,
+  State2 = maps:fold(F, State, Headers),
+  route_all_docs(Req, State2).
+
+parse_header_match_id(Bin, undefined) ->
+  parse_header_match_id(Bin, []);
+parse_header_match_id(Bin, Acc) when is_binary(Bin) ->
+  DocIds = binary:split(Bin, <<",">>, [global]),
+  parse_header_match_id(DocIds, Acc);
+parse_header_match_id([], Acc) ->
+  lists:reverse(Acc);
+parse_header_match_id([DocId|Tail], Acc) ->
+  L = binary:split(DocId, <<" ">>, [global]),
+  [Trimmed] = [ X || X <- L, X =/= <<>> ],
+  parse_header_match_id(Tail, [Trimmed|Acc]).
+
 
 route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
   barrel_http_rest_docs_list:get_resource(Database, Req, State);

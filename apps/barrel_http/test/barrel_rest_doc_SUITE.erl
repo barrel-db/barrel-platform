@@ -24,6 +24,7 @@
 -export([ accept_get/1
         , accept_get_with_rev/1
         , accept_get_with_history/1
+        , accept_get_with_id_match/1
         , accept_post/1
         , accept_put/1
         , accept_put_with_etag/1
@@ -38,6 +39,7 @@
 all() -> [ accept_get
          , accept_get_with_rev
          , accept_get_with_history
+         , accept_get_with_id_match
          , accept_post
          , accept_put
          , accept_put_with_etag
@@ -106,6 +108,33 @@ accept_get_with_history(_Config) ->
   #{<<"name">> := <<"tom">>,
     <<"_meta">> := #{<<"revisions">> := Revisions}} = J,
   #{<<"ids">> := [_], <<"start">> := 1} = Revisions,
+  ok.
+
+accept_get_with_id_match(_Config) ->
+  %% create some docs
+  Kvs = [{<<"a">>, 1}, {<<"b">>, 2}, {<<"c">>, 3},
+         {<<"d">>, 4}, {<<"e">>, 5}, {<<"f">>, 6},
+         {<<"g">>, 42}],
+  Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
+  [ {ok,_,_} = barrel_local:post(<<"testdb">>, D, []) || D <- Docs ],
+
+  %% query the HTTP API with x-barrel-id-match header
+  Url = <<"http://localhost:7080/dbs/testdb/docs">>,
+  Headers = [{<<"Content-Type">>, <<"application/json">>},
+             {<<"x-barrel-id-match">>, <<"a, b, c">>},
+             {<<"x-barrel-id-match">>, <<"e,f, g">>}],
+  {ok, 200, _RespHeaders, Ref} =  hackney:request(get, Url, Headers, <<>>, []),
+  {ok, Body} = hackney:body(Ref),
+  Json = jsx:decode(Body, [return_maps]),
+
+  %% we receive the 6 id we asked for
+  %% they are in same order as requested
+  #{<<"docs">> := [D1,D2,D3,D4|_],
+    <<"count">> := 6} = Json,
+  #{<<"id">> := <<"a">>} = D1,
+  #{<<"id">> := <<"b">>} = D2,
+  #{<<"id">> := <<"c">>} = D3,
+  #{<<"id">> := <<"e">>} = D4,
   ok.
 
 accept_post(_Config) ->

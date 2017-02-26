@@ -19,7 +19,10 @@
 %% API
 -export([get_resource/3]).
 
-get_resource(Database, Req0, State) ->
+-include("barrel_http_rest_docs.hrl").
+
+
+get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
   Options = parse_params(Req0),
   #{last_update_seq := Seq} = barrel_local:db_infos(Database),
   Req = cowboy_req:stream_reply(
@@ -43,14 +46,52 @@ get_resource(Database, Req0, State) ->
   ok = cowboy_req:stream_body(
     iolist_to_binary([
       <<"],">>,
-      <<"\"_count\":">>,
+      <<"\"count\":">>,
       integer_to_binary(Count),
       <<"}">>
       ]),
     fin,
     Req
   ),
+  {ok, Req, State};
+
+get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) ->
+  %% let's process it
+  Req = cowboy_req:stream_reply(
+          200,
+          #{<<"Content-Type">> => <<"application/json">>},
+          Req0
+         ),
+  %% start the initial chunk
+  ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
+  Fun =
+    fun ({ok, Doc, Meta}, {N, Pre}) ->
+        #{<<"id">> := DocId} = Doc,
+        #{<<"rev">> := RevId} = Meta,
+        Reply = #{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc},
+        Chunk = << Pre/binary, (jsx:encode(Reply))/binary >>,
+        ok = cowboy_req:stream_body(Chunk, nofin, Req),
+        {N + 1, <<",">>}
+    end,
+  AccIn = {0, <<"">>},
+  Options = [],
+  {Count, _} = barrel_local:mget(Database, Fun, AccIn, DocIds, Options),
+
+  %% close the document list and return the calculated count
+  ok = cowboy_req:stream_body(
+         iolist_to_binary([
+                           <<"],">>,
+                           <<"\"count\":">>,
+                           integer_to_binary(Count),
+                           <<"}">>
+                          ]),
+         fin,
+         Req
+        ),
   {ok, Req, State}.
+
+
+
 
 parse_params(Req) ->
   Params = cowboy_req:parse_qs(Req),

@@ -143,7 +143,7 @@ wait_rows(start_object, St) -> St;
 wait_rows(end_object, St) -> St;
 wait_rows({key, <<"docs">>}, St) -> St#{ next => fun wait_rows1/2 };
 wait_rows({key, <<"changes">>}, St) -> St#{ next => fun wait_rows1/2 }; %% current changes api
-wait_rows({key, <<"_count">>}, St) ->  St#{ next => fun wait_val/2 };
+wait_rows({key, <<"count">>}, St) ->  St#{ next => fun wait_val/2 };
 wait_rows({key, <<"last_seq">>}, St) ->  St#{ next => fun wait_val/2 }; %% current change api
 wait_rows(_Other,  _) -> erlang:error(badarg).
 
