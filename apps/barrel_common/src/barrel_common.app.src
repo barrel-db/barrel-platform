@@ -1,6 +1,6 @@
 {application, barrel_common,
  [{description, "barrel-db common library"},
-  {vsn, "0.8.1"},
+  {vsn, "0.8.2"},
   {registered, []},
   {applications,
    [kernel,
