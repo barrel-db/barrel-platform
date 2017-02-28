@@ -121,7 +121,14 @@ paths:
      tags:
        - Documents
      summary: Get list of all available documents
-     description: Get list of all available documents
+     description: |
+       Get list of all available documents.
+
+       The `x-barrel-id-match` header can be used to provide a list
+       of docids to be retrieved.
+
+       The `A-IM` header can optionnaly be used to ask for the answer
+       to be provided as a stream of Server Side Events.
      produces:
        - application/json
      parameters:
@@ -130,6 +137,12 @@ paths:
          in: path
          description: database id
          required: true
+         type: string
+       -
+         name: x-barrel-id-match
+         in: header
+         description: list of docid to be retrieved
+         required: false
          type: string
        -
          name: since
