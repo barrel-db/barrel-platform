@@ -193,6 +193,7 @@ accept_delete(_Config) ->
   RevId = binary_to_list(RevIdBin),
   BadRevId = <<"10-2f25ea96da3fed514795b0ced028d58a">>,
   Url = "/dbs/testdb/docs/acceptdelete",
+  %% delete with incorrect revid
   {404, _} = req_etag(delete, Url, #{}, BadRevId),
   {200, _} = req_etag(delete, Url, #{}, RevId),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"acceptdelete">>, []),
@@ -200,8 +201,15 @@ accept_delete(_Config) ->
   %% delete without etag: last winning revision
   Doc2 = #{<<"id">> => <<"deletenoetag">>, <<"name">> => <<"tom">>},
   {ok, _, _} = barrel_local:post(<<"testdb">>, Doc2, []),
-  {200, _} = test_lib:req(delete, "/dbs/testdb/docs/deletenoetag", #{}),
+  {200, _RevDelete} = test_lib:req(delete, "/dbs/testdb/docs/deletenoetag", #{}),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"deletenoetag">>, []),
+
+  %% recreate the same doc
+  {ok, _, RevIdBin2} = barrel_local:post(<<"testdb">>, Doc, []),
+  %% delete with a correct previous revid (but not the last one.)
+  {409, _} = req_etag(delete, Url, #{}, RevId),
+  %% delete with the correct last revision
+  {200, _} = req_etag(delete, Url, #{}, RevIdBin2),
   ok.
 
 reject_store_unknown(_) ->

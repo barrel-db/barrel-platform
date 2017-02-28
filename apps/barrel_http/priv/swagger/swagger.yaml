@@ -178,7 +178,10 @@ paths:
      tags:
        - Documents
      summary: Get a document
-     description: Get a document
+     description: |
+       Get a document.
+
+       You can use the `etag` header to retrieve a specific revision.
      parameters:
        -
          name: database
@@ -191,6 +194,12 @@ paths:
          in: path
          description: document id
          required: true
+         type: string
+       -
+         name: etag
+         in: header
+         description: specific revision to be retrieved
+         required: false
          type: string
      responses:
        200:
@@ -201,8 +210,14 @@ paths:
    put:
      tags:
        - Documents
-     summary: Create/update a new document
-     description: Create/update a new document
+     summary: Update a document
+     description: |
+        Update an existing document. New document should be created using
+        [`POST`](.#!/Documents/post_dbs_database_docs).
+
+        You can use the `etag` header to pass the revision of last document if you
+        want the server to check nobody updated it.
+
      parameters:
        -
          name: database
@@ -215,6 +230,12 @@ paths:
          in: path
          description: document id
          required: true
+         type: string
+       -
+         name: etag
+         in: header
+         description: expected last revision
+         required: false
          type: string
        -
          name: body
@@ -233,7 +254,8 @@ paths:
      tags:
        - Documents
      summary: Delete a document
-     description: Delete a document
+     description: |
+       Delete a document.
      parameters:
        -
          name: database
@@ -248,16 +270,18 @@ paths:
          required: true
          type: string
        -
-         name: rev
-         in: query
-         description: last document revision
-         required: true
+         name: etag
+         in: header
+         description: expected last revision
+         required: false
          type: string
      responses:
        200:
          description: Document deleted
        404:
          description: Document not found
+       409:
+         description: Revision does not match last server revision
 
  /dbs/{database}/revsdiff:
 
@@ -315,7 +339,7 @@ paths:
    put:
      tags:
        - System documents
-     summary: Create/update a system document
+     summary: Create/update a system document.
      description: Reserved for internal documents. You should not use them.
      parameters:
        -
@@ -499,10 +523,6 @@ definitions:
         description: Your app key/value
         type: string
         example: 42
-      _rev:
-        description: Last revision of the document
-        type: string
-        example: 1-6532746b2c23e454192a1cb80496902842
 
   Revsdiff:
     description: List of documents to be checked

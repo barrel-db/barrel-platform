@@ -172,11 +172,16 @@ delete_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
 
   #state{ database=Database, docid=DocId, options=Options} = State,
-  {ok, DocId, RevId2} = barrel_local:delete(Database, DocId, [{async, Async}|Options]),
-  Reply = #{<<"ok">> => true,
-            <<"id">> => DocId,
-            <<"rev">> => RevId2},
-  barrel_http_reply:doc(Reply, Req, State).
+  Result = barrel_local:delete(Database, DocId, [{async, Async}|Options]),
+  case Result of
+    {ok, DocId, RevId2} ->
+      Reply = #{<<"ok">> => true,
+                <<"id">> => DocId,
+                <<"rev">> => RevId2},
+      barrel_http_reply:doc(Reply, Req, State);
+    {error, {conflict, revision_conflict}} ->
+      barrel_http_reply:error(409, <<"revision conflict">>, Req, State)
+  end.
 
 
 get_resource(Req, State) ->
