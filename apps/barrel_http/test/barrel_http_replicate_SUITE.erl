@@ -201,7 +201,7 @@ put_doc(DocName, Value, Config) ->
 delete_doc(DocName, Config) ->
   {Source, _Target} = repctx(Config),
   Id = list_to_binary(DocName),
-  {ok, Doc, Meta} = barrel_local:get(Source, Id, []),
+  {ok, _Doc, Meta} = barrel_local:get(Source, Id, []),
   RevId = maps:get(<<"rev">>, Meta),
   barrel_local:delete(Source, Id, [{rev, RevId}]).
 

@@ -160,10 +160,8 @@ create_resource(Req, State) ->
     {error, {conflict, doc_exists}} ->
       barrel_http_reply:error(409, <<"document exists">>, Req4, State);
     {ok, CreatedDocId, RevId} ->
-      Reply = #{<<"ok">> => true,
-                <<"id">> => CreatedDocId,
-                <<"rev">> => RevId},
-      barrel_http_reply:doc(201, Reply, Req4, State)
+      Req5 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req4),
+      barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State)
   end.
 
 delete_resource(Req, State) ->
@@ -183,6 +181,17 @@ get_resource(Req, State) ->
   Doc = State#state.doc,
   Meta = State#state.meta,
   RevId = maps:get(<<"rev">>, Meta),
-  DocWithMeta = Doc#{<<"_meta">> => Meta},
-  Req2 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req),
-  barrel_http_reply:doc(DocWithMeta, Req2, State).
+  Req2 = case State#state.history of
+           true ->
+             RevIds = barrel_doc:parse_revisions(Meta),
+             Joined = barrel_lib:binary_join(RevIds, <<",">>),
+             cowboy_req:set_resp_header(<<"x-barrel-revisions-id">>, Joined, Req);
+           _ -> Req
+         end,
+  Req3 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req2),
+  Req4 = case maps:get(<<"deleted">>, Meta, false) of
+           true ->
+             cowboy_req:set_resp_header(<<"x-barrel-deleted">>, <<"true">>, Req3);
+           _ -> Req3
+         end,
+  barrel_http_reply:doc(Doc, Req4, State).
