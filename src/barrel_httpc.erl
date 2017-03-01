@@ -200,7 +200,9 @@ get(Conn, DocId, Options0) ->
   end.
 
 parse_header(Headers) ->
-  lists:foldl(fun({<<"etag">>, RevId}, Acc) ->
+  lists:foldl(fun({<<"ETag">>, RevId}, Acc) ->
+                  Acc#{<<"rev">> => RevId};
+                 ({<<"etag">>, RevId}, Acc) ->
                   Acc#{<<"rev">> => RevId};
                  ({<<"x-barrel-revisions-id">>, Bin}, Acc) ->
                   History = binary:split(Bin, <<",">>, [global]),
