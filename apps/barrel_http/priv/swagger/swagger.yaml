@@ -194,7 +194,7 @@ paths:
      description: |
        Get a document.
 
-       You can use the `etag` header to retrieve a specific revision.
+       You can use the `ETag` header to retrieve a specific revision.
      parameters:
        -
          name: database
@@ -209,7 +209,14 @@ paths:
          required: true
          type: string
        -
-         name: etag
+         name: history
+         in: query
+         description: |
+           retrieve history of revisions in header `x-barrel-revisions-id`
+         required: false
+         type: boolean
+       -
+         name: ETag
          in: header
          description: specific revision to be retrieved
          required: false
@@ -217,6 +224,14 @@ paths:
      responses:
        200:
          description: Document found
+         headers:
+           ETag:
+             description: revision of the document
+           x-barrel-deleted:
+             description: if document has been deleted
+             type: boolean
+           x-barrel-revisions-id:
+             description: list of history revisions
        404:
          description: Document not found
 
@@ -228,8 +243,8 @@ paths:
         Update an existing document. New document should be created using
         [`POST`](.#!/Documents/post_dbs_database_docs).
 
-        You can use the `etag` header to pass the revision of last document if you
-        want the server to check nobody updated it.
+        You can use the `ETag` header to pass the revision of last document if you
+        want to ensure it has not been updated.
 
      parameters:
        -
@@ -245,7 +260,7 @@ paths:
          required: true
          type: string
        -
-         name: etag
+         name: ETag
          in: header
          description: expected last revision
          required: false
@@ -260,8 +275,10 @@ paths:
      responses:
        200:
          description: Document updated
+       404:
+         description: Document not found
        409:
-         description: conflict - last revision does not match
+         description: Conflict - revision (ETag) does not match
 
    delete:
      tags:
@@ -269,6 +286,9 @@ paths:
      summary: Delete a document
      description: |
        Delete a document.
+
+       You can use the `ETag` header to pass the revision of last document if you
+       want to ensure it has not been updated.
      parameters:
        -
          name: database
@@ -283,7 +303,7 @@ paths:
          required: true
          type: string
        -
-         name: etag
+         name: ETag
          in: header
          description: expected last revision
          required: false
