@@ -110,9 +110,9 @@ pmap(Fun, List, NWorkers0, Timeout) ->
     {[], Workers},
     List
   ),
-  Res = collect(Running, Timeout),
-  [erlang:demonitor(MRef, [flush]) || {_Pid, MRef} <- Workers],
-  Res.
+  try collect(Running, Timeout)
+  after pmap_demonitor(Workers)
+  end.
 
 collect([], _Timeout) -> [];
 collect([Ref | Next], Timeout) ->
@@ -131,6 +131,13 @@ pmap_worker(Parent, Fun) ->
       Parent ! {Ref, Fun(E)},
       pmap_worker(Parent, Fun)
   end.
+
+pmap_demonitor([{Pid, MRef} | Rest]) ->
+  (catch exit(Pid, shutdown)),
+  erlang:demonitor(MRef, [flush]),
+  pmap_demonitor(Rest);
+pmap_demonitor([]) ->
+  ok.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

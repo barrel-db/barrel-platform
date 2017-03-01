@@ -245,5 +245,3 @@ analyze(Change, Db) ->
       Added = Paths -- OldPaths,
       {Added, Removed, Rid, Paths}
   end.
-
-
