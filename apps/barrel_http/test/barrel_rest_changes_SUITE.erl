@@ -53,32 +53,29 @@ end_per_suite(Config) ->
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
+r(Req) ->
+  test_lib:req(Req).
 
-put_cat() ->
-  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(post, "/dbs/testdb/docs/cat", Doc),
-  J = jsx:decode(R, [return_maps]),
-  binary_to_list(maps:get(<<"rev">>, J)).
-
+post_cat() ->
+  Doc = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
+  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  RevId.
 
 delete_cat(CatRevId) ->
-  {200, R3} = test_lib:req(delete, "/dbs/testdb/docs/cat", CatRevId),
-  A3 = jsx:decode(R3, [return_maps]),
-  true = maps:get(<<"ok">>, A3),
-  binary_to_list(maps:get(<<"rev">>, A3)).
+  {ok, _, RevId} = barrel_local:delete(<<"testdb">>, <<"cat">>, [{rev, CatRevId}]),
+  RevId.
 
-put_dog() ->
-  Doc = "{\"id\": \"dog\", \"name\": \"spike\"}",
-  {201, R} = test_lib:req(post, "/dbs/testdb/docs/dog", Doc),
-  J = jsx:decode(R, [return_maps]),
-  binary_to_list(maps:get(<<"rev">>, J)).
+post_dog() ->
+  Doc = #{<<"id">> => <<"dog">>, <<"name">> => <<"spike">>},
+  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  RevId.
 
 
 %%=======================================================================
 
 accept_get_normal(_Config) ->
-  put_cat(),
-  put_dog(),
+  post_cat(),
+  post_dog(),
 
   {200, R1} = req_changes("/dbs/testdb/docs"),
   A1 = jsx:decode(R1, [return_maps]),
@@ -94,20 +91,26 @@ accept_get_normal(_Config) ->
   ok.
 
 accept_get_history_all(_Config) ->
-  CreateRevId = put_cat(),
-  put_dog(),
+  CreateRevId = post_cat(),
+  post_dog(),
   DeleteRevId = delete_cat(CreateRevId),
 
-  {200, R1} = req_changes("/dbs/testdb/docs?history=all"),
-  A1 = jsx:decode(R1, [return_maps]),
+  #{code := 200,
+    doc := A1} = r(#{method => get,
+                     headers => [{"A-IM", "Incremental feed"}],
+                     route => "/dbs/testdb/docs?history=all"}),
+
   3 = maps:get(<<"last_seq">>, A1),
   Results1 = maps:get(<<"changes">>, A1),
   2 = length(Results1),
   [_, #{<<"id">> := <<"cat">>, <<"changes">> := CatHistory}] = Results1,
-  [DeleteRevId, CreateRevId] = [binary_to_list(R) || R <- CatHistory],
+  [DeleteRevId, CreateRevId] = CatHistory,
 
-  {200, R2} = req_changes("/dbs/testdb/docs?since=1"),
-  A2 = jsx:decode(R2, [return_maps]),
+  #{code := 200,
+    doc := A2} = r(#{method => get,
+                     headers => [{"A-IM", "Incremental feed"}],
+                     route => "/dbs/testdb/docs?since=1"}),
+
   3 = maps:get(<<"last_seq">>, A2),
   Results2 = maps:get(<<"changes">>, A2),
   2 = length(Results2),

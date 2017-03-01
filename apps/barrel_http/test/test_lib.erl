@@ -14,9 +14,30 @@
 
 -module(test_lib).
 
--export([req/2, req/3, req/4]).
+-export([req/1, req/2, req/3, req/4]).
 -export([log/2]).
 
+
+req(Request) when is_map(Request) ->
+  Method = maps:get(method, Request, get),
+  Route = maps:get(route, Request),
+  Headers = maps:get(headers, Request, []),
+  Body = case maps:get(body, Request, <<>>) of
+           Map when is_map(Map) ->
+             jsx:encode(Map);
+           Bin when is_binary(Bin) -> Bin
+         end,
+  Url = <<"http://localhost:7080", (list_to_binary(Route))/binary>>,
+  H = [{<<"Content-Type">>, <<"application/json">>} | Headers],
+  case hackney:request(Method, Url, H, Body, []) of
+    {ok, Code, RespHeaders, Ref} ->
+      {ok, Answer} = hackney:body(Ref),
+      #{code => Code,
+        body => Answer,
+        doc => jsx:decode(Answer, [return_maps]),
+        headers => RespHeaders};
+    Error -> Error
+  end.
 
 req(Method, Route) ->
   req(Method,Route,[]).
