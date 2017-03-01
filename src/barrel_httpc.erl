@@ -191,13 +191,26 @@ get(Conn, DocId, Options0) ->
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   case request(Conn, <<"GET">>, Url, Headers, <<>>) of
-    {ok, 200, _, JsonBody} ->
-      ReqObj = jsx:decode(JsonBody, [return_maps]),
-      {Meta, Doc} = maps:take(<<"_meta">>, ReqObj),
+    {ok, 200, RespHeaders, JsonBody} ->
+      Doc = jsx:decode(JsonBody, [return_maps]),
+      Meta = parse_header(RespHeaders),
       {ok, Doc, Meta};
     Error ->
       Error
   end.
+
+parse_header(Headers) ->
+  lists:foldl(fun({<<"etag">>, RevId}, Acc) ->
+                  Acc#{<<"rev">> => RevId};
+                 ({<<"x-barrel-revisions-id">>, Bin}, Acc) ->
+                  History = binary:split(Bin, <<",">>, [global]),
+                  Acc#{<<"revisions">> => barrel_doc:encode_revisions(History)};
+                 ({<<"x-barrel-deleted">>, <<"true">>}, Acc) ->
+                  Acc#{<<"deleted">> => true};
+                 (_, Acc) ->
+                  Acc
+              end, #{}, Headers).
+
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
@@ -215,11 +228,13 @@ put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
 post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
   case request(Conn, Method, Url, Headers, Body) of
-    {ok, Status, _, JsonBody}=Resp ->
+    {ok, Status, RespHeaders, JsonBody}=Resp ->
       case lists:member(Status, [200, 201]) of
         true ->
           Json = jsx:decode(JsonBody, [return_maps]),
-          {ok, maps:get(<<"id">>, Json), maps:get(<<"rev">>, Json)};
+          DocId = maps:get(<<"id">>, Json),
+          RevId = proplists:get_value(<<"etag">>, RespHeaders),
+          {ok, DocId, RevId};
         false ->
           {error, {bad_response, Resp}}
       end;
@@ -297,11 +312,13 @@ put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, Deleted, _Options) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], [{<<"edit">>, <<"true">>}]),
   Body = jsx:encode(Req),
   case request(Conn, <<"PUT">>, Url, [], Body) of
-    {ok, Status, _, JsonBody}=Resp ->
+    {ok, Status, RespHeaders, JsonBody}=Resp ->
       case lists:member(Status, [200, 201]) of
         true ->
           Json = jsx:decode(JsonBody, [return_maps]),
-          {ok, maps:get(<<"id">>, Json), maps:get(<<"rev">>, Json)};
+          RevId = proplists:get_value(<<"etag">>, RespHeaders),
+          DocId = maps:get(<<"id">>, Json),
+          {ok, DocId, RevId};
         false ->
           {error, {bad_response, Resp}}
       end;
