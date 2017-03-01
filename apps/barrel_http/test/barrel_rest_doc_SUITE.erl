@@ -81,7 +81,7 @@ accept_get(_Config) ->
     headers := H} = r(#{method => get,
                         route => "/dbs/testdb/docs/acceptget"}),
 
-  RevId = proplists:get_value(<<"etag">>, H),
+  RevId = proplists:get_value(<<"ETag">>, H),
   ok.
 
 accept_get_with_rev(_Config) ->
@@ -98,14 +98,15 @@ accept_get_with_rev(_Config) ->
     headers := H1} = r(#{method => get,
                          headers => [{"etag", RevId1}],
                          route => Route}),
-  RevId1 = proplists:get_value(<<"etag">>, H1),
+  RevId1 = proplists:get_value(<<"ETag">>, H1),
 
   #{code := 200,
     doc := Doc2,
     headers := H2} = r(#{method => get,
                          headers => [{"etag", RevId2}],
                          route => Route}),
-  RevId2 = proplists:get_value(<<"etag">>, H2),
+  RevId2 = proplists:get_value(<<"ETag">>, H2),
+
   #{code := 200,
     headers := H3} = r(#{method => get,
                          headers => [{"etag", RevId3}],

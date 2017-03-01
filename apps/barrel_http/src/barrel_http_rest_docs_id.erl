@@ -188,7 +188,7 @@ get_resource(Req, State) ->
              cowboy_req:set_resp_header(<<"x-barrel-revisions-id">>, Joined, Req);
            _ -> Req
          end,
-  Req3 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req2),
+  Req3 = cowboy_req:set_resp_header(<<"ETag">>, RevId, Req2),
   Req4 = case maps:get(<<"deleted">>, Meta, false) of
            true ->
              cowboy_req:set_resp_header(<<"x-barrel-deleted">>, <<"true">>, Req3);
