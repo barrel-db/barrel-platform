@@ -69,18 +69,19 @@ end_per_suite(Config) ->
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
+r(Req) ->
+  test_lib:req(Req).
 
 accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
   {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
-  Route = "/dbs/testdb/docs/acceptget",
-  {200, R} = test_lib:req(get, Route),
-  J = jsx:decode(R, [return_maps]),
-  #{<<"name">> := <<"tom">>, <<"_meta">> := #{<<"rev">> := RevId}} = J,
-  Url = <<"http://localhost:7080", (list_to_binary(Route))/binary>>,
-  Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  {ok, 200, RespHeaders, _} =  hackney:request(get, Url, Headers, <<>>, []),
-  RevId = proplists:get_value(<<"etag">>, RespHeaders),
+
+  #{code := 200,
+    doc := Doc,
+    headers := H} = r(#{method => get,
+                        route => "/dbs/testdb/docs/acceptget"}),
+
+  RevId = proplists:get_value(<<"ETag">>, H),
   ok.
 
 accept_get_with_rev(_Config) ->
@@ -89,25 +90,43 @@ accept_get_with_rev(_Config) ->
   {ok, _, RevId1} = barrel_local:post(<<"testdb">>, Doc1, []),
   Doc2 = #{<<"id">> => DocId, <<"v">> => 2},
   {ok, _, RevId2} = barrel_local:put(<<"testdb">>, Doc2, [{rev, RevId1}]),
-  {ok, _, _RevId3} = barrel_local:delete(<<"testdb">>, DocId, [{rev, RevId2}]),
+  {ok, _, RevId3} = barrel_local:delete(<<"testdb">>, DocId, [{rev, RevId2}]),
+  Route = "/dbs/testdb/docs/acceptgetrev",
 
-  {200, R1} = req_etag(get, "/dbs/testdb/docs/acceptgetrev", #{}, RevId1),
-  J1 = jsx:decode(R1, [return_maps]),
-  #{<<"v">> := 1, <<"_meta">> := #{<<"rev">> := RevId1}} = J1,
-  {200, R2} = req_etag(get, "/dbs/testdb/docs/acceptgetrev", #{}, RevId2),
-  J2 = jsx:decode(R2, [return_maps]),
-  #{<<"v">> := 2, <<"_meta">> := #{<<"rev">> := RevId2}} = J2,
+  #{code := 200,
+    doc := Doc1,
+    headers := H1} = r(#{method => get,
+                         headers => [{"etag", RevId1}],
+                         route => Route}),
+  RevId1 = proplists:get_value(<<"ETag">>, H1),
+
+  #{code := 200,
+    doc := Doc2,
+    headers := H2} = r(#{method => get,
+                         headers => [{"etag", RevId2}],
+                         route => Route}),
+  RevId2 = proplists:get_value(<<"ETag">>, H2),
+
+  #{code := 200,
+    headers := H3} = r(#{method => get,
+                         headers => [{"etag", RevId3}],
+                         route => Route}),
+  <<"true">> = proplists:get_value(<<"x-barrel-deleted">>, H3),
   ok.
 
 accept_get_with_history(_Config) ->
-  Doc = #{<<"id">> => <<"acceptgethist">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel_local:post(<<"testdb">>, Doc, []),
+  D1 = #{<<"id">> => <<"acceptgethist">>, <<"v">> => 1},
+  {ok, _, R1} = barrel_local:post(<<"testdb">>, D1, []),
+  D2 = D1#{<<"v">> => 2},
+  {ok, _, R2} = barrel_local:put(<<"testdb">>, D2, []),
 
-  {200, R} = test_lib:req(get, "/dbs/testdb/docs/acceptgethist?history=true"),
-  J = jsx:decode(R, [return_maps]),
-  #{<<"name">> := <<"tom">>,
-    <<"_meta">> := #{<<"revisions">> := Revisions}} = J,
-  #{<<"ids">> := [_], <<"start">> := 1} = Revisions,
+  #{code := 200,
+    headers := Headers,
+    doc := D2} = r(#{method => get,
+                     route => "/dbs/testdb/docs/acceptgethist?history=true"}),
+
+  RevIds = proplists:get_value(<<"x-barrel-revisions-id">>, Headers),
+  [R2, R1] = binary:split(RevIds, <<",">>),
   ok.
 
 accept_get_with_id_match(_Config) ->
@@ -119,18 +138,14 @@ accept_get_with_id_match(_Config) ->
   [ {ok,_,_} = barrel_local:post(<<"testdb">>, D, []) || D <- Docs ],
 
   %% query the HTTP API with x-barrel-id-match header
-  Url = <<"http://localhost:7080/dbs/testdb/docs">>,
-  Headers = [{<<"Content-Type">>, <<"application/json">>},
-             {<<"x-barrel-id-match">>, <<"a, b, c">>},
-             {<<"x-barrel-id-match">>, <<"e,f, g">>}],
-  {ok, 200, _RespHeaders, Ref} =  hackney:request(get, Url, Headers, <<>>, []),
-  {ok, Body} = hackney:body(Ref),
-  Json = jsx:decode(Body, [return_maps]),
+  #{code := 200,
+    doc := J} = r(#{method => get,
+                    headers => [{<<"x-barrel-id-match">>, <<"a, b, c">>},
+                                {<<"x-barrel-id-match">>, <<"e,f, g">>}],
+                    route => "/dbs/testdb/docs"}),
 
-  %% we receive the 6 id we asked for
-  %% they are in same order as requested
   #{<<"docs">> := [D1,D2,D3,D4|_],
-    <<"count">> := 6} = Json,
+    <<"count">> := 6} = J,
   #{<<"id">> := <<"a">>} = D1,
   #{<<"id">> := <<"b">>} = D2,
   #{<<"id">> := <<"c">>} = D3,
@@ -139,24 +154,33 @@ accept_get_with_id_match(_Config) ->
 
 accept_post(_Config) ->
   D1 = #{<<"name">> => <<"tom">>},
-  {201, R} = test_lib:req(post, "/dbs/testdb/docs", D1),
+  #{code := 201,
+    headers := H,
+    doc := J} = r(#{method => post,
+                    body => D1,
+                    route => "/dbs/testdb/docs"}),
 
-  J = jsx:decode(R, [return_maps]),
+  RevId = proplists:get_value(<<"etag">>, H),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc, _} = barrel_local:get(<<"testdb">>, DocId, []),
+  {ok, Doc, _} = barrel_local:get(<<"testdb">>, DocId, [{rev, RevId}]),
   {409, _} = test_lib:req(post, "/dbs/testdb/docs", Doc),
   ok.
 
 accept_put(_Config) ->
   D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
-  {404, _} = test_lib:req(put, "/dbs/testdb/docs/a", D1),
+  #{code := 404} = r(#{method => put,
+                       body => D1,
+                       route => "/dbs/testdb/docs/a"}),
 
   {ok, _, _} = barrel_local:post(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"a">>, <<"v">> => 2},
-  {201, R} = test_lib:req(put, "/dbs/testdb/docs/a", D2),
-  J = jsx:decode(R, [return_maps]),
-  DocId = maps:get(<<"id">>, J),
-  {ok, D2, _} = barrel_local:get(<<"testdb">>, DocId, []),
+  #{code := 201,
+    headers := H,
+    doc := D2} = r(#{method => put,
+                    body => D2,
+                    route => "/dbs/testdb/docs/a"}),
+  RevId = proplists:get_value(<<"etag">>, H),
+  {ok, D2, _} = barrel_local:get(<<"testdb">>, <<"a">>, [{rev, RevId}]),
   ok.
 
 accept_put_with_etag(_Config) ->
@@ -165,24 +189,22 @@ accept_put_with_etag(_Config) ->
 
   {ok, _, RevId} = barrel_local:post(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"a">>, <<"v">> => 2},
-  {201, R} = req_etag(put, "/dbs/testdb/docs/a", D2, RevId),
-  J = jsx:decode(R, [return_maps]),
-  DocId = maps:get(<<"id">>, J),
-  {ok, D2, _} = barrel_local:get(<<"testdb">>, DocId, []),
-  {409, _} = req_etag(put, "/dbs/testdb/docs/a", D2, RevId),
-  ok.
 
-req_etag(Method, Route, Doc, Etag) when is_map(Doc) ->
-  Headers = [{<<"Content-Type">>, <<"application/json">>},
-             {<<"ETag">>, Etag}],
-  Body = jsx:encode(Doc),
-  Url = <<"http://localhost:7080", (list_to_binary(Route))/binary>>,
-  case hackney:request(Method, Url, Headers, Body, []) of
-    {ok, Code, _Headers, Ref} ->
-      {ok, Answer} = hackney:body(Ref),
-      {Code, Answer};
-    Error -> Error
-  end.
+  #{code := 201,
+    headers := H,
+    doc := D2} = r(#{method => put,
+                     body => D2,
+                     headers => [{"etag", RevId}],
+                     route => "/dbs/testdb/docs/a"}),
+
+  RevId2 = proplists:get_value(<<"etag">>, H),
+  {ok, D2, _} = barrel_local:get(<<"testdb">>, <<"a">>, [{rev, RevId2}]),
+
+  #{code := 409} = r(#{method => put,
+                       body => D2,
+                       headers => [{"etag", RevId}],
+                       route => "/dbs/testdb/docs/a"}),
+  ok.
 
 accept_delete(_Config) ->
   {404, _} = test_lib:req(delete, "/dbs/testdb/docs/acceptdelete"),
@@ -193,23 +215,35 @@ accept_delete(_Config) ->
   RevId = binary_to_list(RevIdBin),
   BadRevId = <<"10-2f25ea96da3fed514795b0ced028d58a">>,
   Url = "/dbs/testdb/docs/acceptdelete",
-  %% delete with incorrect revid
-  {404, _} = req_etag(delete, Url, #{}, BadRevId),
-  {200, _} = req_etag(delete, Url, #{}, RevId),
+
+  #{code := 404} = r(#{method => delete,
+                       headers => [{"etag", BadRevId}],
+                       route => Url}),
+
+  #{code := 200} = r(#{method => delete,
+                       headers => [{"etag", RevId}],
+                       route => Url}),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"acceptdelete">>, []),
 
   %% delete without etag: last winning revision
   Doc2 = #{<<"id">> => <<"deletenoetag">>, <<"name">> => <<"tom">>},
   {ok, _, _} = barrel_local:post(<<"testdb">>, Doc2, []),
-  {200, _RevDelete} = test_lib:req(delete, "/dbs/testdb/docs/deletenoetag", #{}),
+  #{code := 200} = r(#{method => delete,
+                       route => "/dbs/testdb/docs/deletenoetag"}),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"deletenoetag">>, []),
 
   %% recreate the same doc
   {ok, _, RevIdBin2} = barrel_local:post(<<"testdb">>, Doc, []),
+
   %% delete with a correct previous revid (but not the last one.)
-  {409, _} = req_etag(delete, Url, #{}, RevId),
+  #{code := 409} = r(#{method => delete,
+                       headers => [{"etag", RevId}],
+                       route => Url}),
+
   %% delete with the correct last revision
-  {200, _} = req_etag(delete, Url, #{}, RevIdBin2),
+  #{code := 200} = r(#{method => delete,
+                       headers => [{"etag", RevIdBin2}],
+                       route => Url}),
   ok.
 
 reject_store_unknown(_) ->
@@ -237,16 +271,18 @@ reject_bad_json(_) ->
 
 
 post_cat() ->
-  Doc = "{\"id\": \"cat\", \"name\" : \"tom\"}",
-  {201, R} = test_lib:req(post, "/dbs/testdb/docs/cat", Doc),
-  J = jsx:decode(R, [return_maps]),
-  binary_to_list(maps:get(<<"rev">>, J)).
+  Doc = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
+  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  RevId.
 
 revsdiff(_Config) ->
   CatRevId = post_cat(),
-  Request = #{<<"cat">> => [CatRevId, <<"2-missing">>]},
-  {200, R} = test_lib:req(post, "/dbs/testdb/revsdiff", Request),
-  A = jsx:decode(R, [return_maps]),
+
+  #{code := 200,
+    doc := A} = r(#{method => post,
+                    body => #{<<"cat">> => [CatRevId, <<"2-missing">>]},
+                    route => "/dbs/testdb/revsdiff"}),
+
   CatDiffs = maps:get(<<"cat">>, A),
   Missing = maps:get(<<"missing">>, CatDiffs),
   true = lists:member(<<"2-missing">>, Missing),
@@ -261,8 +297,8 @@ put_rev(_Config) ->
   Request = #{<<"id">> => cat,
               <<"document">> => Doc,
               <<"history">> => History},
-  {201, R} = test_lib:req(put, "/dbs/testdb/docs/cat?edit=true", Request),
-  A = jsx:decode(R, [return_maps]),
-  true = maps:get(<<"ok">>, A),
+  #{code := 201} = r(#{method => put,
+                       route => "/dbs/testdb/docs/cat?edit=true",
+                       body => Request}),
   ok.
 
