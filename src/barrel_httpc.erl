@@ -199,20 +199,35 @@ get(Conn, DocId, Options0) ->
       Error
   end.
 
-parse_header(Headers) ->
-  lists:foldl(fun({<<"ETag">>, RevId}, Acc) ->
-                  Acc#{<<"rev">> => RevId};
-                 ({<<"etag">>, RevId}, Acc) ->
-                  Acc#{<<"rev">> => RevId};
-                 ({<<"x-barrel-revisions-id">>, Bin}, Acc) ->
-                  History = binary:split(Bin, <<",">>, [global]),
-                  Acc#{<<"revisions">> => barrel_doc:encode_revisions(History)};
-                 ({<<"x-barrel-deleted">>, <<"true">>}, Acc) ->
-                  Acc#{<<"deleted">> => true};
-                 (_, Acc) ->
-                  Acc
-              end, #{}, Headers).
+parse_header(HeadersList) ->
+  Headers = hackney_headers_new:from_list(HeadersList),
+  maybe_add_revisions(
+    maybe_add_deleted(
+      maybe_add_rev(#{}, Headers),
+      Headers
+    ),
+    Headers
+  ).
 
+maybe_add_rev(Meta, Headers) ->
+  case hackney_headers_new:get_value(<<"etag">>, Headers) of
+    undefined -> Meta;
+    ETag -> Meta#{ <<"rev">> => ETag}
+  end.
+  
+maybe_add_deleted(Meta, Headers) ->
+  case hackney_headers_new:get_value(<<"x-barrel-deleted">>, Headers) of
+    <<"true">> -> Meta#{ <<"deleted">> => true };
+    _ -> Meta
+  end.
+
+maybe_add_revisions(Meta, Headers) ->
+  case hackney_headers_new:lookup(<<"x-barrel-revisions-id">>, Headers) of
+    [] -> Meta;
+    Values ->
+      History = lists:flatten([binary:split(V, <<",">>, [global]) || {_, V} <- Values]),
+      Meta#{ <<"revisions">> => barrel_doc:encode_revisions(History) }
+  end.
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
