@@ -266,6 +266,12 @@ paths:
          required: false
          type: string
        -
+         name: edit
+         in: query
+         description: update a document history
+         required: false
+         type: boolean
+       -
          name: body
          in: body
          description: The document to be updated
