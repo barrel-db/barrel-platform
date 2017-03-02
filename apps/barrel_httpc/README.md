@@ -1,7 +1,7 @@
-barrel
-=====
+barrel_httpc
+============
 
-An OTP application
+Barrel HTTP client for Erlang applications
 
 Build
 -----
