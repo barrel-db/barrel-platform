@@ -47,7 +47,7 @@ start_link() ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
   _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.id}]),
-  
+
   Store =
     #{
       id => barrel_store,
@@ -62,6 +62,7 @@ init([]) ->
       ?sup(barrel_db_sup)
     , Store
     , ?sup(barrel_event)
+    , ?sup(barrel_metrics)
     , ?sup(barrel_task_status)
   ],
 
