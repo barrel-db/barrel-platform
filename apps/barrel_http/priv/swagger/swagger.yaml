@@ -121,7 +121,14 @@ paths:
      tags:
        - Documents
      summary: Get list of all available documents
-     description: Get list of all available documents
+     description: |
+       Get list of all available documents.
+
+       The `x-barrel-id-match` header can be used to provide a list
+       of docids to be retrieved.
+
+       The `A-IM` header can optionnaly be used to ask for the answer
+       to be provided as a stream of Server Side Events.
      produces:
        - application/json
      parameters:
@@ -130,6 +137,12 @@ paths:
          in: path
          description: database id
          required: true
+         type: string
+       -
+         name: x-barrel-id-match
+         in: header
+         description: list of docid to be retrieved
+         required: false
          type: string
        -
          name: since
@@ -178,7 +191,10 @@ paths:
      tags:
        - Documents
      summary: Get a document
-     description: Get a document
+     description: |
+       Get a document.
+
+       You can use the `ETag` header to retrieve a specific revision.
      parameters:
        -
          name: database
@@ -192,17 +208,44 @@ paths:
          description: document id
          required: true
          type: string
+       -
+         name: history
+         in: query
+         description: |
+           retrieve history of revisions in header `x-barrel-revisions-id`
+         required: false
+         type: boolean
+       -
+         name: ETag
+         in: header
+         description: specific revision to be retrieved
+         required: false
+         type: string
      responses:
        200:
          description: Document found
+         headers:
+           ETag:
+             description: revision of the document
+           x-barrel-deleted:
+             description: if document has been deleted
+             type: boolean
+           x-barrel-revisions-id:
+             description: list of history revisions
        404:
          description: Document not found
 
    put:
      tags:
        - Documents
-     summary: Create/update a new document
-     description: Create/update a new document
+     summary: Update a document
+     description: |
+        Update an existing document. New document should be created using
+        [`POST`](.#!/Documents/post_dbs_database_docs).
+
+        You can use the `ETag` header to pass the revision of last document if you
+        want to ensure it has not been updated.
+
      parameters:
        -
          name: database
@@ -216,6 +259,18 @@ paths:
          description: document id
          required: true
          type: string
+       -
+         name: ETag
+         in: header
+         description: expected last revision
+         required: false
+         type: string
+       -
+         name: edit
+         in: query
+         description: update a document history
+         required: false
+         type: boolean
        -
          name: body
          in: body
@@ -226,14 +281,20 @@ paths:
      responses:
        200:
          description: Document updated
+       404:
+         description: Document not found
        409:
-         description: conflict - last revision does not match
+         description: Conflict - revision (ETag) does not match
 
    delete:
      tags:
        - Documents
      summary: Delete a document
-     description: Delete a document
+     description: |
+       Delete a document.
+
+       You can use the `ETag` header to pass the revision of last document if you
+       want to ensure it has not been updated.
      parameters:
        -
          name: database
@@ -248,16 +309,18 @@ paths:
          required: true
          type: string
        -
-         name: rev
-         in: query
-         description: last document revision
-         required: true
+         name: ETag
+         in: header
+         description: expected last revision
+         required: false
          type: string
      responses:
        200:
          description: Document deleted
        404:
          description: Document not found
+       409:
+         description: Revision does not match last server revision
 
  /dbs/{database}/revsdiff:
 
@@ -315,7 +378,7 @@ paths:
    put:
      tags:
        - System documents
-     summary: Create/update a system document
+     summary: Create/update a system document.
      description: Reserved for internal documents. You should not use them.
      parameters:
        -
@@ -499,10 +562,6 @@ definitions:
         description: Your app key/value
         type: string
         example: 42
-      _rev:
-        description: Last revision of the document
-        type: string
-        example: 1-6532746b2c23e454192a1cb80496902842
 
   Revsdiff:
     description: List of documents to be checked
