@@ -15,67 +15,109 @@
 -module(barrel_metrics).
 -author("Bernard Notarianni").
 
--export([new/0]).
--export([to_list/1]).
--export([inc/3]).
--export([update_times/3]).
--export([create_task/2]).
--export([update_task/1]).
+-behaviour(gen_server).
+
+-export([ tc/2
+        , incr_counter/2
+        , get_counter/1
+        , reset_counters/0
+        , reset_counter/1
+        ]).
+
+%% API functions
+-export([start_link/0]).
+
+%% gen_server callbacks
+-export([ init/1
+        , handle_call/3
+        , handle_cast/2
+        , handle_info/2
+        , terminate/2
+        , code_change/3]).
 
 
-new() ->
-  #{ docs_read => 0
-   , doc_read_failures => 0
-   , doc_read_times => new_time_stats()
-   , docs_written => 0
-   , doc_write_failures => 0
-   , doc_write_times => new_time_stats()
-   }.
+-record(state, {}).
 
-new_time_stats() ->
-  #{ values => []
-   , period => 10
-   , mean => 0
-   }.
-
-to_list(Metrics) ->
-  maps:to_list(Metrics). 
+counter_entries() ->
+  [ replication_doc_reads
+  , replication_doc_read_failures
+  , replication_doc_writes
+  , replication_doc_write_failures
+  ].
 
 
-inc(CounterName, Stats, Number) ->
-  Counter = maps:get(CounterName, Stats),
-  maps:update(CounterName, Counter+Number, Stats).
+%% @doc equivalent to timer:tc/1 but storing results in metrics
+%% to be implemented.
+tc(Fun, _Entry) ->
+  Fun().
 
-update_times(MeasureName, NewMeasure, Stat) ->
-  TimeStat = maps:get(MeasureName, Stat),
-  Values = maps:get(values, TimeStat),
-  Period = maps:get(period, TimeStat),
-  {Mean, L2} = mean([NewMeasure|Values], Period),
-  TimeStat2 = TimeStat#{values:=L2, mean:=Mean},
-  maps:update(MeasureName, TimeStat2, Stat).
+get_counter(Entry) when is_atom(Entry) ->
+  [{_, CntRef}] = ets:lookup(?MODULE, Entry),
+  mzmetrics:get_resource_counter(CntRef, 0).
 
-mean(List, Period) ->
-  mean(List, [], 0, 0, Period).
+incr_counter(0, _) -> ok;
+incr_counter(Val, Entry) when Val > 0 ->
+  case get(Entry) of
+    undefined ->
+      try ets:lookup(?MODULE, Entry) of
+          [{_, CntRef}] ->
+          put(Entry, CntRef),
+          incr_counter(Val, Entry);
+          [] ->
+          lager:error("invalid metric counter ~p", [Entry])
+      catch
+        _:_ ->
+          %% we don't want to crash a session/queue
+          %% due to an unavailable counter
+          ok
+      end;
+    CntRef when Val == 1 ->
+      mzmetrics:incr_resource_counter(CntRef, 0);
+    CntRef ->
+      mzmetrics:update_resource_counter(CntRef, 0, Val)
+  end.
 
-mean([], Acc, Sum, Size, _Period) ->
-  {Sum/Size, Acc};
+create(Entry) when is_atom(Entry) ->
+  Ref = mzmetrics:alloc_resource(0, atom_to_list(Entry), 8),
+  ets:insert(?MODULE, {Entry, Ref}).
 
-mean([_|_], Acc, Sum, Size, Period) when Size > Period ->
-  mean([], Acc, Sum, Size, Period);
+reset_counters() ->
+  lists:foreach(
+    fun(Entry) ->
+        reset_counter(Entry)
+    end, counter_entries()).
 
-mean([V|Others], Acc, Sum, Size, Period) ->
-  mean(Others, [V|Acc], Sum+V, Size+1, Period).
+reset_counter(Entry) ->
+  [{_, CntRef}] = ets:lookup(?MODULE, Entry),
+  mzmetrics:reset_resource_counter(CntRef, 0).
 
 
-%%==============================================================================
-%% Storage of collected metrics
-%%==============================================================================
+%% =============================================================================
+%% gen_server API
+%% =============================================================================
 
-create_task(Metrics, Options) ->
-  ok = barrel_task_status:add_task(to_list(Metrics)),
-  Frequency = proplists:get_value(metrics_freq, Options, 1000),
-  barrel_task_status:set_update_frequency(Frequency),
-  ok.
+start_link() ->
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-update_task(Metrics) ->
-  barrel_task_status:update(to_list(Metrics)).
+init([]) ->
+  ets:new(?MODULE, [public, named_table, {read_concurrency, true}]),
+  lists:foreach(
+    fun(Entry) ->
+        create(Entry)
+    end, counter_entries()),
+  {ok, #state{}}.
+
+handle_call(_Req, _From, State) ->
+    {reply, ok, State}.
+
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+handle_info(_, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
