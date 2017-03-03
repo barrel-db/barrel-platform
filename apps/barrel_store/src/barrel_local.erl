@@ -168,6 +168,7 @@ db_infos(Db) ->
   Doc :: doc(),
   Res :: {ok, Doc} | {error, not_found} | {error, any()}.
 get(Db, DocId, Options) ->
+  barrel_metrics:incr_counter(1, docs_read),
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
@@ -180,6 +181,7 @@ get(Db, DocId, Options) ->
     Doc :: doc(),
     Res :: any().
 mget(Db, Fun, AccIn, DocIds, Options) ->
+  barrel_metrics:incr_counter(length(DocIds), docs_read),
   barrel_db:mget(Db, Fun, AccIn, DocIds, Options).
 
 %% @doc create or update a document. Return the new created revision
@@ -190,6 +192,7 @@ mget(Db, Fun, AccIn, DocIds, Options) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put(Db, Doc, Options) when is_map(Doc) ->
+  barrel_metrics:incr_counter(1, docs_updated),
   ok = validate_docid(Doc),
   Rev = proplists:get_value(rev, Options, <<>>),
   Deleted = false,
@@ -209,6 +212,7 @@ put(_,  _, _) ->
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put_rev(Db, Doc, History, Deleted, Options) when is_map(Doc) ->
+  barrel_metrics:incr_counter(1, docs_updated),
   ok = validate_docid(Doc),
   Doc2 = barrel_doc:make_doc(Doc, History, Deleted),
   barrel_db:update_doc(Db, Doc2, [{with_conflict, true} | Options]);
@@ -222,6 +226,7 @@ put_rev(_, _, _, _, _) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 delete(Db, DocId, Options) ->
+  barrel_metrics:incr_counter(1, docs_deleted),
   Doc = #{<<"id">> => DocId},
   Rev = proplists:get_value(rev, Options, <<>>),
   Deleted = true,
@@ -235,6 +240,7 @@ delete(Db, DocId, Options) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 post(Db, Doc0, Options0) ->
+  barrel_metrics:incr_counter(1, docs_created),
   case proplists:get_value(rev, Options0) of
     undefined ->
       DocId = case barrel_doc:id(Doc0) of

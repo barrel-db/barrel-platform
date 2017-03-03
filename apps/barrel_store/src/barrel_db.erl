@@ -257,7 +257,7 @@ update_docs(DbName, Docs, Options) ->
       WithConflict = proplists:get_value(with_conflict, Options, false),
       CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
       ErrorIfExists = proplists:get_value(error_if_exists, Options, false),
-      
+
       Ref = make_ref(),
       % group docs by docid, in case of duplicates
       {DocBuckets, N} = prepare_docs(
@@ -747,7 +747,7 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
               "~s: error writing ~p: ~p",
               [?MODULE_STRING, DocId, Error]
             ),
-  
+
             lists:foreach(
               fun(Req) -> send_result(Req, Error) end,
               Reqs
