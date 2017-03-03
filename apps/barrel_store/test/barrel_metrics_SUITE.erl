@@ -58,8 +58,8 @@ basic_op(_Config) ->
   1 = barrel_metrics:incr_counter(1, replication_doc_writes),
   1 = barrel_metrics:get_counter(replication_doc_reads),
   [Metrics] = collect_messages(1),
-  2 = length(Metrics),
   1 = proplists:get_value(replication_doc_reads, Metrics),
+  1 = proplists:get_value(replication_doc_writes, Metrics),
   ok = hooks:munreg(Hooks),
   ok.
 
