@@ -22,6 +22,7 @@
         , get_counter/1
         , reset_counters/0
         , reset_counter/1
+        , metrics/0
         ]).
 
 %% API functions
@@ -72,10 +73,8 @@ incr_counter(Val, Entry) when Val > 0 ->
           ok
       end;
     CntRef when Val == 1 ->
-      hooks:run(metrics, [Entry, Val]),
       mzmetrics:incr_resource_counter(CntRef, 0);
     CntRef ->
-      hooks:run(metrics, [Entry, Val]),
       mzmetrics:update_resource_counter(CntRef, 0, Val)
   end.
 
@@ -93,6 +92,15 @@ reset_counter(Entry) ->
   [{_, CntRef}] = ets:lookup(?MODULE, Entry),
   mzmetrics:reset_resource_counter(CntRef, 0).
 
+metrics() ->
+  lists:foldl(fun(Entry, Acc) ->
+                  [{Entry,
+                    try get_counter(Entry) of
+                        Value -> Value
+                    catch
+                      _:_ -> 0
+                    end} | Acc]
+              end, [], counter_entries()).
 
 %% =============================================================================
 %% gen_server API
@@ -102,6 +110,7 @@ start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
+  {ok, _} = timer:send_interval(1000, publish_metrics),
   ets:new(?MODULE, [public, named_table, {read_concurrency, true}]),
   lists:foreach(
     fun(Entry) ->
@@ -110,16 +119,17 @@ init([]) ->
   {ok, #state{}}.
 
 handle_call(_Req, _From, State) ->
-    {reply, ok, State}.
+  {reply, ok, State}.
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+handle_cast(_Req, State) ->
+  {noreply, State}.
 
-handle_info(_, State) ->
-    {noreply, State}.
+handle_info(publish_metrics, State) ->
+  hooks:run(metrics, [metrics()]),
+  {noreply, State}.
 
 terminate(_Reason, _State) ->
-    ok.
+  ok.
 
 code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+  {ok, State}.
