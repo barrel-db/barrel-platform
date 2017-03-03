@@ -231,6 +231,19 @@ accept_delete(_Config) ->
   #{code := 200} = r(#{method => delete,
                        route => "/dbs/testdb/docs/deletenoetag"}),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"deletenoetag">>, []),
+
+  %% recreate the same doc
+  {ok, _, RevIdBin2} = barrel_local:post(<<"testdb">>, Doc, []),
+
+  %% delete with a correct previous revid (but not the last one.)
+  #{code := 409} = r(#{method => delete,
+                       headers => [{"etag", RevId}],
+                       route => Url}),
+
+  %% delete with the correct last revision
+  #{code := 200} = r(#{method => delete,
+                       headers => [{"etag", RevIdBin2}],
+                       route => Url}),
   ok.
 
 reject_store_unknown(_) ->
