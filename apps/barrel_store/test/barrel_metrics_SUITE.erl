@@ -23,6 +23,7 @@
         ]).
 
 -export([ basic_op/1
+        , hook1/2
         ]).
 
 all() -> [ basic_op
@@ -48,9 +49,36 @@ end_per_suite(Config) ->
   Config.
 
 basic_op(_Config) ->
+  register(metrics_plugin, self()),
+  Hooks = [{metrics, [{?MODULE, hook1, 2}]}],
+  ok = hooks:mreg(Hooks),
   barrel_metrics:reset_counters(),
   0 = barrel_metrics:get_counter(replication_doc_reads),
   1 = barrel_metrics:incr_counter(1, replication_doc_reads),
+  1 = barrel_metrics:incr_counter(1, replication_doc_writes),
   1 = barrel_metrics:get_counter(replication_doc_reads),
+  ok = hooks:munreg(Hooks),
+  Msgs = collect_messages(2),
+  [{replication_doc_reads, 1},
+   {replication_doc_writes, 1}] = Msgs,
   ok.
 
+
+hook1(Metric, Value) ->
+  Pid = whereis(metrics_plugin),
+  Pid ! {Metric, Value},
+  ok.
+
+collect_messages(N) ->
+  {message_queue_len, N} = erlang:process_info(self(), message_queue_len),
+  lists:reverse(collect_messages(N,[])).
+
+collect_messages(0, Acc) ->
+  Acc;
+collect_messages(N, Acc) ->
+  receive
+    M ->
+      collect_messages(N-1, [M|Acc])
+  after 2000 ->
+      {error, timeout}
+  end.

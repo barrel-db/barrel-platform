@@ -72,8 +72,10 @@ incr_counter(Val, Entry) when Val > 0 ->
           ok
       end;
     CntRef when Val == 1 ->
+      hooks:run(metrics, [Entry, Val]),
       mzmetrics:incr_resource_counter(CntRef, 0);
     CntRef ->
+      hooks:run(metrics, [Entry, Val]),
       mzmetrics:update_resource_counter(CntRef, 0, Val)
   end.
 
