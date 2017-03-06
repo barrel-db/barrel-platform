@@ -46,13 +46,11 @@ read_doc_with_history(Source, Id, Rev, Metrics) ->
   Get = fun() -> get(Source, Id, [{rev, Rev}, {history, true}]) end,
   case timer:tc(Get) of
     {Time, {ok, Doc, Meta}} ->
-      Metrics2 = barrel_replicate_metrics:inc(docs_read, Metrics, 1),
-      Metrics3 = barrel_replicate_metrics:update_times(doc_read_times, Time, Metrics2),
-      barrel_metrics:incr_counter(1, replication_doc_reads),
+      Metrics2 = barrel_metrics:inc(docs_read, Metrics, 1),
+      Metrics3 = barrel_metrics:update_times(doc_read_times, Time, Metrics2),
       {Doc, Meta, Metrics3};
     _ ->
-      Metrics2 = barrel_replicate_metrics:inc(doc_read_failures, Metrics, 1),
-      barrel_metrics:incr_counter(1, replication_doc_failures),
+      Metrics2 = barrel_metrics:inc(doc_read_failures, Metrics, 1),
       {undefined, undefined, Metrics2}
   end.
 
@@ -62,17 +60,15 @@ write_doc(Target, Doc, History, Deleted, Metrics) ->
   PutRev = fun() -> put_rev(Target, Doc, History, Deleted, []) end,
   case timer:tc(PutRev) of
     {Time, {ok, _, _}} ->
-      Metrics2 = barrel_replicate_metrics:inc(docs_written, Metrics, 1),
-      Metrics3 = barrel_replicate_metrics:update_times(doc_write_times, Time, Metrics2),
-      barrel_metrics:incr_counter(1, replication_doc_writes),
+      Metrics2 = barrel_metrics:inc(docs_written, Metrics, 1),
+      Metrics3 = barrel_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
     {_, Error} ->
       lager:error(
         "replicate write error on dbid=~p for docid=~p: ~w",
         [Target, maps:get(<<"id">>, Doc, undefined), Error]
       ),
-      barrel_metrics:incr_counter(1, replication_doc_write_failures),
-      barrel_replicate_metrics:inc(doc_write_failures, Metrics, 1)
+      barrel_metrics:inc(doc_write_failures, Metrics, 1)
   end.
 
 get({Mod, ModState}, Id, Opts) ->
