@@ -392,20 +392,22 @@ encode_attachments([A|Tail]) ->
       {error, Error}
   end.
 
+encode_attachment(#{<<"blob">> := Blob, <<"id">> := Id,
+                    <<"content-type">> := <<"application/erlang">>})
+  when is_binary(Blob) ->
+  {error, {erlang_term_expected, Id}};
 encode_attachment(#{<<"blob">> := Blob }=A) when is_binary(Blob) ->
   B64 = base64:encode(Blob),
   ContentType = maps:get(<<"content-type">>, A, <<"application/octet-stream">>),
   {ok, A#{<<"content-type">> => ContentType,
           <<"blob">> := B64,
           <<"content-length">> => byte_size(Blob)}};
-encode_attachment(#{<<"blob">> := ErlangTerm,
-                    <<"content-type">> := <<"application/erlang">>}=A) ->
+encode_attachment(#{<<"blob">> := ErlangTerm}=A) ->
   TermAsBinary = term_to_binary(ErlangTerm),
   B64 = base64:encode(TermAsBinary),
   {ok, A#{<<"blob">> => B64,
+          <<"content-type">> => <<"application/erlang">>,
           <<"content-length">> => byte_size(TermAsBinary)}};
-encode_attachment(#{<<"blob">> := ErlangTerm}) ->
-  {error, {bad_content_type, ErlangTerm}};
 encode_attachment(#{<<"link">> := Link}=A) ->
   B64 = base64:encode(Link),
   {ok, A#{<<"link">> := B64}}.

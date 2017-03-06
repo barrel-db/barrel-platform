@@ -168,16 +168,16 @@ atomic_erlang_term_attachment(Config) ->
   AttId = <<"myattachement">>,
   Term = {atuple, [a, list], #{a => "map", <<"with">> => <<"binary">>}},
 
+  %% bad content type
+  BadContentType = [#{<<"id">> => AttId,
+                      <<"content-type">> => <<"application/erlang">>,
+                      <<"blob">> => <<"somebinary">>}],
+  {error, {erlang_term_expected, AttId}} = barrel_httpc:post(db(Config), Doc, BadContentType, []),
+
   %% content-type not given for erlang term
   WithoutContentType = [#{<<"id">> => AttId,
                           <<"blob">> => Term}],
-  {error, {bad_content_type, Blob}} = barrel_httpc:post(db(Config), Doc, WithoutContentType, []),
-
-  %% content-type for erlang term
-  WithContentType = [#{<<"id">> => AttId,
-                       <<"content-type">> => <<"application/erlang">>,
-                       <<"blob">> => Blob}],
-  {ok, <<"a">>, _} = barrel_httpc:post(db(Config), Doc, WithContentType, []),
+  {ok, <<"a">>, _} = barrel_httpc:post(db(Config), Doc, WithoutContentType, []),
 
   %% retrieve decoded attachment
   {ok, Doc, [A], _} = barrel_httpc:get(db(Config), DocId,
