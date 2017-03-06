@@ -41,7 +41,7 @@ attach(Conn, DocId, AttDescription, Options) ->
 
 attach(Conn, DocId, AttDescription, Binary, Options) ->
   Data = base64:encode(Binary),
-  attach(Conn, DocId, AttDescription#{<<"_data">> => Data}, Options).
+  attach(Conn, DocId, AttDescription#{<<"blob">> => Data}, Options).
 
 get_attachment(Conn, DocId, AttId, Options) ->
   {ok, Doc, _Meta} = barrel_httpc:get(Conn, DocId, Options),
@@ -54,7 +54,7 @@ get_attachment_binary(Conn, DocId, AttId, Options) ->
   case find_att_doc(AttId, Attachments) of
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
-      Data = maps:get(<<"_data">>, Attachment),
+      Data = maps:get(<<"blob">>, Attachment),
       {ok, base64:decode(Data)}
   end.
 
@@ -75,7 +75,7 @@ replace_attachment_binary(Conn, DocId, AttId, Binary, Options) ->
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
       NewData = base64:encode(Binary),
-      NewAttachment = Attachment#{<<"_data">> => NewData},
+      NewAttachment = Attachment#{<<"blob">> => NewData},
       replace_attachment(Conn, DocId, AttId, NewAttachment, Options)
   end.
 

@@ -16,6 +16,7 @@
 -author("Benoit Chesneau").
 
 -define(DB_URL,<<"http://localhost:7080/dbs/testdb">>).
+-define(DB,<<"testdb">>).
 
 
 %% API
@@ -29,13 +30,17 @@
 
 -export([
   attachment_doc/1,
-  binary_attachment/1
+  binary_attachment/1,
+  post_atomic_attachment/1,
+  post_erlang_term_attachment/1
 ]).
 
 all() ->
   [
-    attachment_doc,
-    binary_attachment
+   %% attachment_doc,
+   %% binary_attachment,
+   post_atomic_attachment,
+   post_erlang_term_attachment
   ].
 
 init_per_suite(Config) ->
@@ -47,7 +52,7 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
   _ = barrel_httpc:create_database(?DB_URL),
   {ok, Conn} = barrel_httpc:connect(?DB_URL),
-  [{db, Conn} | Config].
+  [{db_url, Conn}, {db, ?DB} | Config].
 
 end_per_testcase(_, _Config) ->
   _ = barrel_httpc:delete_database(?DB_URL),
@@ -57,7 +62,8 @@ end_per_suite(Config) ->
   Config.
 
 
-db(Config) -> proplists:get_value(db, Config).
+db(Config) -> proplists:get_value(db_url, Config).
+localdb(Config) -> proplists:get_value(db, Config).
 
 
 attachment_doc(Config) ->
@@ -70,11 +76,12 @@ attachment_doc(Config) ->
     <<"content_type">> => <<"image/png">>,
     <<"link">> => <<"http://somehost.com/cat.png">>
   },
-  
+
   {ok, DocId, R2} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription, [{rev, R1}]),
+  {ok, Doc, _} = barrel_httpc:get(db(Config), DocId, []),
   {ok, AttDescription} = barrel_httpc_attachments:get_attachment(db(Config) , DocId, <<"myattachement">>, []),
   [AttDescription] = barrel_httpc_attachments:attachments(db(Config) , DocId, []),
-  
+
   AttDescription2 = AttDescription#{<<"link">> => <<"http://anotherhost.com/panther.png">>},
   {error, attachment_conflict} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription2, [{rev, R2}]),
   {ok, DocId, R3} = barrel_httpc_attachments:replace_attachment(db(Config) , DocId, AttId, AttDescription2, [{rev, R2}]),
@@ -93,11 +100,72 @@ binary_attachment(Config) ->
     <<"content_type">> => <<"image/png">>
   },
   Blob = <<"blobdata">>,
-  
+
   {ok, DocId, R2} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription, Blob, [{rev, R1}]),
   {ok, Blob} = barrel_httpc_attachments:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R2}]),
-  
+
   Blob2 = <<"anotherblobdata">>,
   {ok, DocId, R3} = barrel_httpc_attachments:replace_attachment_binary(db(Config) , DocId, AttId, Blob2, [{rev, R2}]),
   {ok, Blob2} = barrel_httpc_attachments:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R3}]),
+  ok.
+
+post_atomic_attachment(Config) ->
+  DocId = <<"a">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Blob = <<"blobdata">>,
+  Attachments = [#{<<"id">> => AttId,
+                   <<"blob">> => Blob},
+                  #{<<"id">> => <<"2">>, <<"blob">> => <<"2">>}],
+
+  %% store a document with attachments
+  {ok, <<"a">>, R1} = barrel_httpc:post(db(Config), Doc, Attachments, []),
+
+  %% the document is stored with attachments in prop _attachments
+  {ok, StoredDoc, _} = barrel_local:get(localdb(Config), DocId, []),
+  B64 = base64:encode(Blob),
+  #{<<"_attachments">> :=
+      [#{<<"id">> := AttId,
+         <<"content-type">> := <<"application/octet-stream">>,
+         <<"content-length">> := 8,
+         <<"blob">> := B64}|_]} = StoredDoc,
+
+  %% httpc:get does not return attachments by defautl
+  {ok, Doc, #{<<"rev">> := R1}} = barrel_httpc:get(db(Config), DocId, []),
+  {ok, Doc, [A1,A2], _} = barrel_httpc:get(db(Config), DocId,
+                                        [{attachments, all}]),
+  #{<<"id">> := AttId,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 8,
+    <<"blob">> := Blob} = A1,
+  #{<<"id">> := <<"2">>,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 1,
+    <<"blob">> := <<"2">>} = A2,
+  ok.
+
+post_erlang_term_attachment(Config) ->
+  DocId = <<"a">>,
+  Doc = #{<<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Term = {atuple, [a, list], #{a => "map", <<"with">> => <<"binary">>}},
+
+  %% content-type not given for erlang term
+  WithoutContentType = [#{<<"id">> => AttId,
+                          <<"blob">> => Term}],
+  {error, {bad_content_type, Blob}} = barrel_httpc:post(db(Config), Doc, WithoutContentType, []),
+
+  %% content-type for erlang term
+  WithContentType = [#{<<"id">> => AttId,
+                       <<"content-type">> => <<"application/erlang">>,
+                       <<"blob">> => Blob}],
+  {ok, <<"a">>, _} = barrel_httpc:post(db(Config), Doc, WithContentType, []),
+
+  %% retrieve decoded attachment
+  {ok, Doc, [A], _} = barrel_httpc:get(db(Config), DocId,
+                                       [{attachments, all}]),
+  #{<<"id">> := AttId,
+    <<"content-type">> := <<"application/erlang">>,
+    <<"content-length">> := 64,
+    <<"blob">> := Term} = A,
   ok.
