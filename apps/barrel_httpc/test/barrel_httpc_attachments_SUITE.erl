@@ -37,8 +37,8 @@
 
 all() ->
   [
-   %% attachment_doc,
-   %% binary_attachment,
+   attachment_doc,
+   binary_attachment,
    atomic_attachment,
    atomic_erlang_term_attachment
   ].
@@ -73,7 +73,7 @@ attachment_doc(Config) ->
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
-    <<"content_type">> => <<"image/png">>,
+    <<"content-type">> => <<"image/png">>,
     <<"link">> => <<"http://somehost.com/cat.png">>
   },
 
@@ -97,7 +97,7 @@ binary_attachment(Config) ->
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
-    <<"content_type">> => <<"image/png">>
+    <<"content-type">> => <<"image/png">>
   },
   Blob = <<"blobdata">>,
 

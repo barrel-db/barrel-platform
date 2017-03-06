@@ -28,68 +28,64 @@
 -define(ATTTAG, <<"_attachments">>).
 
 attach(Conn, DocId, AttDescription, Options) ->
-  {ok, Doc, Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]),
   AttId = maps:get(<<"id">>, AttDescription),
   AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
   case find_att_doc(AttId, Attachments) of
     {ok, _} -> {error, attachment_conflict};
     {error, not_found} ->
       Attachments2 = [AttDescription|Attachments],
-      barrel_httpc:put(Conn, Doc#{?ATTTAG => Attachments2}, AttOpts)
+      barrel_httpc:put(Conn, Doc, Attachments2, AttOpts)
   end.
 
 attach(Conn, DocId, AttDescription, Binary, Options) ->
-  Data = base64:encode(Binary),
-  attach(Conn, DocId, AttDescription#{<<"blob">> => Data}, Options).
+  attach(Conn, DocId, AttDescription#{<<"blob">> => Binary}, Options).
 
 get_attachment(Conn, DocId, AttId, Options) ->
-  {ok, Doc, _Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId,
+                                             [{attachments, all}|Options]),
   find_att_doc(AttId, Attachments).
 
 get_attachment_binary(Conn, DocId, AttId, Options) ->
-  {ok, Doc, _Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId, 
+                                             [{attachments, all}|Options]),
   case find_att_doc(AttId, Attachments) of
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
       Data = maps:get(<<"blob">>, Attachment),
-      {ok, base64:decode(Data)}
+      {ok, Data}
   end.
 
 replace_attachment(Conn, DocId, AttId, AttDescription, Options) ->
-  {ok, Doc, Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId, 
+                                                  [{attachments, all}|Options]),
   AttId = maps:get(<<"id">>, AttDescription),
   AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
   %% make new attachment and update the doc
   NewAttachments = replace_att_doc(AttId, AttDescription, Attachments),
-  Doc2 =  Doc#{?ATTTAG => NewAttachments},
-  barrel_httpc:put(Conn, Doc2, AttOpts).
+  barrel_httpc:put(Conn, Doc, NewAttachments, AttOpts).
 
 replace_attachment_binary(Conn, DocId, AttId, Binary, Options) ->
-  {ok, Doc, _Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, _Doc, Attachments, _Meta} = barrel_httpc:get(Conn, DocId,
+                                                    [{attachments, all}|Options]),
   case find_att_doc(AttId, Attachments) of
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
-      NewData = base64:encode(Binary),
-      NewAttachment = Attachment#{<<"blob">> => NewData},
+      NewAttachment = Attachment#{<<"blob">> => Binary},
       replace_attachment(Conn, DocId, AttId, NewAttachment, Options)
   end.
 
 delete_attachment(Conn, DocId, AttId, Options) ->
-  {ok, Doc, Meta} = barrel_httpc:get(Conn, DocId, Options),
-  Attachments = maps:get(?ATTTAG, Doc, []),
+  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId,
+                                                  [{attachments, all}|Options]),
   NewAttachments = delete_att_doc(AttId, Attachments),
   PutOpts = [{rev, maps:get(<<"rev">>, Meta)}],
-  barrel_httpc:put(Conn, Doc#{?ATTTAG => NewAttachments}, PutOpts).
+  barrel_httpc:put(Conn, Doc, NewAttachments, PutOpts).
 
 attachments(Conn, DocId, Options) ->
-  {ok, Doc, _Meta} = barrel_httpc:get(Conn, DocId, Options),
-  maps:get(?ATTTAG, Doc, []).
-
+  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId,
+                                             [{attachments, all}|Options]),
+  Attachments.
 
 %% =============================================================================
 %% Internals

@@ -198,7 +198,7 @@ get(Conn, DocId, Options0) ->
   case request(Conn, <<"GET">>, Url, Headers, <<>>) of
     {ok, 200, RespHeaders, JsonBody} ->
       Doc = jsx:decode(JsonBody, [return_maps]),
-      {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc),
+      {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
       Meta = parse_header(RespHeaders),
       case WithAttachment of
         true ->
@@ -241,12 +241,12 @@ maybe_add_revisions(Meta, Headers) ->
       Meta#{ <<"revisions">> => barrel_doc:encode_revisions(History) }
   end.
 
-maybe_take(Key, Map) when is_map(Map) ->
+maybe_take(Key, Map, Default) when is_map(Map) ->
   case maps:take(Key, Map) of
     {K, M} ->
       {K,M};
     error ->
-      {undefined, Map}
+      {Default, Map}
   end.
 
 maybe_with_attachments(Options) ->
@@ -394,7 +394,8 @@ encode_attachments([A|Tail]) ->
 
 encode_attachment(#{<<"blob">> := Blob }=A) when is_binary(Blob) ->
   B64 = base64:encode(Blob),
-  {ok, A#{<<"content-type">> => <<"application/octet-stream">>,
+  ContentType = maps:get(<<"content-type">>, A, <<"application/octet-stream">>),
+  {ok, A#{<<"content-type">> => ContentType,
           <<"blob">> := B64,
           <<"content-length">> => byte_size(Blob)}};
 encode_attachment(#{<<"blob">> := ErlangTerm,
@@ -404,7 +405,11 @@ encode_attachment(#{<<"blob">> := ErlangTerm,
   {ok, A#{<<"blob">> => B64,
           <<"content-length">> => byte_size(TermAsBinary)}};
 encode_attachment(#{<<"blob">> := ErlangTerm}) ->
-  {error, {bad_content_type, ErlangTerm}}.
+  {error, {bad_content_type, ErlangTerm}};
+encode_attachment(#{<<"link">> := Link}=A) ->
+  B64 = base64:encode(Link),
+  {ok, A#{<<"link">> := B64}}.
+
 
 
 decode_attachments(Attachments) ->
@@ -415,10 +420,12 @@ decode_attachment(#{<<"content-type">> := <<"application/erlang">>}=A) ->
   Blob = base64:decode(B64),
   DecodedBlob = binary_to_term(Blob),
   A#{<<"blob">> => DecodedBlob};
-decode_attachment(#{<<"content-type">> := <<"application/octet-stream">>}=A) ->
-  #{<<"blob">> := B64} = A,
+decode_attachment(#{<<"blob">> := B64}=A) ->
   Blob = base64:decode(B64),
-  A#{<<"blob">> := Blob}.
+  A#{<<"blob">> := Blob};
+decode_attachment(#{<<"link">> := B64}=A) ->
+  Blob = base64:decode(B64),
+  A#{<<"link">> := Blob}.
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
