@@ -31,16 +31,16 @@
 -export([
   attachment_doc/1,
   binary_attachment/1,
-  post_atomic_attachment/1,
-  post_erlang_term_attachment/1
+  atomic_attachment/1,
+  atomic_erlang_term_attachment/1
 ]).
 
 all() ->
   [
    %% attachment_doc,
    %% binary_attachment,
-   post_atomic_attachment,
-   post_erlang_term_attachment
+   atomic_attachment,
+   atomic_erlang_term_attachment
   ].
 
 init_per_suite(Config) ->
@@ -109,7 +109,7 @@ binary_attachment(Config) ->
   {ok, Blob2} = barrel_httpc_attachments:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R3}]),
   ok.
 
-post_atomic_attachment(Config) ->
+atomic_attachment(Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
   AttId = <<"myattachement">>,
@@ -132,6 +132,8 @@ post_atomic_attachment(Config) ->
 
   %% httpc:get does not return attachments by defautl
   {ok, Doc, #{<<"rev">> := R1}} = barrel_httpc:get(db(Config), DocId, []),
+
+  %% ask httpc:get to retrive the attachments with options {attachments, all}
   {ok, Doc, [A1,A2], _} = barrel_httpc:get(db(Config), DocId,
                                         [{attachments, all}]),
   #{<<"id">> := AttId,
@@ -142,9 +144,25 @@ post_atomic_attachment(Config) ->
     <<"content-type">> := <<"application/octet-stream">>,
     <<"content-length">> := 1,
     <<"blob">> := <<"2">>} = A2,
+
+  %% update the attachments
+  Attachments2 = [#{<<"id">> => AttId,
+                    <<"blob">> => Blob},
+                  #{<<"id">> => <<"2">>, <<"blob">> => <<"3">>}],
+  {ok, <<"a">>, _R2} = barrel_httpc:put(db(Config), Doc, Attachments2, []),
+  {ok, Doc, [A1,A3], _} = barrel_httpc:get(db(Config), DocId,
+                                           [{attachments, all}]),
+  #{<<"id">> := <<"2">>,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 1,
+    <<"blob">> := <<"3">>} = A3,
+
+  %% delete all attachments
+  {ok, <<"a">>, _} = barrel_httpc:put(db(Config), Doc, [], []),
+  {ok, Doc, [], _} = barrel_httpc:get(db(Config), DocId, [{attachments, all}]),
   ok.
 
-post_erlang_term_attachment(Config) ->
+atomic_erlang_term_attachment(Config) ->
   DocId = <<"a">>,
   Doc = #{<<"id">> => DocId, <<"v">> => 1},
   AttId = <<"myattachement">>,

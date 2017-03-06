@@ -19,6 +19,7 @@
   connect/1,
   get/3,
   put/3,
+  put/4,
   post/3,
   post/4,
   delete/3,
@@ -269,6 +270,27 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   post_put(Conn, <<"PUT">>, Doc, Url, Headers);
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+%% @doc create or update a document with attachments
+-spec put(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+put(Conn, #{ <<"id">> := DocId } = Doc, Attachments, Options0) ->
+  {Headers, Options1} = headers(Options0),
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  case encode_attachments(Attachments) of
+    EncodedAttachments when is_list(EncodedAttachments) ->
+      EncodedDoc = Doc#{<<"_attachments">> => EncodedAttachments},
+      {Headers, Options1} = headers(Options0),
+      Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+      post_put(Conn, <<"PUT">>, EncodedDoc, Url, Headers);
+    {error, Error} ->
+      {error, Error}
+  end;
+put(_, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
 
 post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
