@@ -320,7 +320,7 @@ multiple_delete(Config) ->
       Pid = spawn_link(
         fun() ->
           {ok, #{ <<"id">> := DocId}, #{<<"rev">> := Rev }} = barrel_httpc:get(db(Config), DocId, []),
-          {ok, _, _} = barrel_httpc:delete(db(Config), DocId,[{rev,  Rev}]),
+          {ok, _, _} = barrel_httpc:delete(db(Config), DocId, [{rev,  Rev}]),
           Self ! {ok, self()}
         end
       ),
@@ -361,7 +361,7 @@ change_deleted(Config) ->
       Del = maps:get(<<"deleted">>, Change, false),
       {ok, [{Id, Del}|Acc]}
     end,
-  
+
   {ok, []} = barrel_httpc:changes_since(db(Config), 0, Fun, [], []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
@@ -396,10 +396,10 @@ change_since_many(Config) ->
           Seq = maps:get(<<"seq">>, Change),
           {ok, [{Seq, Change}|Acc]}
         end,
-  
+
   %% No changes. Database is empty.
   {ok, []} = barrel_httpc:changes_since(db(Config), 0, Fun, [], []),
-  
+
   %% Add 20 docs (doc1 to doc20).
   AddDoc = fun(N) ->
               K = integer_to_binary(N),
@@ -408,18 +408,18 @@ change_since_many(Config) ->
     {ok, Key, _RevId} = barrel_httpc:post(db(Config), Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
-  
+
   %% Delete doc1
   {ok, _Doc1, #{<<"rev">> := RevId}} = barrel_httpc:get(db(Config), <<"doc1">>, []),
   {ok, <<"doc1">>, _} = barrel_httpc:delete(db(Config), <<"doc1">>, [{rev, RevId}]),
-  
+
   %% 20 changes (for doc1 to doc20)
   {ok, All} = barrel_httpc:changes_since(db(Config), 0, Fun, [], [{history, all}]),
   20 = length(All),
   %% History for doc1 includes creation and deletion
   {21, #{<<"changes">> := HistoryDoc1}} = hd(All),
   2 = length(HistoryDoc1),
-  
+
   {ok, [{21, #{<<"id">> := <<"doc1">>}},
         {20, #{<<"id">> := <<"doc20">>}},
         {19, #{<<"id">> := <<"doc19">>}}]} = barrel_httpc:changes_since(db(Config), 18, Fun, [], []),
