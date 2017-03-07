@@ -278,19 +278,13 @@ put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
     Attachments :: [attachment()],
     Options :: write_options(),
     Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-put(Conn, #{ <<"id">> := DocId } = Doc, Attachments, Options0) ->
-  {Headers, Options1} = headers(Options0),
-  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
-  case encode_attachments(Attachments) of
-    EncodedAttachments when is_list(EncodedAttachments) ->
-      EncodedDoc = Doc#{<<"_attachments">> => EncodedAttachments},
-      {Headers, Options1} = headers(Options0),
-      Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
-      post_put(Conn, <<"PUT">>, EncodedDoc, Url, Headers);
+put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      put(Conn, DocWithAttachments, Options0);
     {error, Error} ->
       {error, Error}
-  end;
-put(_, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
+  end.
 
 post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
@@ -365,29 +359,26 @@ post(Conn, Doc, Options0) ->
     Attachments :: [attachment()],
     Options :: write_options(),
     Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-post(Conn, Doc, Attachments, Options0) ->
-  DocWithId = case maps:find(<<"id">>, Doc) of
-                {ok, _Id} -> Doc;
-                error ->
-                  Id = uuid:uuid_to_string(uuid:get_v4(), binary_standard),
-                  Doc#{<<"id">> => Id}
-              end,
-  case encode_attachments(Attachments) of
-    EncodedAttachments when is_list(EncodedAttachments) ->
-      EncodedDoc = DocWithId#{<<"_attachments">> => EncodedAttachments},
-      {Headers, Options1} = headers(Options0),
-      Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], Options1),
-      post_put(Conn, <<"POST">>, EncodedDoc, Url, Headers);
+post(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      post(Conn, DocWithAttachments, Options0);
     {error, Error} ->
       {error, Error}
   end.
 
-encode_attachments([]) ->
-  [];
-encode_attachments([A|Tail]) ->
+
+encode_attachments(Doc, Attachments) ->
+  encode_attachments(Doc, Attachments, []).
+
+encode_attachments(Doc, [], []) ->
+  {ok, Doc};
+encode_attachments(Doc, [], EncodedAttachments) ->
+  {ok, Doc#{<<"_attachments">> => lists:reverse(EncodedAttachments)}};
+encode_attachments(Doc, [A|Tail], Encoded) ->
   case encode_attachment(A) of
     {ok, E} ->
-      [E|encode_attachments(Tail)];
+      encode_attachments(Doc, Tail, [E|Encoded]);
     {error, Error} ->
       {error, Error}
   end.
