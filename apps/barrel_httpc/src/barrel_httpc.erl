@@ -19,7 +19,9 @@
   connect/1,
   get/3,
   put/3,
+  put/4,
   post/3,
+  post/4,
   delete/3,
   put_rev/5,
   fold_by_id/4,
@@ -78,6 +80,8 @@
 -type fold_options() :: list().
 
 -type change() :: #{ binary() => any() }.
+
+-type attachment() :: {atom(), any()}.
 
 -export_type([
   conn/0,
@@ -188,13 +192,21 @@ connect(Url) ->
   Meta :: meta(),
   Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options0) ->
-  {Headers, Options1} = headers(Options0),
-  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  {WithAttachment, Options1} = maybe_with_attachments(Options0),
+  {Headers, Options2} = headers(Options1),
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options2),
   case request(Conn, <<"GET">>, Url, Headers, <<>>) of
     {ok, 200, RespHeaders, JsonBody} ->
       Doc = jsx:decode(JsonBody, [return_maps]),
+      {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
       Meta = parse_header(RespHeaders),
-      {ok, Doc, Meta};
+      case WithAttachment of
+        true ->
+          DecodedAttachments = decode_attachments(Attachments),
+          {ok, DocWithoutAttachment, DecodedAttachments, Meta};
+        false ->
+          {ok, DocWithoutAttachment, Meta}
+      end;
     Error ->
       Error
   end.
@@ -214,7 +226,7 @@ maybe_add_rev(Meta, Headers) ->
     undefined -> Meta;
     ETag -> Meta#{ <<"rev">> => ETag}
   end.
-  
+
 maybe_add_deleted(Meta, Headers) ->
   case hackney_headers_new:get_value(<<"x-barrel-deleted">>, Headers) of
     <<"true">> -> Meta#{ <<"deleted">> => true };
@@ -229,6 +241,23 @@ maybe_add_revisions(Meta, Headers) ->
       Meta#{ <<"revisions">> => barrel_doc:encode_revisions(History) }
   end.
 
+maybe_take(Key, Map, Default) when is_map(Map) ->
+  case maps:take(Key, Map) of
+    {K, M} ->
+      {K,M};
+    error ->
+      {Default, Map}
+  end.
+
+maybe_with_attachments(Options) ->
+  maybe_with_attachments(Options, false, []).
+maybe_with_attachments([], WithAttachment, Acc) ->
+  {WithAttachment, lists:reverse(Acc)};
+maybe_with_attachments([{attachments, all}|Options],_, Acc) ->
+  maybe_with_attachments(Options, true, Acc);
+maybe_with_attachments([H|Options], W, Acc) ->
+  maybe_with_attachments(Options, W, [H|Acc]).
+
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
 -spec put(Conn, Doc, Options) -> Res when
@@ -241,6 +270,21 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   post_put(Conn, <<"PUT">>, Doc, Url, Headers);
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+%% @doc create or update a document with attachments
+-spec put(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      put(Conn, DocWithAttachments, Options0);
+    {error, Error} ->
+      {error, Error}
+  end.
 
 post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
@@ -290,7 +334,6 @@ headers(Options) ->
       {Hdrs, proplists:delete(rev, Options)}
   end.
 
-
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
 -spec post(Conn, Doc, Options) -> Res when
@@ -309,6 +352,73 @@ post(Conn, Doc, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], Options1),
   post_put(Conn, <<"POST">>, DocWithId, Url, Headers).
 
+%% @doc create a document with attachments.
+-spec post(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+post(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      post(Conn, DocWithAttachments, Options0);
+    {error, Error} ->
+      {error, Error}
+  end.
+
+
+encode_attachments(Doc, Attachments) ->
+  encode_attachments(Doc, Attachments, []).
+
+encode_attachments(Doc, [], []) ->
+  {ok, Doc};
+encode_attachments(Doc, [], EncodedAttachments) ->
+  {ok, Doc#{<<"_attachments">> => lists:reverse(EncodedAttachments)}};
+encode_attachments(Doc, [A|Tail], Encoded) ->
+  case encode_attachment(A) of
+    {ok, E} ->
+      encode_attachments(Doc, Tail, [E|Encoded]);
+    {error, Error} ->
+      {error, Error}
+  end.
+
+encode_attachment(#{<<"blob">> := Blob, <<"id">> := Id,
+                    <<"content-type">> := <<"application/erlang">>})
+  when is_binary(Blob) ->
+  {error, {erlang_term_expected, Id}};
+encode_attachment(#{<<"blob">> := Blob }=A) when is_binary(Blob) ->
+  B64 = base64:encode(Blob),
+  ContentType = maps:get(<<"content-type">>, A, <<"application/octet-stream">>),
+  {ok, A#{<<"content-type">> => ContentType,
+          <<"blob">> := B64,
+          <<"content-length">> => byte_size(Blob)}};
+encode_attachment(#{<<"blob">> := ErlangTerm}=A) ->
+  TermAsBinary = term_to_binary(ErlangTerm),
+  B64 = base64:encode(TermAsBinary),
+  {ok, A#{<<"blob">> => B64,
+          <<"content-type">> => <<"application/erlang">>,
+          <<"content-length">> => byte_size(TermAsBinary)}};
+encode_attachment(#{<<"link">> := Link}=A) ->
+  B64 = base64:encode(Link),
+  {ok, A#{<<"link">> := B64}}.
+
+
+
+decode_attachments(Attachments) ->
+  [decode_attachment(A) || A <- Attachments].
+
+decode_attachment(#{<<"content-type">> := <<"application/erlang">>}=A) ->
+  #{<<"blob">> := B64} = A,
+  Blob = base64:decode(B64),
+  DecodedBlob = binary_to_term(Blob),
+  A#{<<"blob">> => DecodedBlob};
+decode_attachment(#{<<"blob">> := B64}=A) ->
+  Blob = base64:decode(B64),
+  A#{<<"blob">> := Blob};
+decode_attachment(#{<<"link">> := B64}=A) ->
+  Blob = base64:decode(B64),
+  A#{<<"link">> := Blob}.
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
