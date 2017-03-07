@@ -23,6 +23,7 @@
   post/3,
   post/4,
   delete/3,
+  update_with/4,
   put_rev/5,
   fold_by_id/4,
   fold_by_path/5,
@@ -367,6 +368,56 @@ post(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
       {error, Error}
   end.
 
+
+%% Atomically modifies the a document, this function takes the docId and pass the Doc and its attachments to the
+%% callback.
+-spec update_with(Conn, DocId, Fun, Options) -> Res when
+  Conn::conn(),
+  DocId :: docid(),
+  Fun :: fun((Doc :: doc() | nil, Attachments :: list()) -> UpdatedDoc :: doc() | {UpdatedDoc :: doc(),
+                                                                                   UpdatedAttachments :: list()} ),
+  Options :: read_options(),
+  Res :: {ok, docid(), rev()}  | {error, any()}.
+update_with(Conn, DocId, Fun, Options) ->
+   case do_update_with(Conn, DocId, Fun, Options) of
+     {ok, _, _} = OK -> OK;
+     {error, {conflict, _}} -> update_with(Conn, DocId, Fun, Options);
+     Error -> Error
+   end.
+
+do_update_with(Conn, DocId, Fun, Options) ->
+  case barrel_httpc:get(Conn, DocId, Options) of
+    {ok, _, _} = Res ->
+      try_put(Res, Conn, Fun);
+    {ok, _, _, _} = Res ->
+      try_put(Res, Conn, Fun);
+    {error, not_found} = Res->
+      try_post(Conn, Fun);
+    Error ->
+      Error
+  end.
+
+try_put({ok, Doc, Meta}, Conn, Fun) ->
+  Rev = maps:get(<<"rev">>, Meta),
+  try_put_1(Fun(Doc, []), Rev, Conn);
+
+try_put({ok, Doc, Meta, Atts}, Conn, Fun) ->
+  Rev = maps:get(<<"rev">>, Meta),
+  try_put_1(Fun(Doc, Atts), Rev, Conn).
+
+
+try_put_1(Doc, Rev, Conn) ->
+  barrel_httpc:put(Conn, Doc, [{rev, Rev}]);
+try_put_1({Doc, Atts}, Rev, Conn) ->
+  barrel_httpc:put(Conn, Doc, Atts, [{rev, Rev}]).
+
+try_post(Conn, Fun) ->
+  case Fun(nil, []) of
+    Doc when is_map(Doc) ->
+      barrel_httpc:post(Conn, Doc, []);
+    {Doc, Atts} ->
+      barrel_httpc:post(Conn, Doc, Atts, [])
+  end.
 
 encode_attachments(Doc, Attachments) ->
   encode_attachments(Doc, Attachments, []).
