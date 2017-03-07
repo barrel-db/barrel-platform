@@ -19,8 +19,10 @@
   connect/1,
   get/3,
   put/3,
+  put/4,
   post/3,
-  delete/4,
+  post/4,
+  delete/3,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5
@@ -72,6 +74,8 @@ deleted => boolean()
 %%   <<"deleted">> => true | false % present if deleted
 %%}
 -type change() :: #{ binary() => any() }.
+
+-type attachment() :: {atom(), any()}.
 
 -export_type([
   conn/0,
@@ -158,15 +162,24 @@ get(Conn, DocId, Options) ->
 put(Conn, Doc, Options) ->
   barrel_httpc:put(Conn, Doc, Options).
 
+%% @doc update a document with attachments
+-spec put(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+put(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
+  barrel_httpc:put(Conn, Doc, Attachments, Options).
+
 %% @doc delete a document
--spec delete(Conn, DocId, RevId, Options) -> Res when
+-spec delete(Conn, DocId, Options) -> Res when
   Conn::conn(),
   DocId :: docid(),
-  RevId :: rev(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-delete(Conn, DocId, RevId, Options) ->
-  barrel_httpc:delete(Conn, DocId, RevId, Options).
+delete(Conn, DocId, Options) ->
+  barrel_httpc:delete(Conn, DocId, Options).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
@@ -177,6 +190,16 @@ delete(Conn, DocId, RevId, Options) ->
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
 post(Conn, Doc, Options) ->
   barrel_httpc:post(Conn, Doc, Options).
+
+%% @doc create a document with attachments.
+-spec post(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+post(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
+  barrel_httpc:post(Conn, Doc, Attachments, Options).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when
