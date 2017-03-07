@@ -23,6 +23,7 @@
   post/3,
   post/4,
   delete/3,
+  update_with/4,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5
@@ -200,6 +201,18 @@ post(Conn, Doc, Options) ->
     Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
 post(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
   barrel_httpc:post(Conn, Doc, Attachments, Options).
+
+%% Atomically modifies the a document, this function takes the docId and pass the Doc and its attachments to the
+%% callback.
+-spec update_with(Conn, DocId, Fun, Options) -> Res when
+  Conn::conn(),
+  DocId :: docid(),
+  Fun :: fun((Doc :: doc() | nil, Attachments :: list()) -> UpdatedDoc :: doc() | {UpdatedDoc :: doc(),
+                                                                                   UpdatedAttachments :: list()} ),
+  Options :: read_options(),
+  Res :: {ok, docid(), rev()}  | {error, any()}.
+update_with(Conn, DocId, Fun, Options) ->
+  barrel_httpc:update_with(Conn, DocId, Fun, Options).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when

@@ -36,6 +36,7 @@
   update_doc/1,
   bad_doc/1,
   create_doc/1,
+  update_with/1,
   get_revisions/1,
   fold_by_id/1,
   order_by_key/1,
@@ -52,6 +53,7 @@ all() ->
   [ db_ops
   , basic_op
   , update_doc
+  , update_with
   , bad_doc
   , create_doc
   , get_revisions
@@ -122,6 +124,21 @@ update_doc(Config) ->
   {ok, <<"a">>, _} = barrel_peer:delete(db(Config), <<"a">>, [{rev, RevId2}]),
   {error, not_found} = barrel_peer:get(db(Config), <<"a">>, []),
   {ok, <<"a">>, _} = barrel_peer:put(db(Config), Doc, []).
+
+update_with(Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_peer:post(db(Config), Doc, []),
+  {ok, Doc, #{ <<"rev">> := RevId }} = barrel_peer:get(db(Config), <<"a">>, []),
+  
+  {ok, <<"a">>, RevId2} = barrel_peer:update_with(
+    db(Config),
+    <<"a">>,
+    fun(Doc1, []) -> Doc1#{ <<"v">> => 2} end,
+    []
+  ),
+  true = (RevId =/= RevId2),
+  {ok, Doc2, #{ <<"rev">> := RevId2 }} = barrel_peer:get(db(Config), <<"a">>, []),
+  #{ <<"id">> := <<"a">>, <<"v">> := 2} = Doc2.
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
