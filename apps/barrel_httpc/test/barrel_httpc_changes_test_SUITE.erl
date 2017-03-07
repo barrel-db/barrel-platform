@@ -122,7 +122,6 @@ changes_feed_callback(Config) ->
     end,
   Options = #{since => 0, mode => sse, changes_cb => Callback },
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
-
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
