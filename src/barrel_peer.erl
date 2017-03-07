@@ -141,7 +141,7 @@ database_infos(Url) ->
 %% If the database is not found, an error is returned
 -spec connect(DbUrl) -> Res when
   DbUrl :: binary(),
-  Res :: ok | {error, any()}.
+  Res :: {ok, conn()} | {error, any()}.
 connect(Url) ->
   barrel_httpc:connect(Url).
 
