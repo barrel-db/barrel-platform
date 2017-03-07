@@ -329,7 +329,7 @@ delete(Conn, DocId, Options0) ->
 headers(Options) ->
   case proplists:get_value(rev, Options) of
     undefined ->
-      {[{<<"Content-Type">>, <<"application/json">>}], Options};
+      {[{<<"Content-Type">>, <<"application/json">>}], proplists:delete(rev, Options)};
     Rev ->
       Hdrs = [{<<"Content-Type">>, <<"application/json">>},
               {<<"ETag">>, Rev}],
