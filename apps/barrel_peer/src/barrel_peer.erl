@@ -19,7 +19,9 @@
   connect/1,
   get/3,
   put/3,
+  put/4,
   post/3,
+  post/4,
   delete/3,
   fold_by_id/4,
   fold_by_path/5,
@@ -72,6 +74,8 @@ deleted => boolean()
 %%   <<"deleted">> => true | false % present if deleted
 %%}
 -type change() :: #{ binary() => any() }.
+
+-type attachment() :: {atom(), any()}.
 
 -export_type([
   conn/0,
@@ -158,6 +162,16 @@ get(Conn, DocId, Options) ->
 put(Conn, Doc, Options) ->
   barrel_httpc:put(Conn, Doc, Options).
 
+%% @doc update a document with attachments
+-spec put(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+put(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
+  barrel_httpc:put(Conn, Doc, Attachments, Options).
+
 %% @doc delete a document
 -spec delete(Conn, DocId, Options) -> Res when
   Conn::conn(),
@@ -176,6 +190,16 @@ delete(Conn, DocId, Options) ->
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
 post(Conn, Doc, Options) ->
   barrel_httpc:post(Conn, Doc, Options).
+
+%% @doc create a document with attachments.
+-spec post(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+post(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
+  barrel_httpc:post(Conn, Doc, Attachments, Options).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when

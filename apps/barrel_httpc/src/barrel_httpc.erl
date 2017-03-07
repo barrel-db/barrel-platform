@@ -271,7 +271,7 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   post_put(Conn, <<"PUT">>, Doc, Url, Headers);
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
 
-%% @doc create or update a document with attachments
+%% @doc update a document with attachments
 -spec put(Conn, Doc, Attachments, Options) -> Res when
     Conn::conn(),
     Doc :: doc(),
