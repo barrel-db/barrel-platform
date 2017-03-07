@@ -170,7 +170,7 @@ database_infos(Url) ->
 %% If the database is not found, an error is returned
 -spec connect(DbUrl) -> Res when
   DbUrl :: binary(),
-  Res :: ok | {error, any()}.
+  Res :: {ok, conn()} | {error, any()}.
 connect(Url) ->
   Max = application:get_env(barrel, max_connections, 12),
   {_, DbName} = name_from_url(Url),
@@ -191,7 +191,8 @@ connect(Url) ->
   Options :: read_options(),
   Doc :: doc(),
   Meta :: meta(),
-  Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
+  Attachments :: list(),
+  Res :: {ok, Doc, Meta} | {ok, Doc, Meta, Attachments} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options0) ->
   {WithAttachment, Options1} = maybe_with_attachments(Options0),
   {Headers, Options2} = headers(Options1),
@@ -391,7 +392,7 @@ do_update_with(Conn, DocId, Fun, Options) ->
       try_put(Res, Conn, Fun);
     {ok, _, _, _} = Res ->
       try_put(Res, Conn, Fun);
-    {error, not_found} = Res->
+    {error, not_found} ->
       try_post(Conn, Fun);
     Error ->
       Error
@@ -406,10 +407,11 @@ try_put({ok, Doc, Meta, Atts}, Conn, Fun) ->
   try_put_1(Fun(Doc, Atts), Rev, Conn).
 
 
-try_put_1(Doc, Rev, Conn) ->
-  barrel_httpc:put(Conn, Doc, [{rev, Rev}]);
-try_put_1({Doc, Atts}, Rev, Conn) ->
-  barrel_httpc:put(Conn, Doc, Atts, [{rev, Rev}]).
+try_put_1({Doc, Atts}, Rev, Conn) when is_map(Doc), is_list(Atts) ->
+  barrel_httpc:put(Conn, Doc, Atts, [{rev, Rev}]);
+try_put_1(Doc, Rev, Conn) when is_map(Doc) ->
+  barrel_httpc:put(Conn, Doc, [{rev, Rev}]).
+
 
 try_post(Conn, Fun) ->
   case Fun(nil, []) of
