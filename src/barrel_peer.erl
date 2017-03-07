@@ -60,7 +60,8 @@ deleted => boolean()
 
 -type db_infos() :: #{}.
 
--type doc() :: term().
+-type doc() :: #{}.
+-type meta() :: #{}.
 
 -type read_options() :: [read_option()].
 
@@ -84,6 +85,7 @@ deleted => boolean()
   rev/0,
   db_infos/0,
   doc/0,
+  meta/0,
   read_option/0, read_options/0,
   write_options/0,
   fold_options/0,
@@ -95,7 +97,7 @@ deleted => boolean()
 %% @doc create a database from its URL
 -spec create_database(DbUrl) -> Res when
   DbUrl :: binary(),
-  Res :: ok | {error, any()}.
+  Res :: {ok, binary()} | {error, any()}.
 create_database(Url) ->
   barrel_httpc:create_database(Url).
 
@@ -149,7 +151,9 @@ connect(Url) ->
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc(),
-  Res :: {ok, Doc} | {error, not_found} | {error, any()}.
+  Meta :: meta(),
+  Attachments :: list(),
+  Res :: {ok, Doc, Meta} | {ok, Doc, Meta, Attachments}  | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options) ->
   barrel_httpc:get(Conn, DocId, Options).
 
