@@ -39,7 +39,7 @@
   get_revisions/1,
   fold_by_id/1,
   order_by_key/1,
-  multiple_put/1,
+  multiple_post/1,
   multiple_get/1,
   multiple_delete/1,
   change_since/1,
@@ -49,31 +49,32 @@
 ]).
 
 all() ->
-  [
-    db_ops,
-    basic_op,
-    update_doc,
-    bad_doc,
-    create_doc,
-    get_revisions,
-    fold_by_id,
-    order_by_key,
-    multiple_put,
-    multiple_get,
-    multiple_delete,
-    change_since,
-    change_deleted,
-    change_since_include_doc,
-    change_since_many
+  [ db_ops
+  , basic_op
+  , update_doc
+  , bad_doc
+  , create_doc
+  , get_revisions
+  , fold_by_id
+  , order_by_key
+  , multiple_post
+  , multiple_get
+  , multiple_delete
+  , change_since
+  , change_deleted
+  , change_since_include_doc
+  , change_since_many
   ].
 
 init_per_suite(Config) ->
+  {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel_store),
   {ok, _} = application:ensure_all_started(barrel_peer),
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_peer:create_database(?DB_URL),
-  _ = barrel_peer:create_database(?DB_URL2),
+  ok = barrel_peer:create_database(?DB_URL),
+  ok = barrel_peer:create_database(?DB_URL2),
   {ok, Conn} = barrel_peer:connect(?DB_URL),
   [{db, Conn} | Config].
 
@@ -104,25 +105,23 @@ db_ops(_Config) ->
 basic_op(Config) ->
   {error, not_found} = barrel_peer:get(db(Config), <<"a">>, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_peer:put(db(Config), Doc, []),
-  Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_peer:get(db(Config), <<"a">>, []),
-  {ok, <<"a">>, _RevId2} = barrel_peer:delete(db(Config), <<"a">>, RevId, []),
+  {ok, <<"a">>, RevId} = barrel_peer:post(db(Config), Doc, []),
+  {ok, Doc, #{ <<"rev">> := RevId }} = barrel_peer:get(db(Config), <<"a">>, []),
+  {ok, <<"a">>, _RevId2} = barrel_peer:delete(db(Config), <<"a">>, [{rev, RevId}]),
   {error, not_found} = barrel_peer:get(db(Config), <<"a">>, []).
 
 update_doc(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"a">>, RevId} = barrel_peer:post(db(Config), Doc, []),
   Doc2 = Doc#{<<"_rev">> => RevId},
-  {ok, Doc2} = barrel_peer:get(db(Config), <<"a">>, []),
+  {ok, Doc, #{<<"rev">> := RevId}} = barrel_peer:get(db(Config), <<"a">>, []),
   Doc3 = Doc2#{ <<"v">> => 2},
   {ok, <<"a">>, RevId2} = barrel_peer:put(db(Config), Doc3, []),
   true = (RevId =/= RevId2),
-  Doc4 = Doc3#{<<"_rev">> => RevId2},
-  {ok, Doc4} = barrel_peer:get(db(Config), <<"a">>, []),
-  {ok, <<"a">>, _RevId2} = barrel_peer:delete(db(Config), <<"a">>, RevId2, []),
+  {ok, Doc3,_} = barrel_peer:get(db(Config), <<"a">>, []),
+  {ok, <<"a">>, _} = barrel_peer:delete(db(Config), <<"a">>, [{rev, RevId2}]),
   {error, not_found} = barrel_peer:get(db(Config), <<"a">>, []),
-  {ok, <<"a">>, _RevId3} = barrel_peer:put(db(Config), Doc, []).
+  {ok, <<"a">>, _} = barrel_peer:put(db(Config), Doc, []).
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
@@ -133,32 +132,32 @@ bad_doc(Config) ->
 
 create_doc(Config) ->
   Doc = #{<<"v">> => 1},
-  {ok, DocId, RevId} = barrel_peer:post(db(Config), Doc, []),
-  CreatedDoc = Doc#{ <<"id">> => DocId, <<"_rev">> => RevId},
-  {ok, CreatedDoc} = barrel_peer:get(db(Config), DocId, []),
-  {error, not_found} = barrel_peer:post(db(Config), CreatedDoc, []),
+  {ok, DocId, _RevId} = barrel_peer:post(db(Config), Doc, []),
+  CreatedDoc = Doc#{ <<"id">> => DocId},
+  {ok, CreatedDoc,_ } = barrel_peer:get(db(Config), DocId, []),
+  {error, conflict} = barrel_peer:post(db(Config), CreatedDoc, []),
   Doc2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   {ok, <<"b">>, _RevId2} = barrel_peer:post(db(Config), Doc2, []).
 
 get_revisions(Config) ->
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} = barrel_peer:post(db(Config), Doc, []),
-  {ok, Doc2} = barrel_peer:get(db(Config), DocId, []),
+  {ok, Doc2, _} = barrel_peer:get(db(Config), DocId, []),
   Doc3 = Doc2#{ v => 2},
   {ok, DocId, RevId2} = barrel_peer:put(db(Config), Doc3, []),
-  {ok, Doc4} = barrel_peer:get(db(Config), DocId, [{history, true}]),
+  {ok, Doc4, _} = barrel_peer:get(db(Config), DocId, [{history, true}]),
   Revisions = parse_revisions(Doc4),
   Revisions == [RevId2, RevId].
 
 fold_by_id(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
   Doc2 = #{ <<"id">> => <<"b">>, <<"v">> => 1},
-  {ok, <<"b">>, _RevId2} = barrel_peer:put(db(Config), Doc2, []),
+  {ok, <<"b">>, _RevId2} = barrel_peer:post(db(Config), Doc2, []),
   Doc3 = #{ <<"id">> => <<"c">>, <<"v">> => 1},
-  {ok, <<"c">>, _RevId3} = barrel_peer:put(db(Config), Doc3, []),
+  {ok, <<"c">>, _RevId3} = barrel_peer:post(db(Config), Doc3, []),
   Fun = fun
-          (#{ <<"id">> := DocId}, Acc1) ->
+          (#{ <<"id">> := DocId},_Meta, Acc1) ->
             {ok, [DocId | Acc1]}
         end,
   {ok, Acc} = barrel_peer:fold_by_id(db(Config), Fun, [], []),
@@ -191,9 +190,9 @@ order_by_key(Config) ->
     <<"creationDate">> => 1431620472,
     <<"isRegistered">> => true
   },
-  {ok, <<"AndersenFamily">>, _Rev} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"AndersenFamily">>, _Rev} = barrel_peer:post(db(Config), Doc, []),
   timer:sleep(400),
-  {ok, Doc1} = barrel_peer:get(db(Config), <<"AndersenFamily">>, []),
+  {ok, Doc1, _} = barrel_peer:get(db(Config), <<"AndersenFamily">>, []),
   Fun = fun(Obj, Acc) -> {ok, [Obj| Acc]} end,
                                            {ok,
     [#{<<"id">> := <<"AndersenFamily">>,
@@ -202,7 +201,7 @@ order_by_key(Config) ->
   #{<<"doc">> := Doc1} = Obj,
   ok.
 
-multiple_put(Config) ->
+multiple_post(Config) ->
   Self = self(),
   Pids  = lists:foldl(
     fun(I, Acc) ->
@@ -210,7 +209,7 @@ multiple_put(Config) ->
       Doc = #{ <<"id">> => DocId, <<"val">> => I},
       Pid = spawn_link(
         fun() ->
-          {ok, DocId, _} = barrel_peer:put(db(Config), Doc, []),
+          {ok, DocId, _} = barrel_peer:post(db(Config), Doc, []),
           Self ! {ok, self()}
         end
       ),
@@ -232,7 +231,7 @@ multiple_get(Config) ->
       Doc = #{ <<"id">> => DocId, <<"val">> => I},
       Pid = spawn_link(
         fun() ->
-          {ok, DocId, _} = barrel_peer:put(db(Config), Doc, []),
+          {ok, DocId, _} = barrel_peer:post(db(Config), Doc, []),
           Self ! {ok, self()}
         end
       ),
@@ -248,7 +247,7 @@ multiple_get(Config) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
       Pid = spawn_link(
         fun() ->
-          {ok, #{ <<"id">> := DocId }} = barrel_peer:get(db(Config), DocId, []),
+          {ok, #{ <<"id">> := DocId }, _} = barrel_peer:get(db(Config), DocId, []),
           Self ! {ok, self()}
         end
       ),
@@ -268,7 +267,7 @@ multiple_delete(Config) ->
       Doc = #{ <<"id">> => DocId, <<"val">> => I},
       Pid = spawn_link(
         fun() ->
-          {ok, DocId, _} = barrel_peer:put(db(Config), Doc, []),
+          {ok, DocId, _} = barrel_peer:post(db(Config), Doc, []),
           Self ! {ok, self()}
         end
       ),
@@ -284,8 +283,8 @@ multiple_delete(Config) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
       Pid = spawn_link(
         fun() ->
-          {ok, #{ <<"id">> := DocId, <<"_rev">> := Rev }} = barrel_peer:get(db(Config), DocId, []),
-          {ok, _, _} = barrel_peer:delete(db(Config), DocId, Rev, []),
+          {ok, #{ <<"id">> := DocId}, #{ <<"rev">> := Rev }} = barrel_peer:get(db(Config), DocId, []),
+          {ok, _, _} = barrel_peer:delete(db(Config), DocId, [{rev, Rev}]),
           Self ! {ok, self()}
         end
       ),
@@ -306,16 +305,16 @@ change_since(Config) ->
         end,
   {ok, []} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
   {ok, [<<"aa">>]} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _RevId2} = barrel_peer:put(db(Config), Doc2, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"bb">>, []),
+  {ok, <<"bb">>, _RevId2} = barrel_peer:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"bb">>, []),
   {ok, [<<"bb">>, <<"aa">>]} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   {ok, [<<"bb">>]} = barrel_peer:changes_since(db(Config), 1, Fun, [], []),
   {ok, []} = barrel_peer:changes_since(db(Config), 2, Fun, [], []),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
-  {ok, <<"cc">>, _RevId3} = barrel_peer:put(db(Config), Doc3, []),
+  {ok, <<"cc">>, _RevId3} = barrel_peer:post(db(Config), Doc3, []),
   {ok, [<<"cc">>]} = barrel_peer:changes_since(db(Config), 2, Fun, [], []),
   ok.
 
@@ -327,14 +326,14 @@ change_deleted(Config) ->
         end,
   {ok, []} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
   {ok, [{<<"aa">>, false}]} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, RevId2} = barrel_peer:put(db(Config), Doc2, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"bb">>, []),
+  {ok, <<"bb">>, RevId2} = barrel_peer:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"bb">>, []),
   {ok, [{<<"bb">>, false}, {<<"aa">>, false}]} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   {ok, [{<<"bb">>, false}]} = barrel_peer:changes_since(db(Config), 1, Fun, [], []),
-  {ok, <<"bb">>, _} = barrel_peer:delete(db(Config), <<"bb">>, RevId2, []),
+  {ok, <<"bb">>, _} = barrel_peer:delete(db(Config), <<"bb">>, [{rev, RevId2}]),
   {ok, [{<<"bb">>, true}]} = barrel_peer:changes_since(db(Config), 2, Fun, [], []),
   {ok, [{<<"bb">>, true}, {<<"aa">>, false}]} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
   ok.
@@ -348,8 +347,8 @@ change_since_include_doc(Config) ->
     {ok, [{Seq, maps:get(<<"doc">>, Change)} |Acc]}
   end,
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
-  {ok, Doc1} = barrel_peer:get(db(Config), <<"aa">>, []),
+  {ok, <<"aa">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
+  {ok, Doc1, _Meta} = barrel_peer:get(db(Config), <<"aa">>, []),
   {ok, [Change]} = barrel_peer:changes_since(db(Config), 0, Fun, [], [{<<"include_doc">>, <<"true">>}]),
   {1, Doc1} = Change,
   ok.
@@ -359,31 +358,30 @@ change_since_many(Config) ->
           Seq = maps:get(<<"seq">>, Change),
           {ok, [{Seq, Change}|Acc]}
         end,
-  
+
   %% No changes. Database is empty.
   {ok, []} = barrel_peer:changes_since(db(Config), 0, Fun, [], []),
-  
+
   %% Add 20 docs (doc1 to doc20).
   AddDoc = fun(N) ->
               K = integer_to_binary(N),
               Key = <<"doc", K/binary>>,
               Doc = #{ <<"id">> => Key, <<"v">> => 1},
-    {ok, Key, _RevId} = barrel_peer:put(db(Config), Doc, [])
+    {ok, Key, _RevId} = barrel_peer:post(db(Config), Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
-  
+
   %% Delete doc1
-  {ok, Doc1} = barrel_peer:get(db(Config), <<"doc1">>, []),
-  #{<<"_rev">> := RevId} = Doc1,
-  {ok, <<"doc1">>, _} = barrel_peer:delete(db(Config), <<"doc1">>, RevId, []),
-  
+  {ok, _Doc1, #{<<"rev">> := RevId}} = barrel_peer:get(db(Config), <<"doc1">>, []),
+  {ok, <<"doc1">>, _} = barrel_peer:delete(db(Config), <<"doc1">>, [{rev, RevId}]),
+
   %% 20 changes (for doc1 to doc20)
   {ok, All} = barrel_peer:changes_since(db(Config), 0, Fun, [], [{history, all}]),
   20 = length(All),
   %% History for doc1 includes creation and deletion
   {21, #{<<"changes">> := HistoryDoc1}} = hd(All),
   2 = length(HistoryDoc1),
-  
+
   {ok, [{21, #{<<"id">> := <<"doc1">>}},
         {20, #{<<"id">> := <<"doc20">>}},
         {19, #{<<"id">> := <<"doc19">>}}]} = barrel_peer:changes_since(db(Config), 18, Fun, [], []),
@@ -404,14 +402,6 @@ wait_pids(Pids) ->
 
 %% from barrel_doc in barrel_commons
 
-parse_revision(<<"">>) -> {0, <<"">>};
-parse_revision(Rev) when is_binary(Rev) ->
-  case binary:split(Rev, <<"-">>) of
-    [BinPos, Hash] -> {binary_to_integer(BinPos), Hash};
-    _ -> error(bad_rev)
-  end;
-parse_revision(Rev) when is_list(Rev) -> parse_revision(list_to_binary(Rev));
-parse_revision(Rev) -> error({bad_rev, Rev}).
 
 parse_revisions(#{ <<"_revisions">> := Revisions}) ->
   case Revisions of
@@ -427,17 +417,3 @@ parse_revisions(#{ <<"_revisions">> := Revisions}) ->
 parse_revisions(#{<<"_rev">> := Rev}) -> [Rev];
 parse_revisions(_) -> [].
 
-revid(Pos, Parent, Body0) ->
-  Ctx0 = crypto:hash_init(md5),
-  Body = maps:filter(fun
-                       (<<"">>, _) -> false;
-                       (<<"_deleted">> , _) -> true;
-                       (<<"_", _/binary>>, _) -> false;
-                       (_, _) -> true
-                     end, Body0),
-  BinPos = integer_to_binary(Pos),
-  Ctx2 = lists:foldl(fun(V, C) ->
-    crypto:hash_update(C, V)
-                     end, Ctx0, [BinPos, Parent, term_to_binary(Body)]),
-  Digest = crypto:hash_final(Ctx2),
-  << BinPos/binary, "-", (barrel_httpc_lib:to_hex(Digest))/binary >>.

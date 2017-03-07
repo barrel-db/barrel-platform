@@ -18,7 +18,7 @@
 
 
 -define(DB_URL,<<"http://localhost:7080/dbs/testdb">>).
-
+-define(DB_URL2,<<"http://localhost:7080/dbs/source">>).
 -export([
   collect_change/1,
   collect_changes/1,
@@ -43,20 +43,25 @@ all() ->
   ].
 
 init_per_suite(Config) ->
+  {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel_store),
   {ok, _} = application:ensure_all_started(barrel_peer),
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_peer:create_database(?DB_URL),
+  ok = barrel_peer:create_database(?DB_URL),
+  ok = barrel_peer:create_database(?DB_URL2),
   {ok, Conn} = barrel_peer:connect(?DB_URL),
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
   _ = barrel_peer:delete_database(?DB_URL),
+  _ = barrel_peer:delete_database(?DB_URL2),
   ok.
 
 end_per_suite(Config) ->
   Config.
+
 
 db(Config) -> proplists:get_value(db, Config).
 
@@ -64,7 +69,7 @@ collect_change(Config) ->
   {ok, Pid} = barrel_peer_changes:start_listener(db(Config), #{since => 0, mode => sse}),
   [] = barrel_peer_changes:fetch_changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_peer_changes:fetch_changes(Pid),
   [] = barrel_peer_changes:fetch_changes(Pid),
@@ -74,22 +79,22 @@ collect_changes(Config) ->
   {ok, Pid} = barrel_peer_changes:start_listener(db(Config), #{since => 0, mode => sse}),
   [] = barrel_peer_changes:fetch_changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _} = barrel_peer:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_peer_changes:fetch_changes(Pid),
   [] = barrel_peer_changes:fetch_changes(Pid),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _} = barrel_peer:put(db(Config), Doc2, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"bb">>, []),
+  {ok, <<"bb">>, _} = barrel_peer:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"bb">>, []),
   timer:sleep(100),
   [#{ <<"seq">> := 2, <<"id">> := <<"bb">>}] = barrel_peer_changes:fetch_changes(Pid),
   [] = barrel_peer_changes:fetch_changes(Pid),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
   Doc4 = #{ <<"id">> => <<"dd">>, <<"v">> => 1},
-  {ok, <<"cc">>, _} = barrel_peer:put(db(Config), Doc3, []),
-  {ok, <<"dd">>, _} = barrel_peer:put(db(Config), Doc4, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"cc">>, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"dd">>, []),
+  {ok, <<"cc">>, _} = barrel_peer:post(db(Config), Doc3, []),
+  {ok, <<"dd">>, _} = barrel_peer:post(db(Config), Doc4, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"cc">>, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"dd">>, []),
   timer:sleep(100),
   [
     #{ <<"seq">> := 3, <<"id">> := <<"cc">>},
@@ -109,10 +114,10 @@ changes_feed_callback(Config) ->
   
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"aa">>, _} = barrel_peer:put(db(Config), Doc1, []),
-  {ok, <<"bb">>, _} = barrel_peer:put(db(Config), Doc2, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"aa">>, []),
-  {ok, _} = barrel_peer:get(db(Config), <<"bb">>, []),
+  {ok, <<"aa">>, _} = barrel_peer:post(db(Config), Doc1, []),
+  {ok, <<"bb">>, _} = barrel_peer:post(db(Config), Doc2, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"aa">>, []),
+  {ok, _, _} = barrel_peer:get(db(Config), <<"bb">>, []),
   timer:sleep(100),
   [
     #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
@@ -127,7 +132,7 @@ heartbeat_collect_change(Config) ->
   timer:sleep(500),
   [] = barrel_peer_changes:fetch_changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _RevId} = barrel_peer:put(db(Config), Doc, []),
+  {ok, <<"aa">>, _RevId} = barrel_peer:post(db(Config), Doc, []),
   timer:sleep(100),
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_peer_changes:fetch_changes(Pid),
   [] = barrel_peer_changes:fetch_changes(Pid),

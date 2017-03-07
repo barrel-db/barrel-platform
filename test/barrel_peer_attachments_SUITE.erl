@@ -29,17 +29,24 @@
 
 -export([
   attachment_doc/1,
-  binary_attachment/1
+  binary_attachment/1,
+  atomic_attachment/1,
+  atomic_erlang_term_attachment/1
 ]).
 
 all() ->
   [
     attachment_doc,
-    binary_attachment
+    binary_attachment,
+    atomic_attachment,
+    atomic_erlang_term_attachment
   ].
 
 init_per_suite(Config) ->
+  {ok, _} = application:ensure_all_started(barrel_http),
+  {ok, _} = application:ensure_all_started(barrel_store),
   {ok, _} = application:ensure_all_started(barrel_httpc),
+  {ok, _} = application:ensure_all_started(barrel_peer),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -61,41 +68,111 @@ db(Config) -> proplists:get_value(db, Config).
 attachment_doc(Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_peer:put(db(Config) , Doc, []),
+  {ok, <<"a">>, R1} = barrel_peer:post(db(Config) , Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
     <<"content_type">> => <<"image/png">>,
     <<"link">> => <<"http://somehost.com/cat.png">>
   },
-  
-  {ok, DocId, R2} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription, [{rev, R1}]),
-  {ok, AttDescription} = barrel_httpc_attachments:get_attachment(db(Config) , DocId, <<"myattachement">>, []),
-  [AttDescription] = barrel_httpc_attachments:attachments(db(Config) , DocId, []),
-  
+
+  {ok, DocId, R2} = barrel_peer:attach(db(Config) , DocId, AttDescription, [{rev, R1}]),
+  {ok, AttDescription} = barrel_peer:get_attachment(db(Config) , DocId, <<"myattachement">>, []),
+  [AttDescription] = barrel_peer:attachments(db(Config) , DocId, []),
+
   AttDescription2 = AttDescription#{<<"link">> => <<"http://anotherhost.com/panther.png">>},
-  {error, attachment_conflict} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription2, [{rev, R2}]),
-  {ok, DocId, R3} = barrel_httpc_attachments:replace_attachment(db(Config) , DocId, AttId, AttDescription2, [{rev, R2}]),
-  [AttDescription2] = barrel_httpc_attachments:attachments(db(Config) , DocId, []),
-  {ok, DocId, _} = barrel_httpc_attachments:delete_attachment(db(Config) , DocId, AttId, [{rev, R3}]),
-  [] = barrel_httpc_attachments:attachments(db(Config) , DocId, []),
+  {error, attachment_conflict} = barrel_peer:attach(db(Config) , DocId, AttDescription2, [{rev, R2}]),
+  {ok, DocId, R3} = barrel_peer:replace_attachment(db(Config) , DocId, AttId, AttDescription2, [{rev, R2}]),
+  [AttDescription2] = barrel_peer:attachments(db(Config) , DocId, []),
+  {ok, DocId, _} = barrel_peer:delete_attachment(db(Config) , DocId, AttId, [{rev, R3}]),
+  [] = barrel_peer:attachments(db(Config) , DocId, []),
   ok.
 
 binary_attachment(Config) ->
   DocId = <<"a">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, <<"a">>, R1} = barrel_peer:put(db(Config) , Doc, []),
+  {ok, <<"a">>, R1} = barrel_peer:post(db(Config) , Doc, []),
   AttId = <<"myattachement">>,
   AttDescription = #{
     <<"id">> => AttId,
     <<"content_type">> => <<"image/png">>
   },
   Blob = <<"blobdata">>,
-  
-  {ok, DocId, R2} = barrel_httpc_attachments:attach(db(Config) , DocId, AttDescription, Blob, [{rev, R1}]),
-  {ok, Blob} = barrel_httpc_attachments:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R2}]),
-  
+
+  {ok, DocId, R2} = barrel_peer:attach(db(Config) , DocId, AttDescription, Blob, [{rev, R1}]),
+  {ok, Blob} = barrel_peer:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R2}]),
+
   Blob2 = <<"anotherblobdata">>,
-  {ok, DocId, R3} = barrel_httpc_attachments:replace_attachment_binary(db(Config) , DocId, AttId, Blob2, [{rev, R2}]),
-  {ok, Blob2} = barrel_httpc_attachments:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R3}]),
+  {ok, DocId, R3} = barrel_peer:replace_attachment_binary(db(Config) , DocId, AttId, Blob2, [{rev, R2}]),
+  {ok, Blob2} = barrel_peer:get_attachment_binary(db(Config) , DocId, AttId, [{rev, R3}]),
+  ok.
+
+atomic_attachment(Config) ->
+  DocId = <<"a">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Blob = <<"blobdata">>,
+  Attachments = [#{<<"id">> => AttId,
+                   <<"blob">> => Blob},
+                  #{<<"id">> => <<"2">>, <<"blob">> => <<"2">>}],
+
+  %% store a document with attachments
+  {ok, <<"a">>, R1} = barrel_peer:post(db(Config), Doc, Attachments, []),
+
+  %% get does not return attachments by defautl
+  {ok, Doc, #{<<"rev">> := R1}} = barrel_peer:get(db(Config), DocId, []),
+
+  %% ask get to retrive the attachments with options {attachments, all}
+  {ok, Doc, [A1,A2], _} = barrel_peer:get(db(Config), DocId,
+                                        [{attachments, all}]),
+  #{<<"id">> := AttId,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 8,
+    <<"blob">> := Blob} = A1,
+  #{<<"id">> := <<"2">>,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 1,
+    <<"blob">> := <<"2">>} = A2,
+
+  %% update the attachments
+  Attachments2 = [#{<<"id">> => AttId,
+                    <<"blob">> => Blob},
+                  #{<<"id">> => <<"2">>, <<"blob">> => <<"3">>}],
+  {ok, <<"a">>, _R2} = barrel_peer:put(db(Config), Doc, Attachments2, []),
+  {ok, Doc, [A1,A3], _} = barrel_peer:get(db(Config), DocId,
+                                           [{attachments, all}]),
+  #{<<"id">> := <<"2">>,
+    <<"content-type">> := <<"application/octet-stream">>,
+    <<"content-length">> := 1,
+    <<"blob">> := <<"3">>} = A3,
+
+  %% delete all attachments
+  {ok, <<"a">>, _} = barrel_peer:put(db(Config), Doc, [], []),
+  {ok, Doc, [], _} = barrel_peer:get(db(Config), DocId, [{attachments, all}]),
+  ok.
+
+atomic_erlang_term_attachment(Config) ->
+  DocId = <<"a">>,
+  Doc = #{<<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Term = {atuple, [a, list], #{a => "map", <<"with">> => <<"binary">>}},
+
+  %% bad content type
+  BadContentType = [#{<<"id">> => AttId,
+                      <<"content-type">> => <<"application/erlang">>,
+                      <<"blob">> => <<"somebinary">>}],
+  {error, {erlang_term_expected, AttId}} = barrel_peer:post(db(Config), Doc, BadContentType, []),
+
+  %% content-type not given for erlang term
+  WithoutContentType = [#{<<"id">> => AttId,
+                          <<"blob">> => Term}],
+  {ok, <<"a">>, _} = barrel_peer:post(db(Config), Doc, WithoutContentType, []),
+
+  %% retrieve decoded attachment
+  {ok, Doc, [A], _} = barrel_peer:get(db(Config), DocId,
+                                       [{attachments, all}]),
+  #{<<"id">> := AttId,
+    <<"content-type">> := <<"application/erlang">>,
+    <<"content-length">> := 64,
+    <<"blob">> := Term} = A,
   ok.
