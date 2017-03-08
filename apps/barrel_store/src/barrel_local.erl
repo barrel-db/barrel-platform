@@ -173,12 +173,11 @@ get(Db, DocId, Options) ->
 %% @doc retrieve several documents
 -spec multi_get(Db, Fun, AccIn, DocIds, Options) -> [Res] when
     Db::db(),
-    Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+    Fun :: fun((doc(), meta(), any() ) -> Res),
     AccIn :: any(),
     DocIds :: [docid()],
     Options :: read_options(),
-    Doc :: doc(),
-    Res :: [{ok, doc(), meta()} | {error, any()}].
+    Res :: any().
 multi_get(Db, Fun, AccIn, DocIds, Options) ->
   barrel_db:multi_get(Db, Fun, AccIn, DocIds, Options).
 

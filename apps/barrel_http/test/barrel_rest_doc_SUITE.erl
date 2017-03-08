@@ -144,12 +144,8 @@ accept_get_with_id_match(_Config) ->
                                 {<<"x-barrel-id-match">>, <<"e,f, g">>}],
                     route => "/dbs/testdb/docs"}),
 
-  #{<<"docs">> := [D1,D2,D3,D4|_],
-    <<"count">> := 6} = J,
-  #{<<"id">> := <<"a">>} = D1,
-  #{<<"id">> := <<"b">>} = D2,
-  #{<<"id">> := <<"c">>} = D3,
-  #{<<"id">> := <<"e">>} = D4,
+  #{<<"docs">> := Rows, <<"count">> := 6} = J,
+  Docs =:= [Doc || #{ <<"doc">> := Doc } <- Rows],
   ok.
 
 accept_post(_Config) ->

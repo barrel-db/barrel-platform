@@ -127,7 +127,7 @@ multi_get(_Config) ->
 
   %% a fun to parse the results
   %% the parameter is the same format as the regular get function output
-  Fun=fun({ok, Doc, Meta}, Acc) ->
+  Fun=fun(Doc, Meta, Acc) ->
           #{<<"id">> := DocId} = Doc,
           #{<<"rev">> := RevId} = Meta,
           [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]

@@ -35,7 +35,7 @@ get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
     fun (Doc, Meta, {N, Pre}) ->
-        DocWithMeta = Doc#{<<"_meta">> => Meta},
+        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
         Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
@@ -65,11 +65,9 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
-    fun ({ok, Doc, Meta}, {N, Pre}) ->
-        #{<<"id">> := DocId} = Doc,
-        #{<<"rev">> := RevId} = Meta,
-        Reply = #{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc},
-        Chunk = << Pre/binary, (jsx:encode(Reply))/binary >>,
+    fun (Doc, Meta, {N, Pre}) ->
+        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
+        Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {N + 1, <<",">>}
     end,

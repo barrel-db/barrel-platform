@@ -68,12 +68,8 @@ accept_get(_Config) ->
   {200, R2} = test_lib:req(get, "/dbs/testdb/docs"),
   A2 = jsx:decode(R2, [return_maps]),
   Rows2 = maps:get(<<"docs">>, A2),
-  [#{<<"_meta">> := #{<<"rev">> := CatRevId},
-     <<"id">> := <<"cat">>,
-     <<"name">> := <<"tom">>},
-   #{<<"_meta">> := #{<<"rev">> := DogRevId},
-     <<"id">> := <<"dog">>,
-     <<"name">> := <<"dingo">>}] = Rows2,
+  [#{<<"meta">> := #{<<"rev">> := CatRevId}, <<"doc">> := D1},
+   #{<<"meta">> := #{<<"rev">> := DogRevId}, <<"doc">> := D2}] = Rows2,
   ok.
 
 accept_start_key(_Config) ->
