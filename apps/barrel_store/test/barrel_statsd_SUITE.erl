@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_metrics_SUITE).
+-module(barrel_statsd_SUITE).
 -author("Bernard Notarianni").
 
 -behaviour(barrel_stats_plugin).
@@ -36,16 +36,18 @@ all() -> [ plugin
          ].
 
 env() ->
-  [{plugin, ?MODULE}].
+  [{plugin, barrel_stats_statsd},
+   {statsd_server, {{127,0,0,1}, 8888}}].
 
 init_per_suite(Config) ->
+  start_udp_server(8888),
   application:stop(barrel_store),
   ok = application:set_env(barrel_store, metrics, env()),
   {ok, _} = application:ensure_all_started(barrel_store),
   Config.
 
 init_per_testcase(_, Config) ->
-  true = register(test_metric_client, self()),
+  true = register(test_metric_testd, self()),
   {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
   [{db, <<"testdb">>} | Config].
 
@@ -66,18 +68,14 @@ plugin(_Config) ->
   barrel_metrics:increment(Name),
 
   Msgs = collect_messages(2),
-  ExpectedEnv = env(),
-  [ {plugin, init, {counter, Name}, ExpectedEnv},
-    {plugin, increment, Name, ExpectedEnv} ] = Msgs,
+  [ {plugin, init, {counter, Name}},
+    {plugin, increment, Name} ] = Msgs,
   ok.
 
 measures(_Config) ->
   {ok, _, _} = barrel_local:post(<<"testdb">>, #{<<"v">> => 42}, []),
   Msgs = collect_messages(1),
-  ExpectedEnv = env(),
-  [{plugin, increment
-   , [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]
-   , ExpectedEnv}] = Msgs,
+  [{plugin, increment, [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]} ] = Msgs,
   ok.
 
 collect_messages(N) ->
@@ -97,13 +95,50 @@ collect_messages(N, Acc) ->
 %% plugin callbacks
 %% =============================================================================
 
-init(Type, Name, Env) ->
-  Pid = whereis(test_metric_client),
-  Pid ! {plugin, init, {Type, Name}, Env},
+init(Type, Name, _Env) ->
+  Pid = whereis(test_metric_testd),
+  Pid ! {plugin, init, {Type, Name}},
   ok.
 
-increment(Name, Env) ->
-  Pid = whereis(test_metric_client),
-  Pid ! {plugin, increment, Name, Env},
+increment(Name, _Env) ->
+  Pid = whereis(test_metric_testd),
+  Pid ! {plugin, increment, Name},
   ok.
+
+%% =============================================================================
+%% Statsd UDP server
+%% Collecting internal metrics from a barrel node
+%% =============================================================================
+
+start_udp_server(Port) ->
+  Parent = self(),
+  spawn_link(fun() -> server(Parent, Port) end),
+  ok.
+
+server(Parent, Port) ->
+  {ok, Socket} = gen_udp:open(Port, [binary, {active, false}]),
+  lager:info("statsd udp server opened socket:~p~n",[Socket]),
+  loop(Parent, Socket).
+
+loop(Parent, Socket) ->
+  inet:setopts(Socket, [{active, once}]),
+  ct:print("loop ~p", [Socket]),
+  receive
+    {udp, Socket, _Host, _Port, Bin} ->
+      ct:print("msg=~p",[Bin]),
+      Msg = parse_statsd(Bin),
+      Parent ! {statsd_message, Msg},
+      loop(Parent, Socket);
+    Other ->
+      ct:print("other=~p",[Other]),
+      ct:fail("unexpected message=~p",[Other])
+  end.
+
+parse_statsd(Bin) ->
+  [_Bhost, R1] = binary:split(Bin, <<".">>),
+  [Bkey, R2] = binary:split(R1, <<":">>),
+  [Bval, _] = binary:split(R2, <<"|">>),
+  Key = binary_to_list(Bkey),
+  Val = binary_to_integer(Bval),
+  {{Key, gauge}, Val}.
 

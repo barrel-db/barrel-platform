@@ -62,7 +62,6 @@ init([]) ->
       ?sup(barrel_db_sup)
     , Store
     , ?sup(barrel_event)
-    , ?sup(barrel_metrics)
     , ?sup(barrel_task_status)
   ],
 

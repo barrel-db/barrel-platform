@@ -2,8 +2,12 @@
 
 -type metric_type() :: counter | gauge.
 -type metric_name() :: [ any() ].
--export_type([metric_name/0]).
+-type metric_env() :: [ any() ].
 
--callback init(Type :: metric_type(), Name :: metric_name()) -> ok.
+-export_type([ metric_type/0
+             , metric_name/0
+             , metric_env/0]).
 
--callback increment( Name :: metric_name() ) -> ok.
+-callback init(Type :: metric_type(), Name :: metric_name(), Env :: metric_env()) -> ok.
+
+-callback increment( Name :: metric_name(), Env :: metric_env() ) -> ok.
