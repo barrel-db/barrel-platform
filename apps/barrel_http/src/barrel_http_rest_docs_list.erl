@@ -75,7 +75,7 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
     end,
   AccIn = {0, <<"">>},
   Options = [],
-  {Count, _} = barrel_local:mget(Database, Fun, AccIn, DocIds, Options),
+  {Count, _} = barrel_local:multi_get(Database, Fun, AccIn, DocIds, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(

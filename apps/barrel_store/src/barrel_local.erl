@@ -21,7 +21,7 @@
   put/3,
   put_rev/5,
   get/3,
-  mget/5,
+  multi_get/5,
   delete/3,
   post/3,
   fold_by_id/4,
@@ -171,7 +171,7 @@ get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
--spec mget(Db, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Db, Fun, AccIn, DocIds, Options) -> [Res] when
     Db::db(),
     Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
     AccIn :: any(),
@@ -179,8 +179,8 @@ get(Db, DocId, Options) ->
     Options :: read_options(),
     Doc :: doc(),
     Res :: any().
-mget(Db, Fun, AccIn, DocIds, Options) ->
-  barrel_db:mget(Db, Fun, AccIn, DocIds, Options).
+multi_get(Db, Fun, AccIn, DocIds, Options) ->
+  barrel_db:multi_get(Db, Fun, AccIn, DocIds, Options).
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
@@ -274,7 +274,7 @@ fold_by_id(Db, Fun, Acc, Options) ->
   Db::db(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
 changes_since(Db, Since, Fun, Acc) ->

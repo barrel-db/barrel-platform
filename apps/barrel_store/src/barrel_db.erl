@@ -22,7 +22,7 @@
   create_doc/3,
   update_doc/3,
   get/3,
-  mget/5,
+  multi_get/5,
   get_doc_info/3,
   get_doc_info_int/3,
   fold_by_id/4,
@@ -89,7 +89,7 @@ infos(DbName) ->
     end
   ).
 
-mget(DbName, Fun, AccIn, DocIds, Options) ->
+multi_get(DbName, Fun, AccIn, DocIds, Options) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, not_found};
     Db ->

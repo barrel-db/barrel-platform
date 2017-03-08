@@ -134,7 +134,7 @@ multi_get(_Config) ->
       end,
 
   %% let's process it
-  Results = barrel_local:mget(<<"testdb">>, Fun, [], Mget, []),
+  Results = barrel_local:multi_get(<<"testdb">>, Fun, [], Mget, []),
 
   %% check results
   [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1},
