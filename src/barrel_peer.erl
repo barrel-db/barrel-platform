@@ -58,10 +58,10 @@ deleted => boolean()
 
 -type write_options() :: list().
 
--type db_infos() :: #{}.
+-type db_infos() :: map().
 
--type doc() :: #{}.
--type meta() :: #{}.
+-type doc() :: map().
+-type meta() :: map().
 
 -type read_options() :: [read_option()].
 
