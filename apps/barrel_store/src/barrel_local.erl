@@ -178,7 +178,7 @@ get(Db, DocId, Options) ->
     DocIds :: [docid()],
     Options :: read_options(),
     Doc :: doc(),
-    Res :: any().
+    Res :: [{ok, doc(), meta()} | {error, any()}].
 multi_get(Db, Fun, AccIn, DocIds, Options) ->
   barrel_db:multi_get(Db, Fun, AccIn, DocIds, Options).
 
