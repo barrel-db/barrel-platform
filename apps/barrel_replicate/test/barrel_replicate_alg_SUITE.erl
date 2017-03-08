@@ -81,19 +81,12 @@ one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
 
-  barrel_metrics:reset_counters(),
-  0 = barrel_metrics:get_counter(replication_doc_reads),
-  0 = barrel_metrics:get_counter(replication_doc_writes),
-
   Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
-
-  1 = barrel_metrics:get_counter(replication_doc_reads),
-  1 = barrel_metrics:get_counter(replication_doc_writes),
 
   ok = delete_doc("a", <<"source">>),
   ok = delete_doc("a", <<"testdb">>),

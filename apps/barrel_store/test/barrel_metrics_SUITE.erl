@@ -15,6 +15,8 @@
 -module(barrel_metrics_SUITE).
 -author("Bernard Notarianni").
 
+-behaviour(barrel_stats_plugin).
+
 -export([ all/0
         , init_per_suite/1
         , end_per_suite/1
@@ -22,18 +24,26 @@
         , end_per_testcase/2
         ]).
 
--export([ basic_op/1
-        , hook1/1
+-export([ plugin/1
+        , measures/1
         ]).
 
-all() -> [ basic_op
+
+-export([init/2, increment/1]).
+
+all() -> [ plugin
+         , measures
          ].
 
 init_per_suite(Config) ->
+  application:stop(barrel_store),
+  ok = application:set_env(barrel_store, statsd_server, {{127,0,0,1}, 8888}),
+  ok = application:set_env(barrel_store, metrics_plugin, ?MODULE),
   {ok, _} = application:ensure_all_started(barrel_store),
   Config.
 
 init_per_testcase(_, Config) ->
+  true = register(test_metric_client, self()),
   {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
   [{db, <<"testdb">>} | Config].
 
@@ -48,25 +58,20 @@ end_per_suite(Config) ->
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
-basic_op(_Config) ->
-  register(metrics_plugin, self()),
-  Hooks = [{metrics, [{?MODULE, hook1, 1}]}],
-  ok = hooks:mreg(Hooks),
-  barrel_metrics:reset_counters(),
-  0 = barrel_metrics:get_counter(replication_doc_reads),
-  1 = barrel_metrics:incr_counter(1, replication_doc_reads),
-  1 = barrel_metrics:incr_counter(1, replication_doc_writes),
-  1 = barrel_metrics:get_counter(replication_doc_reads),
-  [Metrics] = collect_messages(1),
-  1 = proplists:get_value(replication_doc_reads, Metrics),
-  1 = proplists:get_value(replication_doc_writes, Metrics),
-  ok = hooks:munreg(Hooks),
+plugin(_Config) ->
+  Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
+  barrel_metrics:init(counter, Name),
+  barrel_metrics:increment(Name),
+
+  Msgs = collect_messages(2),
+  [ {plugin, init, {counter, Name}},
+    {plugin, increment, Name} ] = Msgs,
   ok.
 
-
-hook1(Metric) ->
-  Pid = whereis(metrics_plugin),
-  Pid ! Metric,
+measures(_Config) ->
+  {ok, _, _} = barrel_local:post(<<"testdb">>, #{<<"v">> => 42}, []),
+  Msgs = collect_messages(1),
+  [{plugin, increment, [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]} ] = Msgs,
   ok.
 
 collect_messages(N) ->
@@ -81,3 +86,52 @@ collect_messages(N, Acc) ->
   after 2000 ->
       {error, timeout}
   end.
+
+%% =============================================================================
+%% plugin callbacks
+%% =============================================================================
+
+init(Type, Name) ->
+  Pid = whereis(test_metric_client),
+  Pid ! {plugin, init, {Type, Name}},
+  ok.
+
+increment(Name) ->
+  Pid = whereis(test_metric_client),
+  Pid ! {plugin, increment, Name},
+  ok.
+
+%% =============================================================================
+%% Statsd UDP server
+%% Collecting internal metrics from a barrel node
+%% =============================================================================
+
+start_udp_server(Port) ->
+  Parent = self(),
+  spawn_link(fun() -> server(Parent, Port) end),
+  ok.
+
+server(Parent, Port) ->
+  {ok, Socket} = gen_udp:open(Port, [binary, {active, false}]),
+  lager:info("statsd udp server opened socket:~p~n",[Socket]),
+  loop(Parent, Socket).
+
+loop(Parent, Socket) ->
+  inet:setopts(Socket, [{active, once}]),
+  receive
+    {udp, Socket, _Host, _Port, Bin} ->
+      Msg = parse_statsd(Bin),
+      Parent ! {statsd_message, Msg},
+      loop(Parent, Socket);
+    Other ->
+      ct:fail("unexpected message=~p",[Other])
+  end.
+
+parse_statsd(Bin) ->
+  [_Bhost, R1] = binary:split(Bin, <<".">>),
+  [Bkey, R2] = binary:split(R1, <<":">>),
+  [Bval, _] = binary:split(R2, <<"|">>),
+  Key = binary_to_list(Bkey),
+  Val = binary_to_integer(Bval),
+  {{Key, gauge}, Val}.
+

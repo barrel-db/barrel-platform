@@ -48,11 +48,9 @@ read_doc_with_history(Source, Id, Rev, Metrics) ->
     {Time, {ok, Doc, Meta}} ->
       Metrics2 = barrel_replicate_metrics:inc(docs_read, Metrics, 1),
       Metrics3 = barrel_replicate_metrics:update_times(doc_read_times, Time, Metrics2),
-      barrel_metrics:incr_counter(1, replication_doc_reads),
       {Doc, Meta, Metrics3};
     _ ->
       Metrics2 = barrel_replicate_metrics:inc(doc_read_failures, Metrics, 1),
-      barrel_metrics:incr_counter(1, replication_doc_failures),
       {undefined, undefined, Metrics2}
   end.
 
@@ -64,14 +62,12 @@ write_doc(Target, Doc, History, Deleted, Metrics) ->
     {Time, {ok, _, _}} ->
       Metrics2 = barrel_replicate_metrics:inc(docs_written, Metrics, 1),
       Metrics3 = barrel_replicate_metrics:update_times(doc_write_times, Time, Metrics2),
-      barrel_metrics:incr_counter(1, replication_doc_writes),
       Metrics3;
     {_, Error} ->
       lager:error(
         "replicate write error on dbid=~p for docid=~p: ~w",
         [Target, maps:get(<<"id">>, Doc, undefined), Error]
       ),
-      barrel_metrics:incr_counter(1, replication_doc_write_failures),
       barrel_replicate_metrics:inc(doc_write_failures, Metrics, 1)
   end.
 
