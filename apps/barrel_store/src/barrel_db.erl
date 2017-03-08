@@ -105,9 +105,13 @@ multi_get(DbName, Fun, AccIn, DocIds, Options) ->
                     Res = get_doc1(Db, DocId, Rev,
                                    WithHistory, MaxHistory,
                                    Ancestors, ReadOptions),
-                    Fun(Res, Acc)
+                    case Res of
+                      {ok, Doc, Meta} ->
+                        Fun(Doc, Meta, Acc);
+                      _ -> Acc
+                    end
                 end,
-      %% finally retieve the doc
+      %% finally retrieve the docs
       try
         lists:foldl(GetRevs, AccIn, DocIds)
       after rocksdb:release_snapshot(Snapshot)

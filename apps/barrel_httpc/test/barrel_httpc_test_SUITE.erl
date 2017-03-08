@@ -38,6 +38,7 @@
   create_doc/1,
   get_revisions/1,
   put_rev/1,
+  multi_get/1,
   fold_by_id/1,
   order_by_key/1,
   multiple_post/1,
@@ -61,6 +62,7 @@ all() ->
     create_doc,
     get_revisions,
     put_rev,
+    multi_get,
     fold_by_id,
     order_by_key,
     multiple_post,
@@ -193,6 +195,34 @@ put_rev(Config) ->
   {ok, Doc5, _} = barrel_httpc:get(db(Config), DocId, [{history, true}]),
   Revisions = parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
+
+multi_get(Config) ->
+  %% create some docs
+  Kvs = [{<<"a">>, 1},
+         {<<"b">>, 2},
+         {<<"c">>, 3}],
+  Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
+  [ {ok,_,_} = barrel_httpc:post(db(Config), D, []) || D <- Docs ],
+  
+  %% the "query" to get the id/rev
+  Mget = [ Id || {Id, _} <- Kvs],
+  
+  %% a fun to parse the results
+  %% the parameter is the same format as the regular get function output
+  Fun=fun(Doc, Meta, Acc) ->
+    #{<<"id">> := DocId} = Doc,
+    #{<<"rev">> := RevId} = Meta,
+    
+    [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]
+      end,
+  
+  %% let's process it
+  Results = barrel_httpc:multi_get(db(Config), Fun, [], Mget, []),
+  
+  %% check results
+  [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1}, <<"id">> := <<"a">>,  <<"rev">> := _},
+   #{<<"doc">> := #{<<"id">> := <<"b">>, <<"v">> := 2}},
+   #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = lists:reverse(Results).
 
 revsdiff(Config) ->
   Doc = #{ <<"id">> => <<"revsdiff">>, <<"v">> => 1},

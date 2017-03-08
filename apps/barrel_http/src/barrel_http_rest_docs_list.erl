@@ -65,7 +65,7 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
-    fun ({ok, Doc, Meta}, {N, Pre}) ->
+    fun (Doc, Meta, {N, Pre}) ->
         DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
         Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),

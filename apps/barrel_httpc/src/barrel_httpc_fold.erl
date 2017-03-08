@@ -27,17 +27,16 @@
 
 -define(TIMEOUT, 5000).
 
-fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options0) ->
-  {Method, Body, Options2} = case proplists:get_value(docids, Options0) of
-                               undefined ->
-                                 {<<"GET">>, <<>>, Options0};
-                               Ids ->
-                                 Options1 = proplists:delete(docids, Options0),
-                                 Body1 = jsx:encode( #{ <<"ids">> => Ids } ),
-                                 {<<"POST">>, Body1, Options1}
-                             end,
-  Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, Options2),
-  Headers = [{<<"Content-Type">>, <<"application/json">>}],
+fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options) ->
+  Headers =  case proplists:get_value(docids, Options) of
+               undefined ->
+                 [{<<"Content-Type">>, <<"application/json">>}];
+               Ids when is_list(Ids) ->
+                 [ {<<"Content-Type">>, <<"application/json">>} |
+                    [{<<"x-barrel-id-match">>, Id} || Id <- Ids] ]
+             end,
+
+  Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, proplists:delete(docids, Options)),
   ReqOpts = [{async, once}, {pool, Pool}],
   
   WrapperFun =
@@ -47,7 +46,7 @@ fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options0) ->
       UserFun(Doc, Meta, Acc)
     end,
   
-  case hackney:request(Method, Url, Headers, Body, ReqOpts) of
+  case hackney:request(<<"Get">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
       wait_fold_response(Ref, WrapperFun, AccIn);
     Error ->

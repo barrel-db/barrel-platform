@@ -18,6 +18,7 @@
   database_infos/1,
   connect/1,
   get/3,
+  multi_get/5,
   put/3,
   put/4,
   post/3,
@@ -212,6 +213,20 @@ get(Conn, DocId, Options0) ->
     Error ->
       Error
   end.
+
+%% @doc retrieve several documents
+-spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> [Res] when
+  Conn::conn(),
+  Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+  AccIn :: any(),
+  DocIds :: [docid()],
+  Options :: read_options(),
+  Doc :: doc(),
+  Res :: [{ok, doc(), meta()} | {error, any()}].
+multi_get(Db, UserFun, AccIn, DocIds, Options) ->
+  WrapperFun = fun(Doc, Meta, Acc) -> {ok, UserFun(Doc, Meta, Acc)} end,
+  {ok, Res} = barrel_httpc_fold:fold_by_id(Db, WrapperFun, AccIn, [{docids, DocIds} | Options]),
+  Res.
 
 parse_header(HeadersList) ->
   Headers = hackney_headers_new:from_list(HeadersList),
