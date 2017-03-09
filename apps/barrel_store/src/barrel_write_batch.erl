@@ -27,7 +27,7 @@
 -type batch_op() :: {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
                     {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
                     {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
-                    {post, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
+                    {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
                     map().
 
 -export_type([
