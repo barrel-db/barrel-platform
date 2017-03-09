@@ -26,6 +26,7 @@
   delete/3,
   update_with/4,
   put_rev/5,
+  write_batch/3,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5,
@@ -85,6 +86,31 @@
 
 -type attachment() :: {atom(), any()}.
 
+-type batch_options() :: [
+{async, boolean()}
+].
+
+-type batch_results() :: [
+  {ok, docid(), revid()}
+  | {error, not_found}
+  | {error, {conflict, doc_exists}}
+  | {error, {conflict, revision_conflict}}
+  | {error, any()}
+].
+
+-type batch_op() ::
+  {put, Doc :: barrel_local:doc()} |
+  {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
+  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
+  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()], Rev :: barrel_local:revid()} |
+  {post, Doc :: barrel_local:doc()} |
+  {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
+  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
+  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()], IsUpsert :: boolean()} |
+  {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
+  {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
+  {put_rev, Doc :: barrel_local:doc(), Attachments :: [attachment()], History :: list(), Deleted :: boolean()}.
+
 -export_type([
   conn/0,
   docid/0,
@@ -96,7 +122,10 @@
   fold_options/0,
   revid/0,
   revtree/0,
-  change/0
+  change/0,
+  batch_options/0,
+  batch_results/0,
+  batch_op/0
 ]).
 
 
@@ -525,6 +554,83 @@ put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, Deleted, _Options) ->
     Error -> Error
   end;
 put_rev(_, _, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+%% @doc Apply the specified updates to the database.
+%% Note: The batch is not guaranteed to be atomic, atomicity is only guaranteed at the doc level.
+-spec write_batch(Conn, Updates, Options) -> Results when
+  Conn :: conn(),
+  Updates :: [batch_op()],
+  Options :: batch_options(),
+  Results :: batch_results().
+write_batch(Conn, Updates, Options) ->
+  Async = proplists:get_value(async, Options, false),
+  Headers = [ {<<"Content-Type">>, <<"application/json">>},
+              {<<"x-barrel-write-batch">>, <<"true">>},
+              {<<"x-barrel-async">>, Async }],
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], []),
+  JsonUpdate = [batch_update(Update) || Update <- Updates],
+  Body = jsx:encode(#{ <<"updates">> => JsonUpdate }),
+  case request(Conn, <<"POST">>, Url, Headers, Body) of
+    {ok, Status, _RespHeaders, JsonBody}=Resp ->
+      case lists:member(Status, [200]) of
+        true ->
+          Json = jsx:decode(JsonBody, [return_maps]),
+          case maps:find(<<"results">>, Json) of
+            {ok, Results} ->
+              [ batch_result(Res) || Res <- Results ];
+            error ->
+              ok
+          end;
+        false ->
+          {error, {bad_response, Resp}}
+      end;
+    Error -> Error
+  end.
+
+batch_update({post, Doc}) when is_map(Doc) ->
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc };
+batch_update({post, Doc0, Attachments}) when is_map(Doc0), is_list(Attachments) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc1 };
+batch_update({post, Doc, IsUpsert}) when is_map(Doc), is_boolean(IsUpsert) ->
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc, <<"is_upsert">> => IsUpsert };
+batch_update({post, Doc0, Attachments,  IsUpsert}) when is_map(Doc0), is_list(Attachments), is_boolean(IsUpsert) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc1, <<"is_upsert">> => IsUpsert };
+batch_update({put, Doc}) when is_map(Doc) ->
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc };
+batch_update({put, Doc0, Attachments}) when is_map(Doc0), is_list(Attachments) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc1 };
+batch_update({put, Doc, Rev}) when is_map(Doc), is_binary(Rev) ->
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc, <<"rev">> => Rev };
+batch_update({put, Doc0, Attachments, Rev}) when is_map(Doc0), is_list(Attachments), is_binary(Rev) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc1, <<"rev">> => Rev };
+batch_update({delete, DocId}) when is_binary(DocId) ->
+  #{ <<"op">> => <<"delete">>, <<"id">> => DocId };
+batch_update({delete, DocId, Rev}) when is_binary(DocId), is_binary(Rev) ->
+  #{ <<"op">> => <<"delete">>, <<"id">> => DocId, <<"rev">> => Rev };
+batch_update({put_rev, Doc, History, Deleted}) when is_binary(Doc), is_binary(History), is_boolean(Deleted) ->
+  #{ <<"op">> => <<"put_rev">>, <<"doc">> => Doc, <<"history">> => History, <<"deleted">> => Deleted };
+batch_update(
+  {put_rev, Doc0, Attachments, History, Deleted}
+) when is_binary(Doc0), is_list(Attachments), is_binary(History), is_boolean(Deleted) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put_rev">>, <<"doc">> => Doc1, <<"history">> => History, <<"deleted">> => Deleted };
+batch_update(_) ->
+  erlang:error(badarg).
+
+batch_result(#{ <<"status">> := <<"ok">>, <<"id">> := DocId, <<"rev">> := Rev }) ->
+  {ok, DocId, Rev};
+batch_result(#{ <<"status">> := <<"error">>, <<"reason">> := <<"not found">> }) ->
+  {error, not_found};
+batch_result(#{ <<"status">> := <<"error">>, <<"reason">> := Other }) ->
+  {error, Other};
+batch_result(#{ <<"status">> := <<"conflict">>, <<"reason">> := <<"doc exists">> }) ->
+  {error, {conflict, doc_exists}};
+batch_result(#{ <<"status">> := <<"conflict">>, <<"reason">> := <<"revision conflict">> }) ->
+  {error, {conflict, revision_conflict}}.
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when

@@ -75,7 +75,6 @@ changes_since(#{pool := Pool}= Conn, Since, Fun, AccIn, Options) ->
   ReqOpts = [{async, once}, {pool, Pool}],
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
-      error_logger:info_msg("wait resp on ~p~n", [Url]),
       wait_fold_response(Ref, Fun, AccIn);
     Error ->
       Error

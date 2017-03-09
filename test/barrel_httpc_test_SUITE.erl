@@ -39,6 +39,8 @@
   get_revisions/1,
   put_rev/1,
   multi_get/1,
+  write_batch/1,
+  write_batch_with_attachment/1,
   fold_by_id/1,
   order_by_key/1,
   multiple_post/1,
@@ -63,6 +65,8 @@ all() ->
     get_revisions,
     put_rev,
     multi_get,
+    write_batch,
+    write_batch_with_attachment,
     fold_by_id,
     order_by_key,
     multiple_post,
@@ -231,6 +235,68 @@ revsdiff(Config) ->
   {ok, <<"revsdiff">>, _RevId2} = barrel_httpc:put(db(Config), Doc2, [{rev, RevId}]),
   {ok, [<<"1-missing">>], []} = barrel_httpc:revsdiff(db(Config), <<"revsdiff">>, [<<"1-missing">>]),
   ok.
+
+write_batch(Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
+  D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
+  {ok, _, Rev1_1} = barrel_httpc:post(db(Config), D1, []),
+  {ok, _, Rev3_1} = barrel_httpc:post(db(Config), D3, []),
+  OPs =  [
+    { put, D1#{ <<"v">> => 2 }, Rev1_1},
+    { post, D2, false},
+    { delete, <<"c">>, Rev3_1},
+    { put, D4, <<>>}
+  ],
+  
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"c">>, []),
+  
+  Results = barrel_httpc:write_batch(db(Config), OPs, []),
+  true = is_list(Results),
+  
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _},
+    {ok, <<"c">>, _},
+    {error, not_found} ] = Results,
+  
+  {ok, #{ <<"v">> := 2}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"b">>, []),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"c">>, []).
+
+write_batch_with_attachment(Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  Att1 = #{ <<"id">> => <<"att_a">>, <<"blob">> => <<"hello a">>},
+  Att2 = #{ <<"id">> => <<"att_b">>, <<"blob">> => <<"hello b">>},
+  
+  %% store d1 and check db state
+  {ok, _, Rev1_1} = barrel_httpc:post(db(Config), D1, []),
+  {ok, D1, [], _} = barrel_httpc:get(db(Config), <<"a">>, [{attachments, all}]),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
+  
+  %% write batch
+  OPs = [
+    {put, D1, [Att1], Rev1_1},
+    {post, D2, [Att2]}
+  ],
+  
+  Results = barrel_httpc:write_batch(db(Config), OPs, []),
+  true = is_list(Results),
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _} ] = Results,
+  
+  
+  {ok, D1,
+   [#{<<"id">> := <<"att_a">>,
+      <<"blob">> := <<"hello a">>}], _} = barrel_httpc:get(db(Config), <<"a">>,  [{attachments,  all}]),
+  {ok, D2,
+    [#{<<"id">> := <<"att_b">>,
+       <<"blob">> := <<"hello b">>}], _} = barrel_httpc:get(db(Config), <<"b">>,  [{attachments,  all}]).
 
 fold_by_id(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
