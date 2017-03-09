@@ -32,7 +32,8 @@
   attachment_doc/1,
   binary_attachment/1,
   atomic_attachment/1,
-  atomic_erlang_term_attachment/1
+  atomic_erlang_term_attachment/1,
+  attachment_parsing/1
 ]).
 
 all() ->
@@ -40,7 +41,8 @@ all() ->
    attachment_doc,
    binary_attachment,
    atomic_attachment,
-   atomic_erlang_term_attachment
+   atomic_erlang_term_attachment,
+   attachment_parsing
   ].
 
 init_per_suite(Config) ->
@@ -186,4 +188,23 @@ atomic_erlang_term_attachment(Config) ->
     <<"content-type">> := <<"application/erlang">>,
     <<"content-length">> := 64,
     <<"blob">> := Term} = A,
+  ok.
+
+attachment_parsing(Config) ->
+  DocId = <<"a">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Blob = <<"blobdata">>,
+  Attachments = [#{<<"id">> => AttId,
+                   <<"blob">> => Blob}],
+
+  {ok, <<"a">>, R1} = barrel_httpc:post(db(Config), Doc, Attachments, []),
+
+  {ok, Doc, #{<<"rev">> := R1}} = barrel_httpc:get(db(Config), DocId, []),
+  {ok, NoParsing, #{<<"rev">> := R1}} =
+    barrel_httpc:get(db(Config), DocId, [{attachments_parsing, false}]),
+  #{<<"_attachments">> := EncodedAttachments,
+    <<"id">> := DocId,
+    <<"v">> := 1} = NoParsing,
+  [#{<<"id">> := AttId}] = EncodedAttachments,
   ok.
