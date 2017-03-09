@@ -45,6 +45,8 @@
   revsdiff/1,
   get_revisions/1,
   put_rev/1,
+  write_batch/1,
+  write_json_batch/1,
   change_deleted/1,
   resource_id/1
 ]).
@@ -69,6 +71,8 @@ all() ->
     change_since_include_doc,
     revsdiff,
     put_rev,
+    write_batch,
+    write_json_batch,
     change_deleted,
     resource_id
   ].
@@ -239,6 +243,67 @@ put_rev(_Config) ->
   
   Revisions = barrel_doc:parse_revisions(Meta).
 
+write_batch(_Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
+  D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
+  {ok, _, Rev1_1} = barrel_local:post(<<"testdb">>, D1, []),
+  {ok, _, Rev3_1} = barrel_local:post(<<"testdb">>, D3, []),
+  OPs =  [
+    { put, D1#{ <<"v">> => 2 }, Rev1_1},
+    { post, D2, false},
+    { delete, <<"c">>, Rev3_1},
+    { put, D4, <<>>}
+  ],
+  
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"c">>, []),
+  
+  Results = barrel_local:write_batch(<<"testdb">>, OPs, []),
+  true = is_list(Results),
+  
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _},
+    {ok, <<"c">>, _},
+    {error, not_found} ] = Results,
+  
+  {ok, #{ <<"v">> := 2}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"c">>, []).
+
+write_json_batch(_Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
+  D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
+  {ok, _, Rev1_1} = barrel_local:post(<<"testdb">>, D1, []),
+  {ok, _, Rev3_1} = barrel_local:post(<<"testdb">>, D3, []),
+  JsonOPs =  [
+    #{ <<"op">> => <<"put">>, <<"doc">> => D1#{ <<"v">> => 2 }, <<"rev">> => Rev1_1},
+    #{ <<"op">> => <<"post">>, <<"doc">> => D2},
+    #{ <<"op">> => <<"delete">>, <<"id">> => <<"c">>, <<"rev">> => Rev3_1},
+    #{ <<"op">> => <<"put">>, <<"doc">> => D4}
+  ],
+  
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"c">>, []),
+  
+  Results = barrel_local:write_batch(<<"testdb">>, JsonOPs, []),
+  true = is_list(Results),
+
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _},
+    {ok, <<"c">>, _},
+    {error, not_found} ] = Results,
+  
+  {ok, #{ <<"v">> := 2}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"c">>, []).
 
 
 fold_by_id(_Config) ->

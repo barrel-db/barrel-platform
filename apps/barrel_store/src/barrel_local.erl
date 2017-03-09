@@ -27,7 +27,8 @@
   fold_by_id/4,
   changes_since/4,
   changes_since/5,
-  revsdiff/3
+  revsdiff/3,
+  write_batch/3
 ]).
 
 -export([
@@ -121,6 +122,18 @@
   revtree => revtree(),
   doc => doc()
 }.
+
+-type batch_options() :: [
+  {async, boolean()}
+].
+
+-type batch_results() :: [
+  {ok, docid(), revid()}
+  | {error, not_found}
+  | {error, {conflict, doc_exists}}
+  | {error, {conflict, revision_conflict}}
+  | {error, any()}
+].
 
 
 -export_type([
@@ -244,6 +257,21 @@ update_doc(Db, Batch) ->
     [Res] -> Res
   end.
 
+
+-spec write_batch(Db, Updates, Options) -> Results when
+  Db :: db(),
+  Updates :: [barrel_write_batch:batch_op()],
+  Options :: batch_options(),
+  Results :: batch_results().
+write_batch(Db, Updates, Options) when is_list(Options) ->
+  Async = proplists:get_value(async, Options, false),
+  Batch = barrel_write_batch:from_list(Updates, Async),
+  barrel_db:update_docs(Db, Batch);
+write_batch(_, _, _) -> erlang:error(badarg).
+
+
+
+
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
   Db::db(),
@@ -351,8 +379,3 @@ replication_info(Name) ->
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
-
-
-%% internal
-validate_docid(#{ <<"id">> := _DocId }) -> ok;
-validate_docid(_) -> erlang:error({bad_doc, invalid_docid}).

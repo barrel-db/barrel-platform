@@ -105,61 +105,25 @@ handle_write_batch(Req, State) ->
 
   end.
 
-do_write_batch(Json, Req, State) ->
+do_write_batch(Json, Req, #state{database=Db}=State) ->
   Async = case Req of
             #{ headers := #{ <<"x-barrel-async">> := << "true">> }} -> true;
             _ -> false
           end,
   
-  Ops = maps:get(<<"updates">>, Json),
-  InitBatch = barrel_write_batch:new(Async),
-  update_docs(Ops, InitBatch, Req, State).
-
-
-update_docs([Op | Rest], Batch, Req, State) ->
-  case parse_op(Op) of
-    {put, Obj, Rev} ->
-      Batch2 = barrel_write_batch:put(Obj, Rev, Batch),
-      update_docs(Rest, Batch2, Req, State);
-    {post, Obj, IsUpsert} ->
-      Batch2 = barrel_write_batch:post(Obj, IsUpsert, Batch),
-      update_docs(Rest, Batch2, Req, State);
-    {delete, Id, Rev} ->
-      Batch2 = barrel_write_batch:delete(Id, Rev, Batch),
-      update_docs(Rest, Batch2, Req, State);
-    {put_rev, Obj, History, Deleted} ->
-      Batch2 = barrel_write_batch:put_rev(Obj, History, Deleted, Batch),
-      update_docs(Rest, Batch2, Req, State);
-    error ->
-      barrel_http_reply:error(400, <<"invalid batch">>, Req, State)
-  end;
-update_docs([], Batch, Req, #state{database=Db}=State) ->
-  lager:info("batch is ~p~n", [Batch]),
-  case barrel_db:update_docs(Db, Batch) of
+  OPs = maps:get(<<"updates">>, Json),
+  try  barrel_local:write_batch(Db, OPs, [{async, Async}]) of
     ok ->
       barrel_http_reply:json(200, #{ <<"ok">> => true }, Req, State);
     Results ->
       JsonResults = [ batch_result(Result) || Result <- Results ],
       JsonResp = #{ <<"ok">> => true, <<"results">> =>  JsonResults },
-      lager:info("results is ~p~n", [JsonResults]),
-      
       barrel_http_reply:json(200, JsonResp, Req, State)
+  catch
+    error:badarg ->
+      barrel_http_reply:error(400, <<"invalid batch">>, Req, State)
   end.
 
-parse_op(#{ <<"op">> := <<"put">>, <<"doc">> := Doc} = OP) ->
-  Rev = maps:get(<<"rev">>, OP, <<>>),
-  {put, Doc, Rev};
-parse_op(#{ <<"op">> := <<"post">>, <<"doc">> := Doc} = OP) ->
-  IsUpsert = maps:get(<<"is_upsert">>, OP, false),
-  {post, Doc, IsUpsert};
-parse_op(#{ <<"op">> := <<"delete">>, <<"id">> := DocId} = OP) ->
-  Rev = maps:get(<<"rev">>, OP, <<>>),
-  {delete, DocId, Rev};
-parse_op(#{ <<"op">> := <<"put_rev">>, <<"doc">> := Doc, <<"history">> := History} = OP) ->
-  Deleted = maps:get(<<"deleted">>, OP, false),
-  {put_rev, Doc, History, Deleted};
-parse_op(_) ->
-  error.
 
 batch_result({ok, Id, Rev}) ->
   #{ <<"status">> => <<"ok">>, <<"id">> => Id, <<"rev">> => Rev};
