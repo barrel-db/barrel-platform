@@ -124,6 +124,11 @@ parse_header_match_id([DocId|Tail], Acc) ->
 
 route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
   barrel_http_rest_docs_list:get_resource(Database, Req, State);
+route_all_docs(
+  #{headers := #{<<"x-barrel-write-batch">> := <<"true">>}}=Req,
+  #state{method= <<"POST">>, docid=undefined}=State
+) ->
+  barrel_http_rest_docs_list:handle_write_batch(Req, State);
 route_all_docs(Req, State) ->
   barrel_http_rest_docs_id:handle(Req, State).
 

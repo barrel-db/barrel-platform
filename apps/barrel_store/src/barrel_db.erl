@@ -19,8 +19,6 @@
 %% API
 -export([
   infos/1,
-  create_doc/3,
-  update_doc/3,
   get/3,
   multi_get/5,
   get_doc_info/3,
@@ -34,7 +32,8 @@
   delete_system_doc/2,
   query/5,
   query/6,
-  get_doc1/7
+  get_doc1/7,
+  update_docs/2
 ]).
 
 -export([
@@ -227,46 +226,12 @@ get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
       {error, not_found}
   end.
 
-
-create_doc(DbName, Doc, Options0) ->
-  Options1 = [{create_if_missing, true} | Options0],
-  update_doc(DbName, Doc, Options1).
-
-update_doc(DbName, Doc, Options) ->
-  case update_docs(DbName, [Doc], Options) of
-    ok -> ok;
-    [Res] -> Res
-  end.
-
-prepare_docs(
-  [Doc | Rest], DocBuckets, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx
-) ->
-  Req = {self(), Ref, Idx, Async},
-  Update = {Doc, WithConflict, CreateIfMissing, ErrorIfExists, Req},
-
-  DocBuckets2 = case maps:find(Doc#doc.id, DocBuckets) of
-                  {ok, OldUpdates} -> maps:put(Doc#doc.id,  OldUpdates ++ [Update], DocBuckets);
-                  error -> maps:put(Doc#doc.id,  [Update], DocBuckets)
-                end,
-
-  prepare_docs(Rest, DocBuckets2, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, Idx + 1);
-prepare_docs([], DocBuckets, _, _, _, _, _, Idx) ->
-  {DocBuckets, Idx}.
-
-update_docs(DbName, Docs, Options) ->
+update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, not_found};
     Db = #db{pid=DbPid} ->
-      Async = proplists:get_value(async, Options, false),
-      WithConflict = proplists:get_value(with_conflict, Options, false),
-      CreateIfMissing = proplists:get_value(create_if_missing, Options, false),
-      ErrorIfExists = proplists:get_value(error_if_exists, Options, false),
       
-      Ref = make_ref(),
-      % group docs by docid, in case of duplicates
-      {DocBuckets, N} = prepare_docs(
-        Docs, #{}, Async, WithConflict, CreateIfMissing, ErrorIfExists, Ref, 0
-      ),
+      {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
 
@@ -476,7 +441,6 @@ delete_system_doc(DbName, DocId) ->
       gen_server:call(Pid, {delete, EncKey})
     end
   ).
-
 
 query(DbName, Path, Fun, AccIn, Options) ->
   query(DbName, Path, Fun, AccIn, order_by_key, Options).

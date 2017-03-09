@@ -29,6 +29,7 @@
         , accept_put/1
         , accept_put_with_etag/1
         , accept_delete/1
+        , accept_write_batch/1
         , reject_store_unknown/1
         , reject_unknown_query_parameters/1
         , reject_bad_json/1
@@ -44,6 +45,7 @@ all() -> [ accept_get
          , accept_put
          , accept_put_with_etag
          , accept_delete
+         , accept_write_batch
          , reject_store_unknown
          , reject_unknown_query_parameters
          , reject_bad_json
@@ -241,6 +243,44 @@ accept_delete(_Config) ->
                        headers => [{"etag", RevIdBin2}],
                        route => Url}),
   ok.
+
+accept_write_batch(_Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
+  D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
+  {ok, _, Rev1_1} = barrel_local:post(<<"testdb">>, D1, []),
+  {ok, _, Rev3_1} = barrel_local:post(<<"testdb">>, D3, []),
+  Bulk = #{ <<"updates">> => [
+    #{ <<"op">> => <<"put">>, <<"doc">> => D1#{ <<"v">> => 2 }, <<"rev">> => Rev1_1},
+    #{ <<"op">> => <<"post">>, <<"doc">> => D2},
+    #{ <<"op">> => <<"delete">>, <<"id">> => <<"c">>, <<"rev">> => Rev3_1},
+    #{ <<"op">> => <<"put">>, <<"doc">> => D4}
+  ]},
+  
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"c">>, []),
+  
+  %% make request
+  Url = "/dbs/testdb/docs",
+  #{ code := 200,
+     doc := Resp } = r(#{ method => post,
+                          headers => [{"x-barrel-write-batch", "true"}],
+                          route => Url,
+                          body => Bulk }),
+  
+  #{<<"results">> := [
+    #{ <<"status">> := <<"ok">>, <<"id">> := <<"a">>},
+    #{ <<"status">> := <<"ok">>, <<"id">> := <<"b">>},
+    #{ <<"status">> := <<"ok">>, <<"id">> := <<"c">>},
+    #{ <<"status">> := <<"error">>, <<"reason">> := <<"not found">>}
+  ]} = Resp,
+  
+  {ok, #{ <<"v">> := 2}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"b">>, []),
+  {error, not_found} = barrel_local:get(<<"testdb">>, <<"c">>, []).
 
 reject_store_unknown(_) ->
   Doc = #{<<"name">> => <<"tom">>},
