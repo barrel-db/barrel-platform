@@ -201,13 +201,16 @@ get(Conn, DocId, Options0) ->
   case request(Conn, <<"GET">>, Url, Headers, <<>>) of
     {ok, 200, RespHeaders, JsonBody} ->
       Doc = jsx:decode(JsonBody, [return_maps]),
-      {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
       Meta = parse_header(RespHeaders),
       case WithAttachment of
-        true ->
+        decoded ->
+          {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
           DecodedAttachments = decode_attachments(Attachments),
           {ok, DocWithoutAttachment, DecodedAttachments, Meta};
+        raw ->
+          {ok, Doc, Meta};
         false ->
+          {_, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
           {ok, DocWithoutAttachment, Meta}
       end;
     Error ->
@@ -271,7 +274,9 @@ maybe_with_attachments(Options) ->
 maybe_with_attachments([], WithAttachment, Acc) ->
   {WithAttachment, lists:reverse(Acc)};
 maybe_with_attachments([{attachments, all}|Options],_, Acc) ->
-  maybe_with_attachments(Options, true, Acc);
+  maybe_with_attachments(Options, decoded, Acc);
+maybe_with_attachments([{attachments_parsing, false}|Options],_, Acc) ->
+  maybe_with_attachments(Options, raw, Acc);
 maybe_with_attachments([H|Options], W, Acc) ->
   maybe_with_attachments(Options, W, [H|Acc]).
 
