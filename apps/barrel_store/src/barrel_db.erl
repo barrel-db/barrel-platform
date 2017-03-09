@@ -442,7 +442,6 @@ delete_system_doc(DbName, DocId) ->
     end
   ).
 
-
 query(DbName, Path, Fun, AccIn, Options) ->
   query(DbName, Path, Fun, AccIn, order_by_key, Options).
 
