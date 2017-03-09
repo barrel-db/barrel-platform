@@ -257,7 +257,8 @@ update_doc(Db, Batch) ->
     [Res] -> Res
   end.
 
-
+%% @doc Apply the specified updates to the database.
+%% Note: The batch is not guaranteed to be atomic, atomicity is only guaranteed at the doc level.
 -spec write_batch(Db, Updates, Options) -> Results when
   Db :: db(),
   Updates :: [barrel_write_batch:batch_op()],

@@ -24,7 +24,9 @@
 -include_lib("barrel_common/include/barrel_common.hrl").
 
 -type batch() :: tuple().
--type batch_op() :: {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
+-type batch_op() :: {put, Doc :: barrel_local:doc()} |
+                    {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
+                    {post, Doc :: barrel_local:doc()} |
                     {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
                     {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
                     {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
@@ -155,7 +157,9 @@ parse_op(#{ <<"op">> := <<"put_rev">>, <<"doc">> := Doc, <<"history">> := Histor
   {put_rev, Doc, History, Deleted};
 
 %% internal batch
+parse_op({put, Doc}) when is_map(Doc) -> {put, Doc, <<>>};
 parse_op({put, Doc, Rev} = OP) when is_map(Doc), is_binary(Rev) -> OP;
+parse_op({post, Doc}) when is_map(Doc) -> {post, Doc, false};
 parse_op({post, Doc, IsUpsert} = OP) when is_map(Doc), is_boolean(IsUpsert) -> OP;
 parse_op({delete, Id, Rev} = OP) when is_binary(Id), is_binary(Rev) -> OP;
 parse_op({put_rev, Doc, History, Deleted} = OP)  when is_map(Doc), is_list(History), is_boolean(Deleted) -> OP;
