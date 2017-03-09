@@ -24,6 +24,7 @@
   include_doc/1,
   collect_changes/1,
   changes_feed_callback/1,
+  restart_when_server_timeout/1,
   heartbeat_collect_change/1,
   multiple_put/1
 ]).
@@ -42,6 +43,7 @@ all() ->
     include_doc,
     collect_changes,
     changes_feed_callback,
+    restart_when_server_timeout,
     heartbeat_collect_change,
     multiple_put
   ].
@@ -136,6 +138,33 @@ changes_feed_callback(Config) ->
   ok = barrel_httpc_changes:stop(Pid).
 
 
+restart_when_server_timeout(Config) ->
+  Self = self(),
+  Callback =
+    fun(Change) ->
+        Self ! {change, Change}
+    end,
+  Options = #{since => 0, mode => sse, changes_cb => Callback,
+              max_retry => 2, delay_before_retry => 500},
+  {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
+  Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
+  ok = application:stop(barrel_http),
+  ok = application:start(barrel_http),
+  timer:sleep(100),
+  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
+  {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
+  timer:sleep(100),
+  [
+   #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
+   #{ <<"seq">> := 2, <<"id">> := <<"bb">>}
+  ] = collect_changes(2, queue:new()),
+  ok = application:stop(barrel_http),
+  [{error, timeout}] = collect_changes(1, queue:new()),
+  ok = barrel_httpc_changes:stop(Pid),
+  ok = application:start(barrel_http),
+  ok.
+
 heartbeat_collect_change(Config) ->
   Options = #{since => 0, heartbeat => 100, mode => sse },
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
@@ -150,7 +179,7 @@ heartbeat_collect_change(Config) ->
 
 multiple_put(Config) ->
   Self = self(),
-  
+
   %% spawn a change listener
   spawn(
     fun() ->
@@ -203,6 +232,8 @@ collect_changes(I, Q) ->
   receive
     {change, Change} ->
       collect_changes(I-1, queue:in(Change, Q))
+  after 500 ->
+      collect_changes(0, queue:in({error, timeout}, Q))
   end.
 
 wait_pids([]) -> ok;
