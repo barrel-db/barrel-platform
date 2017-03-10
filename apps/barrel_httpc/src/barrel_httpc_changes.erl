@@ -37,7 +37,9 @@
   mode => binary | sse,
   include_doc => true | false,
   history => true | false,
-  changes_cb => fun( (barrel_peer:change()) -> ok )
+  changes_cb => fun( (barrel_peer:change()) -> ok ),
+  max_retry => non_neg_integer(),
+  delay_before_retry => non_neg_integer()
 }.
 
 -export_type([listener_options/0]).
@@ -75,6 +77,10 @@ changes(FeedPid) ->
 %%                              % the full history if history is true (from last to first),
 %%   <<"deleted">> => true | false % present if deleted
 %%}
+%%
+%% In case the connection is lost or closed, it will retry to connect, at most
+%% `max_retry` times (default=5 times), waiting `delay_before_retry` ms between each
+%% try (default=500 ms)
 -spec start_link(Conn, ListenerOptions) -> Res when
   Conn :: barrel_httpc:conn(),
   ListenerOptions :: listener_options(),
