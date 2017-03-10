@@ -58,6 +58,7 @@ end_per_testcase(_, _Config) ->
 end_per_suite(Config) ->
   application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
+  ok = application:set_env(barrel_store, metrics, undefined),
   Config.
 
 plugin(_Config) ->

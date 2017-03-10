@@ -40,7 +40,6 @@ env() ->
    {statsd_server, {{127,0,0,1}, 8888}}].
 
 init_per_suite(Config) ->
-  start_udp_server(8888),
   application:stop(barrel_store),
   ok = application:set_env(barrel_store, metrics, env()),
   {ok, _} = application:ensure_all_started(barrel_store),
@@ -58,24 +57,28 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  application:stop(barrel_store),
+  ok = application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
+  ok = application:set_env(barrel_store, metrics, undefined),
   Config.
 
 plugin(_Config) ->
+  start_udp_server(8888),
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
   barrel_metrics:increment(Name),
 
-  Msgs = collect_messages(2),
-  [ {plugin, init, {counter, Name}},
-    {plugin, increment, Name} ] = Msgs,
+  Msgs = collect_messages(1),
+  [{statsd_message, {counter, Host, Key, 1}}] = Msgs,
+  "nohost" = Host,
+  "replication/repid/doc_reads" = Key,
   ok.
 
 measures(_Config) ->
+  start_udp_server(8888),
   {ok, _, _} = barrel_local:post(<<"testdb">>, #{<<"v">> => 42}, []),
   Msgs = collect_messages(1),
-  [{plugin, increment, [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]} ] = Msgs,
+  [{statsd_message, {counter, "nohost", "dbs/testdb/doc_created", 1}}] = Msgs,
   ok.
 
 collect_messages(N) ->
@@ -87,8 +90,8 @@ collect_messages(N, Acc) ->
   receive
     M ->
       collect_messages(N-1, [M|Acc])
-  after 2000 ->
-      {error, timeout}
+  after 5000 ->
+      [{error, timeout}|Acc]
   end.
 
 %% =============================================================================
@@ -117,28 +120,29 @@ start_udp_server(Port) ->
 
 server(Parent, Port) ->
   {ok, Socket} = gen_udp:open(Port, [binary, {active, false}]),
-  lager:info("statsd udp server opened socket:~p~n",[Socket]),
   loop(Parent, Socket).
 
 loop(Parent, Socket) ->
   inet:setopts(Socket, [{active, once}]),
-  ct:print("loop ~p", [Socket]),
   receive
     {udp, Socket, _Host, _Port, Bin} ->
-      ct:print("msg=~p",[Bin]),
       Msg = parse_statsd(Bin),
       Parent ! {statsd_message, Msg},
       loop(Parent, Socket);
     Other ->
-      ct:print("other=~p",[Other]),
       ct:fail("unexpected message=~p",[Other])
   end.
 
 parse_statsd(Bin) ->
-  [_Bhost, R1] = binary:split(Bin, <<".">>),
+  [Bhost, R1] = binary:split(Bin, <<".">>),
   [Bkey, R2] = binary:split(R1, <<":">>),
-  [Bval, _] = binary:split(R2, <<"|">>),
+  [Bval, BType] = binary:split(R2, <<"|">>),
+  Host = binary_to_list(Bhost),
   Key = binary_to_list(Bkey),
   Val = binary_to_integer(Bval),
-  {{Key, gauge}, Val}.
+  Type = case BType of
+           <<"c">> -> counter;
+           <<"g">> -> gauge
+         end,
+  {Type, Host, Key, Val}.
 

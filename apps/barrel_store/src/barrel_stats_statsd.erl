@@ -36,25 +36,25 @@ increment(Name, Env) ->
 push(_, _, undefined) ->
   ok;
 push(Server, Name, Value) ->
+  [_, NodeId] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
+  [Node | _] = binary:split(NodeId, <<".">>),
   StasdKey = barrel_lib:binary_join(Name, <<"/">>),
-  send(Server, StasdKey, Value).
+  NameWithNode = <<Node/binary, ".", StasdKey/binary>>,
+  send(Server, NameWithNode, Value).
 
 send({Peer, Port}, Key, {counter, Value}) ->
-  ct:print("send"),
   BVal = integer_to_binary(Value),
   Data = <<Key/binary, ":", BVal/binary, "|c">>,
   udp(Peer, Port, Data).
 
 udp(Peer, Port, Data) ->
   Fun = fun() ->
-            ct:print("udp ~p ~p ~p", [Peer, Port, Data]),
             case gen_udp:open(0) of
               {ok, Socket} ->
-                ok = gen_udp:send(Socket, Peer, Port, Data),
-                ct:print("ok"),
+                gen_udp:send(Socket, Peer, Port, Data),
                 gen_udp:close(Socket);
               Error ->
                 lagger:error("can not open udp socket to statsd server: ~p", [Error])
             end
         end,
- spawn(Fun).
+  spawn(Fun).
