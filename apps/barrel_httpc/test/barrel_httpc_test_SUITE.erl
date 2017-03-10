@@ -33,10 +33,14 @@
   db_ops/1,
   basic_op/1,
   update_doc/1,
+  update_with/1,
   bad_doc/1,
   create_doc/1,
   get_revisions/1,
   put_rev/1,
+  multi_get/1,
+  write_batch/1,
+  write_batch_with_attachment/1,
   fold_by_id/1,
   order_by_key/1,
   multiple_post/1,
@@ -55,10 +59,14 @@ all() ->
     db_ops,
     basic_op,
     update_doc,
+    update_with,
     bad_doc,
     create_doc,
     get_revisions,
     put_rev,
+    multi_get,
+    write_batch,
+    write_batch_with_attachment,
     fold_by_id,
     order_by_key,
     multiple_post,
@@ -134,6 +142,21 @@ update_doc(Config) ->
   {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_httpc:post(db(Config), Doc, []).
 
+update_with(Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, RevId} = barrel_httpc:post(db(Config), Doc, []),
+  {ok, Doc, #{ <<"rev">> := RevId }} = barrel_httpc:get(db(Config), <<"a">>, []),
+  
+  {ok, <<"a">>, RevId2} = barrel_httpc:update_with(
+    db(Config),
+    <<"a">>,
+    fun(Doc1, []) -> Doc1#{ <<"v">> => 2} end,
+    []
+  ),
+  true = (RevId =/= RevId2),
+  {ok, Doc2, #{ <<"rev">> := RevId2 }} = barrel_httpc:get(db(Config), <<"a">>, []),
+  #{ <<"id">> := <<"a">>, <<"v">> := 2} = Doc2.
+
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
   try barrel_httpc:put(db(Config), Doc, [])
@@ -177,6 +200,34 @@ put_rev(Config) ->
   Revisions = parse_revisions(Doc5),
   Revisions == [RevId2, RevId].
 
+multi_get(Config) ->
+  %% create some docs
+  Kvs = [{<<"a">>, 1},
+         {<<"b">>, 2},
+         {<<"c">>, 3}],
+  Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
+  [ {ok,_,_} = barrel_httpc:post(db(Config), D, []) || D <- Docs ],
+  
+  %% the "query" to get the id/rev
+  Mget = [ Id || {Id, _} <- Kvs],
+  
+  %% a fun to parse the results
+  %% the parameter is the same format as the regular get function output
+  Fun=fun(Doc, Meta, Acc) ->
+    #{<<"id">> := DocId} = Doc,
+    #{<<"rev">> := RevId} = Meta,
+    
+    [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]
+      end,
+  
+  %% let's process it
+  Results = barrel_httpc:multi_get(db(Config), Fun, [], Mget, []),
+  
+  %% check results
+  [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1}, <<"id">> := <<"a">>,  <<"rev">> := _},
+   #{<<"doc">> := #{<<"id">> := <<"b">>, <<"v">> := 2}},
+   #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = lists:reverse(Results).
+
 revsdiff(Config) ->
   Doc = #{ <<"id">> => <<"revsdiff">>, <<"v">> => 1},
   {ok, <<"revsdiff">>, RevId} = barrel_httpc:post(db(Config), Doc, []),
@@ -184,6 +235,68 @@ revsdiff(Config) ->
   {ok, <<"revsdiff">>, _RevId2} = barrel_httpc:put(db(Config), Doc2, [{rev, RevId}]),
   {ok, [<<"1-missing">>], []} = barrel_httpc:revsdiff(db(Config), <<"revsdiff">>, [<<"1-missing">>]),
   ok.
+
+write_batch(Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
+  D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
+  {ok, _, Rev1_1} = barrel_httpc:post(db(Config), D1, []),
+  {ok, _, Rev3_1} = barrel_httpc:post(db(Config), D3, []),
+  OPs =  [
+    { put, D1#{ <<"v">> => 2 }, Rev1_1},
+    { post, D2, false},
+    { delete, <<"c">>, Rev3_1},
+    { put, D4, <<>>}
+  ],
+  
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"c">>, []),
+  
+  Results = barrel_httpc:write_batch(db(Config), OPs, []),
+  true = is_list(Results),
+  
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _},
+    {ok, <<"c">>, _},
+    {error, not_found} ] = Results,
+  
+  {ok, #{ <<"v">> := 2}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"b">>, []),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"c">>, []).
+
+write_batch_with_attachment(Config) ->
+  %% create resources
+  D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
+  D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
+  Att1 = #{ <<"id">> => <<"att_a">>, <<"blob">> => <<"hello a">>},
+  Att2 = #{ <<"id">> => <<"att_b">>, <<"blob">> => <<"hello b">>},
+  
+  %% store d1 and check db state
+  {ok, _, Rev1_1} = barrel_httpc:post(db(Config), D1, []),
+  {ok, D1, [], _} = barrel_httpc:get(db(Config), <<"a">>, [{attachments, all}]),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
+  
+  %% write batch
+  OPs = [
+    {put, D1, [Att1], Rev1_1},
+    {post, D2, [Att2]}
+  ],
+  
+  Results = barrel_httpc:write_batch(db(Config), OPs, []),
+  true = is_list(Results),
+  [ {ok, <<"a">>, _},
+    {ok, <<"b">>, _} ] = Results,
+  
+  
+  {ok, D1,
+   [#{<<"id">> := <<"att_a">>,
+      <<"blob">> := <<"hello a">>}], _} = barrel_httpc:get(db(Config), <<"a">>,  [{attachments,  all}]),
+  {ok, D2,
+    [#{<<"id">> := <<"att_b">>,
+       <<"blob">> := <<"hello b">>}], _} = barrel_httpc:get(db(Config), <<"b">>,  [{attachments,  all}]).
 
 fold_by_id(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
@@ -320,7 +433,7 @@ multiple_delete(Config) ->
       Pid = spawn_link(
         fun() ->
           {ok, #{ <<"id">> := DocId}, #{<<"rev">> := Rev }} = barrel_httpc:get(db(Config), DocId, []),
-          {ok, _, _} = barrel_httpc:delete(db(Config), DocId,[{rev,  Rev}]),
+          {ok, _, _} = barrel_httpc:delete(db(Config), DocId, [{rev,  Rev}]),
           Self ! {ok, self()}
         end
       ),
@@ -361,7 +474,7 @@ change_deleted(Config) ->
       Del = maps:get(<<"deleted">>, Change, false),
       {ok, [{Id, Del}|Acc]}
     end,
-  
+
   {ok, []} = barrel_httpc:changes_since(db(Config), 0, Fun, [], []),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
@@ -396,10 +509,10 @@ change_since_many(Config) ->
           Seq = maps:get(<<"seq">>, Change),
           {ok, [{Seq, Change}|Acc]}
         end,
-  
+
   %% No changes. Database is empty.
   {ok, []} = barrel_httpc:changes_since(db(Config), 0, Fun, [], []),
-  
+
   %% Add 20 docs (doc1 to doc20).
   AddDoc = fun(N) ->
               K = integer_to_binary(N),
@@ -408,18 +521,18 @@ change_since_many(Config) ->
     {ok, Key, _RevId} = barrel_httpc:post(db(Config), Doc, [])
            end,
   [AddDoc(N) || N <- lists:seq(1,20)],
-  
+
   %% Delete doc1
   {ok, _Doc1, #{<<"rev">> := RevId}} = barrel_httpc:get(db(Config), <<"doc1">>, []),
   {ok, <<"doc1">>, _} = barrel_httpc:delete(db(Config), <<"doc1">>, [{rev, RevId}]),
-  
+
   %% 20 changes (for doc1 to doc20)
   {ok, All} = barrel_httpc:changes_since(db(Config), 0, Fun, [], [{history, all}]),
   20 = length(All),
   %% History for doc1 includes creation and deletion
   {21, #{<<"changes">> := HistoryDoc1}} = hd(All),
   2 = length(HistoryDoc1),
-  
+
   {ok, [{21, #{<<"id">> := <<"doc1">>}},
         {20, #{<<"id">> := <<"doc20">>}},
         {19, #{<<"id">> := <<"doc19">>}}]} = barrel_httpc:changes_since(db(Config), 18, Fun, [], []),

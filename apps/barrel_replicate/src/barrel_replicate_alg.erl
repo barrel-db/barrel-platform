@@ -72,7 +72,7 @@ write_doc(Target, Doc, History, Deleted, Metrics) ->
   end.
 
 get({Mod, ModState}, Id, Opts) ->
-  Mod:get(ModState, Id, Opts);
+  Mod:get(ModState, Id, [{attachments_parsing, false}|Opts]);
 get(Db, Id, Opts) when is_binary(Db) ->
   barrel_db:get(Db, Id, Opts).
 

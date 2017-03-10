@@ -29,7 +29,7 @@
         ]).
 
 
--export([init/3, increment/2]).
+-export([init/3, increment/3]).
 
 all() -> [ plugin
          , measures
@@ -69,7 +69,7 @@ plugin(_Config) ->
   Msgs = collect_messages(2),
   ExpectedEnv = env(),
   [ {plugin, init, {counter, Name}, ExpectedEnv},
-    {plugin, increment, Name, ExpectedEnv} ] = Msgs,
+    {plugin, increment, Name, 1, ExpectedEnv} ] = Msgs,
   ok.
 
 measures(_Config) ->
@@ -78,6 +78,7 @@ measures(_Config) ->
   ExpectedEnv = env(),
   [{plugin, increment
    , [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]
+   , 1
    , ExpectedEnv}] = Msgs,
   ok.
 
@@ -103,8 +104,8 @@ init(Type, Name, Env) ->
   Pid ! {plugin, init, {Type, Name}, Env},
   ok.
 
-increment(Name, Env) ->
+increment(Name, Value, Env) ->
   Pid = whereis(test_metric_client),
-  Pid ! {plugin, increment, Name, Env},
+  Pid ! {plugin, increment, Name, Value, Env},
   ok.
 

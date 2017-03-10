@@ -10,4 +10,4 @@
 
 -callback init(Type :: metric_type(), Name :: metric_name(), Env :: metric_env()) -> ok.
 
--callback increment( Name :: metric_name(), Env :: metric_env() ) -> ok.
+-callback increment( Name :: metric_name(), Value :: integer(), Env :: metric_env() ) -> ok.

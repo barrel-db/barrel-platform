@@ -18,6 +18,7 @@
 
 %% API
 -export([get_resource/3]).
+-export([handle_write_batch/2]).
 
 -include("barrel_http_rest_docs.hrl").
 
@@ -35,7 +36,7 @@ get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
     fun (Doc, Meta, {N, Pre}) ->
-        DocWithMeta = Doc#{<<"_meta">> => Meta},
+        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
         Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
@@ -65,17 +66,15 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
-    fun ({ok, Doc, Meta}, {N, Pre}) ->
-        #{<<"id">> := DocId} = Doc,
-        #{<<"rev">> := RevId} = Meta,
-        Reply = #{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc},
-        Chunk = << Pre/binary, (jsx:encode(Reply))/binary >>,
+    fun (Doc, Meta, {N, Pre}) ->
+        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
+        Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {N + 1, <<",">>}
     end,
   AccIn = {0, <<"">>},
   Options = [],
-  {Count, _} = barrel_local:mget(Database, Fun, AccIn, DocIds, Options),
+  {Count, _} = barrel_local:multi_get(Database, Fun, AccIn, DocIds, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -91,7 +90,51 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
   {ok, Req, State}.
 
 
+handle_write_batch(Req, State) ->
+  {ok, Body, Req2} = cowboy_req:read_body(Req),
+  case Body of
+    <<>> ->
+      barrel_http_reply:error(400, <<"empty body">>, Req2, State);
+    Body ->
+      try jsx:decode(Body, [return_maps]) of Json ->
+        do_write_batch(Json, Req2, State)
+      catch
+        _:_ ->
+          barrel_http_reply:error(400, <<"malformed json document">>, Req2, State)
+      end
 
+  end.
+
+do_write_batch(Json, Req, #state{database=Db}=State) ->
+  Async = case Req of
+            #{ headers := #{ <<"x-barrel-async">> := << "true">> }} -> true;
+            _ -> false
+          end,
+  
+  OPs = maps:get(<<"updates">>, Json),
+  try  barrel_local:write_batch(Db, OPs, [{async, Async}]) of
+    ok ->
+      barrel_http_reply:json(200, #{ <<"ok">> => true }, Req, State);
+    Results ->
+      JsonResults = [ batch_result(Result) || Result <- Results ],
+      JsonResp = #{ <<"ok">> => true, <<"results">> =>  JsonResults },
+      barrel_http_reply:json(200, JsonResp, Req, State)
+  catch
+    error:badarg ->
+      barrel_http_reply:error(400, <<"invalid batch">>, Req, State)
+  end.
+
+
+batch_result({ok, Id, Rev}) ->
+  #{ <<"status">> => <<"ok">>, <<"id">> => Id, <<"rev">> => Rev};
+batch_result({error, not_found}) ->
+  #{ <<"status">> => <<"error">>, <<"reason">> => <<"not found">>};
+batch_result({error, {conflict, doc_exists}}) ->
+  #{ <<"status">> => <<"conflict">>, <<"reason">> => <<"doc exists">>};
+batch_result({error, {conflict, revision_conflict}}) ->
+  #{ <<"status">> => <<"conflict">>, <<"reason">> => <<"revision conflict">>};
+batch_result({error, Reason}) ->
+  #{ <<"status">> => <<"error">>, <<"reason">> => Reason}.
 
 parse_params(Req) ->
   Params = cowboy_req:parse_qs(Req),

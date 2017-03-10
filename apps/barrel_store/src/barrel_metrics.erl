@@ -19,6 +19,7 @@
 
 -export([ init/2
         , increment/1
+        , increment/2
         ]).
 
 init(Type, Name) ->
@@ -31,11 +32,12 @@ init(Type, Name) ->
   end.
 
 increment(Name) ->
+  increment(Name, 1).
+increment(Name, Value) ->
   Env = application:get_env(barrel_store, metrics, undefined),
   case Env of
     undefined -> ok;
     Env ->
       Plugin = proplists:get_value(plugin, Env),
-      Plugin:increment(Name, Env)
+      Plugin:increment(Name, Value, Env)
   end.
-

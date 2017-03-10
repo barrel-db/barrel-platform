@@ -20,16 +20,16 @@
 
 %% plugin callbacks
 -export([ init/3
-        , increment/2
+        , increment/3
         ]).
 
 
 init(_Type, _Name, _Env) ->
   ok.
 
-increment(Name, Env) ->
+increment(Name, Value, Env) ->
   Server = proplists:get_value(statsd_server, Env),
-  push(Server, Name, {counter, 1}),
+  push(Server, Name, {counter, Value}),
   ok.
 
 

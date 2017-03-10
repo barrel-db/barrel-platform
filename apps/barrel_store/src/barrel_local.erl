@@ -21,13 +21,14 @@
   put/3,
   put_rev/5,
   get/3,
-  mget/5,
+  multi_get/5,
   delete/3,
   post/3,
   fold_by_id/4,
   changes_since/4,
   changes_since/5,
-  revsdiff/3
+  revsdiff/3,
+  write_batch/3
 ]).
 
 -export([
@@ -122,6 +123,18 @@
   doc => doc()
 }.
 
+-type batch_options() :: [
+  {async, boolean()}
+].
+
+-type batch_results() :: [
+  {ok, docid(), revid()}
+  | {error, not_found}
+  | {error, {conflict, doc_exists}}
+  | {error, {conflict, revision_conflict}}
+  | {error, any()}
+].
+
 
 -export_type([
   dbname/0,
@@ -171,16 +184,15 @@ get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
--spec mget(Db, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Db, Fun, AccIn, DocIds, Options) -> [Res] when
     Db::db(),
-    Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+    Fun :: fun((doc(), meta(), any() ) -> Res),
     AccIn :: any(),
     DocIds :: [docid()],
     Options :: read_options(),
-    Doc :: doc(),
     Res :: any().
-mget(Db, Fun, AccIn, DocIds, Options) ->
-  barrel_db:mget(Db, Fun, AccIn, DocIds, Options).
+multi_get(Db, Fun, AccIn, DocIds, Options) ->
+  barrel_db:multi_get(Db, Fun, AccIn, DocIds, Options).
 
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
@@ -190,13 +202,12 @@ mget(Db, Fun, AccIn, DocIds, Options) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put(Db, Doc, Options) when is_map(Doc) ->
-  ok = validate_docid(Doc),
   Rev = proplists:get_value(rev, Options, <<>>),
-  Deleted = false,
-  barrel_db:update_doc(Db, barrel_doc:make_doc(Doc, [Rev], Deleted), Options);
+  Async = proplists:get_value(async, Options, false),
+  Batch = barrel_write_batch:put(Doc, Rev, barrel_write_batch:new(Async)),
+  update_doc(Db, Batch);
 put(_,  _, _) ->
   erlang:error(badarg).
-
 
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
@@ -209,9 +220,9 @@ put(_,  _, _) ->
   Options :: write_options(),
   Res ::  {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 put_rev(Db, Doc, History, Deleted, Options) when is_map(Doc) ->
-  ok = validate_docid(Doc),
-  Doc2 = barrel_doc:make_doc(Doc, History, Deleted),
-  barrel_db:update_doc(Db, Doc2, [{with_conflict, true} | Options]);
+  Async = proplists:get_value(async, Options, false),
+  Batch = barrel_write_batch:put_rev(Doc, History, Deleted, barrel_write_batch:new(Async)),
+  update_doc(Db, Batch);
 put_rev(_, _, _, _, _) ->
   erlang:error(badarg).
 
@@ -222,10 +233,10 @@ put_rev(_, _, _, _, _) ->
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 delete(Db, DocId, Options) ->
-  Doc = #{<<"id">> => DocId},
+  Async = proplists:get_value(async, Options, false),
   Rev = proplists:get_value(rev, Options, <<>>),
-  Deleted = true,
-  barrel_db:update_doc(Db, barrel_doc:make_doc(Doc, [Rev], Deleted), Options).
+  Batch = barrel_write_batch:delete(DocId, Rev, barrel_write_batch:new(Async)),
+  update_doc(Db, Batch).
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% Optionally the document ID can be set in the doc.
@@ -234,33 +245,35 @@ delete(Db, DocId, Options) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
-post(Db, Doc0, Options0) ->
-  case proplists:get_value(rev, Options0) of
-    undefined ->
-      DocId = case barrel_doc:id(Doc0) of
-                undefined -> barrel_lib:uniqid();
-                Id -> Id
-              end,
-      %% create doc record
-      Doc1 = barrel_doc:make_doc(
-        maps:put(<<"id">>, DocId, Doc0),
-        [<<>>],
-        false
-      ),
- 
-      Options1 = case proplists:get_value(is_upsert, Options0, false) of
-                   false -> [{error_if_exists, true} | Options0];
-                   _ -> Options0
-                 end,
-      case barrel_db:create_doc(Db, Doc1, Options1) of
-        {ok, Doc, Meta} ->
-          barrel_metrics:increment([<<"dbs">>, Db, <<"doc_created">>]),
-          {ok, Doc, Meta};
-        Error -> Error
-      end;
-   _Rev ->
-      erlang:error(badarg)
+post(Db, Doc, Options) ->
+  Async = proplists:get_value(async, Options, false),
+  IsUpsert = proplists:get_value(is_upsert, Options, false),
+  Batch = barrel_write_batch:post(Doc, IsUpsert, barrel_write_batch:new(Async)),
+  update_doc(Db, Batch).
+
+update_doc(Db, Batch) ->
+  case barrel_db:update_docs(Db, Batch) of
+    ok -> ok;
+    [Res] ->
+      barrel_metrics:increment([<<"dbs">>, Db, <<"doc_created">>], 1),
+      Res
   end.
+
+%% @doc Apply the specified updates to the database.
+%% Note: The batch is not guaranteed to be atomic, atomicity is only guaranteed at the doc level.
+-spec write_batch(Db, Updates, Options) -> Results when
+  Db :: db(),
+  Updates :: [barrel_write_batch:batch_op()],
+  Options :: batch_options(),
+  Results :: batch_results().
+write_batch(Db, Updates, Options) when is_list(Options) ->
+  Async = proplists:get_value(async, Options, false),
+  Batch = barrel_write_batch:from_list(Updates, Async),
+  barrel_db:update_docs(Db, Batch);
+write_batch(_, _, _) -> erlang:error(badarg).
+
+
+
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
@@ -279,7 +292,7 @@ fold_by_id(Db, Fun, Acc, Options) ->
   Db::db(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any().
 changes_since(Db, Since, Fun, Acc) ->
@@ -369,8 +382,3 @@ replication_info(Name) ->
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
-
-
-%% internal
-validate_docid(#{ <<"id">> := _DocId }) -> ok;
-validate_docid(_) -> erlang:error({bad_doc, invalid_docid}).

@@ -18,10 +18,15 @@
   database_infos/1,
   connect/1,
   get/3,
+  multi_get/5,
   put/3,
+  put/4,
   post/3,
+  post/4,
   delete/3,
+  update_with/4,
   put_rev/5,
+  write_batch/3,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5,
@@ -67,10 +72,10 @@
 
 -type write_options() :: list().
 
--type db_infos() :: #{}.
+-type db_infos() :: map().
 
--type doc() :: #{}.
--type meta() :: #{}.
+-type doc() :: map().
+-type meta() :: map().
 
 -type read_options() :: [read_option()].
 
@@ -78,6 +83,33 @@
 -type fold_options() :: list().
 
 -type change() :: #{ binary() => any() }.
+
+-type attachment() :: {atom(), any()}.
+
+-type batch_options() :: [
+{async, boolean()}
+].
+
+-type batch_results() :: [
+  {ok, docid(), revid()}
+  | {error, not_found}
+  | {error, {conflict, doc_exists}}
+  | {error, {conflict, revision_conflict}}
+  | {error, any()}
+].
+
+-type batch_op() ::
+  {put, Doc :: barrel_local:doc()} |
+  {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
+  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
+  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()], Rev :: barrel_local:revid()} |
+  {post, Doc :: barrel_local:doc()} |
+  {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
+  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
+  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()], IsUpsert :: boolean()} |
+  {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
+  {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
+  {put_rev, Doc :: barrel_local:doc(), Attachments :: [attachment()], History :: list(), Deleted :: boolean()}.
 
 -export_type([
   conn/0,
@@ -90,7 +122,10 @@
   fold_options/0,
   revid/0,
   revtree/0,
-  change/0
+  change/0,
+  batch_options/0,
+  batch_results/0,
+  batch_op/0
 ]).
 
 
@@ -165,7 +200,7 @@ database_infos(Url) ->
 %% If the database is not found, an error is returned
 -spec connect(DbUrl) -> Res when
   DbUrl :: binary(),
-  Res :: ok | {error, any()}.
+  Res :: {ok, conn()} | {error, any()}.
 connect(Url) ->
   Max = application:get_env(barrel, max_connections, 12),
   {_, DbName} = name_from_url(Url),
@@ -186,18 +221,44 @@ connect(Url) ->
   Options :: read_options(),
   Doc :: doc(),
   Meta :: meta(),
-  Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
+  Attachments :: list(),
+  Res :: {ok, Doc, Meta} | {ok, Doc, Meta, Attachments} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options0) ->
-  {Headers, Options1} = headers(Options0),
-  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
+  {WithAttachment, Options1} = maybe_with_attachments(Options0),
+  {Headers, Options2} = headers(Options1),
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options2),
   case request(Conn, <<"GET">>, Url, Headers, <<>>) of
     {ok, 200, RespHeaders, JsonBody} ->
       Doc = jsx:decode(JsonBody, [return_maps]),
       Meta = parse_header(RespHeaders),
-      {ok, Doc, Meta};
+      case WithAttachment of
+        decoded ->
+          {Attachments, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
+          DecodedAttachments = decode_attachments(Attachments),
+          {ok, DocWithoutAttachment, DecodedAttachments, Meta};
+        raw ->
+          {ok, Doc, Meta};
+        false ->
+          {_, DocWithoutAttachment} = maybe_take(<<"_attachments">>, Doc, []),
+          {ok, DocWithoutAttachment, Meta}
+      end;
     Error ->
       Error
   end.
+
+%% @doc retrieve several documents
+-spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> [Res] when
+  Conn::conn(),
+  Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+  AccIn :: any(),
+  DocIds :: [docid()],
+  Options :: read_options(),
+  Doc :: doc(),
+  Res :: [{ok, doc(), meta()} | {error, any()}].
+multi_get(Db, UserFun, AccIn, DocIds, Options) ->
+  WrapperFun = fun(Doc, Meta, Acc) -> {ok, UserFun(Doc, Meta, Acc)} end,
+  {ok, Res} = barrel_httpc_fold:fold_by_id(Db, WrapperFun, AccIn, [{docids, DocIds} | Options]),
+  Res.
 
 parse_header(HeadersList) ->
   Headers = hackney_headers_new:from_list(HeadersList),
@@ -214,7 +275,7 @@ maybe_add_rev(Meta, Headers) ->
     undefined -> Meta;
     ETag -> Meta#{ <<"rev">> => ETag}
   end.
-  
+
 maybe_add_deleted(Meta, Headers) ->
   case hackney_headers_new:get_value(<<"x-barrel-deleted">>, Headers) of
     <<"true">> -> Meta#{ <<"deleted">> => true };
@@ -229,6 +290,25 @@ maybe_add_revisions(Meta, Headers) ->
       Meta#{ <<"revisions">> => barrel_doc:encode_revisions(History) }
   end.
 
+maybe_take(Key, Map, Default) when is_map(Map) ->
+  case maps:take(Key, Map) of
+    {K, M} ->
+      {K,M};
+    error ->
+      {Default, Map}
+  end.
+
+maybe_with_attachments(Options) ->
+  maybe_with_attachments(Options, false, []).
+maybe_with_attachments([], WithAttachment, Acc) ->
+  {WithAttachment, lists:reverse(Acc)};
+maybe_with_attachments([{attachments, all}|Options],_, Acc) ->
+  maybe_with_attachments(Options, decoded, Acc);
+maybe_with_attachments([{attachments_parsing, false}|Options],_, Acc) ->
+  maybe_with_attachments(Options, raw, Acc);
+maybe_with_attachments([H|Options], W, Acc) ->
+  maybe_with_attachments(Options, W, [H|Acc]).
+
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
 -spec put(Conn, Doc, Options) -> Res when
@@ -241,6 +321,21 @@ put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   post_put(Conn, <<"PUT">>, Doc, Url, Headers);
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+%% @doc update a document with attachments
+-spec put(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      put(Conn, DocWithAttachments, Options0);
+    {error, Error} ->
+      {error, Error}
+  end.
 
 post_put(Conn, Method, Doc, Url, Headers) ->
   Body = jsx:encode(Doc),
@@ -283,13 +378,12 @@ delete(Conn, DocId, Options0) ->
 headers(Options) ->
   case proplists:get_value(rev, Options) of
     undefined ->
-      {[{<<"Content-Type">>, <<"application/json">>}], Options};
+      {[{<<"Content-Type">>, <<"application/json">>}], proplists:delete(rev, Options)};
     Rev ->
       Hdrs = [{<<"Content-Type">>, <<"application/json">>},
               {<<"ETag">>, Rev}],
       {Hdrs, proplists:delete(rev, Options)}
   end.
-
 
 %% @doc create a document . Like put but only create a document without updating the old one.
 %% A doc shouldn't have revision. Optionally the document ID can be set in the doc.
@@ -309,6 +403,124 @@ post(Conn, Doc, Options0) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], Options1),
   post_put(Conn, <<"POST">>, DocWithId, Url, Headers).
 
+%% @doc create a document with attachments.
+-spec post(Conn, Doc, Attachments, Options) -> Res when
+    Conn::conn(),
+    Doc :: doc(),
+    Attachments :: [attachment()],
+    Options :: write_options(),
+    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+post(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
+  case encode_attachments(Doc, Attachments) of
+    {ok, DocWithAttachments} ->
+      post(Conn, DocWithAttachments, Options0);
+    {error, Error} ->
+      {error, Error}
+  end.
+
+
+%% Atomically modifies the a document, this function takes the docId and pass the Doc and its attachments to the
+%% callback.
+-spec update_with(Conn, DocId, Fun, Options) -> Res when
+  Conn::conn(),
+  DocId :: docid(),
+  Fun :: fun((Doc :: doc() | nil, Attachments :: list()) -> UpdatedDoc :: doc() | {UpdatedDoc :: doc(),
+                                                                                   UpdatedAttachments :: list()} ),
+  Options :: read_options(),
+  Res :: {ok, docid(), rev()}  | {error, any()}.
+update_with(Conn, DocId, Fun, Options) ->
+   case do_update_with(Conn, DocId, Fun, Options) of
+     {ok, _, _} = OK -> OK;
+     {error, {conflict, _}} -> update_with(Conn, DocId, Fun, Options);
+     Error -> Error
+   end.
+
+do_update_with(Conn, DocId, Fun, Options) ->
+  case barrel_httpc:get(Conn, DocId, Options) of
+    {ok, _, _} = Res ->
+      try_put(Res, Conn, Fun);
+    {ok, _, _, _} = Res ->
+      try_put(Res, Conn, Fun);
+    {error, not_found} ->
+      try_post(Conn, Fun);
+    Error ->
+      Error
+  end.
+
+try_put({ok, Doc, Meta}, Conn, Fun) ->
+  Rev = maps:get(<<"rev">>, Meta),
+  try_put_1(Fun(Doc, []), Rev, Conn);
+
+try_put({ok, Doc, Meta, Atts}, Conn, Fun) ->
+  Rev = maps:get(<<"rev">>, Meta),
+  try_put_1(Fun(Doc, Atts), Rev, Conn).
+
+
+try_put_1({Doc, Atts}, Rev, Conn) when is_map(Doc), is_list(Atts) ->
+  barrel_httpc:put(Conn, Doc, Atts, [{rev, Rev}]);
+try_put_1(Doc, Rev, Conn) when is_map(Doc) ->
+  barrel_httpc:put(Conn, Doc, [{rev, Rev}]).
+
+
+try_post(Conn, Fun) ->
+  case Fun(nil, []) of
+    Doc when is_map(Doc) ->
+      barrel_httpc:post(Conn, Doc, []);
+    {Doc, Atts} ->
+      barrel_httpc:post(Conn, Doc, Atts, [])
+  end.
+
+encode_attachments(Doc, Attachments) ->
+  encode_attachments(Doc, Attachments, []).
+
+encode_attachments(Doc, [], []) ->
+  {ok, Doc};
+encode_attachments(Doc, [], EncodedAttachments) ->
+  {ok, Doc#{<<"_attachments">> => lists:reverse(EncodedAttachments)}};
+encode_attachments(Doc, [A|Tail], Encoded) ->
+  case encode_attachment(A) of
+    {ok, E} ->
+      encode_attachments(Doc, Tail, [E|Encoded]);
+    {error, Error} ->
+      {error, Error}
+  end.
+
+encode_attachment(#{<<"blob">> := Blob, <<"id">> := Id,
+                    <<"content-type">> := <<"application/erlang">>})
+  when is_binary(Blob) ->
+  {error, {erlang_term_expected, Id}};
+encode_attachment(#{<<"blob">> := Blob }=A) when is_binary(Blob) ->
+  B64 = base64:encode(Blob),
+  ContentType = maps:get(<<"content-type">>, A, <<"application/octet-stream">>),
+  {ok, A#{<<"content-type">> => ContentType,
+          <<"blob">> := B64,
+          <<"content-length">> => byte_size(Blob)}};
+encode_attachment(#{<<"blob">> := ErlangTerm}=A) ->
+  TermAsBinary = term_to_binary(ErlangTerm),
+  B64 = base64:encode(TermAsBinary),
+  {ok, A#{<<"blob">> => B64,
+          <<"content-type">> => <<"application/erlang">>,
+          <<"content-length">> => byte_size(TermAsBinary)}};
+encode_attachment(#{<<"link">> := Link}=A) ->
+  B64 = base64:encode(Link),
+  {ok, A#{<<"link">> := B64}}.
+
+
+
+decode_attachments(Attachments) ->
+  [decode_attachment(A) || A <- Attachments].
+
+decode_attachment(#{<<"content-type">> := <<"application/erlang">>}=A) ->
+  #{<<"blob">> := B64} = A,
+  Blob = base64:decode(B64),
+  DecodedBlob = binary_to_term(Blob),
+  A#{<<"blob">> => DecodedBlob};
+decode_attachment(#{<<"blob">> := B64}=A) ->
+  Blob = base64:decode(B64),
+  A#{<<"blob">> := Blob};
+decode_attachment(#{<<"link">> := B64}=A) ->
+  Blob = base64:decode(B64),
+  A#{<<"link">> := Blob}.
 
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
@@ -342,6 +554,83 @@ put_rev(Conn, #{ <<"id">> := DocId } = Doc, History, Deleted, _Options) ->
     Error -> Error
   end;
 put_rev(_, _, _, _, _) -> erlang:error({bad_doc, invalid_docid}).
+
+%% @doc Apply the specified updates to the database.
+%% Note: The batch is not guaranteed to be atomic, atomicity is only guaranteed at the doc level.
+-spec write_batch(Conn, Updates, Options) -> Results when
+  Conn :: conn(),
+  Updates :: [batch_op()],
+  Options :: batch_options(),
+  Results :: batch_results().
+write_batch(Conn, Updates, Options) ->
+  Async = proplists:get_value(async, Options, false),
+  Headers = [ {<<"Content-Type">>, <<"application/json">>},
+              {<<"x-barrel-write-batch">>, <<"true">>},
+              {<<"x-barrel-async">>, Async }],
+  Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], []),
+  JsonUpdate = [batch_update(Update) || Update <- Updates],
+  Body = jsx:encode(#{ <<"updates">> => JsonUpdate }),
+  case request(Conn, <<"POST">>, Url, Headers, Body) of
+    {ok, Status, _RespHeaders, JsonBody}=Resp ->
+      case lists:member(Status, [200]) of
+        true ->
+          Json = jsx:decode(JsonBody, [return_maps]),
+          case maps:find(<<"results">>, Json) of
+            {ok, Results} ->
+              [ batch_result(Res) || Res <- Results ];
+            error ->
+              ok
+          end;
+        false ->
+          {error, {bad_response, Resp}}
+      end;
+    Error -> Error
+  end.
+
+batch_update({post, Doc}) when is_map(Doc) ->
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc };
+batch_update({post, Doc0, Attachments}) when is_map(Doc0), is_list(Attachments) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc1 };
+batch_update({post, Doc, IsUpsert}) when is_map(Doc), is_boolean(IsUpsert) ->
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc, <<"is_upsert">> => IsUpsert };
+batch_update({post, Doc0, Attachments,  IsUpsert}) when is_map(Doc0), is_list(Attachments), is_boolean(IsUpsert) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"post">>, <<"doc">> => Doc1, <<"is_upsert">> => IsUpsert };
+batch_update({put, Doc}) when is_map(Doc) ->
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc };
+batch_update({put, Doc0, Attachments}) when is_map(Doc0), is_list(Attachments) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc1 };
+batch_update({put, Doc, Rev}) when is_map(Doc), is_binary(Rev) ->
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc, <<"rev">> => Rev };
+batch_update({put, Doc0, Attachments, Rev}) when is_map(Doc0), is_list(Attachments), is_binary(Rev) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put">>, <<"doc">> => Doc1, <<"rev">> => Rev };
+batch_update({delete, DocId}) when is_binary(DocId) ->
+  #{ <<"op">> => <<"delete">>, <<"id">> => DocId };
+batch_update({delete, DocId, Rev}) when is_binary(DocId), is_binary(Rev) ->
+  #{ <<"op">> => <<"delete">>, <<"id">> => DocId, <<"rev">> => Rev };
+batch_update({put_rev, Doc, History, Deleted}) when is_binary(Doc), is_binary(History), is_boolean(Deleted) ->
+  #{ <<"op">> => <<"put_rev">>, <<"doc">> => Doc, <<"history">> => History, <<"deleted">> => Deleted };
+batch_update(
+  {put_rev, Doc0, Attachments, History, Deleted}
+) when is_binary(Doc0), is_list(Attachments), is_binary(History), is_boolean(Deleted) ->
+  {ok, Doc1} = encode_attachments(Doc0, Attachments),
+  #{ <<"op">> => <<"put_rev">>, <<"doc">> => Doc1, <<"history">> => History, <<"deleted">> => Deleted };
+batch_update(_) ->
+  erlang:error(badarg).
+
+batch_result(#{ <<"status">> := <<"ok">>, <<"id">> := DocId, <<"rev">> := Rev }) ->
+  {ok, DocId, Rev};
+batch_result(#{ <<"status">> := <<"error">>, <<"reason">> := <<"not found">> }) ->
+  {error, not_found};
+batch_result(#{ <<"status">> := <<"error">>, <<"reason">> := Other }) ->
+  {error, Other};
+batch_result(#{ <<"status">> := <<"conflict">>, <<"reason">> := <<"doc exists">> }) ->
+  {error, {conflict, doc_exists}};
+batch_result(#{ <<"status">> := <<"conflict">>, <<"reason">> := <<"revision conflict">> }) ->
+  {error, {conflict, revision_conflict}}.
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Conn, DocId, RevIds) -> Res when
