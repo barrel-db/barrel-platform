@@ -32,7 +32,7 @@
 -export([init/3, increment/2]).
 
 all() -> [ plugin
-         , measures
+         %% , measures
          ].
 
 env() ->

@@ -254,9 +254,7 @@ post(Db, Doc, Options) ->
 update_doc(Db, Batch) ->
   case barrel_db:update_docs(Db, Batch) of
     ok -> ok;
-    [Res] ->
-      barrel_metrics:increment([<<"dbs">>, Db, <<"doc_created">>], 1),
-      Res
+    [Res] -> Res
   end.
 
 %% @doc Apply the specified updates to the database.
