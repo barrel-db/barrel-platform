@@ -249,11 +249,10 @@ get(Conn, DocId, Options0) ->
 %% @doc retrieve several documents
 -spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> AccOut when
   Conn::conn(),
-  Fun :: fun( doc(), meta(), any()) -> any()),
+  Fun :: fun( (doc(), meta(), any()) -> any()),
   AccIn :: any(),
   DocIds :: [docid()],
   Options :: read_options(),
-  Doc :: doc(),
   AccOut :: any().
 multi_get(_Db, _UserFun, AccIn, [], _Options) -> AccIn;
 multi_get(Db, UserFun, AccIn, DocIds, Options) ->
