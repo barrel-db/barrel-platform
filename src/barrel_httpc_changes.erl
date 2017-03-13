@@ -22,7 +22,7 @@
 ]).
 
 -export([
-  init_feed/3,
+  init_feed/1,
   wait_changes/1
 ]).
 
@@ -37,7 +37,9 @@
   mode => binary | sse,
   include_doc => true | false,
   history => true | false,
-  changes_cb => fun( (barrel_peer:change()) -> ok )
+  changes_cb => fun( (barrel_peer:change()) -> ok ),
+  max_retry => non_neg_integer(),
+  delay_before_retry => non_neg_integer()
 }.
 
 -export_type([listener_options/0]).
@@ -75,13 +77,21 @@ changes(FeedPid) ->
 %%                              % the full history if history is true (from last to first),
 %%   <<"deleted">> => true | false % present if deleted
 %%}
+%%
+%% In case the connection is lost or closed, it will retry to connect, at most
+%% `max_retry` times (default=5 times), waiting `delay_before_retry` ms between each
+%% try (default=500 ms)
 -spec start_link(Conn, ListenerOptions) -> Res when
   Conn :: barrel_httpc:conn(),
   ListenerOptions :: listener_options(),
   ListenerPid :: pid(),
   Res :: {ok, ListenerPid} | {error, any()}.
 start_link(Conn, Options) ->
-  proc_lib:start_link(?MODULE, init_feed, [self(), Conn, Options]).
+  State = #{ parent => self(),
+             conn => Conn,
+             last_seq => undefined,
+             options => Options},
+  proc_lib:start_link(?MODULE, init_feed, [State]).
 
 %% @doc stop a change listener
 -spec stop(ListenerPid) -> Res when
@@ -112,9 +122,22 @@ parse_change(ChangeBin) ->
   ).
 
 
-init_feed(Parent, Conn, Options) ->
-  Headers = case maps:get(since, Options, 0) of
-    0 -> 
+init_feed(State = #{retry := 0} ) ->
+  cleanup(State, "remote stopped (max retry reached)"),
+  exit(normal);
+
+init_feed(State) ->
+  #{parent := Parent,
+    conn := Conn,
+    options := Options} = State,
+  Since = case maps:get(last_seq, State) of
+            undefined ->
+              maps:get(since, Options, 0);
+            LastSeq ->
+              LastSeq
+          end,
+  Headers = case Since of
+    0 ->
       [{<<"Accept">>, <<"text/event-stream">>}];
     Since ->
       [{<<"Accept">>, <<"text/event-stream">>},
@@ -126,24 +149,23 @@ init_feed(Parent, Conn, Options) ->
   proc_lib:init_ack(Parent, {ok, self()}),
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
-      wait_response(Parent, Ref, Options);
+      wait_response(State#{ref => Ref});
     Error ->
       lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
-      exit(Error)
+      retry_connect(State)
+      %% exit(Error)
   end.
 
-wait_response(Parent, Ref, Options) ->
+wait_response(State = #{ options := Options}) ->
   receive
     {hackney_response, Ref, {status, 200, _}} ->
       Cb = maps:get(changes_cb, Options, nil),
       Mode = maps:get(mode, Options, binary),
-      State = #{parent => Parent,
-                ref => Ref,
-                changes => queue:new(),
-                mode => Mode,
-                changes_cb => Cb,
-                buffer => <<>>},
-      wait_changes(State);
+      State2 = State#{changes => queue:new(),
+                      mode => Mode,
+                      changes_cb => Cb,
+                      buffer => <<>>},
+      wait_changes(State2);
     {hackney_response, Ref, {status, 404, _}} ->
       lager:error("~s not_found ~n", [?MODULE_STRING]),
       cleanup(Ref, not_found),
@@ -159,12 +181,13 @@ wait_response(Parent, Ref, Options) ->
       lager:error(
         "~s hackney error: ~p~n",
         [?MODULE_STRING, Reason]
-      ),
+       ),
       cleanup(Ref, Reason),
       exit(Reason())
   after ?TIMEOUT ->
-    cleanup(Ref, timeout),
-    exit(timeout)
+      Ref = maps:get(ref, State),
+      cleanup(Ref, timeout),
+      exit(timeout)
   end.
 
 wait_changes(State = #{ parent := Parent, ref := Ref }) ->
@@ -177,8 +200,7 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     {hackney_response, Ref, {headers, _Headers}} ->
       wait_changes(State);
     {hackney_response, Ref, done} ->
-      cleanup(State, "remote stopped"),
-      exit(normal);
+      retry_connect(State);
     {hackney_response, Ref, Data} when is_binary(Data) ->
       decode_data(Data, State);
     {hackney_response, Ref, Error} ->
@@ -200,6 +222,20 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     cleanup(State, timeout),
     exit(timeout)
   end.
+
+retry_connect(State = #{options := Options}) ->
+  DelayBeforeRetry = maps:get(delay_before_retry, Options, 500),
+  timer:sleep(DelayBeforeRetry),
+  Retry = case maps:get(retry, State, undefined) of
+            undefined ->
+              maps:get(max_retry, Options, 5);
+            Value ->
+              Value - 1
+          end,
+  lager:warning("[~s] retry to connect (~p)", [?MODULE_STRING, Retry]),
+  LastSeq = maps:get(last_seq, State),
+  init_feed(State#{since => LastSeq, retry => Retry}).
+
 
 system_continue(_, _, {wait_changes, State}) ->
   wait_changes(State).
@@ -223,7 +259,6 @@ cleanup(#{ ref := Ref }, Reason) ->
 cleanup(Ref, Reason) ->
   lager:info("closing change feed connection: ~p", [Reason]),
   (catch hackney:close(Ref)),
-  
   ok.
 
 
@@ -263,15 +298,19 @@ decode_data(Data, State = #{ mode := binary, changes_cb := Cb }) ->
     Changes
   ),
   wait_changes(NewState);
-decode_data(Data, State = #{ changes_cb := Cb }) ->
+decode_data(Data, State = #{ changes_cb := Cb, last_seq := PreviousSeq }) ->
   {Changes, NewState} = sse_changes(Data, State),
-  lists:foreach(
-    fun
-      (<<>>) -> ok;
-      (Change) -> Cb(parse_change(Change)) end,
-    Changes
-  ),
-  wait_changes(NewState).
+  LastSeq = lists:foldl(
+              fun
+                (<<>>,Acc) -> Acc;
+                (Change,_) ->
+                  ParsedChange = parse_change(Change),
+                  Cb(ParsedChange),
+                  maps:get(<<"seq">>, ParsedChange)
+              end,
+              PreviousSeq, Changes
+             ),
+  wait_changes(NewState#{last_seq => LastSeq}).
 
 sse_changes(Data, State=#{ buffer := Buffer }) ->
   NewBuffer = << Buffer/binary, Data/binary >>,
