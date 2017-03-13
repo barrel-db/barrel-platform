@@ -160,14 +160,13 @@ get(Conn, DocId, Options) ->
   barrel_httpc:get(Conn, DocId, Options).
 
 %% @doc retrieve several documents
--spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> AccOut when
   Conn::conn(),
-  Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+  Fun :: fun( (doc(), meta(), any()) -> any()),
   AccIn :: any(),
   DocIds :: [docid()],
   Options :: read_options(),
-  Doc :: doc(),
-  Res :: [{ok, doc(), meta()} | {error, any()}].
+  AccOut :: any().
 multi_get(Conn, Fun, AccIn, DocIds, Options) ->
   barrel_httpc:multi_get(Conn, Fun, AccIn, DocIds, Options).
 
