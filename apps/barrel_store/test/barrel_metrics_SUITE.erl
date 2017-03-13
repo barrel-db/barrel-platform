@@ -25,14 +25,12 @@
         ]).
 
 -export([ plugin/1
-        , measures/1
         ]).
 
 
 -export([init/3, increment/3]).
 
 all() -> [ plugin
-         %% , measures
          ].
 
 env() ->
@@ -70,16 +68,6 @@ plugin(_Config) ->
   ExpectedEnv = env(),
   [ {plugin, init, {counter, Name}, ExpectedEnv},
     {plugin, increment, Name, 1, ExpectedEnv} ] = Msgs,
-  ok.
-
-measures(_Config) ->
-  {ok, _, _} = barrel_local:post(<<"testdb">>, #{<<"v">> => 42}, []),
-  Msgs = collect_messages(1),
-  ExpectedEnv = env(),
-  [{plugin, increment
-   , [ <<"dbs">>, <<"testdb">>, <<"doc_created">>]
-   , 1
-   , ExpectedEnv}] = Msgs,
   ok.
 
 collect_messages(N) ->

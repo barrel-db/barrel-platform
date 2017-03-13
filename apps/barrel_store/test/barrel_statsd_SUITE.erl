@@ -25,14 +25,12 @@
         ]).
 
 -export([ plugin/1
-        , measures/1
         ]).
 
 
--export([init/3, increment/2]).
+-export([init/3, increment/3]).
 
 all() -> [ plugin
-         %% , measures
          ].
 
 env() ->
@@ -74,13 +72,6 @@ plugin(_Config) ->
   "replication/repid/doc_reads" = Key,
   ok.
 
-measures(_Config) ->
-  start_udp_server(8888),
-  {ok, _, _} = barrel_local:post(<<"testdb">>, #{<<"v">> => 42}, []),
-  Msgs = collect_messages(1),
-  [{statsd_message, {counter, "nohost", "dbs/testdb/doc_created", 1}}] = Msgs,
-  ok.
-
 collect_messages(N) ->
   lists:reverse(collect_messages(N,[])).
 
@@ -103,7 +94,7 @@ init(Type, Name, _Env) ->
   Pid ! {plugin, init, {Type, Name}},
   ok.
 
-increment(Name, _Env) ->
+increment(Name, _Value, _Env) ->
   Pid = whereis(test_metric_testd),
   Pid ! {plugin, increment, Name},
   ok.
