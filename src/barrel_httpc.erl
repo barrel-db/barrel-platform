@@ -247,14 +247,15 @@ get(Conn, DocId, Options0) ->
   end.
 
 %% @doc retrieve several documents
--spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> AccOut when
   Conn::conn(),
-  Fun :: fun(({ok, Doc} | {error, any()} ) -> Res),
+  Fun :: fun( doc(), meta(), any()) -> any()),
   AccIn :: any(),
   DocIds :: [docid()],
   Options :: read_options(),
   Doc :: doc(),
-  Res :: [{ok, doc(), meta()} | {error, any()}].
+  AccOut :: any().
+multi_get(_Db, _UserFun, AccIn, [], _Options) -> AccIn;
 multi_get(Db, UserFun, AccIn, DocIds, Options) ->
   WrapperFun = fun(Doc, Meta, Acc) -> {ok, UserFun(Doc, Meta, Acc)} end,
   {ok, Res} = barrel_httpc_fold:fold_by_id(Db, WrapperFun, AccIn, [{docids, DocIds} | Options]),
