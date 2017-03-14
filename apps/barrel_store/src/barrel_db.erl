@@ -128,13 +128,7 @@ get(DbName, DocId, Options) ->
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
       Ancestors = proplists:get_value(ancestors, Options, []),
-      %% initialize a snapshot for reads
-      {ok, Snapshot} = rocksdb:snapshot(Db#db.store),
-      ReadOptions = [{snapshot, Snapshot}],
-      %% finally retieve the doc
-      try get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions)
-      after rocksdb:release_snapshot(Snapshot)
-      end
+      get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, [])
   end.
 
 get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
@@ -230,7 +224,7 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, not_found};
     Db = #db{pid=DbPid} ->
-      
+
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
@@ -715,7 +709,7 @@ do_update_docs(DocBuckets, Db =  #db{store=Store, last_rid=LastRid }) ->
               "~s: error writing ~p: ~p",
               [?MODULE_STRING, DocId, Error]
             ),
-  
+
             lists:foreach(
               fun(Req) -> send_result(Req, Error) end,
               Reqs
@@ -854,12 +848,12 @@ merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInf
   {OldPos, _}  = barrel_doc:parse_revision(CurrentRev),
   {Idx, Parent} = find_parent(Revs, RevTree, 0),
   if
-    Idx =:= 0 -> 
+    Idx =:= 0 ->
       {ok, DocInfo};
     true ->
       ToAdd = lists:sublist(Revs, Idx),
       RevTree2 = edit_revtree(lists:reverse(ToAdd), Parent, Doc#doc.deleted, RevTree),
-  
+
       %% update docinfo
       DocInfo2 = DocInfo#{ local_seq := Seq + 1,
                            body_map => BodyMap#{ NewRev => Body },
@@ -868,7 +862,7 @@ merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInf
       %% find winning revision and update doc infos with it
       {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
       {NewPos, _}  = barrel_doc:parse_revision(WinningRev),
-  
+
       %% if the new winning revision is at the same position we keep the current
       %% one as winner. Else we update the doc info.
       if
