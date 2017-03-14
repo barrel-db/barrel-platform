@@ -25,6 +25,7 @@
         ]).
 
 -export([ plugin/1
+        , send_to_statsd/1
         ]).
 
 
@@ -33,9 +34,11 @@
 all() -> [ plugin
          ].
 
+-define(STATSD_PORT, 8125).
+
 env() ->
   [{plugin, barrel_stats_statsd},
-   {statsd_server, {{127,0,0,1}, 8888}}].
+   {statsd_server, {{127,0,0,1}, ?STATSD_PORT}}].
 
 init_per_suite(Config) ->
   application:stop(barrel_store),
@@ -61,7 +64,7 @@ end_per_suite(Config) ->
   Config.
 
 plugin(_Config) ->
-  start_udp_server(8888),
+  start_udp_server(?STATSD_PORT),
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
   barrel_metrics:increment(Name),
@@ -71,6 +74,7 @@ plugin(_Config) ->
   "nohost" = Host,
   "replication/repid/doc_reads" = Key,
   ok.
+
 
 collect_messages(N) ->
   lists:reverse(collect_messages(N,[])).
@@ -137,3 +141,30 @@ parse_statsd(Bin) ->
          end,
   {Type, Host, Key, Val}.
 
+
+%% =============================================================================
+%% Helper to test with a real statsd server
+%% =============================================================================
+%%
+%% This is a helper test to help and debug connection to a real statsd server.
+%% You should start your statsd server before running it.
+%%
+%% Run with rebar:
+%%
+%% $ rebar3 ct --suite apps/barrel_store/test/barrel_statsd_SUITE --case=send_to_statsd
+%%
+%% Tested with this graphite docker image:
+%% https://github.com/hopsoft/docker-graphite-statsd
+%% =============================================================================
+
+send_to_statsd(_Config) ->
+  Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
+
+  barrel_metrics:init(counter, Name),
+  CreateMetrics = fun() ->
+                      N = rand:uniform(100),
+                      barrel_metrics:increment(Name, N),
+                      timer:sleep(1000)
+                  end,
+  [CreateMetrics() || _ <- lists:seq(1,100)],
+  ok.
