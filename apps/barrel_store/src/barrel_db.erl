@@ -552,7 +552,10 @@ open_db(DbId, Config) ->
 default_rocksdb_options() ->
   [{max_open_files, 64},
    {allow_concurrent_memtable_write, true},
-   {enable_write_thread_adaptive_yield, true}].
+   {enable_write_thread_adaptive_yield, true},
+   %% 8 GiB
+   {table_factory_block_cache_size, 8 bsl 30}
+  ].
 
 handle_call({put, K, V}, _From, Db) ->
   Reply = (catch do_put(K, V, Db)),
