@@ -202,7 +202,7 @@ database_infos(Url) ->
   DbUrl :: binary(),
   Res :: {ok, conn()} | {error, any()}.
 connect(Url) ->
-  Max = application:get_env(barrel, max_connections, 12),
+  Max = application:get_env(barrel_httpc, max_connections, 12),
   {_, DbName} = name_from_url(Url),
   PoolName = binary_to_atom(DbName, latin1),
   _ = hackney_pool:start_pool(PoolName, [{pool_size, Max}]),
