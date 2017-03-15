@@ -64,6 +64,8 @@
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
 
+-define(BLK_CACHE_SIZE, 8 bsl 30). % 8 GiB
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -550,11 +552,12 @@ open_db(DbId, Config) ->
   rocksdb:open(Path, DbOpts).
 
 default_rocksdb_options() ->
+  BlockCacheSize = application:get_env(barrel_store, block_cache_size, ?BLK_CACHE_SIZE),
+
   [{max_open_files, 64},
    {allow_concurrent_memtable_write, true},
    {enable_write_thread_adaptive_yield, true},
-   %% 8 GiB
-   {table_factory_block_cache_size, 8 bsl 30}
+   {table_factory_block_cache_size, BlockCacheSize}
   ].
 
 handle_call({put, K, V}, _From, Db) ->
