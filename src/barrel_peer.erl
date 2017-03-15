@@ -276,13 +276,13 @@ fold_by_path(Conn, Path, Fun, AccIn, Options) ->
 %%   <<"deleted">> => true | false % present if deleted
 %%}
 -spec changes_since(Conn, Since, Fun, AccIn, Opts) -> AccOut when
-  Conn::conn(),
+  Conn :: conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
-  AccOut :: any(),
-  Opts :: list().
+  Opts :: list(),
+  AccOut :: any().
 changes_since(Conn, Since, Fun, AccIn, Opts) ->
   barrel_httpc_fold:changes_since(Conn, Since, Fun, AccIn, Opts).
 
