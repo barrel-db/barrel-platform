@@ -319,7 +319,8 @@ maybe_with_attachments([H|Options], W, Acc) ->
 put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
-  post_put(Conn, <<"PUT">>, Doc, Url, Headers);
+  Async = proplists:get_value(async, Options1, false),
+  post_put(Conn, <<"PUT">>, Doc, Url, Headers, Async);
 put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
 
 %% @doc update a document with attachments
@@ -328,7 +329,7 @@ put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
     Doc :: doc(),
     Attachments :: [attachment()],
     Options :: write_options(),
-    Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+    Res :: {ok, docid(), rev()} | ok | {error, conflict} | {error, any()}.
 put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
   case encode_attachments(Doc, Attachments) of
     {ok, DocWithAttachments} ->
@@ -337,11 +338,13 @@ put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
       {error, Error}
   end.
 
-post_put(Conn, Method, Doc, Url, Headers) ->
+post_put(Conn, Method, Doc, Url, Headers, Async) ->
   Body = jsx:encode(Doc),
   case request(Conn, Method, Url, Headers, Body) of
     {ok, Status, RespHeaders, JsonBody}=Resp ->
-      case lists:member(Status, [200, 201]) of
+      case lists:member(Status, [200, 201, 202]) of
+        true when Async =:= true ->
+          ok;
         true ->
           Json = jsx:decode(JsonBody, [return_maps]),
           DocId = maps:get(<<"id">>, Json),
@@ -391,7 +394,7 @@ headers(Options) ->
   Conn::conn(),
   Doc :: doc(),
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+  Res :: {ok, docid(), rev()} | ok |{error, conflict} | {error, any()}.
 post(Conn, Doc, Options0) ->
   DocWithId = case maps:find(<<"id">>, Doc) of
                 {ok, _Id} -> Doc;
@@ -401,7 +404,8 @@ post(Conn, Doc, Options0) ->
               end,
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>], Options1),
-  post_put(Conn, <<"POST">>, DocWithId, Url, Headers).
+  Async = proplists:get_value(async, Options1, false),
+  post_put(Conn, <<"POST">>, DocWithId, Url, Headers, Async).
 
 %% @doc create a document with attachments.
 -spec post(Conn, Doc, Attachments, Options) -> Res when
