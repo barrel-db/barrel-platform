@@ -79,7 +79,7 @@ deleted => boolean()
 %%}
 -type change() :: #{ binary() => any() }.
 
--type attachment() :: {atom(), any()}.
+-type attachment() :: #{binary() => any()}.
 
 -export_type([
   conn/0,
