@@ -34,6 +34,7 @@
   basic_op/1,
   update_doc/1,
   update_with/1,
+  async_update/1,
   bad_doc/1,
   create_doc/1,
   get_revisions/1,
@@ -60,6 +61,7 @@ all() ->
     basic_op,
     update_doc,
     update_with,
+    async_update,
     bad_doc,
     create_doc,
     get_revisions,
@@ -156,6 +158,17 @@ update_with(Config) ->
   true = (RevId =/= RevId2),
   {ok, Doc2, #{ <<"rev">> := RevId2 }} = barrel_httpc:get(db(Config), <<"a">>, []),
   #{ <<"id">> := <<"a">>, <<"v">> := 2} = Doc2.
+
+async_update(Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  ok= barrel_httpc:post(db(Config), Doc, [{async, true}]),
+  timer:sleep(200),
+  {ok,
+   #{ <<"id">> := <<"a">>, <<"v">> := 1},
+   #{ <<"rev">> := RevId } } = barrel_httpc:get(db(Config), <<"a">>, []),
+  ok= barrel_httpc:put(db(Config), Doc#{ <<"v">> => 2 }, [{async, true}, {rev, RevId}]),
+  timer:sleep(400),
+  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel_local:get(<<"testdb">>, <<"a">>, []).
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
