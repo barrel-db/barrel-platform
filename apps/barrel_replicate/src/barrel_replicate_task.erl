@@ -74,7 +74,7 @@ init({RepId, Source0, Target0, Options}) ->
   {ok, Source} = maybe_connect(Source0),
   {ok, Target} = maybe_connect(Target0),
 
-  Metrics = barrel_metrics:new(),
+  Metrics = barrel_replicate_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
 
@@ -87,8 +87,8 @@ init({RepId, Source0, Target0, Options}) ->
               changes_since_pid=Pid,
               metrics=Metrics,
               options=Options},
-  ok = barrel_metrics:create_task(Metrics, Options),
-  barrel_metrics:update_task(Metrics),
+  ok = barrel_replicate_metrics:create_task(Metrics, Options),
+  barrel_replicate_metrics:update_task(Metrics),
   {ok, State}.
 
 
@@ -146,7 +146,7 @@ handle_info({change, Change}, S) ->
   Checkpoint3 = barrel_replicate_checkpoint:maybe_write_checkpoint(Checkpoint2),
 
   S2 = S#st{checkpoint=Checkpoint3, metrics=Metrics2},
-  barrel_metrics:update_task(Metrics2),
+  barrel_replicate_metrics:update_task(Metrics2),
   {noreply, S2};
 
 
@@ -171,7 +171,7 @@ handle_info({'EXIT', Pid, Reason}, State) ->
   {stop, Reason, State}.
 
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
-  barrel_metrics:update_task(State#st.metrics),
+  barrel_replicate_metrics:update_task(State#st.metrics),
   lager:debug(
     "barrel_replicate(~p} terminated: ~p",
     [RepId, _Reason]
