@@ -58,7 +58,10 @@ parse_params([{<<"edit">>, Edit}|Tail], State) ->
   parse_params(Tail, State#state{edit=Edit});
 parse_params([{<<"history">>, <<"true">>}|Tail], State) ->
   parse_params(Tail, State#state{history=true});
+parse_params([{<<"async">>, <<"true">>}|Tail], State) ->
+  parse_params(Tail, State#state{async=true});
 parse_params([{Param, __Value}|_], _State) ->
+  io:format("unknown param ~p~n", [Param]),
   {error, {unknown_param, Param}}.
 
 
@@ -161,7 +164,10 @@ create_resource(Req, State) ->
       barrel_http_reply:error(409, <<"document exists">>, Req4, State);
     {ok, CreatedDocId, RevId} ->
       Req5 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req4),
-      barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State)
+      barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State);
+    ok ->
+      barrel_http_reply:doc(201, #{<<"ok">> => true}, Req4, State)
+
   end.
 
 delete_resource(Req, State) ->

@@ -64,6 +64,8 @@
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
 
+-define(BLK_CACHE_SIZE, 8 bsl 30). % 8 GiB
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -128,13 +130,7 @@ get(DbName, DocId, Options) ->
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
       Ancestors = proplists:get_value(ancestors, Options, []),
-      %% initialize a snapshot for reads
-      {ok, Snapshot} = rocksdb:snapshot(Db#db.store),
-      ReadOptions = [{snapshot, Snapshot}],
-      %% finally retieve the doc
-      try get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions)
-      after rocksdb:release_snapshot(Snapshot)
-      end
+      get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, [])
   end.
 
 get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
@@ -230,6 +226,7 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, found};
     Db = #db{pid=DbPid} ->
+
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
@@ -555,9 +552,13 @@ open_db(DbId, Config) ->
   rocksdb:open(Path, DbOpts).
 
 default_rocksdb_options() ->
+  BlockCacheSize = application:get_env(barrel_store, block_cache_size, ?BLK_CACHE_SIZE),
+
   [{max_open_files, 64},
    {allow_concurrent_memtable_write, true},
-   {enable_write_thread_adaptive_yield, true}].
+   {enable_write_thread_adaptive_yield, true},
+   {table_factory_block_cache_size, BlockCacheSize}
+  ].
 
 handle_call({put, K, V}, _From, Db) ->
   Reply = (catch do_put(K, V, Db)),
@@ -853,12 +854,12 @@ merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInf
   {OldPos, _}  = barrel_doc:parse_revision(CurrentRev),
   {Idx, Parent} = find_parent(Revs, RevTree, 0),
   if
-    Idx =:= 0 -> 
+    Idx =:= 0 ->
       {ok, DocInfo};
     true ->
       ToAdd = lists:sublist(Revs, Idx),
       RevTree2 = edit_revtree(lists:reverse(ToAdd), Parent, Doc#doc.deleted, RevTree),
-  
+
       %% update docinfo
       DocInfo2 = DocInfo#{ local_seq := Seq + 1,
                            body_map => BodyMap#{ NewRev => Body },
@@ -867,7 +868,7 @@ merge_revtree_with_conflict(Doc = #doc{revs=[NewRev |_]=Revs, body=Body}, DocInf
       %% find winning revision and update doc infos with it
       {WinningRev, Branched, Conflict} = barrel_revtree:winning_revision(RevTree2),
       {NewPos, _}  = barrel_doc:parse_revision(WinningRev),
-  
+
       %% if the new winning revision is at the same position we keep the current
       %% one as winner. Else we update the doc info.
       if

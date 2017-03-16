@@ -34,6 +34,7 @@
   basic_op/1,
   update_doc/1,
   update_with/1,
+  async_update/1,
   bad_doc/1,
   create_doc/1,
   get_revisions/1,
@@ -60,6 +61,7 @@ all() ->
     basic_op,
     update_doc,
     update_with,
+    async_update,
     bad_doc,
     create_doc,
     get_revisions,
@@ -146,7 +148,7 @@ update_with(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_httpc:post(db(Config), Doc, []),
   {ok, Doc, #{ <<"rev">> := RevId }} = barrel_httpc:get(db(Config), <<"a">>, []),
-  
+
   {ok, <<"a">>, RevId2} = barrel_httpc:update_with(
     db(Config),
     <<"a">>,
@@ -156,6 +158,17 @@ update_with(Config) ->
   true = (RevId =/= RevId2),
   {ok, Doc2, #{ <<"rev">> := RevId2 }} = barrel_httpc:get(db(Config), <<"a">>, []),
   #{ <<"id">> := <<"a">>, <<"v">> := 2} = Doc2.
+
+async_update(Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  ok= barrel_httpc:post(db(Config), Doc, [{async, true}]),
+  timer:sleep(200),
+  {ok,
+   #{ <<"id">> := <<"a">>, <<"v">> := 1},
+   #{ <<"rev">> := RevId } } = barrel_httpc:get(db(Config), <<"a">>, []),
+  ok= barrel_httpc:put(db(Config), Doc#{ <<"v">> => 2 }, [{async, true}, {rev, RevId}]),
+  timer:sleep(400),
+  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel_local:get(<<"testdb">>, <<"a">>, []).
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
@@ -207,25 +220,27 @@ multi_get(Config) ->
          {<<"c">>, 3}],
   Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
   [ {ok,_,_} = barrel_httpc:post(db(Config), D, []) || D <- Docs ],
-  
-  %% the "query" to get the id/rev
-  Mget = [ Id || {Id, _} <- Kvs],
-  
+
+
+  Mget =  [<<"a">>, <<"c">>],
+
   %% a fun to parse the results
   %% the parameter is the same format as the regular get function output
   Fun=fun(Doc, Meta, Acc) ->
-    #{<<"id">> := DocId} = Doc,
-    #{<<"rev">> := RevId} = Meta,
-    
-    [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]
+          #{<<"id">> := DocId} = Doc,
+          #{<<"rev">> := RevId} = Meta,
+
+          [#{<<"id">> => DocId, <<"rev">> => RevId, <<"doc">>  => Doc }|Acc]
       end,
-  
+
+  [] = barrel_httpc:multi_get(db(Config), Fun, [], [], []),
+
   %% let's process it
   Results = barrel_httpc:multi_get(db(Config), Fun, [], Mget, []),
-  
+
+
   %% check results
   [#{<<"doc">> := #{<<"id">> := <<"a">>, <<"v">> := 1}, <<"id">> := <<"a">>,  <<"rev">> := _},
-   #{<<"doc">> := #{<<"id">> := <<"b">>, <<"v">> := 2}},
    #{<<"doc">> := #{<<"id">> := <<"c">>, <<"v">> := 3}}] = lists:reverse(Results).
 
 revsdiff(Config) ->
@@ -250,19 +265,19 @@ write_batch(Config) ->
     { delete, <<"c">>, Rev3_1},
     { put, D4, <<>>}
   ],
-  
+
   {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
   {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"c">>, []),
-  
+
   Results = barrel_httpc:write_batch(db(Config), OPs, []),
   true = is_list(Results),
-  
+
   [ {ok, <<"a">>, _},
     {ok, <<"b">>, _},
     {ok, <<"c">>, _},
     {error, not_found} ] = Results,
-  
+
   {ok, #{ <<"v">> := 2}, _} = barrel_httpc:get(db(Config), <<"a">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel_httpc:get(db(Config), <<"b">>, []),
   {error, not_found} = barrel_httpc:get(db(Config), <<"c">>, []).
@@ -273,27 +288,27 @@ write_batch_with_attachment(Config) ->
   D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   Att1 = #{ <<"id">> => <<"att_a">>, <<"blob">> => <<"hello a">>},
   Att2 = #{ <<"id">> => <<"att_b">>, <<"blob">> => <<"hello b">>},
-  
+
   %% store d1 and check db state
   {ok, _, Rev1_1} = barrel_httpc:post(db(Config), D1, []),
   {ok, D1, [], _} = barrel_httpc:get(db(Config), <<"a">>, [{attachments, all}]),
   {error, not_found} = barrel_httpc:get(db(Config), <<"b">>, []),
-  
+
   %% write batch
   OPs = [
     {put, D1, [Att1], Rev1_1},
     {post, D2, [Att2]}
   ],
-  
+
   Results = barrel_httpc:write_batch(db(Config), OPs, []),
   true = is_list(Results),
   [ {ok, <<"a">>, _},
     {ok, <<"b">>, _} ] = Results,
-  
-  
+
   {ok, D1,
    [#{<<"id">> := <<"att_a">>,
       <<"blob">> := <<"hello a">>}], _} = barrel_httpc:get(db(Config), <<"a">>,  [{attachments,  all}]),
+
   {ok, D2,
     [#{<<"id">> := <<"att_b">>,
        <<"blob">> := <<"hello b">>}], _} = barrel_httpc:get(db(Config), <<"b">>,  [{attachments,  all}]).

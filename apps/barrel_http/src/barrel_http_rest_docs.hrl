@@ -33,5 +33,6 @@
           timer,
           heartbeat,
           last_seq,
-          changes_since_pid
+          changes_since_pid,
+          async=false
          }).

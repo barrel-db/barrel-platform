@@ -6,9 +6,6 @@
          parse_change/1]).
 
 
--type listener_options() :: #{}.
-
--export_type([listener_options/0]).
 
 %% @doc start a change listener on the database.
 %% This function create a process that will listen on the changes feed API.
@@ -25,7 +22,7 @@
 %%}
 -spec start_listener(Conn, ListenerOptions) -> Res when
   Conn :: barrel_peer:conn(),
-  ListenerOptions :: listener_options(),
+  ListenerOptions :: barrel_httpc_changes:listener_options(),
   ListenerPid :: pid(),
   Res :: {ok, ListenerPid} | {error, any()}.
 start_listener(Conn, Options) ->
