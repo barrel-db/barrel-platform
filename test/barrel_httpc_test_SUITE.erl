@@ -33,6 +33,7 @@
   db_ops/1,
   basic_op/1,
   update_doc/1,
+  delete_doc_without_revision/1,
   update_with/1,
   async_update/1,
   bad_doc/1,
@@ -60,6 +61,7 @@ all() ->
     db_ops,
     basic_op,
     update_doc,
+    delete_doc_without_revision,
     update_with,
     async_update,
     bad_doc,
@@ -143,6 +145,15 @@ update_doc(Config) ->
   {ok, <<"a">>, _RevId2} = barrel_httpc:delete(db(Config), <<"a">>, [{rev, RevId2}]),
   {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []),
   {ok, <<"a">>, _RevId3} = barrel_httpc:post(db(Config), Doc, []).
+
+
+delete_doc_without_revision(Config) ->
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {ok, <<"a">>, RevId} = barrel_httpc:post(db(Config), Doc, []),
+  {ok, Doc, _Meta} = barrel_httpc:get(db(Config), <<"a">>, []),
+  {ok, _, _} = barrel_httpc:delete(db(Config), <<"a">>, []),
+  {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []).
 
 update_with(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
