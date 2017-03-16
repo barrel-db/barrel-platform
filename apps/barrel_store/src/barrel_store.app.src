@@ -12,6 +12,7 @@
      rocksdb,
      uuid,
      sext,
+     hooks,
      barrel_common
     ]},
    {env, []},

@@ -224,7 +224,7 @@ get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
 
 update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
+    undefined -> {error, found};
     Db = #db{pid=DbPid} ->
 
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),

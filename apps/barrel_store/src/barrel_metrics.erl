@@ -1,4 +1,4 @@
-%% Copyright 2016, Bernard Notarianni
+%% Copyright 2017, Bernard Notarianni
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -15,67 +15,29 @@
 -module(barrel_metrics).
 -author("Bernard Notarianni").
 
--export([new/0]).
--export([to_list/1]).
--export([inc/3]).
--export([update_times/3]).
--export([create_task/2]).
--export([update_task/1]).
+%% API
 
+-export([ init/2
+        , increment/1
+        , increment/2
+        ]).
 
-new() ->
-  #{ docs_read => 0
-   , doc_read_failures => 0
-   , doc_read_times => new_time_stats()
-   , docs_written => 0
-   , doc_write_failures => 0
-   , doc_write_times => new_time_stats()
-   }.
+init(Type, Name) ->
+  Env = application:get_env(barrel_store, metrics, undefined),
+  case Env of
+    undefined -> ok;
+    Env ->
+      Plugin = proplists:get_value(plugin, Env),
+      Plugin:init(Type, Name, Env)
+  end.
 
-new_time_stats() ->
-  #{ values => []
-   , period => 10
-   , mean => 0
-   }.
-
-to_list(Metrics) ->
-  maps:to_list(Metrics). 
-
-
-inc(CounterName, Stats, Number) ->
-  Counter = maps:get(CounterName, Stats),
-  maps:update(CounterName, Counter+Number, Stats).
-
-update_times(MeasureName, NewMeasure, Stat) ->
-  TimeStat = maps:get(MeasureName, Stat),
-  Values = maps:get(values, TimeStat),
-  Period = maps:get(period, TimeStat),
-  {Mean, L2} = mean([NewMeasure|Values], Period),
-  TimeStat2 = TimeStat#{values:=L2, mean:=Mean},
-  maps:update(MeasureName, TimeStat2, Stat).
-
-mean(List, Period) ->
-  mean(List, [], 0, 0, Period).
-
-mean([], Acc, Sum, Size, _Period) ->
-  {Sum/Size, Acc};
-
-mean([_|_], Acc, Sum, Size, Period) when Size > Period ->
-  mean([], Acc, Sum, Size, Period);
-
-mean([V|Others], Acc, Sum, Size, Period) ->
-  mean(Others, [V|Acc], Sum+V, Size+1, Period).
-
-
-%%==============================================================================
-%% Storage of collected metrics
-%%==============================================================================
-
-create_task(Metrics, Options) ->
-  ok = barrel_task_status:add_task(to_list(Metrics)),
-  Frequency = proplists:get_value(metrics_freq, Options, 1000),
-  barrel_task_status:set_update_frequency(Frequency),
-  ok.
-
-update_task(Metrics) ->
-  barrel_task_status:update(to_list(Metrics)).
+increment(Name) ->
+  increment(Name, 1).
+increment(Name, Value) ->
+  Env = application:get_env(barrel_store, metrics, undefined),
+  case Env of
+    undefined -> ok;
+    Env ->
+      Plugin = proplists:get_value(plugin, Env),
+      Plugin:increment(Name, Value, Env)
+  end.
