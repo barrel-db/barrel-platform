@@ -28,7 +28,11 @@
         ]).
 
 
--export([init/3, increment/3]).
+-export([ init/3
+        , increment/3
+        , set_value/3
+        , duration/3
+        ]).
 
 all() -> [ plugin
          ].
@@ -63,11 +67,16 @@ plugin(_Config) ->
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
   barrel_metrics:increment(Name),
+  barrel_metrics:set_value(Name, 42),
+  barrel_metrics:duration(Name, 123),
 
-  Msgs = collect_messages(2),
+  Msgs = collect_messages(4),
   ExpectedEnv = env(),
-  [ {plugin, init, {counter, Name}, ExpectedEnv},
-    {plugin, increment, Name, 1, ExpectedEnv} ] = Msgs,
+  [ {plugin, init, {counter, Name}, ExpectedEnv}
+  , {plugin, increment, Name, 1, ExpectedEnv}
+  , {plugin, set_value, Name, 42, ExpectedEnv}
+  , {plugin, duration, Name, 123, ExpectedEnv}
+  ] = Msgs,
   ok.
 
 collect_messages(N) ->
@@ -97,3 +106,12 @@ increment(Name, Value, Env) ->
   Pid ! {plugin, increment, Name, Value, Env},
   ok.
 
+set_value(Name, Value, Env) ->
+  Pid = whereis(test_metric_client),
+  Pid ! {plugin, set_value, Name, Value, Env},
+  ok.
+
+duration(Name, Value, Env) ->
+  Pid = whereis(test_metric_client),
+  Pid ! {plugin, duration, Name, Value, Env},
+  ok.

@@ -20,6 +20,8 @@
 -export([ init/2
         , increment/1
         , increment/2
+        , set_value/2
+        , duration/2
         ]).
 
 init(Type, Name) ->
@@ -40,4 +42,22 @@ increment(Name, Value) ->
     Env ->
       Plugin = proplists:get_value(plugin, Env),
       Plugin:increment(Name, Value, Env)
+  end.
+
+set_value(Name, Value) ->
+  Env = application:get_env(barrel_store, metrics, undefined),
+  case Env of
+    undefined -> ok;
+    Env ->
+      Plugin = proplists:get_value(plugin, Env),
+      Plugin:set_value(Name, Value, Env)
+  end.
+
+duration(Name, Value) ->
+  Env = application:get_env(barrel_store, metrics, undefined),
+  case Env of
+    undefined -> ok;
+    Env ->
+      Plugin = proplists:get_value(plugin, Env),
+      Plugin:duration(Name, Value, Env)
   end.

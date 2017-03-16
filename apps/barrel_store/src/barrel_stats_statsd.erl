@@ -21,10 +21,19 @@
 %% plugin callbacks
 -export([ init/3
         , increment/3
+        , set_value/3
+        , duration/3
         ]).
 
+%% Specification for statsd message format:
+%% https://github.com/etsy/statsd/blob/master/docs/metric_types.md
 
 init(_Type, _Name, _Env) ->
+  ok.
+
+set_value(Name, Value, Env) ->
+  Server = proplists:get_value(statsd_server, Env),
+  push(Server, Name, {gauge, Value}),
   ok.
 
 increment(Name, Value, Env) ->
@@ -32,6 +41,10 @@ increment(Name, Value, Env) ->
   push(Server, Name, {counter, Value}),
   ok.
 
+duration(Name, Value, Env) ->
+  Server = proplists:get_value(statsd_server, Env),
+  push(Server, Name, {duration, Value}),
+  ok.
 
 push(_, _, undefined) ->
   ok;
@@ -45,6 +58,16 @@ push(Server, Name, Value) ->
 send({Peer, Port}, Key, {counter, Value}) ->
   BVal = integer_to_binary(Value),
   Data = <<Key/binary, ":", BVal/binary, "|c">>,
+  udp(Peer, Port, Data);
+
+send({Peer, Port}, Key, {gauge, Value}) ->
+  BVal = integer_to_binary(Value),
+  Data = <<Key/binary, ":", BVal/binary, "|g">>,
+  udp(Peer, Port, Data);
+
+send({Peer, Port}, Key, {duration, Value}) ->
+  BVal = integer_to_binary(Value),
+  Data = <<Key/binary, ":", BVal/binary, "|ms">>,
   udp(Peer, Port, Data).
 
 udp(Peer, Port, Data) ->
