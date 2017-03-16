@@ -22,7 +22,7 @@
   {git,"https://github.com/ninenines/ranch",
        {ref,"40809cd2b257a8a53bcb5588ecaa88cc5381ff5c"}},
   1},
- {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.6.2">>},0},
+ {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.6.3">>},0},
  {<<"sext">>,{pkg,<<"sext">>,<<"1.4.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.6.0">>},0}]}.
@@ -39,7 +39,7 @@
  {<<"metrics">>, <<"25F094DEA2CDA98213CECC3AEFF09E940299D950904393B2A29D191C346A8486">>},
  {<<"mimerl">>, <<"993F9B0E084083405ED8252B99460C4F0563E41729AB42D9074FD5E52439BE88">>},
  {<<"quickrand">>, <<"33A277A639C442D77AB5C1EEA4641A49E3F034FD13658BB57E192A6E083FE77D">>},
- {<<"rocksdb">>, <<"29DCC0B89F7760F5BDD6F03FBB50AF1480E1B192C6B1FDDD1584EEDDC9081D00">>},
+ {<<"rocksdb">>, <<"21EECAA14196CF3CF9DD857C6B5E9C5720DA2CC3A0FD97AEE5D22101AEBC227C">>},
  {<<"sext">>, <<"2A9443A90C3164231A5E11C73133C4B1762B27FBF1647AA0DE06EF565C47B38B">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
  {<<"uuid">>, <<"1BA81515EEB37EEB7F1563B658E30CDF18BCAF1FD6A390BBF3838461753E69D8">>}]}
