@@ -75,7 +75,7 @@ plugin(_Config) ->
   Msgs = collect_messages(1),
   [{statsd_message, {counter, Host, Key, 1}}] = Msgs,
   "nohost" = Host,
-  "replication/repid/doc_reads" = Key,
+  "replication.repid.doc_reads" = Key,
   ok.
 
 
