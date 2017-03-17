@@ -3,13 +3,14 @@
 
 <p align="center">
 
+
    <a href="https://gitter.im/barrel-db/barrel-platform?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge">
         <img src="https://badges.gitter.im/barrel-db/barrel-platform.svg">
     </a>
 
-   <a href="https://travis-ci.org/barrel-db/barrel-platform">
-        <img src="https://travis-ci.org/barrel-db/barrel-platform.svg?branch=master">
-   </a>
+   <a href="https://gitlab.com/barrel-db/barrel-platform/commits/master">
+        <img alt="build status" src="https://gitlab.com/barrel-db/barrel-platform/badges/master/build.svg" />
+    </a>
 
    <a href="https://github.com/barrel-db/barrel-platform/blob/master/LICENSE">
         <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
