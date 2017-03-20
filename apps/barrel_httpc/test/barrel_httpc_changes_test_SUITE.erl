@@ -150,6 +150,7 @@ restart_when_server_timeout(Config) ->
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
   ok = application:stop(barrel_http),
+  timer:sleep(200),
   ok = application:start(barrel_http),
   timer:sleep(100),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
@@ -213,6 +214,7 @@ multiple_put(Config) ->
     lists:seq(1, 1000)
   ),
 
+  1000 = length(Pids),
   ok = wait_pids(Pids),
 
   #{ <<"docs_count">> := 1000 } = barrel_httpc:database_infos(?DB_URL),
@@ -220,7 +222,8 @@ multiple_put(Config) ->
     {changes, Changes} ->
       case length(Changes) of
         1000 -> ok;
-        _ -> erlang:error(bad_changes_count)
+        Other ->
+          ct:fail("bad changes count=~p",[Other])
       end
   end,
   ok.

@@ -34,7 +34,7 @@
 all() -> [ plugin
          ].
 
--define(STATSD_PORT, 8125).
+-define(STATSD_PORT, 8888).
 
 env() ->
   [{plugin, barrel_stats_statsd},
