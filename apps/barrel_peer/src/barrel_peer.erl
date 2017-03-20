@@ -246,7 +246,7 @@ write_batch(Conn, Updates, Options) ->
 -spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when
   Conn::conn(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((Doc :: doc(), Meta :: meta(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),

@@ -3,18 +3,15 @@
 
 <p align="center">
 
+
    <a href="https://gitter.im/barrel-db/barrel-platform?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge">
         <img src="https://badges.gitter.im/barrel-db/barrel-platform.svg">
     </a>
-   
-   <a href="https://travis-ci.org/barrel-db/barrel-platform">
-        <img src="https://travis-ci.org/barrel-db/barrel-platform.svg?branch=master">
-   </a>
-   
-   <a href="https://waffle.io/barrel-db/barrel-platform">
-    <img src="https://badge.waffle.io/barrel-db/barrel-platform.png?label=Merging...&title=Merging">
-   </a>
-      
+
+   <a href="https://gitlab.com/barrel-db/barrel-platform/commits/master">
+        <img alt="build status" src="https://gitlab.com/barrel-db/barrel-platform/badges/master/build.svg" />
+    </a>
+
    <a href="https://github.com/barrel-db/barrel-platform/blob/master/LICENSE">
         <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
    </a>
@@ -28,11 +25,15 @@
 
 # Barrel platform
 
-Barrel is a modern document-oriented database in Erlang focusing on data locality (put/match the data next to you) and P2P.
+Barrel is a modern document-oriented database in Erlang focusing on data locality (put/match the data next to you) and
+P2P.
 
-Barrel must also be able to work in unreliable conditions were sometimes the quorum can't be achieved (because it is working offline or in other conditions).
+Barrel must also be able to work in unreliable conditions were sometimes the quorum can't be achieved (because it is
+working offline or in other conditions).
 
-Because Barrel is built on an existing relatively small code base, it is possible to make radical changes as part of an incremental process. Underpinning, all this work is efficient for small and large data systems — something rare among database systems.
+Because Barrel is built on an existing relatively small code base, it is possible to make radical changes as part of an
+incremental process. Underpinning, all this work is efficient for small and large data systems — something rare among
+database systems.
 
 ## Requirements
 
