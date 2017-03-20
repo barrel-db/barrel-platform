@@ -64,32 +64,38 @@ end_per_suite(Config) ->
   Config.
 
 plugin(_Config) ->
+  InitMsgs = collect_all_messages(),
+  CountersInit = [ C || {plugin, init, {counter, C}, _} <- InitMsgs],
+  [ <<"testdb">> = Db || [_,Db,_] <- CountersInit ],
+  4 = length(CountersInit),
+  TimersInit = [ G || {plugin, init, {duration, G}, _} <- InitMsgs],
+  [ <<"testdb">> = Db || [_,Db,_] <- TimersInit ],
+  3 = length(TimersInit),
+
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
   barrel_metrics:increment(Name),
   barrel_metrics:set_value(Name, 42),
   barrel_metrics:duration(Name, 123),
 
-  Msgs = collect_messages(4),
+  Msgs = collect_all_messages(),
   ExpectedEnv = env(),
   [ {plugin, init, {counter, Name}, ExpectedEnv}
   , {plugin, increment, Name, 1, ExpectedEnv}
   , {plugin, set_value, Name, 42, ExpectedEnv}
   , {plugin, duration, Name, 123, ExpectedEnv}
   ] = Msgs,
+
   ok.
 
-collect_messages(N) ->
-  lists:reverse(collect_messages(N,[])).
-
-collect_messages(0, Acc) ->
-  Acc;
-collect_messages(N, Acc) ->
+collect_all_messages() ->
+  collect_all_messages([]).
+collect_all_messages(Acc) ->
   receive
     M ->
-      collect_messages(N-1, [M|Acc])
-  after 2000 ->
-      {error, timeout}
+      collect_all_messages([M|Acc])
+  after 0 ->
+      lists:reverse(Acc)
   end.
 
 %% =============================================================================

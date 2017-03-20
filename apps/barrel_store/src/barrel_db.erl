@@ -226,19 +226,23 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, found};
     Db = #db{pid=DbPid} ->
-
+      StartTime1 = os:timestamp(),
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
       barrel_metrics:increment([<<"store">>, DbName, <<"starting_update">>]),
-      StartTime = os:timestamp(),
+      StartTime2 = os:timestamp(),
       DbPid ! {update_docs, DocBuckets},
 
-      case Async of
-        false ->
-          collect_updates(Db, Ref, MRef, [], N, StartTime);
-        true ->
-          ok
-      end
+      Res = case Async of
+              false ->
+                collect_updates(Db, Ref, MRef, [], N, StartTime2);
+              true ->
+                ok
+            end,
+
+      barrel_metrics:duration_since([<<"store">>, DbName, <<"update">>], StartTime1),
+      barrel_metrics:increment([<<"store">>, DbName, <<"update">>]),
+      Res
   end.
 
 collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N, StartTime) when N > 0 ->
@@ -499,6 +503,8 @@ init([DbId, Config]) ->
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
 
+  ok = init_metrics(DbId),
+
   %% set indexer mode
   IndexerMode = barrel_lib:to_atom(
     maps:get(<<"indexer_mode">>, Config, consistent)
@@ -544,6 +550,21 @@ init_meta(Store) ->
       <<"system_docs_count">> => 0},
     []
   ).
+
+init_metrics(DbId) ->
+  Counters = [ [<<"store">>, DbId, <<"starting_update">>]
+             , [<<"store">>, DbId, <<"local_update">>]
+             , [<<"store">>, DbId, <<"collect_updates">>]
+             , [<<"store">>, DbId, <<"update_docs">>]
+             ],
+  [ barrel_metrics:init(counter, C) || C <- Counters ],
+
+  Durations = [ [<<"store">>, DbId, <<"update_docs">>]
+              , [<<"store">>, DbId, <<"local_update">>]
+              , [<<"store">>, DbId, <<"index_update">>]
+              ],
+  [ barrel_metrics:init(duration, D) || D <- Durations ],
+  ok.
 
 open_db(DbId, Config) ->
   Path = db_path(DbId),

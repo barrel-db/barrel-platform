@@ -252,10 +252,7 @@ post(Db, Doc, Options) ->
   update_doc(Db, Batch).
 
 update_doc(Db, Batch) ->
-  StartTime = os:timestamp(),
   Result = barrel_db:update_docs(Db, Batch),
-  barrel_metrics:duration_since([<<"store">>, Db, <<"update">>, <<"duration">>], StartTime),
-  barrel_metrics:increment([<<"store">>, Db, <<"update">>, <<"count">>]),
   case Result of
     ok -> ok;
     [Res] -> Res
