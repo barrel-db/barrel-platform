@@ -28,6 +28,7 @@
    [ one_doc/1
    , target_not_empty/1
    , deleted_doc/1
+   , attachments/1
    , random_activity/1
    ]).
 
@@ -35,6 +36,7 @@ all() ->
   [ one_doc
   , target_not_empty
   , deleted_doc
+  , attachments
   , random_activity
   ].
 
@@ -46,7 +48,8 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
   _ = barrel_store:create_db(<<"testdb">>, #{}),
   _ = barrel_store:create_db(<<"source">>, #{}),
-  [{source_conn, source()},{target_conn, target()}, {source, <<"source">>}, {target, <<"testdb">>}|Config].
+  [{source_conn, source()},{target_conn, target()},
+   {source, <<"source">>}, {target, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
   ok = barrel_local:delete_db(<<"testdb">>),
@@ -136,6 +139,32 @@ deleted_doc(Config) ->
   {error, not_found} = barrel_local:get(Source, DocId, []),
   timer:sleep(400),
   {error, not_found} = barrel_local:get(Target, DocId, []),
+  ok = barrel_local:stop_replication(RepId),
+  ok.
+
+attachments(Config) ->
+  {ok, HttpcSource} = barrel_httpc:connect(source_url()),
+  {ok, HttpcTarget} = barrel_httpc:connect(target_url()),
+  DocId = <<"withattachments">>,
+  Doc = #{ <<"id">> => DocId, <<"v">> => 1},
+  AttId = <<"myattachement">>,
+  Blob = <<"blobdata">>,
+  Attachments = [#{<<"id">> => AttId,
+                   <<"blob">> => Blob}],
+  {ok, DocId, _} = barrel_httpc:post(HttpcSource, Doc, Attachments, []),
+
+  SourceConn = proplists:get_value(source_conn, Config),
+  TargetConn = proplists:get_value(target_conn, Config),
+  RepConfig = #{<<"source">> => SourceConn,
+                <<"target">> => TargetConn},
+  {ok, #{<<"replication_id">> := RepId}} =
+    barrel_replicate:start_replication(RepConfig, []),
+  timer:sleep(400),
+
+  {ok, Doc, [A], _} = barrel_httpc:get(HttpcTarget, DocId, [{attachments, all}]),
+  #{<<"id">> := AttId,
+    <<"blob">> := Blob} = A,
+
   ok = barrel_local:stop_replication(RepId),
   ok.
 

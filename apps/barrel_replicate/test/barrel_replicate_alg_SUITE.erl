@@ -81,7 +81,7 @@ one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
 
-  Metrics = barrel_metrics:new(),
+  Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
@@ -97,7 +97,7 @@ source_not_empty(_Config) ->
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
 
-  Metrics = barrel_metrics:new(),
+  Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
@@ -110,7 +110,7 @@ deleted_doc(_Config) ->
   {ok, #{ <<"id">> := <<"a">>}, #{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, [{rev, RevId}]),
 
-  Metrics = barrel_metrics:new(),
+  Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
 
@@ -125,7 +125,7 @@ random_activity(_Config) ->
   Scenario = scenario(),
   ExpectedResults = play_scenario(Scenario, <<"source">>),
 
-  Metrics = barrel_metrics:new(),
+  Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
   {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
   ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>),

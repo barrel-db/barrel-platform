@@ -18,12 +18,14 @@
   database_infos/1,
   connect/1,
   get/3,
+  multi_get/5,
   put/3,
   put/4,
   post/3,
   post/4,
   delete/3,
   update_with/4,
+  write_batch/3,
   fold_by_id/4,
   fold_by_path/5,
   changes_since/5
@@ -77,7 +79,7 @@ deleted => boolean()
 %%}
 -type change() :: #{ binary() => any() }.
 
--type attachment() :: {atom(), any()}.
+-type attachment() :: #{binary() => any()}.
 
 -export_type([
   conn/0,
@@ -157,6 +159,17 @@ connect(Url) ->
 get(Conn, DocId, Options) ->
   barrel_httpc:get(Conn, DocId, Options).
 
+%% @doc retrieve several documents
+-spec multi_get(Conn, Fun, AccIn, DocIds, Options) -> AccOut when
+  Conn::conn(),
+  Fun :: fun( (doc(), meta(), any()) -> any()),
+  AccIn :: any(),
+  DocIds :: [docid()],
+  Options :: read_options(),
+  AccOut :: any().
+multi_get(Conn, Fun, AccIn, DocIds, Options) ->
+  barrel_httpc:multi_get(Conn, Fun, AccIn, DocIds, Options).
+
 %% @doc create or update a document. Return the new created revision
 %% with the docid or a conflict.
 -spec put(Conn, Doc, Options) -> Res when
@@ -218,11 +231,22 @@ post(Conn, Doc, Attachments, Options) when is_list(Attachments) ->
 update_with(Conn, DocId, Fun, Options) ->
   barrel_httpc:update_with(Conn, DocId, Fun, Options).
 
+%% @doc Apply the specified updates to the database.
+%% Note: The batch is not guaranteed to be atomic, atomicity is only guaranteed at the doc level.
+-spec write_batch(Conn, Updates, Options) -> Results when
+  Conn :: conn(),
+  Updates :: [barrel_httpc:batch_op()],
+  Options :: barrel_httpc:batch_options(),
+  Results :: barrel_httpc:batch_results().
+write_batch(Conn, Updates, Options) ->
+  barrel_httpc:write_batch(Conn, Updates, Options).
+
+
 %% @doc fold all docs by Id
 -spec fold_by_id(Conn, Fun, AccIn, Options) -> AccOut | Error when
   Conn::conn(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((Doc :: doc(), Meta :: meta(), Acc1 :: any()) -> FunRes),
   Options :: fold_options(),
   AccIn :: any(),
   AccOut :: any(),
@@ -252,13 +276,13 @@ fold_by_path(Conn, Path, Fun, AccIn, Options) ->
 %%   <<"deleted">> => true | false % present if deleted
 %%}
 -spec changes_since(Conn, Since, Fun, AccIn, Opts) -> AccOut when
-  Conn::conn(),
+  Conn :: conn(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
-  AccOut :: any(),
-  Opts :: list().
+  Opts :: list(),
+  AccOut :: any().
 changes_since(Conn, Since, Fun, AccIn, Opts) ->
   barrel_httpc_fold:changes_since(Conn, Since, Fun, AccIn, Opts).
 
