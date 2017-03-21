@@ -54,7 +54,7 @@ init(Req, _Opts) ->
   Feed = accepted_feed(Req),
   IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>]),
   Route = binary:split(Path, <<"/">>, [global]),
-  S1 = #state{path=Path},
+  S1 = #state{path=Path, start_time=os:timestamp()},
   case {Route,  IsChangesFeed} of
     {[<<>>,<<"dbs">>,_,<<"docs">>], false} ->
       S2 = S1#state{handler=list},

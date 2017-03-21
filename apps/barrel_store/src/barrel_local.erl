@@ -252,7 +252,8 @@ post(Db, Doc, Options) ->
   update_doc(Db, Batch).
 
 update_doc(Db, Batch) ->
-  case barrel_db:update_docs(Db, Batch) of
+  Result = barrel_db:update_docs(Db, Batch),
+  case Result of
     ok -> ok;
     [Res] -> Res
   end.

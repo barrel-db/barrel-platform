@@ -51,8 +51,7 @@ push(_, _, undefined) ->
 push(Server, Name, Value) ->
   [_, NodeId] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
   [Node | _] = binary:split(NodeId, <<".">>),
-  StasdKey = barrel_lib:binary_join(Name, <<"/">>),
-  NameWithNode = <<Node/binary, ".", StasdKey/binary>>,
+  NameWithNode = barrel_lib:binary_join([Node|Name], <<".">>),
   send(Server, NameWithNode, Value).
 
 send({Peer, Port}, Key, {counter, Value}) ->

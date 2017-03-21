@@ -1,7 +1,7 @@
 -module(barrel_stats_plugin).
 
--type metric_type() :: counter | gauge.
--type metric_name() :: [ any() ].
+-type metric_type() :: counter | gauge | duration.
+-type metric_name() :: [ binary() ].
 -type metric_env() :: [ any() ].
 
 -export_type([ metric_type/0
