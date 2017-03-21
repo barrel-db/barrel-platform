@@ -29,7 +29,10 @@
         ]).
 
 
--export([init/3, increment/3]).
+-export([ init/3
+        , increment/3
+        , set_value/3
+        , duration/3]).
 
 all() -> [ plugin
          ].
@@ -72,7 +75,7 @@ plugin(_Config) ->
   Msgs = collect_messages(1),
   [{statsd_message, {counter, Host, Key, 1}}] = Msgs,
   "nohost" = Host,
-  "replication/repid/doc_reads" = Key,
+  "replication.repid.doc_reads" = Key,
   ok.
 
 
@@ -101,6 +104,16 @@ init(Type, Name, _Env) ->
 increment(Name, _Value, _Env) ->
   Pid = whereis(test_metric_testd),
   Pid ! {plugin, increment, Name},
+  ok.
+
+set_value(Name, _Value, _Env) ->
+  Pid = whereis(test_metric_testd),
+  Pid ! {plugin, set_value, Name},
+  ok.
+
+duration(Name, _Value, _Env) ->
+  Pid = whereis(test_metric_testd),
+  Pid ! {plugin, duration, Name},
   ok.
 
 %% =============================================================================

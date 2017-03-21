@@ -22,6 +22,7 @@
         , increment/2
         , set_value/2
         , duration/2
+        , duration_since/2
         ]).
 
 init(Type, Name) ->
@@ -52,6 +53,10 @@ set_value(Name, Value) ->
       Plugin = proplists:get_value(plugin, Env),
       Plugin:set_value(Name, Value, Env)
   end.
+
+duration_since(Name, StartTime) ->
+  Duration = trunc(timer:now_diff(os:timestamp(), StartTime) / 1000),
+  duration(Name, Duration).
 
 duration(Name, Value) ->
   Env = application:get_env(barrel_store, metrics, undefined),

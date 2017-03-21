@@ -64,8 +64,8 @@ create_db(_Config) ->
   ok = barrel_store:delete_db(<<"testdb1">>),
   timer:sleep(100),
   [] = barrel_store:databases().
-  
-  
+
+
 persist_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
