@@ -22,6 +22,7 @@
 ]).
 
 -export([
+  init/3,
   init_feed/1,
   wait_changes/1
 ]).
@@ -87,11 +88,7 @@ changes(FeedPid) ->
   ListenerPid :: pid(),
   Res :: {ok, ListenerPid} | {error, any()}.
 start_link(Conn, Options) ->
-  State = #{ parent => self(),
-             conn => Conn,
-             last_seq => undefined,
-             options => Options},
-  proc_lib:start_link(?MODULE, init_feed, [State]).
+  proc_lib:start_link(?MODULE, init, [self(), Conn, Options]).
 
 %% @doc stop a change listener
 -spec stop(ListenerPid) -> Res when
@@ -121,6 +118,14 @@ parse_change(ChangeBin) ->
     Lines
   ).
 
+init(Parent, Conn, Options) ->
+  Retry =  maps:get(max_retry, Options, 5),
+  State = #{ parent => Parent,
+             conn => Conn,
+             last_seq => undefined,
+             retry => Retry,
+             options => Options},
+  init_feed(State).
 
 init_feed(State = #{retry := 0} ) ->
   cleanup(State, "remote stopped (max retry reached)"),
@@ -156,7 +161,7 @@ init_feed(State) ->
       %% exit(Error)
   end.
 
-wait_response(State = #{ options := Options}) ->
+wait_response(State = #{ ref := Ref, options := Options}) ->
   receive
     {hackney_response, Ref, {status, 200, _}} ->
       Cb = maps:get(changes_cb, Options, nil),
@@ -223,18 +228,11 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     exit(timeout)
   end.
 
-retry_connect(State = #{options := Options}) ->
-  DelayBeforeRetry = maps:get(delay_before_retry, Options, 500),
-  timer:sleep(DelayBeforeRetry),
-  Retry = case maps:get(retry, State, undefined) of
-            undefined ->
-              maps:get(max_retry, Options, 5);
-            Value ->
-              Value - 1
-          end,
+retry_connect(State = #{retry := Retry, options := #{delay_before_retry := Delay}}) ->
+  timer:sleep(Delay),
   lager:warning("[~s] retry to connect (~p)", [?MODULE_STRING, Retry]),
   LastSeq = maps:get(last_seq, State),
-  init_feed(State#{since => LastSeq, retry => Retry}).
+  init_feed(State#{since => LastSeq, retry => Retry-1}).
 
 
 system_continue(_, _, {wait_changes, State}) ->
