@@ -228,9 +228,8 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     exit(timeout)
   end.
 
-retry_connect(State = #{retry := Retry, options := Options}) ->
-  DelayBeforeRetry = maps:get(delay_before_retry, Options, 500),
-  timer:sleep(DelayBeforeRetry),
+retry_connect(State = #{retry := Retry, options := #{delay_before_retry := Delay}}) ->
+  timer:sleep(Delay),
   lager:warning("[~s] retry to connect (~p)", [?MODULE_STRING, Retry]),
   LastSeq = maps:get(last_seq, State),
   init_feed(State#{since => LastSeq, retry => Retry-1}).
