@@ -240,8 +240,8 @@ update_docs(DbName, Batch) ->
                 ok
             end,
 
-      barrel_metrics:duration_since([<<"store">>, DbName, <<"update">>], StartTime1),
-      barrel_metrics:increment([<<"store">>, DbName, <<"update">>]),
+      barrel_metrics:duration_since([<<"store">>, DbName, <<"update_docs">>], StartTime1),
+      barrel_metrics:increment([<<"store">>, DbName, <<"update_docs">>]),
       Res
   end.
 
@@ -253,14 +253,14 @@ collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N, StartTime) when N > 
       exit(Reason)
   end;
 collect_updates(Db, _Ref, MRef, Results, 0, StartTime) ->
-  barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"local_update">>, <<"duration">>], StartTime),
+  barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"local_update">>], StartTime),
   erlang:demonitor(MRef, [flush]),
   %% wait for the index refresh?
   case Db#db.indexer_mode of
     consistent ->
       StartIndexTime = os:timestamp(),
       _ = barrel_indexer:refresh_index(Db#db.indexer, Db#db.updated_seq),
-      barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"index_update">>, <<"duration">>], StartIndexTime);
+      barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"index_update">>], StartIndexTime);
     lazy ->
       Db#db.indexer ! refresh_index
   end,
@@ -564,6 +564,10 @@ init_metrics(DbId) ->
               , [<<"store">>, DbId, <<"index_update">>]
               ],
   [ barrel_metrics:init(duration, D) || D <- Durations ],
+
+  Gauges = [ [<<"store">>, DbId, <<"update_queue_length">>]
+           ],
+  [ barrel_metrics:init(gauge, G) || G <- Gauges ],
   ok.
 
 open_db(DbId, Config) ->

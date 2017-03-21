@@ -71,6 +71,9 @@ plugin(_Config) ->
   TimersInit = [ G || {plugin, init, {duration, G}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- TimersInit ],
   3 = length(TimersInit),
+  GaugesInit = [ G || {plugin, init, {gauge, G}, _} <- InitMsgs],
+  [ <<"testdb">> = Db || [_,Db,_] <- GaugesInit ],
+  1 = length(GaugesInit),
 
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
@@ -85,6 +88,15 @@ plugin(_Config) ->
   , {plugin, set_value, Name, 42, ExpectedEnv}
   , {plugin, duration, Name, 123, ExpectedEnv}
   ] = Msgs,
+
+  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
+  {ok, <<"a">>, _} = barrel_local:post(<<"testdb">>, Doc, []),
+
+  %% ensure all metrics have been initialized with plugin function init
+  MsgsPost = collect_all_messages(),
+  Post = [ N || {plugin, _, N , _, _} <- MsgsPost],
+  Init = CountersInit ++ TimersInit ++ GaugesInit,
+  [ true = lists:member(N, Init) || N <- Post ],
 
   ok.
 
