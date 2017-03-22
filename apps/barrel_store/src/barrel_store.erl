@@ -130,7 +130,7 @@ handle_call({create_db, Config=#{<<"database_id">> := DbId}}, _From, State) ->
     undefined ->
       {Reply, NState} = do_create_db(Config, State),
       {reply, Reply, NState};
-    [_Db] ->
+    _Db ->
       {reply, {error, db_exists}, State}
   end;
 
@@ -149,7 +149,7 @@ handle_cast(_Request, State) ->  {noreply, State}.
 handle_info({'EXIT', DbPid, _Reason}, State) ->
   NState = db_is_down(DbPid, State),
   {noreply, NState};
-  
+
 handle_info(init_dbs, State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
@@ -273,7 +273,7 @@ load_dbs(#{ conf := Conf, db_pids := DbPids} = State) ->
     {[], [], State},
     Dbs
   ),
-  
+
   case Dbs -- Dbs2 of
     [] -> {Loaded, State2};
     NDbs ->
@@ -292,7 +292,7 @@ conf_path() ->
   Path = filename:join(data_dir(), "barrel_config"),
   ok = filelib:ensure_dir(Path),
   Path.
-  
+
 persist_config(Conf) ->
   file:write_file(conf_path(), jsx:encode(Conf)).
 
