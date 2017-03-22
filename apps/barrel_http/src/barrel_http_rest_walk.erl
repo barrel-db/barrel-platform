@@ -119,15 +119,20 @@ fold_docs(Req0, State = #state{database=Database}) ->
   {ok, Req, State}.
 
 
-start_chunked_response(Req0, #state{database=Database}) ->
-  #{last_update_seq := Seq} = barrel_local:db_infos(Database),
-  Req = cowboy_req:stream_reply(
-    200,
-    #{<<"Content-Type">> => <<"application/json">>,
-      <<"ETag">> =>  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>},
-    Req0
-  ),
-  Req.
+start_chunked_response(Req0, #state{database=Database}=State) ->
+  case barrel_local:db_infos(Database) of
+    {ok, Infos} ->
+      Seq = maps:get(last_update_seq, Infos),
+      Req = cowboy_req:stream_reply(
+              200,
+              #{<<"Content-Type">> => <<"application/json">>,
+                <<"ETag">> =>  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>},
+              Req0
+             ),
+      Req;
+    _ ->
+      barrel_http_reply:error(500, Req0, State)
+  end.
 
 parse_params(Req) ->
   Params = cowboy_req:parse_qs(Req),

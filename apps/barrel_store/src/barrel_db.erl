@@ -79,14 +79,15 @@ infos(DbName) ->
   with_db(
     DbName,
     fun(Db) ->
-      #{
-        name => DbName,
-        id => Db#db.id,
-        docs_count => Db#db.docs_count,
-        last_update_seq => Db#db.updated_seq,
-        system_docs_count => Db#db.system_docs_count,
-        last_index_seq => Db#db.indexed_seq
-      }
+        Info = #{
+          name => DbName,
+          id => Db#db.id,
+          docs_count => Db#db.docs_count,
+          last_update_seq => Db#db.updated_seq,
+          system_docs_count => Db#db.system_docs_count,
+          last_index_seq => Db#db.indexed_seq
+         },
+        {ok, Info}
     end
   ).
 

@@ -24,37 +24,13 @@
 
 
 get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
-  Options = parse_params(Req0),
-  #{last_update_seq := Seq} = barrel_local:db_infos(Database),
-  Req = cowboy_req:stream_reply(
-    200,
-    #{<<"Content-Type">> => <<"application/json">>,
-      <<"ETag">> =>  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>},
-    Req0
-  ),
-  %% start the initial chunk
-  ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
-  Fun =
-    fun (Doc, Meta, {N, Pre}) ->
-        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
-        Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
-        ok = cowboy_req:stream_body(Chunk, nofin, Req),
-        {ok, {N + 1, <<",">>}}
-    end,
-  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
-
-  %% close the document list and return the calculated count
-  ok = cowboy_req:stream_body(
-    iolist_to_binary([
-      <<"],">>,
-      <<"\"count\":">>,
-      integer_to_binary(Count),
-      <<"}">>
-      ]),
-    fin,
-    Req
-  ),
-  {ok, Req, State};
+  case barrel_local:db_infos(Database) of
+    {ok, Info} ->
+      Seq = maps:get(last_update_seq, Info),
+      get_resource_since(Seq, Database, Req0, State);
+    {error, _} ->
+      barrel_http_reply:error(500, Req0, State)
+  end;
 
 get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) ->
   %% let's process it
@@ -88,6 +64,39 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
          Req
         ),
   {ok, Req, State}.
+
+get_resource_since(Seq, Database, Req0, #state{idmatch=undefined}=State) ->
+  Options = parse_params(Req0),
+  Req = cowboy_req:stream_reply(
+    200,
+    #{<<"Content-Type">> => <<"application/json">>,
+      <<"ETag">> =>  <<"W/\"", (integer_to_binary(Seq))/binary, "\"" >>},
+    Req0
+  ),
+  %% start the initial chunk
+  ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
+  Fun =
+    fun (Doc, Meta, {N, Pre}) ->
+        DocWithMeta =  #{ <<"doc">>  => Doc, <<"meta">> => Meta },
+        Chunk = << Pre/binary, (jsx:encode(DocWithMeta))/binary >>,
+        ok = cowboy_req:stream_body(Chunk, nofin, Req),
+        {ok, {N + 1, <<",">>}}
+    end,
+  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+
+  %% close the document list and return the calculated count
+  ok = cowboy_req:stream_body(
+    iolist_to_binary([
+      <<"],">>,
+      <<"\"count\":">>,
+      integer_to_binary(Count),
+      <<"}">>
+      ]),
+    fin,
+    Req
+  ),
+  {ok, Req, State}.
+
 
 
 handle_write_batch(Req, State) ->
