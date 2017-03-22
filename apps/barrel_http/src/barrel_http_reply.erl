@@ -64,4 +64,6 @@ reply(HttpCode, Headers, Content, Req, State) ->
 message(404) ->
   "not found";
 message(405) ->
-  "method not allowed".
+  "method not allowed";
+message(500) ->
+  "internal server error".
