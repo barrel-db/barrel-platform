@@ -34,7 +34,7 @@ handle(Req, State) ->
   check_params(Req, State).
 
 terminate(_Reason, _Req, #state{database=Db, method=Method, start_time=StartTime}) ->
-  Key = [<<"http">>, Db, Method, <<"duration">>],
+  Key = [<<"rest">>, Db, Method, <<"duration">>],
   barrel_metrics:duration_since(Key, StartTime),
   ok;
 terminate(_, _, _) ->
