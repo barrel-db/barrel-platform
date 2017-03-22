@@ -27,7 +27,10 @@ distclean: clean ## Clean all build and releases artifacts
 cleantest:
 	@rm -rf _build/test
 
-test: cleantest
+dialyzer:
+	@$(REBAR) dialyzer
+
+test: cleantest dialyzer
 	@$(REBAR) eunit
 	@$(REBAR) ct
 
