@@ -201,22 +201,20 @@ register_replication(RepId, Pid, Persisted, Config, #{ config := All} = State) -
 
 
 do_stop_replication(RepId) ->
-  case find_repid(RepId) of
-    undefined ->
+  case ets:take(replication_ids, RepId) of
+    [] ->
       ok;
-    {ok, {_, nil, _}} ->
+    [{RepId, {_, nil, _}}] ->
       ok;
-    {ok, {true, Pid, MRef}} ->
+    [{RepId, {true, Pid, MRef}}] ->
       ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       true = erlang:demonitor(MRef, [flush]),
-      true = ets:delete(replication_ids, Pid),
       true = ets:insert(replication_ids, {RepId, {true, nil, nil}}),
       ok;
-    {ok, {false, Pid, MRef}} ->
-      ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
-      [{RepId, {_, Pid, MRef}}] = ets:take(replication_ids, RepId),
+    [{RepId, {false, Pid, MRef}}] ->
+      ok =
+      supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       true = erlang:demonitor(MRef, [flush]),
-      true = ets:delete(replication_ids, Pid),
       ok
   end.
 
