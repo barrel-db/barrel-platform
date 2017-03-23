@@ -27,40 +27,83 @@
 
 -define(ATTTAG, <<"_attachments">>).
 
+
+-spec attach(Conn, DocId, AttDescription, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttDescription :: barrel_httpc:att_description(),
+    Options :: barrel_httpc:read_options(),
+    Res :: {ok, barrel_httpc:docid(), barrel_httpc:rev()} | ok | {error, term()}.
 attach(Conn, DocId, AttDescription, Options) ->
   case barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]) of
     {ok, Doc, Attachments, Meta} ->
       AttId = maps:get(<<"id">>, AttDescription),
       AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
-      case find_att_doc(AttId, Attachments) of
+      case find_att_doc(Attachments, AttId) of
         {ok, _} -> {error, attachment_conflict};
         {error, not_found} ->
           Attachments2 = [AttDescription|Attachments],
           barrel_httpc:put(Conn, Doc, Attachments2, AttOpts)
       end;
-    {error, Error} -> {error, Error}
+    {error, _} = Error ->
+      Error
   end.
 
-attach(Conn, DocId, AttDescription, Binary, Options) ->
-  attach(Conn, DocId, AttDescription#{<<"blob">> => Binary}, Options).
+-spec attach(Conn, DocId, AttDescription, AttBin, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttDescription :: barrel_httpc:att_description(),
+    AttBin :: binary(),
+    Options :: barrel_httpc:read_options(),
+    Res :: {ok, barrel_httpc:docid(), barrel_httpc:rev()} | ok | {error, term()}.
+attach(Conn, DocId, AttDescription, AttBin, Options) when is_binary(AttBin) ->
+  attach(Conn, DocId, AttDescription#{<<"blob">> => AttBin}, Options).
 
+-spec get_attachment(Conn, DocId, AttId, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttId :: binary(),
+    Options :: barrel_httpc:write_options(),
+    AttDescription :: barrel_httpc:att_description(),
+    Res :: {ok, AttDescription} | {error, term()}.
 get_attachment(Conn, DocId, AttId, Options) ->
-  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId,
-                                             [{attachments, all}|Options]),
-  find_att_doc(AttId, Attachments).
-
-get_attachment_binary(Conn, DocId, AttId, Options) ->
-  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId, 
-                                             [{attachments, all}|Options]),
-  case find_att_doc(AttId, Attachments) of
-    {error, not_found} -> {error, not_found};
-    {ok, Attachment} ->
-      Data = maps:get(<<"blob">>, Attachment),
-      {ok, Data}
+  case barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]) of
+    {ok, _, Attachments, _} ->
+      find_att_doc(Attachments, AttId);
+    {error, _} = Error ->
+      Error
   end.
 
+-spec get_attachment_binary(Conn, DocId, AttId, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttId :: binary(),
+    AttBin :: binary(),
+    Options :: barrel_httpc:read_options(),
+    Res :: {ok, AttBin} | {error, not_found}.
+get_attachment_binary(Conn, DocId, AttId, Options) ->
+  case barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]) of
+    {ok, _, Attachments, _} ->
+      case find_att_doc(Attachments, AttId) of
+        {ok, Attachment} ->
+          Data = maps:get(<<"blob">>, Attachment),
+          {ok, Data};
+        {error, not_found} ->
+          {error, not_found}
+      end;
+    {error, _} = Error ->
+      Error
+  end.
+
+-spec replace_attachment(Conn, DocId, AttId, AttDescription, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttId :: binary(),
+    AttDescription :: barrel_httpc:att_description(),
+    Options :: barrel_httpc:write_options(),
+    Res :: {ok, barrel_httpc:docid(), barrel_httpc:rev()} | ok | {error, term()}.
 replace_attachment(Conn, DocId, AttId, AttDescription, Options) ->
-  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId, 
+  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId,
                                                   [{attachments, all}|Options]),
   AttId = maps:get(<<"id">>, AttDescription),
   AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
@@ -68,16 +111,29 @@ replace_attachment(Conn, DocId, AttId, AttDescription, Options) ->
   NewAttachments = replace_att_doc(AttId, AttDescription, Attachments),
   barrel_httpc:put(Conn, Doc, NewAttachments, AttOpts).
 
-replace_attachment_binary(Conn, DocId, AttId, Binary, Options) ->
-  {ok, _Doc, Attachments, _Meta} = barrel_httpc:get(Conn, DocId,
-                                                    [{attachments, all}|Options]),
-  case find_att_doc(AttId, Attachments) of
+
+-spec replace_attachment_binary(Conn, DocId, AttId, AttBin, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttId :: binary(),
+    AttBin :: binary(),
+    Options :: barrel_httpc:write_options(),
+    Res :: {ok, barrel_httpc:docid(), barrel_httpc:rev()} | ok | {error, term()}.
+replace_attachment_binary(Conn, DocId, AttId, AttBin, Options) when is_binary(AttBin) ->
+  {ok, _Doc, Attachments, _Meta} = barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]),
+  case find_att_doc(Attachments, AttId) of
     {error, not_found} -> {error, not_found};
     {ok, Attachment} ->
-      NewAttachment = Attachment#{<<"blob">> => Binary},
+      NewAttachment = Attachment#{<<"blob">> => AttBin},
       replace_attachment(Conn, DocId, AttId, NewAttachment, Options)
   end.
 
+-spec delete_attachment(Conn, DocId, AttId, Options) -> Res when
+    Conn :: barrel_httpc:conn(),
+    DocId :: barrel_httpc:docid(),
+    AttId :: binary(),
+    Options :: barrel_httpc:write_options(),
+    Res ::  {ok, barrel_httpc:docid(), barrel_httpc:rev()} | {error, term()}.
 delete_attachment(Conn, DocId, AttId, Options) ->
   {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId,
                                                   [{attachments, all}|Options]),
@@ -85,21 +141,22 @@ delete_attachment(Conn, DocId, AttId, Options) ->
   PutOpts = [{rev, maps:get(<<"rev">>, Meta)}],
   barrel_httpc:put(Conn, Doc, NewAttachments, PutOpts).
 
+-spec attachments(Conn, DocId, Options) -> Attachments when
+  Conn :: barrel_httpc:conn(),
+  DocId :: barrel_httpc:docid(),
+  Options :: barrel_httpc:read_options(),
+  Attachments :: [barrel_httpc:attachment()].
 attachments(Conn, DocId, Options) ->
-  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId,
-                                             [{attachments, all}|Options]),
+  {ok, _, Attachments, _} = barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]),
   Attachments.
 
 %% =============================================================================
 %% Internals
 %% =============================================================================
 
-find_att_doc(_, []) ->
-  {error, not_found};
-find_att_doc(AttId, [#{<<"id">> := AttId}=AttDoc|_]) ->
-  {ok, AttDoc};
-find_att_doc(AttId, [_|Tail]) ->
-  find_att_doc(AttId, Tail).
+find_att_doc([#{<<"id">> := AttId}=AttDoc|_], AttId) -> {ok, AttDoc};
+find_att_doc([_|Rest], AttId) -> find_att_doc(Rest, AttId);
+find_att_doc([], _AttId) -> {error, not_found}.
 
 replace_att_doc(_,_, []) ->
   [];
