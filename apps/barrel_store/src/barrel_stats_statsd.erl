@@ -46,8 +46,6 @@ duration(Name, Value, Env) ->
   push(Server, Name, {duration, Value}),
   ok.
 
-push(_, _, undefined) ->
-  ok;
 push(Server, Name, Value) ->
   [_, NodeId] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
   [Node | _] = binary:split(NodeId, <<".">>),

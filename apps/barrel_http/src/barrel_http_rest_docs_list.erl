@@ -119,7 +119,7 @@ do_write_batch(Json, Req, #state{database=Db}=State) ->
             #{ headers := #{ <<"x-barrel-async">> := << "true">> }} -> true;
             _ -> false
           end,
-  
+
   OPs = maps:get(<<"updates">>, Json),
   try  barrel_local:write_batch(Db, OPs, [{async, Async}]) of
     ok ->

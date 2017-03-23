@@ -120,12 +120,12 @@ check_resource_exists(Req, S) ->
 check_resource_exists2(Req, S) ->
   #state{ database=Database, docid=DocId, options=Options } = S,
   case barrel_local:get(Database, DocId, Options) of
+    {ok, Doc, Meta} ->
+      route2(Req, S#state{doc=Doc, meta=Meta});
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
     {error, _} ->
-      barrel_http_reply:error(500, Req, S);
-    {ok, Doc, Meta} ->
-      route2(Req, S#state{doc=Doc, meta=Meta})
+      barrel_http_reply:error(500, Req, S)
   end.
 
 
@@ -162,6 +162,11 @@ create_resource(Req, State) ->
                        end
                    end,
   case Result of
+    {ok, CreatedDocId, RevId} ->
+      Req5 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req4),
+      barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State);
+    ok ->
+      barrel_http_reply:doc(201, #{<<"ok">> => true}, Req4, State);
     {error, not_found} ->
       barrel_http_reply:error(404, Req4, State);
     {error, {conflict, revision_conflict}} ->
@@ -170,13 +175,7 @@ create_resource(Req, State) ->
       barrel_http_reply:error(409, <<"document exists">>, Req4, State);
     {error, Error} ->
       lagger:error("unexpected error=~p", [Error]),
-      barrel_http_reply:error(500, Req4, State);
-    {ok, CreatedDocId, RevId} ->
-      Req5 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req4),
-      barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State);
-    ok ->
-      barrel_http_reply:doc(201, #{<<"ok">> => true}, Req4, State)
-
+      barrel_http_reply:error(500, Req4, State)
   end.
 
 delete_resource(Req, State) ->

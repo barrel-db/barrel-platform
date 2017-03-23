@@ -185,7 +185,7 @@ get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
--spec multi_get(Db, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Db, Fun, AccIn, DocIds, Options) -> Res when
     Db::db(),
     Fun :: fun((doc(), meta(), any() ) -> Res),
     AccIn :: any(),
@@ -265,7 +265,7 @@ update_doc(Db, Batch) ->
   Db :: db(),
   Updates :: [barrel_write_batch:batch_op()],
   Options :: batch_options(),
-  Results :: batch_results().
+  Results :: batch_results() | ok.
 write_batch(Db, Updates, Options) when is_list(Options) ->
   Async = proplists:get_value(async, Options, false),
   Batch = barrel_write_batch:from_list(Updates, Async),
@@ -328,7 +328,7 @@ query(Db, Path, Fun, AccIn, Opts) ->
   Db::db(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((DocId :: docid(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((DocId :: docid(), Doc :: doc(), Val :: any(), Acc1 :: any()) -> FunRes),
   OrderBy :: order_by_key | order_by_value | {order_by_child, ChildKey :: binary()},
   Options :: fold_options(),
   AccIn :: any(),
