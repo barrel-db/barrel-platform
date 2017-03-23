@@ -213,7 +213,7 @@ put(_,  _, _) ->
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
 -spec put_rev(Db, Doc, History, Deleted, Options) -> Res when
-  Db::db(),
+  Db::dbname(),
   Doc :: doc(),
   History :: [rev()],
   Deleted :: boolean(),

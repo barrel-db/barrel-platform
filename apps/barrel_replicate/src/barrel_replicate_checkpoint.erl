@@ -31,9 +31,9 @@
             , session_id  ::binary()  % replication session (history) id
             , source
             , target
-            , start_seq=0 ::integer() % start seq for current repl session
-            , last_seq=0  ::integer() % last received seq from source
-            , target_seq  ::integer() % target seq for current repl session
+            , start_seq=0 :: integer() % start seq for current repl session
+            , last_seq=0  :: integer() % last received seq from source
+            , target_seq  :: undefined | integer() % target seq for current repl session
             , options
             }).
 
