@@ -18,3 +18,4 @@ test:
     - ./support/rebar3 eunit
     - ./support/rebar3 ct
     - ./support/rebar3 dialyzer
+    - ./support/rebar3 cover
