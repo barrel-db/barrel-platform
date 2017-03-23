@@ -122,6 +122,8 @@ check_resource_exists2(Req, S) ->
   case barrel_local:get(Database, DocId, Options) of
     {error, not_found} ->
       barrel_http_reply:error(404, Req, S);
+    {error, _} ->
+      barrel_http_reply:error(500, Req, S);
     {ok, Doc, Meta} ->
       route2(Req, S#state{doc=Doc, meta=Meta})
   end.

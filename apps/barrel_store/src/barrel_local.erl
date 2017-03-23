@@ -179,7 +179,8 @@ db_infos(Db) ->
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc(),
-  Res :: {ok, Doc} | {error, not_found} | {error, any()}.
+  Meta :: meta(),
+  Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
 get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
