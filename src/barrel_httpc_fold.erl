@@ -121,7 +121,7 @@ decode_data(Data, State = #{ref := Ref, decode_fun := DecodeFun}) ->
       {incomplete, DecodeFun2} = DecodeFun(Data),
       try DecodeFun2(end_stream) of
           {done, Acc} ->
-          ok = hackney:stop_async(Ref),
+          _ = hackney:stop_async(Ref),
           ok = hackney:skip_body(Ref),
           {ok, Acc}
       catch
