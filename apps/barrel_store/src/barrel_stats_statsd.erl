@@ -77,4 +77,5 @@ udp(Peer, Port, Data) ->
                 lagger:error("can not open udp socket to statsd server: ~p", [Error])
             end
         end,
-  spawn(Fun).
+  _ = spawn(Fun),
+  ok.

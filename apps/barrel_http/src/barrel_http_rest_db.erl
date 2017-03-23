@@ -58,6 +58,6 @@ get_resource(Req, #state{database=Database}=State) ->
     {ok, Info} ->
       barrel_http_reply:doc(Info, Req, State);
     {error, Error} ->
-      lager:error("db_infos error=~p",[Error]),
+      _ = lager:error("db_infos error=~p",[Error]),
       barrel_http_reply:error(500, Req, State)
   end.

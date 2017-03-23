@@ -111,8 +111,9 @@ start_link() ->
 create_tab() ->
   case ets:info(?MODULE, name) of
     undefined ->
-      ets:new(?MODULE, [named_table, public, ordered_set,
-        {read_concurrency, true}, {write_concurrency, true}]),
+      _ = ets:new(?MODULE, [named_table, public, ordered_set,
+                            {read_concurrency, true},
+                            {write_concurrency, true}]),
       true;
     _ ->
       false
@@ -125,8 +126,10 @@ create_tab() ->
 -spec init(term()) -> {ok, state()}.
 init([IsNew]) ->
   case IsNew of
-    true -> ok;
-    false -> init_monitors()
+    true ->
+      ok;
+    false ->
+      _ = init_monitors()
   end,
   {ok, #state{}}.
 

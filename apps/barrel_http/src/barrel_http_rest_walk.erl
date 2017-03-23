@@ -95,10 +95,9 @@ fold_docs(Req0, State = #state{database=Database}) ->
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
     fun
-      (_DocId, _DocInfo, {ok, nil}, Acc) ->
-        {ok, Acc};
-      (DocId, _DocInfo, {ok, Doc}, {N, Pre}) ->
-        Obj = #{ id => DocId, <<"val">> => Doc, <<"doc">> => Doc},
+
+      (Doc, _Meta, {N, Pre}) ->
+        Obj = #{ id => maps:get(<<"id">>, Doc), <<"val">> => Doc, <<"doc">> => Doc},
         Chunk = << Pre/binary, (jsx:encode(Obj))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
@@ -106,7 +105,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
   {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
-  ok = cowboy_req:chunk(
+  ok = cowboy_req:stream_body(
     iolist_to_binary([
       <<"],">>,
       <<"\"count\":">>,

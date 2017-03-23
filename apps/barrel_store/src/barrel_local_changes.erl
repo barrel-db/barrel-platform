@@ -42,7 +42,7 @@
 start_link(DbId, Options) ->
   case barrel_store:whereis_db(DbId) of
     undefined ->
-      lager:debug(
+      _ = lager:debug(
         "~s: db ~p not found",
         [?MODULE_STRING, DbId]
       ),
@@ -164,7 +164,7 @@ wait_changes(State = #{ parent := Parent , db_ref := Ref}) ->
         {wait_changes, State});
     {'DOWN', Ref, process, _Pid, Reason} ->
       #{ db := #db{ id = DbId } } = State,
-      lager:info("[~p] database down dbid=~p reason=~p (listener pid=~p)", [?MODULE, DbId, Reason, self()]),
+      _ = lager:info("[~p] database down dbid=~p reason=~p (listener pid=~p)", [?MODULE, DbId, Reason, self()]),
       exit(normal)
   end.
 
@@ -173,7 +173,7 @@ system_continue(_, _, {wait_changes, State}) ->
 
 -spec system_terminate(any(), _, _, _) -> no_return().
 system_terminate(Reason, _, _, _State) ->
-  lager:debug(
+  _ = lager:debug(
     "~s terminate: ~p",
     [?MODULE_STRING,Reason]
   ),

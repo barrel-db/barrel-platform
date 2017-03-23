@@ -38,14 +38,14 @@ fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options) ->
 
   Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, proplists:delete(docids, Options)),
   ReqOpts = [{async, once}, {pool, Pool}],
-  
+
   WrapperFun =
     fun(Obj, Acc) ->
       % extract metadata.
       #{ <<"doc">> := Doc, <<"meta">> := Meta} = Obj,
       UserFun(Doc, Meta, Acc)
     end,
-  
+
   case hackney:request(<<"Get">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
       wait_fold_response(Ref, WrapperFun, AccIn);
@@ -102,7 +102,7 @@ wait_fold_response(Ref, Fun, AccIn) ->
   end.
 
 loop(State = #{ ref := Ref}) ->
-  hackney:stream_next(Ref),
+  ok = hackney:stream_next(Ref),
   receive
     {hackney_response, Ref, {headers, _Headers}} ->
       loop(State);
@@ -121,7 +121,7 @@ decode_data(Data, State = #{ref := Ref, decode_fun := DecodeFun}) ->
       {incomplete, DecodeFun2} = DecodeFun(Data),
       try DecodeFun2(end_stream) of
           {done, Acc} ->
-          hackney:stop_async(Ref),
+          ok = hackney:stop_async(Ref),
           ok = hackney:skip_body(Ref),
           {ok, Acc}
       catch

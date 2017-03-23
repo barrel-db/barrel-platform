@@ -322,13 +322,14 @@ maybe_with_attachments([H|Options], W, Acc) ->
   Conn::conn(),
   Doc :: doc(),
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
+  Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()} | no_return().
 put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   Async = proplists:get_value(async, Options1, false),
   post_put(Conn, <<"PUT">>, Doc, Url, Headers, Async);
-put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
+put(_, _, _) ->
+  erlang:error({bad_doc, invalid_docid}).
 
 %% @doc update a document with attachments
 -spec put(Conn, Doc, Attachments, Options) -> Res when
@@ -336,7 +337,7 @@ put(_, _, _) -> erlang:error({bad_doc, invalid_docid}).
     Doc :: doc(),
     Attachments :: [attachment()],
     Options :: write_options(),
-    Res :: {ok, docid(), rev()} | ok | {error, conflict} | {error, any()}.
+    Res :: {ok, docid(), rev()} | ok | {error, conflict} | {error, any()} | no_return().
 put(Conn, Doc, Attachments, Options0) when is_list(Attachments) ->
   case encode_attachments(Doc, Attachments) of
     {ok, DocWithAttachments} ->

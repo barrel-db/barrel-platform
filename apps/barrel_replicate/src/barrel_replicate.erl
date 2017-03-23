@@ -93,7 +93,7 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info({'DOWN', _MRef, process, Pid, Reason}, State) ->
-  lager:info("[~s] replication down pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
+  _ = lager:info("[~s] replication down pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   _ = task_is_down(Pid),
   {noreply, State};
 
@@ -102,7 +102,7 @@ handle_info(init_config, State) ->
   {noreply, State2};
 
 handle_info(Info, State) ->
-  lager:error("[~s] received an unknown message, exiting ~p", [?MODULE_STRING, Info]),
+  _ = lager:error("[~s] received an unknown message, exiting ~p", [?MODULE_STRING, Info]),
   {stop, normal, State}.
 
 terminate(_Reason, _State) ->

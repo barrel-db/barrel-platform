@@ -154,7 +154,7 @@
 -include_lib("barrel_common/include/barrel_common.hrl").
 
 create_db(DbId, Config) ->
-  lager:warning("barrel_db:create/2 is deprecated", []),
+  _ = lager:warning("barrel_db:create/2 is deprecated", []),
   barrel_store:create_db(Config#{ <<"database_id">> => DbId }).
 
 create_db(Config) ->
@@ -302,7 +302,7 @@ changes_since(Db, Since, Fun, Acc) ->
   Db::dbname(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any(),
   Opts :: list().
@@ -338,7 +338,7 @@ query(Db, Path, Fun, AccIn, OrderBy, Opts) ->
 
 %% @deprecated
 find_by_key(Db, Path, Fun, AccIn, Opts) ->
-  lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
+  _ = lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
   barrel_db:query(Db, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given

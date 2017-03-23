@@ -90,8 +90,7 @@ write_checkpoint(State)  ->
                 ,<<"end_time">> => timestamp()
                 ,<<"end_time_microsec">> => erlang:system_time(micro_seconds)
                 },
-  [add_checkpoint(Db, RepId, SessionId, HistorySize, Checkpoint) ||
-    Db <- [Source, Target]],
+  _ = [add_checkpoint(Db, RepId, SessionId, HistorySize, Checkpoint) || Db <- [Source, Target]],
   ok.
 
 add_checkpoint(Db, RepId, SessionId, HistorySize, Checkpoint) ->
@@ -136,7 +135,7 @@ read_last_seq(Db, RepId) ->
     {error, not_found} ->
       0;
     Other ->
-      lager:error("replication cannot read checkpoint on ~p: ~p", [Db, Other]),
+      _ = lager:error("replication cannot read checkpoint on ~p: ~p", [Db, Other]),
       0
   end.
 
@@ -183,12 +182,10 @@ checkpoint_docid(RepId) ->
 %% RFC3339 timestamps.
 %% Note: doesn't include the time seconds fraction (RFC3339 says it's optional).
 timestamp() ->
-  {{Year, Month, Day}, {Hour, Min, Sec}} =
-    calendar:now_to_local_time(erlang:timestamp()),
+  {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(erlang:timestamp()),
   UTime = erlang:universaltime(),
   LocalTime = calendar:universal_time_to_local_time(UTime),
-  DiffSecs = calendar:datetime_to_gregorian_seconds(LocalTime) -
-    calendar:datetime_to_gregorian_seconds(UTime),
+  DiffSecs = calendar:datetime_to_gregorian_seconds(LocalTime) - calendar:datetime_to_gregorian_seconds(UTime),
   zone(DiffSecs div 3600, (DiffSecs rem 3600) div 60),
   iolist_to_binary(
     io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w~s",
