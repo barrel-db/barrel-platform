@@ -722,7 +722,7 @@ changes_since(Conn, Since, Fun, AccIn, Opts) ->
     AttDescription :: att_description(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, any()}.
 attach(Db, DocId, AttDescription, Options) ->
   barrel_httpc_attachments:attach(Db, DocId, AttDescription, Options).
 

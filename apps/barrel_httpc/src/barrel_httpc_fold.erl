@@ -67,7 +67,8 @@ fold_by_path(#{pool := Pool}= Conn, Path, Fun, AccIn, Options) when is_binary(Pa
 fold_by_path(_Conn, _Path, _Fun, _AccIn, _Options) -> erlang:error(badarg).
 
 changes_since(#{pool := Pool}= Conn, Since, Fun, AccIn, Options) ->
-  Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, [{<<"since">>, Since} | Options]),
+  SinceBin = integer_to_binary(Since),
+  Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, [{<<"since">>, SinceBin} | Options]),
   Headers = [
     {<<"Content-Type">>, <<"application/json">>},
     {<<"A-IM">>, <<"Incremental feed">>}
