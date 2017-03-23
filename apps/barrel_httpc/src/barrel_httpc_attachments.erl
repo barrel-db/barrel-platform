@@ -28,14 +28,17 @@
 -define(ATTTAG, <<"_attachments">>).
 
 attach(Conn, DocId, AttDescription, Options) ->
-  {ok, Doc, Attachments, Meta} = barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]),
-  AttId = maps:get(<<"id">>, AttDescription),
-  AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
-  case find_att_doc(AttId, Attachments) of
-    {ok, _} -> {error, attachment_conflict};
-    {error, not_found} ->
-      Attachments2 = [AttDescription|Attachments],
-      barrel_httpc:put(Conn, Doc, Attachments2, AttOpts)
+  case barrel_httpc:get(Conn, DocId, [{attachments, all}|Options]) of
+    {ok, Doc, Attachments, Meta} ->
+      AttId = maps:get(<<"id">>, AttDescription),
+      AttOpts = [{rev, maps:get(<<"rev">>, Meta)}],
+      case find_att_doc(AttId, Attachments) of
+        {ok, _} -> {error, attachment_conflict};
+        {error, not_found} ->
+          Attachments2 = [AttDescription|Attachments],
+          barrel_httpc:put(Conn, Doc, Attachments2, AttOpts)
+      end;
+    {error, Error} -> {error, Error}
   end.
 
 attach(Conn, DocId, AttDescription, Binary, Options) ->
