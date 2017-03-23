@@ -93,7 +93,7 @@ init_feed(Parent, Db, Options) ->
   Since = maps:get(since, Options, 0),
   ChangeCb = maps:get(changes_cb, Options, nil),
   Mode = maps:get(mode, Options, binary),
-  
+
   %% make change callback
   ChangeFun = case {Mode, ChangeCb} of
                 {binary, nil} ->
@@ -120,13 +120,13 @@ init_feed(Parent, Db, Options) ->
                     {ok, {erlang:max(LastSeq, Seq), ChangeQ}}
                   end
               end,
-  
+
   %% retrieve change options from the options given to the feed
   %% TODO: have changes_since function accepting a map
   ChangeOpts = parse_options(Options),
-  
+
   Ref = erlang:monitor(process, Db#db.pid),
-  
+
   %% initialize the changes
   State0 =
   #{parent => Parent,
@@ -136,7 +136,7 @@ init_feed(Parent, Db, Options) ->
     change_fun => ChangeFun,
     changes => queue:new(),
     last_seq => Since},
-  
+
   %% register to the changes
   barrel_event:reg(Db#db.id),
 
@@ -177,7 +177,7 @@ system_terminate(Reason, _, _, _State) ->
     "~s terminate: ~p",
     [?MODULE_STRING,Reason]
   ),
-  
+
   catch barrel_event:unreg(),
   exit(Reason).
 
@@ -191,7 +191,7 @@ get_changes(State) ->
     Opts
   ),
   State#{ last_seq => LastSeq1, changes => Changes1}.
-  
+
 
 parse_options(Options) ->
   maps:fold(
@@ -207,5 +207,6 @@ parse_options(Options) ->
   ).
 
 encode_sse(Change) ->
-  << "id: ", (integer_to_binary(Change))/binary, "\n",
+  Seq = maps:get(<<"seq">>, Change),
+  << "id: ", (integer_to_binary(Seq))/binary, "\n",
      "data: ", (jsx:encode(Change))/binary >>.
