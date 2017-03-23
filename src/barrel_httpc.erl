@@ -84,7 +84,11 @@
 
 -type change() :: #{ binary() => any() }.
 
--type attachment() :: {atom(), any()}.
+-type attachment() :: #{binary() => any()}.
+
+-type attid() :: binary().
+
+-type att_description() :: map().
 
 -type batch_options() :: [
 {async, boolean()}
@@ -125,7 +129,10 @@
   change/0,
   batch_options/0,
   batch_results/0,
-  batch_op/0
+  batch_op/0,
+  attid/0,
+  att_description/0,
+  attachment/0
 ]).
 
 
@@ -221,8 +228,8 @@ connect(Url) ->
   Options :: read_options(),
   Doc :: doc(),
   Meta :: meta(),
-  Attachments :: list(),
-  Res :: {ok, Doc, Meta} | {ok, Doc, Meta, Attachments} | {error, not_found} | {error, any()}.
+  Attachments :: [attachment()],
+  Res :: {ok, Doc, Meta} | {ok, Doc, Attachments, Meta} | {error, not_found} | {error, any()}.
 get(Conn, DocId, Options0) ->
   {WithAttachment, Options1} = maybe_with_attachments(Options0),
   {Headers, Options2} = headers(Options1),
@@ -455,7 +462,7 @@ try_put({ok, Doc, Meta}, Conn, Fun) ->
   Rev = maps:get(<<"rev">>, Meta),
   try_put_1(Fun(Doc, []), Rev, Conn);
 
-try_put({ok, Doc, Meta, Atts}, Conn, Fun) ->
+try_put({ok, Doc, Atts, Meta}, Conn, Fun) ->
   Rev = maps:get(<<"rev">>, Meta),
   try_put_1(Fun(Doc, Atts), Rev, Conn).
 
@@ -641,7 +648,7 @@ batch_result(#{ <<"status">> := <<"conflict">>, <<"reason">> := <<"revision conf
   Conn::conn(),
   DocId :: docid(),
   RevIds :: [revid()],
-  Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
+  Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]} | {error, any()}.
 revsdiff(Conn, DocId, RevIds) ->
   case revsdiff(Conn, #{ DocId => RevIds }) of
     {ok, Res} ->
@@ -658,7 +665,7 @@ revsdiff(Conn, DocId, RevIds) ->
 -spec revsdiff(Conn, Docs) -> Res when
   Conn :: conn(),
   Docs :: #{ docid() => [revid()]},
-  Res :: {ok, #{ docid() => [revid()] }} | {error, any()}.
+  Res :: {ok, #{ docid() => map() }} | {error, any()}.
 revsdiff(Conn, Docs) when is_map(Docs) ->
   Url = barrel_httpc_lib:make_url(Conn, [<<"revsdiff">>], []),
   Body = jsx:encode(Docs),
@@ -709,27 +716,84 @@ changes_since(Conn, Since, Fun, AccIn, Opts) ->
   barrel_httpc_fold:changes_since(Conn, Since, Fun, AccIn, Opts).
 
 
+-spec attach(Conn, DocId, AttDescription, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttDescription :: att_description(),
+    Options :: list(),
+    RevId :: revid(),
+    Res :: {ok, DocId, RevId}.
 attach(Db, DocId, AttDescription, Options) ->
   barrel_httpc_attachments:attach(Db, DocId, AttDescription, Options).
 
+-spec attach(Conn, DocId, AttDescription, Binary, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttDescription :: att_description(),
+    Binary :: binary(),
+    Options :: list(),
+    RevId :: revid(),
+    Res :: {ok, DocId, RevId}.
 attach(Db, DocId, AttDescription, Binary, Options) ->
   barrel_httpc_attachments:attach(Db, DocId, AttDescription, Binary, Options).
 
+-spec get_attachment(Conn, DocId, AttId, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttId :: att_description(),
+    Options :: list(),
+    AttDescription :: att_description(),
+    Res :: {ok, AttDescription}.
 get_attachment(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:get_attachment(Db, DocId, AttId, Options).
 
+-spec get_attachment_binary(Conn, DocId, AttId, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttId :: attid(),
+    Options :: list(),
+    Binary :: binary(),
+    Res :: {ok, Binary}.
 get_attachment_binary(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:get_attachment_binary(Db, DocId, AttId, Options).
 
+-spec replace_attachment(Conn, DocId, AttId, AttDescription, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttId :: attid(),
+    AttDescription :: att_description(),
+    Options :: list(),
+    RevId :: revid(),
+    Res :: {ok, DocId, RevId}.
 replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
   barrel_httpc_attachments:replace_attachment(Db, DocId, AttId, AttDescription, Options).
 
+-spec replace_attachment_binary(Conn, DocId, AttId, Binary, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttId :: attid(),
+    Binary :: binary(),
+    Options :: list(),
+    RevId :: revid(),
+    Res :: {ok, DocId, RevId}.
 replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
   barrel_httpc_attachments:replace_attachment_binary(Db, DocId, AttId, Binary, Options).
 
+-spec delete_attachment(Conn, DocId, AttId, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    AttId :: attid(),
+    Options :: list(),
+    RevId :: revid(),
+    Res :: {ok, DocId, RevId}.
 delete_attachment(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:delete_attachment(Db, DocId, AttId, Options).
 
+-spec attachments(Conn, DocId, Options) -> Res when
+    Conn :: conn(),
+    DocId :: docid(),
+    Options :: list(),
+    Res :: [att_description()].
 attachments(Db, DocId, Options) ->
   barrel_httpc_attachments:attachments(Db, DocId, Options).
 

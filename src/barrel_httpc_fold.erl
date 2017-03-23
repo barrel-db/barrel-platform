@@ -118,8 +118,9 @@ loop(State = #{ ref := Ref}) ->
 decode_data(Data, State = #{ref := Ref, decode_fun := DecodeFun}) ->
   try
       {incomplete, DecodeFun2} = DecodeFun(Data),
-      try DecodeFun2(end_stream) of  {done, Acc} ->
-          {ok, _} = hackney:stop_async(Ref),
+      try DecodeFun2(end_stream) of
+          {done, Acc} ->
+          hackney:stop_async(Ref),
           ok = hackney:skip_body(Ref),
           {ok, Acc}
       catch
