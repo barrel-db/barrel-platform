@@ -168,6 +168,9 @@ create_resource(Req, State) ->
       barrel_http_reply:error(409, <<"revision conflict">>, Req4, State);
     {error, {conflict, doc_exists}} ->
       barrel_http_reply:error(409, <<"document exists">>, Req4, State);
+    {error, Error} ->
+      lagger:error("unexpected error=~p", [Error]),
+      barrel_http_reply:error(500, Req4, State);
     {ok, CreatedDocId, RevId} ->
       Req5 = cowboy_req:set_resp_header(<<"etag">>, RevId, Req4),
       barrel_http_reply:doc(201, Json#{<<"id">> => CreatedDocId}, Req5, State);

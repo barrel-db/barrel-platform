@@ -245,7 +245,7 @@ delete(Db, DocId, Options) ->
   Db::db(),
   Doc :: doc(),
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
+  Res :: ok | {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 post(Db, Doc, Options) ->
   Async = proplists:get_value(async, Options, false),
   IsUpsert = proplists:get_value(is_upsert, Options, false),
