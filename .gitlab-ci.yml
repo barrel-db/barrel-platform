@@ -23,6 +23,7 @@ test:
 pages:
     stage: deploy
     script:
+      - ./support/rebar3 cover
       - mv _build/test/cover public/
     artifacts:
       paths:
