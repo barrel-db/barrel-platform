@@ -19,3 +19,14 @@ test:
     - ./support/rebar3 ct
     - ./support/rebar3 dialyzer
     - ./support/rebar3 cover
+
+pages:
+    stage: deploy
+    script:
+      - mv _build/test/cover public/
+    artifacts:
+      paths:
+        - public
+      expire_in: 30 days
+    only:
+      - master
