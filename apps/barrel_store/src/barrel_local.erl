@@ -50,7 +50,6 @@
 ]).
 
 -export([
-  start_replication/2,
   start_replication/3,
   start_replication/4,
   stop_replication/1,
@@ -289,7 +288,7 @@ fold_by_id(Db, Fun, Acc, Options) ->
 
 %% @doc fold all changes since last sequence
 -spec changes_since(Db, Since, Fun, AccIn) -> AccOut when
-  Db::db(),
+  Db::dbname(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
@@ -300,7 +299,7 @@ changes_since(Db, Since, Fun, Acc) ->
 
 %% @doc fold all changes since last sequence
 -spec changes_since(Db, Since, Fun, AccIn, Opts) -> AccOut when
-  Db::db(),
+  Db::dbname(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
@@ -344,22 +343,13 @@ find_by_key(Db, Path, Fun, AccIn, Opts) ->
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Db, DocId, RevIds) -> Res when
-  Db::db(),
+  Db::dbname(),
   DocId :: docid(),
   RevIds :: [revid()],
   Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
 revsdiff(Db, DocId, RevIds) ->
   barrel_db:revsdiff(Db, DocId, RevIds).
 
-
-%% replication API
-start_replication(Source, Target) ->
-  start_replication(Source, Target, []).
-
-%% TODO: maybe we should pass the calculated replication id in options?
-start_replication(Source, Target, Options) when is_list(Options) ->
-  Name = barrel_replicate_task:repid(Source, Target),
-  start_replication(Name, Source, Target, Options);
 
 start_replication(Name, Source, Target) ->
   start_replication(Name, Source, Target, []).
