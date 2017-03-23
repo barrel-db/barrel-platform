@@ -1,4 +1,4 @@
-image: erlang:19.2.2
+image: erlang:19.3
 
 before_script:
   - apt-get update -y
