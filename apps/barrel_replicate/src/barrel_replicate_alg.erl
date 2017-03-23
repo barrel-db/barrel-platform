@@ -64,7 +64,7 @@ write_doc(Target, Doc, History, Deleted, Metrics) ->
       Metrics3 = barrel_replicate_metrics:update_times(doc_write_times, Time, Metrics2),
       Metrics3;
     {_, Error} ->
-      lager:error(
+      _ = lager:error(
         "replicate write error on dbid=~p for docid=~p: ~w",
         [Target, maps:get(<<"id">>, Doc, undefined), Error]
       ),

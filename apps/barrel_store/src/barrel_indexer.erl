@@ -106,7 +106,7 @@ fetch_changes(Since, #{ db := Db, index_changes_size := Max}) ->
   {NChanges, Changes} = barrel_db:changes_since_int(
     Db, Since, Fun, {0, []}, [{include_doc, true}]
   ),
-  lager:debug(
+  _ = lager:debug(
     "~s: fetched ~p changes since ~p:~n~n~p",
     [?MODULE_STRING, NChanges, Since, Changes]
   ),
@@ -116,20 +116,20 @@ process_changes(Changes, State0 = #{ db := Db }) ->
   #{ update_seq := LastSeq } = State2 = lists:foldl(
     fun(Change = #{ <<"seq">> := Seq }, State = #{ update_seq := OldSeq}) ->
       {ToAdd, ToDel, Rid, FullPaths} = analyze(Change, Db),
-      lager:debug(
+      _ = lager:debug(
         "~s: processed changed in ~p, ~n - to add:~n~p~n - to del:~n~p",
         [?MODULE_STRING, Db#db.name, ToAdd, ToDel]
       ),
       ForwardOps = merge_forward_paths(ToAdd, ToDel, Rid, Db),
       ReverseOps = merge_reverse_paths(ToAdd, ToDel, Rid, Db),
-      
+
       ok = update_index(Db, ForwardOps, ReverseOps, Rid, FullPaths),
       State#{ update_seq => erlang:max(Seq, OldSeq) }
     end,
     State0,
     Changes
   ),
-  
+
   %% update the index
   ok = rocksdb:put(
     Db#db.store, barrel_keys:db_meta_key("indexed_seq"), term_to_binary(LastSeq),
@@ -137,7 +137,7 @@ process_changes(Changes, State0 = #{ db := Db }) ->
   ),
   ets:update_element(barrel_dbs, Db#db.id, {#db.indexed_seq, LastSeq}),
   Db#db.pid ! {index_updated, LastSeq},
-  
+
   {{ok, LastSeq}, State2}.
 
 

@@ -46,18 +46,16 @@ info(StreamID, Info, State0=#state{next=Next0}) ->
 	fold(Commands0, State0#state{next=Next}).
 
 terminate(StreamID, Reason, #state{next=Next}=State) ->
-  #state{status_code=StatusCode, ip=Ip, path=Path, method=Method} = State,
-  Format = "~p ~p ~s ~s",
-  Params = [Ip, StatusCode, Method, Path],
-  case StatusCode of
-    Error when Error >= 500 ->
-      access:error(Format, Params);
-    Warning when Warning >= 400 ->
-      access:warning(Format, Params);
-    _ ->
-      access:info(Format, Params)
-  end,
+  _ = log_access(State),
   cowboy_stream:terminate(StreamID, Reason, Next).
+
+log_access(#state{status_code=Code, ip=Ip, path=Path, method=Method}) when Code >= 500 ->
+  access:error("~p ~p ~s ~s", [Ip, Code, Method, Path]);
+log_access(#state{status_code=Code, ip=Ip, path=Path, method=Method}) when Code >= 400 ->
+  access:warning("~p ~p ~s ~s", [Ip, Code, Method, Path]);
+log_access(#state{status_code=Code, ip=Ip, path=Path, method=Method}) ->
+  access:info("~p ~p ~s ~s", [Ip, Code, Method, Path]).
+
 
 fold(Commands, State) ->
   fold(Commands, State, []).

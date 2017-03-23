@@ -56,7 +56,7 @@ create_resource(Req, #state{body=Json}=State) ->
     {error, db_exists} ->
       barrel_http_reply:error(409, "db exists", Req, State);
     Error ->
-      lager:error("got server error ~p~n", [Error]),
+      _ = lager:error("got server error ~p~n", [Error]),
       barrel_http_reply:error(500, "db error", Req, State)
   end.
 

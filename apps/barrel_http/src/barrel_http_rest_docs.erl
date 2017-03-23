@@ -44,9 +44,10 @@ aim_feed(Req) ->
   end.
 
 param_feed(Req) ->
-  case cowboy_req:qs(Req) of
-    #{feed := Feed} -> hackney_bstr:to_lower(Feed);
-    _ -> undefined
+  Qs = cowboy_req:parse_qs(Req),
+  case proplists:get_value(<<"feed">>, Qs) of
+    undefined -> undefined;
+    Feed -> hackney_bstr:to_lower(Feed)
   end.
 
 init(Req, _Opts) ->

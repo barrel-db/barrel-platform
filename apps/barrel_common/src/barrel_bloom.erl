@@ -69,9 +69,9 @@ bloom(N, E) when is_number(N), N > 0,
 bloom(Mode, Dim, E) ->
   K = 1 + trunc(log2(1/E)),
   P = pow(E, 1 / K),
-  case Mode of
-    size -> Mb = 1 + trunc(-log2(1 - pow(1 - P, 1 / Dim)));
-    bits -> Mb = Dim
+  Mb = case Mode of
+    size -> 1 + trunc(-log2(1 - pow(1 - P, 1 / Dim)));
+    bits -> Dim
   end,
   M = 1 bsl Mb,
   N = trunc(log(1-P) / log(1-1/M)),
@@ -194,7 +194,7 @@ simple_shuffle(L, N) ->
   lists:sublist(simple_shuffle(L), 1, N).
 simple_shuffle(L) ->
   N = 1000 * length(L),
-  L2 = [{random:uniform(N), E} || E <- L],
+  L2 = [{rand:uniform(N), E} || E <- L],
   {_, L3} = lists:unzip(lists:keysort(1, L2)),
   L3.
 
@@ -211,7 +211,7 @@ fixed_case(Bloom, Size, FalseRate) ->
     barrel_bloom:add_element(E, Bloom0)
               end, Bloom, RandomList),
   [?assertEqual(true, barrel_bloom:is_element(E, Bloom2)) || E <- RandomList],
-  
+
   ?assert(barrel_bloom:size(Bloom2) > ((1-FalseRate)*Size)),
   ok.
 

@@ -123,7 +123,7 @@ compare1(RevA, RevB) when RevA > RevB -> 1;
 compare1(RevA, RevB) when RevA < RevB -> -1;
 compare1(_, _) -> 0.
 
--spec id(doc()) -> docid().
+-spec id(doc()) -> docid() | undefined.
 id(#{<<"id">> := Id}) -> Id;
 id(#{}) -> undefined;
 id(_) -> erlang:error(bad_doc).

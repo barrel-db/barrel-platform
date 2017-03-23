@@ -46,8 +46,6 @@ duration(Name, Value, Env) ->
   push(Server, Name, {duration, Value}),
   ok.
 
-push(_, _, undefined) ->
-  ok;
 push(Server, Name, Value) ->
   [_, NodeId] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
   [Node | _] = binary:split(NodeId, <<".">>),
@@ -73,10 +71,11 @@ udp(Peer, Port, Data) ->
   Fun = fun() ->
             case gen_udp:open(0) of
               {ok, Socket} ->
-                gen_udp:send(Socket, Peer, Port, Data),
+                _ = gen_udp:send(Socket, Peer, Port, Data),
                 gen_udp:close(Socket);
               Error ->
                 lagger:error("can not open udp socket to statsd server: ~p", [Error])
             end
         end,
-  spawn(Fun).
+  _ = spawn(Fun),
+  ok.
