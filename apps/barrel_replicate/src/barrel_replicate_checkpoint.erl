@@ -182,15 +182,14 @@ checkpoint_docid(RepId) ->
 %% RFC3339 timestamps.
 %% Note: doesn't include the time seconds fraction (RFC3339 says it's optional).
 timestamp() ->
-  {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(erlang:timestamp()),
+  {{Year, Month, Day}, {Hour, Min, Sec}} =  calendar:now_to_local_time(erlang:timestamp()),
   UTime = erlang:universaltime(),
   LocalTime = calendar:universal_time_to_local_time(UTime),
   DiffSecs = calendar:datetime_to_gregorian_seconds(LocalTime) - calendar:datetime_to_gregorian_seconds(UTime),
-  zone(DiffSecs div 3600, (DiffSecs rem 3600) div 60),
+  Zone = zone(DiffSecs div 3600, (DiffSecs rem 3600) div 60),
   iolist_to_binary(
     io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w~s",
-                  [Year, Month, Day, Hour, Min, Sec,
-                   zone(DiffSecs div 3600, (DiffSecs rem 3600) div 60)])).
+                  [Year, Month, Day, Hour, Min, Sec, Zone])).
 
 zone(Hr, Min) when Hr >= 0, Min >= 0 ->
   io_lib:format("+~2..0w:~2..0w", [Hr, Min]);

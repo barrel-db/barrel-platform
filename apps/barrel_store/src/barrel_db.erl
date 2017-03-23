@@ -634,25 +634,27 @@ handle_info({update_docs, DocBuckets}, Db) ->
 
 handle_info(_Info, State) -> {noreply, State}.
 
+terminate(Reason, #db{ id = Id, store = nil }) ->
+  _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
+  ok;
+
 terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
-  if
-    Store /= nil ->
-      %% close the index if any
-      case is_pid(Idx) of
-        true -> (catch barrel_indexer:stop(Idx));
-        false -> ok
-      end,
-      %% finally close the database and return its result
-      Result = (catch rocksdb:close(Store)),
-      _ = lager:info(
-            "~s: ~p closed: ~p",
-            [?MODULE_STRING, Id, Result]
-           );
-    true ->  ok
-  end,
+  ok = stop_indexer(Idx),
+  %% finally close the database and return its result
+  ok = close_store(Id, Store),
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok.
 
+stop_indexer(Idx) when is_pid(Idx) ->
+  _ = (catch barrel_indexer:stop(Idx)),
+  ok;
+stop_indexer(_) ->
+  ok.
+
+close_store(Id, Store) ->
+  Result = (catch rocksdb:close(Store)),
+  _ = lager:info("~s: ~p closed: ~p",[?MODULE_STRING, Id, Result]),
+  ok.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
@@ -813,14 +815,14 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
               {ok, DI2} = merge_revtree_with_conflict(Doc, DI1),
               {DI2, [Req | Reqs1]};
             false when CreateIfMissing =/= true, Seq =:= 0 ->
-              send_result(Req, {error, not_found}),
+              _ = send_result(Req, {error, not_found}),
               {DI1, Reqs1};
             false ->
               case merge_revtree(Doc, DI1, ErrorIfExists) of
                 {ok, DI2} ->
                   {DI2, [Req | Reqs1]};
                 Conflict ->
-                  send_result(Req, {error, Conflict}),
+                  _ = send_result(Req, {error, Conflict}),
                   {DI1, Reqs1}
               end
           end

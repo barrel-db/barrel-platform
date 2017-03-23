@@ -71,7 +71,7 @@ udp(Peer, Port, Data) ->
   Fun = fun() ->
             case gen_udp:open(0) of
               {ok, Socket} ->
-                gen_udp:send(Socket, Peer, Port, Data),
+                _ = gen_udp:send(Socket, Peer, Port, Data),
                 gen_udp:close(Socket);
               Error ->
                 lagger:error("can not open udp socket to statsd server: ~p", [Error])
