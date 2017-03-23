@@ -209,12 +209,13 @@ do_stop_replication(RepId) ->
     [{RepId, {true, Pid, MRef}}] ->
       ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       true = erlang:demonitor(MRef, [flush]),
+      true = ets:delete(replication_ids, Pid),
       true = ets:insert(replication_ids, {RepId, {true, nil, nil}}),
       ok;
     [{RepId, {false, Pid, MRef}}] ->
-      ok =
-      supervisor:terminate_child(barrel_replicate_task_sup, Pid),
+      ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       true = erlang:demonitor(MRef, [flush]),
+      true = ets:delete(replication_ids, Pid),
       ok
   end.
 

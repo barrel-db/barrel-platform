@@ -196,7 +196,7 @@ wait_response(State = #{ ref := Ref, options := Options}) ->
   end.
 
 wait_changes(State = #{ parent := Parent, ref := Ref }) ->
-  ok = hackney:stream_next(Ref),
+  _ = hackney:stream_next(Ref),
   receive
     {get_changes, Pid, Tag} ->
       {Events, NewState} = get_changes(State),
