@@ -150,7 +150,7 @@ update_doc(Config) ->
 delete_doc_without_revision(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []),
-  {ok, <<"a">>, RevId} = barrel_httpc:post(db(Config), Doc, []),
+  {ok, <<"a">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
   {ok, Doc, _Meta} = barrel_httpc:get(db(Config), <<"a">>, []),
   {ok, _, _} = barrel_httpc:delete(db(Config), <<"a">>, []),
   {error, not_found} = barrel_httpc:get(db(Config), <<"a">>, []).
