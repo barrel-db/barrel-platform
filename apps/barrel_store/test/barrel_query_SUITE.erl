@@ -24,12 +24,14 @@
 ]).
 
 -export([
-  order_by_key/1
+  order_by_key/1,
+  multiple_docs/1
 ]).
 
 all() ->
   [
-    order_by_key
+    order_by_key,
+    multiple_docs
   ].
 
 init_per_suite(Config) ->
@@ -75,4 +77,58 @@ order_by_key(_Config) ->
   [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel_local:query(<<"testdb">>, <<"id">>, Fun, [], []),
   [{<<"AndersenFamily">>, null}] = barrel_local:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
   ok.
+
+
+multiple_docs(_Config) ->
+  DocA = #{ <<"test">> => <<"a">> },
+  DocB = #{ <<"test">> => <<"b">> },
+  BatchA = [{post, DocA} || _I <- lists:seq(1, 30)],
+  BatchB = [{post, DocB} || _I <- lists:seq(1, 25)],
+  ResultsA = barrel_local:write_batch(<<"testdb">>, BatchA, []),
+  ResultsB = barrel_local:write_batch(<<"testdb">>, BatchB, []),
+
+  IdsA = [Id || {ok, Id, _} <- ResultsA],
+  IdsB = [Id || {ok, Id, _} <- ResultsB],
+
+  30 = length(IdsA),
+  25 = length(IdsB),
+
+  All = barrel_local:fold_by_id(<<"testdb">>,
+                                       fun(#{ <<"id">> := Id }, _, Acc) -> {ok, [Id | Acc]} end,
+                                       [],
+                                       []),
+  55 = length(All),
+
+  All20 = barrel_local:fold_by_id(<<"testdb">>,
+                                       fun(#{ <<"id">> := Id }, _, Acc) -> {ok, [Id | Acc]} end,
+                                       [],
+                                       [{max, 20}]),
+  20 = length(All20),
+
+  All40 = barrel_local:fold_by_id(<<"testdb">>,
+                                       fun(#{ <<"id">> := Id }, _, Acc) -> {ok, [Id | Acc]} end,
+                                       [],
+                                       [{max, 40}]),
+  40 = length(All40),
+
+  QAll = barrel_local:query(<<"testdb">>,
+                                  <<"test/a">>,
+                                  fun(Id, _, _, Acc) -> {ok, [Id | Acc]} end,
+                                  [],
+                                  []),
+  30 = length(QAll),
+
+  Q15 = barrel_local:query(<<"testdb">>,
+                                  <<"test/a">>,
+                                  fun(Id, _, _, Acc) -> {ok, [Id | Acc]} end,
+                                  [],
+                                  [{max, 15}]),
+  15 = length(Q15),
+
+  QBAll = barrel_local:query(<<"testdb">>,
+                                  <<"test/b">>,
+                                  fun(Id, _, _, Acc) -> {ok, [Id | Acc]} end,
+                                  [],
+                                  []),
+  25 = length(QBAll).
 
