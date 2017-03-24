@@ -19,7 +19,7 @@
 -include("barrel_store.hrl").
 
 
-query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_key, FilterOpts) ->
+query(Db, Path0, Fun, Acc, order_by_key, FilterOpts) ->
   Path1 = valid_path(Path0),
   Parts = partial_path(barrel_json:decode_path(Path1)),
   StartKey = case proplists:get_value(start_at, FilterOpts) of
@@ -37,7 +37,7 @@ query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_key, FilterOpts) ->
            end,
   Prefix = barrel_keys:idx_forward_path_key(Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
-query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_value, FilterOpts) ->
+query(Db, Path0, Fun, Acc, order_by_value, FilterOpts) ->
   Path1 = valid_path(Path0),
   Parts = reverse_partial_path(barrel_json:decode_path(Path1)),
   StartKey = case proplists:get_value(start_at, FilterOpts) of
@@ -51,7 +51,7 @@ query(Db = #db{id=DbId}, Path0, Fun, Acc, order_by_value, FilterOpts) ->
              End when is_binary(End) ->
                EndParts = Parts ++ [End],
                barrel_keys:idx_reverse_path_key(EndParts)
-  
+
            end,
   Prefix = barrel_keys:idx_reverse_path_key(Parts),
   query1(Db, Prefix, StartKey, EndKey, Fun, Acc, Path0, FilterOpts);
@@ -68,7 +68,7 @@ query1(#db{store=Store}=Db, Prefix, StartKey, EndKey, Fun, AccIn, Path, Opts) ->
      {lte, EndKey},
      {max, Max},
      {read_options, ReadOptions}],
-  
+
   WrapperFun =
     fun(_KeyBin, BinEntries, Acc) ->
       Entries = binary_to_term(BinEntries),

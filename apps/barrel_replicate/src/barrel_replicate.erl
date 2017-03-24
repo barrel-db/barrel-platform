@@ -93,7 +93,7 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info({'DOWN', _MRef, process, Pid, Reason}, State) ->
-  lager:info("[~s] replication down pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
+  _ = lager:info("[~s] replication down pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   _ = task_is_down(Pid),
   {noreply, State};
 
@@ -102,7 +102,7 @@ handle_info(init_config, State) ->
   {noreply, State2};
 
 handle_info(Info, State) ->
-  lager:error("[~s] received an unknown message, exiting ~p", [?MODULE_STRING, Info]),
+  _ = lager:error("[~s] received an unknown message, exiting ~p", [?MODULE_STRING, Info]),
   {stop, normal, State}.
 
 terminate(_Reason, _State) ->
@@ -201,20 +201,19 @@ register_replication(RepId, Pid, Persisted, Config, #{ config := All} = State) -
 
 
 do_stop_replication(RepId) ->
-  case find_repid(RepId) of
-    undefined ->
+  case ets:take(replication_ids, RepId) of
+    [] ->
       ok;
-    {ok, {_, nil, _}} ->
+    [{RepId, {_, nil, _}}] ->
       ok;
-    {ok, {true, Pid, MRef}} ->
+    [{RepId, {true, Pid, MRef}}] ->
       ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
       true = erlang:demonitor(MRef, [flush]),
       true = ets:delete(replication_ids, Pid),
       true = ets:insert(replication_ids, {RepId, {true, nil, nil}}),
       ok;
-    {ok, {false, Pid, MRef}} ->
+    [{RepId, {false, Pid, MRef}}] ->
       ok = supervisor:terminate_child(barrel_replicate_task_sup, Pid),
-      [{RepId, {_, Pid, MRef}}] = ets:take(replication_ids, RepId),
       true = erlang:demonitor(MRef, [flush]),
       true = ets:delete(replication_ids, Pid),
       ok

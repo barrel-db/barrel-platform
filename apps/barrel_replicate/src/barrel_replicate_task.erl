@@ -151,28 +151,28 @@ handle_info({change, Change}, S) ->
 
 
 handle_info({'EXIT', Pid, Reason}, #st{changes_since_pid=Pid}=State) ->
-  lager:warning("[~s] changes process exited pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
+  _ = lager:warning("[~s] changes process exited pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   Source = State#st.source,
   Checkpoint = State#st.checkpoint,
   LastSeq = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
   case database_exist(Source) of
     true ->
       {ok, NewPid} = start_changes_feed_process(Source, LastSeq),
-      lager:warning("[~s] changes process restarted pid=~p",[?MODULE_STRING, NewPid]),
+      _ = lager:warning("[~s] changes process restarted pid=~p",[?MODULE_STRING, NewPid]),
       {noreply, State};
     false ->
-      lager:warning("[~s] database ~p does not exist anymore. Stop task pid=~p",
+      _ = lager:warning("[~s] database ~p does not exist anymore. Stop task pid=~p",
                     [?MODULE_STRING, Source, self()]),
       {stop, normal, State}
   end;
 
 handle_info({'EXIT', Pid, Reason}, State) ->
-  lager:error("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
+  _ = lager:error("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   {stop, Reason, State}.
 
 terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
   barrel_replicate_metrics:update_task(State#st.metrics),
-  lager:debug(
+  _ = lager:debug(
     "barrel_replicate(~p} terminated: ~p",
     [RepId, _Reason]
   ),

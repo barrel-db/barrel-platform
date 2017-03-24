@@ -1,4 +1,4 @@
-image: erlang:19.2.2
+image: erlang:19.3
 
 before_script:
   - apt-get update -y
@@ -17,3 +17,19 @@ test:
   script:
     - ./support/rebar3 eunit
     - ./support/rebar3 ct
+    - ./support/rebar3 dialyzer
+    - ./support/rebar3 cover
+
+pages:
+    stage: deploy
+    script:
+      - ./support/rebar3 eunit
+      - ./support/rebar3 ct
+      - ./support/rebar3 cover
+      - mv _build/test/cover/ public/
+    artifacts:
+      paths:
+        - public
+      expire_in: 30 days
+    only:
+      - master

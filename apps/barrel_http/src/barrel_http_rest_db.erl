@@ -54,4 +54,10 @@ check_database_exist(Req, State) ->
   end.
 
 get_resource(Req, #state{database=Database}=State) ->
-  barrel_http_reply:doc(barrel_local:db_infos(Database), Req, State).
+  case barrel_local:db_infos(Database) of
+    {ok, Info} ->
+      barrel_http_reply:doc(Info, Req, State);
+    {error, Error} ->
+      _ = lager:error("db_infos error=~p",[Error]),
+      barrel_http_reply:error(500, Req, State)
+  end.

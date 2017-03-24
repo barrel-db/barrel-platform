@@ -111,8 +111,9 @@ start_link() ->
 create_tab() ->
   case ets:info(?MODULE, name) of
     undefined ->
-      ets:new(?MODULE, [named_table, public, ordered_set,
-        {read_concurrency, true}, {write_concurrency, true}]),
+      _ = ets:new(?MODULE, [named_table, public, ordered_set,
+                            {read_concurrency, true},
+                            {write_concurrency, true}]),
       true;
     _ ->
       false
@@ -124,10 +125,7 @@ create_tab() ->
 %%%
 -spec init(term()) -> {ok, state()}.
 init([IsNew]) ->
-  case IsNew of
-    true -> ok;
-    false -> init_monitors()
-  end,
+  ok = init_monitors(IsNew),
   {ok, #state{}}.
 
 -spec handle_call(term(), term(), state()) -> {reply, term(), state()}.
@@ -167,9 +165,12 @@ process_is_down(Pid) ->
   ets:delete(?MODULE, Pid),
   ets:delete(?MODULE, {t, Pid}).
 
-init_monitors() ->
+init_monitors(false) ->
   Pids = ets:select(?MODULE, ets:fun2ms(fun({Pid, m}) -> Pid end)),
-  [erlang:monitor(process, Pid) || Pid <- Pids].
+  _ = [erlang:monitor(process, Pid) || Pid <- Pids],
+  ok;
+init_monitors(true) ->
+  ok.
 
 timestamp() ->
   timestamp(erlang:timestamp()).

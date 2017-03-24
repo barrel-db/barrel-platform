@@ -104,7 +104,7 @@ start_link() ->
 init_tab() ->
   case ets:info(?TAB, name) of
     undefined ->
-      ets:new(?TAB, [named_table, public, ordered_set]),
+      _ = ets:new(?TAB, [named_table, public, ordered_set]),
       true;
     _ ->
       false
@@ -204,12 +204,12 @@ do_register_dbs(Pid, DbNames) ->
 
 maybe_monitor(Pid) ->
   %% only monitor once a process
-  case ets:lookup(?TAB, Pid) of
-    [] ->
+  case ets:member(?TAB, Pid) of
+    false ->
       MRef = erlang:monitor(process, Pid),
       ets:insert(?TAB, {Pid, MRef}),
       ok;
-    [_] ->
+    true ->
       ok
   end.
 

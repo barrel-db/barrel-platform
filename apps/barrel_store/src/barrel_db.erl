@@ -79,14 +79,15 @@ infos(DbName) ->
   with_db(
     DbName,
     fun(Db) ->
-      #{
-        name => DbName,
-        id => Db#db.id,
-        docs_count => Db#db.docs_count,
-        last_update_seq => Db#db.updated_seq,
-        system_docs_count => Db#db.system_docs_count,
-        last_index_seq => Db#db.indexed_seq
-      }
+        Info = #{
+          name => DbName,
+          id => Db#db.id,
+          docs_count => Db#db.docs_count,
+          last_update_seq => Db#db.updated_seq,
+          system_docs_count => Db#db.system_docs_count,
+          last_index_seq => Db#db.indexed_seq
+         },
+        {ok, Info}
     end
   ).
 
@@ -461,7 +462,7 @@ query(DbName, Path, Fun, AccIn, OrderBy, Options) ->
 with_db(DbName, Fun) ->
   case barrel_store:whereis_db(DbName) of
     undefined ->
-      lager:debug(
+      _ = lager:debug(
         "~s: db ~p not found",
         [?MODULE_STRING, DbName]
       ),
@@ -557,17 +558,17 @@ init_metrics(DbId) ->
              , [<<"store">>, DbId, <<"collect_updates">>]
              , [<<"store">>, DbId, <<"update_docs">>]
              ],
-  [ barrel_metrics:init(counter, C) || C <- Counters ],
+  _ = [ barrel_metrics:init(counter, C) || C <- Counters ],
 
   Durations = [ [<<"store">>, DbId, <<"update_docs">>]
               , [<<"store">>, DbId, <<"local_update">>]
               , [<<"store">>, DbId, <<"index_update">>]
               ],
-  [ barrel_metrics:init(duration, D) || D <- Durations ],
+  _ = [ barrel_metrics:init(duration, D) || D <- Durations ],
 
   Gauges = [ [<<"store">>, DbId, <<"update_queue_length">>]
            ],
-  [ barrel_metrics:init(gauge, G) || G <- Gauges ],
+  _ = [ barrel_metrics:init(gauge, G) || G <- Gauges ],
   ok.
 
 open_db(DbId, Config) ->
@@ -600,26 +601,27 @@ handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 
 handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) ->
-  if
-    Store /= nil ->
-      case is_pid(Idx) of
-        true -> (catch barrel_indexer:stop(Idx));
-        false -> ok
-      end,
-      ok = rocksdb:close(Store),
-      TempName = db_path(barrel_lib:uniqid()),
-      file:rename(db_path(Id), TempName),
-      %% deletion of the database happen asynchronously
-      spawn(
-        fun() ->
-          ok = rocksdb:destroy(TempName, []),
-          lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
-        end
-      );
-    true ->
-      ok
-  end,
-  {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
+  Reply  = if
+             Store /= nil ->
+               case is_pid(Idx) of
+                 true -> (catch barrel_indexer:stop(Idx));
+                 false -> ok
+               end,
+               ok = rocksdb:close(Store),
+               TempName = db_path(barrel_lib:uniqid()),
+               _ = file:rename(db_path(Id), TempName),
+               %% deletion of the database happen asynchronously
+               spawn(
+                 fun() ->
+                     ok = rocksdb:destroy(TempName, []),
+                     _ = lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
+                 end
+                ),
+               {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
+             true ->
+               {stop, normal, ok, Db#db{ store=nil, indexer=nil}}
+           end,
+  Reply;
 
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
@@ -632,25 +634,27 @@ handle_info({update_docs, DocBuckets}, Db) ->
 
 handle_info(_Info, State) -> {noreply, State}.
 
+terminate(Reason, #db{ id = Id, store = nil }) ->
+  _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
+  ok;
+
 terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
-  if
-    Store /= nil ->
-      %% close the index if any
-      case is_pid(Idx) of
-        true -> (catch barrel_indexer:stop(Idx));
-        false -> ok
-      end,
-      %% finally close the database and return its result
-      Result = (catch rocksdb:close(Store)),
-      lager:info(
-        "~s: ~p closed: ~p",
-        [?MODULE_STRING, Id, Result]
-      );
-    true ->  ok
-  end,
-  lager:info("terminate db ~p: ~p~n", [Id, Reason]),
+  ok = stop_indexer(Idx),
+  %% finally close the database and return its result
+  ok = close_store(Id, Store),
+  _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok.
 
+stop_indexer(Idx) when is_pid(Idx) ->
+  _ = (catch barrel_indexer:stop(Idx)),
+  ok;
+stop_indexer(_) ->
+  ok.
+
+close_store(Id, Store) ->
+  Result = (catch rocksdb:close(Store)),
+  _ = lager:info("~s: ~p closed: ~p",[?MODULE_STRING, Id, Result]),
+  ok.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
@@ -744,7 +748,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
             barrel_db_event:notify(Db2#db.id, db_updated),
             Db2;
           Error ->
-            lager:error(
+            _ = lager:error(
               "~s: error writing ~p: ~p",
               [?MODULE_STRING, DocId, Error]
             ),
@@ -811,14 +815,14 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
               {ok, DI2} = merge_revtree_with_conflict(Doc, DI1),
               {DI2, [Req | Reqs1]};
             false when CreateIfMissing =/= true, Seq =:= 0 ->
-              send_result(Req, {error, not_found}),
+              _ = send_result(Req, {error, not_found}),
               {DI1, Reqs1};
             false ->
               case merge_revtree(Doc, DI1, ErrorIfExists) of
                 {ok, DI2} ->
                   {DI2, [Req | Reqs1]};
                 Conflict ->
-                  send_result(Req, {error, Conflict}),
+                  _ = send_result(Req, {error, Conflict}),
                   {DI1, Reqs1}
               end
           end

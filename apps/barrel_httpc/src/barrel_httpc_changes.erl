@@ -55,8 +55,8 @@
           conn,
           ref,
           hackney_timeout    :: non_neg_integer(),
-          last_seq           :: non_neg_integer(),
-          since              :: non_neg_integer(),
+          last_seq           :: undefined | non_neg_integer(),
+          since              :: undefined | non_neg_integer(),
           changes,
           mode               :: term(),
           changes_cb,
@@ -183,7 +183,7 @@ init_feed(State) ->
     {ok, Ref} ->
       wait_response(State#state{ref = Ref});
     Error ->
-      lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
+      _ = lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
       retry_connect(State)
       %% exit(Error)
   end.
@@ -192,7 +192,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
   receive
     {hackney_response, Ref, {status, 200, _}} ->
       Conn = State#state.conn,
-      lager:info("[~s] connected to conn=~p", [?MODULE_STRING, Conn]),
+      _ = lager:info("[~s] connected to conn=~p", [?MODULE_STRING, Conn]),
       Cb = maps:get(changes_cb, Options, nil),
       Mode = maps:get(mode, Options, binary),
       MaxRetry = State#state.max_retry,
@@ -203,18 +203,18 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
                            buffer = <<>>},
       wait_changes(State2);
     {hackney_response, Ref, {status, 404, _}} ->
-      lager:error("~s not_found ~n", [?MODULE_STRING]),
+      _ = lager:error("~s not_found ~n", [?MODULE_STRING]),
       cleanup(Ref, not_found),
       exit(not_found);
     {hackney_response, Ref, {status, Status, Reason}} ->
-      lager:error(
+      _ = lager:error(
         "~s request bad status ~p(~p)~n",
         [?MODULE_STRING, Status, Reason]
       ),
       cleanup(Ref, {http_error, Status, Reason}),
       exit({http_error, Status, Reason});
     {hackney_response, Ref, {error, Reason}} ->
-      lager:error(
+      _ = lager:error(
         "~s hackney error: ~p~n",
         [?MODULE_STRING, Reason]
        ),
@@ -227,7 +227,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
   end.
 
 wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
-  hackney:stream_next(Ref),
+  _ = hackney:stream_next(Ref),
   receive
     {get_changes, Pid, Tag} ->
       {Events, NewState} = get_changes(State),
@@ -236,12 +236,12 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
     {hackney_response, Ref, {headers, _Headers}} ->
       wait_changes(State);
     {hackney_response, Ref, done} ->
-      lager:warning("[~s] hackney connection done", [?MODULE_STRING]),
+      _ = lager:warning("[~s] hackney connection done", [?MODULE_STRING]),
       retry_connect(State);
     {hackney_response, Ref, Data} when is_binary(Data) ->
       decode_data(Data, State);
     {hackney_response, Ref, Error} ->
-      lager:error(
+      _ = lager:error(
         "~s hackney error: ~p~n",
         [?MODULE_STRING, Error]
       ),
@@ -255,7 +255,7 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
         Request, From, Parent, ?MODULE, [],
         {wait_changes, State})
   after State#state.hackney_timeout ->
-    lager:error("~s timeout: ~n", [?MODULE_STRING]),
+    _ = lager:error("~s timeout: ~n", [?MODULE_STRING]),
     cleanup(State, timeout),
     exit(timeout)
   end.
@@ -263,7 +263,7 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
 retry_connect(#state{retry = Retry}=State) ->
   Delay = State#state.delay_before_retry,
   timer:sleep(Delay),
-  lager:warning("[~s] try to reconnect (~p)", [?MODULE_STRING, Retry]),
+  _ = lager:warning("[~s] try to reconnect (~p)", [?MODULE_STRING, Retry]),
   LastSeq = State#state.last_seq,
   init_feed(State#state{since = LastSeq, retry = Retry-1}).
 
@@ -275,7 +275,7 @@ system_continue(_, _, {wait_changes, State}) ->
 system_terminate(Reason, _, _, #{ ref := Ref }) ->
   %% unregister the stream
   catch hackney:close(Ref),
-  lager:debug(
+  _ = lager:debug(
     "~s terminate: ~p",
     [?MODULE_STRING,Reason]
   ),
@@ -288,7 +288,7 @@ system_code_change(Misc, _, _, _) ->
 cleanup(#state{ ref = Ref }, Reason) ->
   cleanup(Ref, Reason);
 cleanup(Ref, Reason) ->
-  lager:info("closing change feed connection: ~p", [Reason]),
+  _ = lager:info("closing change feed connection: ~p", [Reason]),
   (catch hackney:close(Ref)),
   ok.
 
@@ -307,7 +307,7 @@ decode_data(Data, #state{ mode = binary, changes = Q, changes_cb = nil }=State) 
     Q,
     Changes
   ),
-  wait_changes(NewState#{ changes => Q2 });
+  wait_changes(NewState#state{ changes = Q2 });
 decode_data(Data, #state{ changes = Q, changes_cb = nil }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
   Q2  = lists:foldl(
