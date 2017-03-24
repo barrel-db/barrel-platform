@@ -34,24 +34,27 @@
 ]).
 
 -type listener_options() :: #{
-  since => non_neg_integer(),
-  mode => binary | sse,
-  include_doc => true | false,
-  history => true | false,
-  changes_cb => fun( (barrel_peer:change()) -> ok ),
-  max_retry => non_neg_integer(),
+  since              => non_neg_integer(),
+  mode               => binary | sse,
+  include_doc        => true | false,
+  history            => true | false,
+  changes_cb         => fun( (barrel_peer:change()) -> ok ),
+  timeout            => non_neg_integer(),
+  max_retry          => non_neg_integer(),
   delay_before_retry => non_neg_integer()
 }.
 
 -export_type([listener_options/0]).
 
--define(TIMEOUT, 5000).
+-define(DEFAULT_TIMEOUT,   5000).
+-define(DEFAULT_HEARTBEAT, 3000).
 -define(DEFAULT_MAX_RETRY, 5).
 
 -record(state, {
           parent             :: pid(),
           conn,
           ref,
+          hackney_timeout    :: non_neg_integer(),
           last_seq           :: non_neg_integer(),
           since              :: non_neg_integer(),
           changes,
@@ -76,7 +79,7 @@ changes(FeedPid) ->
   receive
     {changes, Tag, Changes} -> Changes;
     {'DOWN', MRef, _, _, Reason} -> exit(Reason)
-  after ?TIMEOUT ->
+  after ?DEFAULT_TIMEOUT ->
     erlang:demonitor(MRef, [flush]),
     exit(timeout)
   end.
@@ -140,6 +143,7 @@ init(Parent, Conn, Options) ->
                   conn = Conn,
                   last_seq = undefined,
                   retry = Retry,
+                  hackney_timeout = maps:get(timeout, Options, ?DEFAULT_TIMEOUT),
                   max_retry = maps:get(max_retry, Options, 5),
                   delay_before_retry = maps:get(delay_before_retry, Options, 500),
                   options = Options},
@@ -167,7 +171,11 @@ init_feed(State) ->
       [{<<"Accept">>, <<"text/event-stream">>},
        {<<"Last-Event-Id">>, integer_to_binary(Since)}]
   end,
-  Params = parse_options(Options),
+  Params0 = parse_options(Options),
+  Params = case proplists:is_defined(<<"heartbeat">>, Params0) of
+             true -> Params0;
+             _ -> [{<<"heartbeat">>, ?DEFAULT_HEARTBEAT}|Params0]
+           end,
   Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, Params),
   ReqOpts = [{pool, none}, {async, once}],
   proc_lib:init_ack(Parent, {ok, self()}),
@@ -212,7 +220,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
        ),
       cleanup(Ref, Reason),
       exit(Reason())
-  after ?TIMEOUT ->
+  after State#state.hackney_timeout ->
       Ref = State#state.ref,
       cleanup(Ref, timeout),
       exit(timeout)
@@ -246,7 +254,7 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
       sys:handle_system_msg(
         Request, From, Parent, ?MODULE, [],
         {wait_changes, State})
-  after ?TIMEOUT ->
+  after State#state.hackney_timeout ->
     lager:error("~s timeout: ~n", [?MODULE_STRING]),
     cleanup(State, timeout),
     exit(timeout)
