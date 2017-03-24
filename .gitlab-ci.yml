@@ -23,8 +23,10 @@ test:
 pages:
     stage: deploy
     script:
+      - ./support/rebar3 eunit
+      - ./support/rebar3 ct
       - ./support/rebar3 cover
-      - mv _build/test/cover public/
+      - mv _build/test/cover/ public/
     artifacts:
       paths:
         - public
