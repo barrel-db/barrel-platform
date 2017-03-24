@@ -46,7 +46,23 @@
 -export_type([listener_options/0]).
 
 -define(TIMEOUT, 5000).
+-define(DEFAULT_MAX_RETRY, 5).
 
+-record(state, {
+          parent             :: pid(),
+          conn,
+          ref,
+          last_seq           :: non_neg_integer(),
+          since              :: non_neg_integer(),
+          changes,
+          mode               :: term(),
+          changes_cb,
+          buffer,
+          retry              :: non_neg_integer(),
+          delay_before_retry :: non_neg_integer(),
+          max_retry          :: non_neg_integer(),
+          options            :: map()
+         }).
 %% fetch all changes received by a listener à that time.
 %% Only useful when no changes callback is given.
 %% Otherwise the list will always be empty.
@@ -87,7 +103,7 @@ changes(FeedPid) ->
   ListenerOptions :: listener_options(),
   ListenerPid :: pid(),
   Res :: {ok, ListenerPid} | {error, any()}.
-start_link(Conn, Options) ->
+start_link(Conn, Options) when is_map(Options) ->
   proc_lib:start_link(?MODULE, init, [self(), Conn, Options]).
 
 %% @doc stop a change listener
@@ -119,27 +135,30 @@ parse_change(ChangeBin) ->
   ).
 
 init(Parent, Conn, Options) ->
-  Retry =  maps:get(max_retry, Options, 5),
-  State = #{ parent => Parent,
-             conn => Conn,
-             last_seq => undefined,
-             retry => Retry,
-             options => Options},
+  Retry =  maps:get(max_retry, Options, ?DEFAULT_MAX_RETRY),
+  State = #state{ parent = Parent,
+                  conn = Conn,
+                  last_seq = undefined,
+                  retry = Retry,
+                  max_retry = maps:get(max_retry, Options, 5),
+                  delay_before_retry = maps:get(delay_before_retry, Options, 500),
+                  options = Options},
   init_feed(State).
 
-init_feed(State = #{retry := 0} ) ->
+init_feed(#state{retry = 0} = State ) ->
   cleanup(State, "remote stopped (max retry reached)"),
   exit(normal);
 
 init_feed(State) ->
-  #{parent := Parent,
-    conn := Conn,
-    options := Options} = State,
-  Since = case maps:get(last_seq, State) of
+  #state{parent = Parent,
+         conn = Conn,
+         last_seq = LastSeq,
+         options = Options} = State,
+  Since = case LastSeq of
             undefined ->
               maps:get(since, Options, 0);
-            LastSeq ->
-              LastSeq
+            Seq ->
+              Seq
           end,
   Headers = case Since of
     0 ->
@@ -154,22 +173,26 @@ init_feed(State) ->
   proc_lib:init_ack(Parent, {ok, self()}),
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
-      wait_response(State#{ref => Ref});
+      wait_response(State#state{ref = Ref});
     Error ->
       lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
       retry_connect(State)
       %% exit(Error)
   end.
 
-wait_response(State = #{ ref := Ref, options := Options}) ->
+wait_response(#state{ ref = Ref, options = Options}=State) ->
   receive
     {hackney_response, Ref, {status, 200, _}} ->
+      Conn = State#state.conn,
+      lager:info("[~s] connected to conn=~p", [?MODULE_STRING, Conn]),
       Cb = maps:get(changes_cb, Options, nil),
       Mode = maps:get(mode, Options, binary),
-      State2 = State#{changes => queue:new(),
-                      mode => Mode,
-                      changes_cb => Cb,
-                      buffer => <<>>},
+      MaxRetry = State#state.max_retry,
+      State2 = State#state{changes = queue:new(),
+                           mode = Mode,
+                           retry = MaxRetry,
+                           changes_cb = Cb,
+                           buffer = <<>>},
       wait_changes(State2);
     {hackney_response, Ref, {status, 404, _}} ->
       lager:error("~s not_found ~n", [?MODULE_STRING]),
@@ -190,12 +213,12 @@ wait_response(State = #{ ref := Ref, options := Options}) ->
       cleanup(Ref, Reason),
       exit(Reason())
   after ?TIMEOUT ->
-      Ref = maps:get(ref, State),
+      Ref = State#state.ref,
       cleanup(Ref, timeout),
       exit(timeout)
   end.
 
-wait_changes(State = #{ parent := Parent, ref := Ref }) ->
+wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
   hackney:stream_next(Ref),
   receive
     {get_changes, Pid, Tag} ->
@@ -205,6 +228,7 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     {hackney_response, Ref, {headers, _Headers}} ->
       wait_changes(State);
     {hackney_response, Ref, done} ->
+      lager:warning("[~s] hackney connection done", [?MODULE_STRING]),
       retry_connect(State);
     {hackney_response, Ref, Data} when is_binary(Data) ->
       decode_data(Data, State);
@@ -228,11 +252,12 @@ wait_changes(State = #{ parent := Parent, ref := Ref }) ->
     exit(timeout)
   end.
 
-retry_connect(State = #{retry := Retry, options := #{delay_before_retry := Delay}}) ->
+retry_connect(#state{retry = Retry}=State) ->
+  Delay = State#state.delay_before_retry,
   timer:sleep(Delay),
-  lager:warning("[~s] retry to connect (~p)", [?MODULE_STRING, Retry]),
-  LastSeq = maps:get(last_seq, State),
-  init_feed(State#{since => LastSeq, retry => Retry-1}).
+  lager:warning("[~s] try to reconnect (~p)", [?MODULE_STRING, Retry]),
+  LastSeq = State#state.last_seq,
+  init_feed(State#state{since = LastSeq, retry = Retry-1}).
 
 
 system_continue(_, _, {wait_changes, State}) ->
@@ -252,7 +277,7 @@ system_code_change(Misc, _, _, _) ->
   {ok, Misc}.
 
 
-cleanup(#{ ref := Ref }, Reason) ->
+cleanup(#state{ ref = Ref }, Reason) ->
   cleanup(Ref, Reason);
 cleanup(Ref, Reason) ->
   lager:info("closing change feed connection: ~p", [Reason]),
@@ -260,11 +285,11 @@ cleanup(Ref, Reason) ->
   ok.
 
 
-get_changes(State = #{ changes := Q }) ->
+get_changes(#state{ changes = Q }=State) ->
   Changes = queue:to_list(Q),
-  {Changes, State#{ changes => queue:new() }}.
+  {Changes, State#state{ changes = queue:new() }}.
 
-decode_data(Data, State = #{ mode := binary, changes := Q, changes_cb := nil }) ->
+decode_data(Data, #state{ mode = binary, changes = Q, changes_cb = nil }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
   Q2  = lists:foldl(
     fun
@@ -275,7 +300,7 @@ decode_data(Data, State = #{ mode := binary, changes := Q, changes_cb := nil }) 
     Changes
   ),
   wait_changes(NewState#{ changes => Q2 });
-decode_data(Data, State = #{ changes := Q, changes_cb := nil }) ->
+decode_data(Data, #state{ changes = Q, changes_cb = nil }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
   Q2  = lists:foldl(
     fun
@@ -285,8 +310,8 @@ decode_data(Data, State = #{ changes := Q, changes_cb := nil }) ->
     Q,
     Changes
   ),
-  wait_changes(NewState#{ changes => Q2 });
-decode_data(Data, State = #{ mode := binary, changes_cb := Cb }) ->
+  wait_changes(NewState#state{ changes = Q2 });
+decode_data(Data, #state{ mode = binary, changes_cb = Cb }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
   lists:foreach(
     fun
@@ -296,7 +321,7 @@ decode_data(Data, State = #{ mode := binary, changes_cb := Cb }) ->
     Changes
   ),
   wait_changes(NewState);
-decode_data(Data, State = #{ changes_cb := Cb, last_seq := PreviousSeq }) ->
+decode_data(Data, #state{ changes_cb = Cb, last_seq = PreviousSeq }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
   LastSeq = lists:foldl(
               fun
@@ -308,16 +333,16 @@ decode_data(Data, State = #{ changes_cb := Cb, last_seq := PreviousSeq }) ->
               end,
               PreviousSeq, Changes
              ),
-  wait_changes(NewState#{last_seq => LastSeq}).
+  wait_changes(NewState#state{last_seq = LastSeq}).
 
-sse_changes(Data, State=#{ buffer := Buffer }) ->
+sse_changes(Data, #state{ buffer = Buffer }=State) ->
   NewBuffer = << Buffer/binary, Data/binary >>,
   DataList = binary:split(NewBuffer, <<"\n\n">>, [global]),
   case lists:reverse(DataList) of
     [<<>> | Changes] ->
-      {lists:reverse(Changes), State#{ buffer => <<>> }};
+      {lists:reverse(Changes), State#state{ buffer = <<>> }};
     [Rest | Changes] ->
-      {lists:reverse(Changes), State#{ buffer => Rest }}
+      {lists:reverse(Changes), State#state{ buffer = Rest }}
   end.
 
 parse_options(Options) ->
