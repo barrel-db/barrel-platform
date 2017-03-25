@@ -16,7 +16,7 @@
           path,
           method,
           database,
-          handler :: list | changes | doc,
+          handler,
           docid,
           idmatch,
           revid,

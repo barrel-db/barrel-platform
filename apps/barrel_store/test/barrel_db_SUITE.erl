@@ -208,12 +208,12 @@ create_doc(_Config) ->
   {ok, <<"b">>, _RevId2} = barrel_local:post(<<"testdb">>, Doc2, []).
 
 docs_count(_Config) ->
-  #{ docs_count := 0 } = barrel_local:db_infos(<<"testdb">>),
+  {ok, #{ docs_count := 0 }} = barrel_local:db_infos(<<"testdb">>),
   Doc = #{<<"v">> => 1},
   {ok, DocId, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
-  #{ docs_count := 1 } = barrel_local:db_infos(<<"testdb">>),
+  {ok, #{ docs_count := 1 }} = barrel_local:db_infos(<<"testdb">>),
   {ok, _, _} = barrel_local:delete(<<"testdb">>, DocId, [{rev, RevId}]),
-  #{ docs_count := 0 } = barrel_local:db_infos(<<"testdb">>).
+  {ok, #{ docs_count := 0 }} = barrel_local:db_infos(<<"testdb">>).
 
 get_revisions(_Config) ->
   Doc = #{<<"v">> => 1},

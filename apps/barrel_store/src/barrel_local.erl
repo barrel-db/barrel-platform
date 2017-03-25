@@ -50,7 +50,6 @@
 ]).
 
 -export([
-  start_replication/2,
   start_replication/3,
   start_replication/4,
   stop_replication/1,
@@ -155,7 +154,7 @@
 -include_lib("barrel_common/include/barrel_common.hrl").
 
 create_db(DbId, Config) ->
-  lager:warning("barrel_db:create/2 is deprecated", []),
+  _ = lager:warning("barrel_db:create/2 is deprecated", []),
   barrel_store:create_db(Config#{ <<"database_id">> => DbId }).
 
 create_db(Config) ->
@@ -179,12 +178,13 @@ db_infos(Db) ->
   DocId :: docid(),
   Options :: read_options(),
   Doc :: doc(),
-  Res :: {ok, Doc} | {error, not_found} | {error, any()}.
+  Meta :: meta(),
+  Res :: {ok, Doc, Meta} | {error, not_found} | {error, any()}.
 get(Db, DocId, Options) ->
   barrel_db:get(Db, DocId, Options).
 
 %% @doc retrieve several documents
--spec multi_get(Db, Fun, AccIn, DocIds, Options) -> [Res] when
+-spec multi_get(Db, Fun, AccIn, DocIds, Options) -> Res when
     Db::db(),
     Fun :: fun((doc(), meta(), any() ) -> Res),
     AccIn :: any(),
@@ -213,7 +213,7 @@ put(_,  _, _) ->
 %% @doc insert a specific revision to a a document. Useful for the replication.
 %% It takes the document id, the doc to edit and the revision history (list of ancestors).
 -spec put_rev(Db, Doc, History, Deleted, Options) -> Res when
-  Db::db(),
+  Db::dbname(),
   Doc :: doc(),
   History :: [rev()],
   Deleted :: boolean(),
@@ -244,7 +244,7 @@ delete(Db, DocId, Options) ->
   Db::db(),
   Doc :: doc(),
   Options :: write_options(),
-  Res :: {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
+  Res :: ok | {ok, docid(), rev()} | {error, conflict()} | {error, any()}.
 post(Db, Doc, Options) ->
   Async = proplists:get_value(async, Options, false),
   IsUpsert = proplists:get_value(is_upsert, Options, false),
@@ -264,7 +264,7 @@ update_doc(Db, Batch) ->
   Db :: db(),
   Updates :: [barrel_write_batch:batch_op()],
   Options :: batch_options(),
-  Results :: batch_results().
+  Results :: batch_results() | ok.
 write_batch(Db, Updates, Options) when is_list(Options) ->
   Async = proplists:get_value(async, Options, false),
   Batch = barrel_write_batch:from_list(Updates, Async),
@@ -288,7 +288,7 @@ fold_by_id(Db, Fun, Acc, Options) ->
 
 %% @doc fold all changes since last sequence
 -spec changes_since(Db, Since, Fun, AccIn) -> AccOut when
-  Db::db(),
+  Db::dbname(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
   Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
@@ -299,10 +299,10 @@ changes_since(Db, Since, Fun, Acc) ->
 
 %% @doc fold all changes since last sequence
 -spec changes_since(Db, Since, Fun, AccIn, Opts) -> AccOut when
-  Db::db(),
+  Db::dbname(),
   Since :: non_neg_integer(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((Seq :: non_neg_integer(), Change :: change(), Acc :: any()) -> FunRes),
+  Fun :: fun((Change :: change(), Acc :: any()) -> FunRes),
   AccIn :: any(),
   AccOut :: any(),
   Opts :: list().
@@ -327,7 +327,7 @@ query(Db, Path, Fun, AccIn, Opts) ->
   Db::db(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((DocId :: docid(), Doc :: doc(), Acc1 :: any()) -> FunRes),
+  Fun :: fun((DocId :: docid(), Doc :: doc(), Val :: any(), Acc1 :: any()) -> FunRes),
   OrderBy :: order_by_key | order_by_value | {order_by_child, ChildKey :: binary()},
   Options :: fold_options(),
   AccIn :: any(),
@@ -338,27 +338,18 @@ query(Db, Path, Fun, AccIn, OrderBy, Opts) ->
 
 %% @deprecated
 find_by_key(Db, Path, Fun, AccIn, Opts) ->
-  lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
+  _ = lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
   barrel_db:query(Db, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Db, DocId, RevIds) -> Res when
-  Db::db(),
+  Db::dbname(),
   DocId :: docid(),
   RevIds :: [revid()],
   Res:: {ok, Missing :: [revid()], PossibleAncestors :: [revid()]}.
 revsdiff(Db, DocId, RevIds) ->
   barrel_db:revsdiff(Db, DocId, RevIds).
 
-
-%% replication API
-start_replication(Source, Target) ->
-  start_replication(Source, Target, []).
-
-%% TODO: maybe we should pass the calculated replication id in options?
-start_replication(Source, Target, Options) when is_list(Options) ->
-  Name = barrel_replicate_task:repid(Source, Target),
-  start_replication(Name, Source, Target, Options);
 
 start_replication(Name, Source, Target) ->
   start_replication(Name, Source, Target, []).

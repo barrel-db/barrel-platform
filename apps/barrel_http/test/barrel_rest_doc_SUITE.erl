@@ -147,7 +147,14 @@ accept_get_with_id_match(_Config) ->
                     route => "/dbs/testdb/docs"}),
 
   #{<<"docs">> := Rows, <<"count">> := 6} = J,
-  Docs =:= [Doc || #{ <<"doc">> := Doc } <- Rows],
+  Fetched  = [Doc || #{ <<"doc">> := Doc } <- Rows],
+  Expected = [D || D = #{ <<"id">> := Id } <- Docs,
+                   case lists:member(Id, [<<"a">>,<<"b">>,<<"c">>,<<"e">>,
+                                     <<"f">>,<<"g">>]) of
+                     true -> true;
+                     false -> false
+                   end],
+  [] = Expected -- Fetched,
   ok.
 
 accept_post(_Config) ->
@@ -258,11 +265,11 @@ accept_write_batch(_Config) ->
     #{ <<"op">> => <<"delete">>, <<"id">> => <<"c">>, <<"rev">> => Rev3_1},
     #{ <<"op">> => <<"put">>, <<"doc">> => D4}
   ]},
-  
+
   {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"b">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"c">>, []),
-  
+
   %% make request
   Url = "/dbs/testdb/docs",
   #{ code := 200,
@@ -270,14 +277,14 @@ accept_write_batch(_Config) ->
                           headers => [{"x-barrel-write-batch", "true"}],
                           route => Url,
                           body => Bulk }),
-  
+
   #{<<"results">> := [
     #{ <<"status">> := <<"ok">>, <<"id">> := <<"a">>},
     #{ <<"status">> := <<"ok">>, <<"id">> := <<"b">>},
     #{ <<"status">> := <<"ok">>, <<"id">> := <<"c">>},
     #{ <<"status">> := <<"error">>, <<"reason">> := <<"not found">>}
   ]} = Resp,
-  
+
   {ok, #{ <<"v">> := 2}, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel_local:get(<<"testdb">>, <<"b">>, []),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"c">>, []).
