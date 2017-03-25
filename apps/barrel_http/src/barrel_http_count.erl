@@ -38,13 +38,10 @@ init_metrics() ->
             , [<<"http">>, <<"500">>]
             ],
   lists:foreach(fun(M) ->
-                    Counters = metrics_method(Metrics, M),
+                    Counters = [ [Theme, M, Code] || [Theme, Code] <- Metrics ],
                     [ barrel_metrics:init(counter, C) || C <- Counters ]
-                end, [<<"GET">>, <<"POST">>, <<"PUT">>, <<"DELETE">>]).
-
-metrics_method(Metrics, Method) ->
-  [ {Theme, Method, Code} || {Theme, Code} <- Metrics ].
-
+                end, [<<"GET">>, <<"POST">>, <<"PUT">>, <<"DELETE">>]),
+  ok.
 
 init(StreamID, Req, Opts) ->
   Method = maps:get(method, Req),
