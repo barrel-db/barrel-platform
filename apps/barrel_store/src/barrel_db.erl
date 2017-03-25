@@ -557,6 +557,7 @@ init_metrics(DbId) ->
              , [<<"store">>, DbId, <<"local_update">>]
              , [<<"store">>, DbId, <<"collect_updates">>]
              , [<<"store">>, DbId, <<"update_docs">>]
+             , [<<"store">>, DbId, <<"do_update_docs">>]
              ],
   _ = [ barrel_metrics:init(counter, C) || C <- Counters ],
 
@@ -675,7 +676,7 @@ send_result(_, _) ->
 
 do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) ->
   %% try to collect a maximum of updates at once
-  barrel_metrics:increment([<<"store">>, DbId, <<"collect_updates">>]),
+  barrel_metrics:increment([<<"store">>, DbId, <<"do_update_docs">>]),
   {message_queue_len, QueueLength} = erlang:process_info(self(), message_queue_len),
   barrel_metrics:set_value([<<"store">>, DbId, <<"update_queue_length">>], QueueLength),
   DocBuckets2 = collect_updates(DbId, DocBuckets),
