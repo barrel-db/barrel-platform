@@ -25,6 +25,7 @@
   collect_changes/1,
   changes_feed_callback/1,
   restart_when_server_timeout/1,
+  heartbeat_and_timeout/1,
   heartbeat_collect_change/1,
   multiple_put/1
 ]).
@@ -45,6 +46,7 @@ all() ->
     changes_feed_callback,
     restart_when_server_timeout,
     heartbeat_collect_change,
+    heartbeat_and_timeout,
     multiple_put
   ].
 
@@ -177,6 +179,43 @@ heartbeat_collect_change(Config) ->
   [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid),
   [] = barrel_httpc_changes:changes(Pid),
   ok = barrel_httpc_changes:stop(Pid).
+
+heartbeat_and_timeout(Config) ->
+  process_flag(trap_exit, true),
+
+  %% httpc will timeout before receiving the heartbeat
+  Options1 = #{since => 0, timeout => 50, heartbeat => 100, mode => sse },
+  {ok, Pid1} = barrel_httpc_changes:start_link(db(Config), Options1),
+  ok = receive
+         {'EXIT', Pid1, timeout} ->
+           ok;
+         Unexpected ->
+           {unexpected, Unexpected}
+       after 2000 ->
+           {error, test_timeout}
+       end,
+
+  %% timeout is larger than heartbeat. We will keep receiving changes.
+  Options2 = #{since => 0, timeout => 200, heartbeat => 100, mode => sse },
+  {ok, Pid2} = barrel_httpc_changes:start_link(db(Config), Options2),
+  [] = barrel_httpc_changes:changes(Pid2),
+  Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
+  {ok, <<"aa">>, _RevId} = barrel_httpc:post(db(Config), Doc, []),
+  timer:sleep(100),
+  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_httpc_changes:changes(Pid2),
+  [] = barrel_httpc_changes:changes(Pid2),
+
+  %% httpc did not timeout
+  ok = receive
+         {'EXIT', Pid1, timeout} ->
+           {error, timeout_received};
+         Other ->
+           {unexpected, Other}
+       after 0 ->
+           ok
+       end,
+  ok = barrel_httpc_changes:stop(Pid2),
+  ok.
 
 multiple_put(Config) ->
   Self = self(),
