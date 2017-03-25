@@ -73,9 +73,8 @@ plugin(_Config) ->
   barrel_metrics:increment(Name),
 
   Msgs = collect_messages(1),
-  [{statsd_message, {counter, Host, Key, 1}}] = Msgs,
-  "nohost" = Host,
-  "replication.repid.doc_reads" = Key,
+  [{statsd_message, {counter, Key, 1}}] = Msgs,
+  "barrel.nohost.nonode.replication.repid.doc_reads" = Key,
   ok.
 
 
@@ -142,17 +141,15 @@ loop(Parent, Socket) ->
   end.
 
 parse_statsd(Bin) ->
-  [Bhost, R1] = binary:split(Bin, <<".">>),
-  [Bkey, R2] = binary:split(R1, <<":">>),
-  [Bval, BType] = binary:split(R2, <<"|">>),
-  Host = binary_to_list(Bhost),
+  [Bkey, R] = binary:split(Bin, <<":">>),
+  [Bval, BType] = binary:split(R, <<"|">>),
   Key = binary_to_list(Bkey),
   Val = binary_to_integer(Bval),
   Type = case BType of
            <<"c">> -> counter;
            <<"g">> -> gauge
          end,
-  {Type, Host, Key, Val}.
+  {Type, Key, Val}.
 
 
 %% =============================================================================

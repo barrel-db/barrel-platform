@@ -46,11 +46,11 @@ duration(Name, Value, Env) ->
   push(Server, Name, {duration, Value}),
   ok.
 
-push(Server, Name, Value) ->
-  [_, NodeId] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
-  [Node | _] = binary:split(NodeId, <<".">>),
-  NameWithNode = barrel_lib:binary_join([Node|Name], <<".">>),
-  send(Server, NameWithNode, Value).
+push(Server, MetricName, Value) ->
+  [Node, Host] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
+  HostWithoutDots = barrel_lib:binary_join(binary:split(Host, <<".">>, [global]), <<"_">>),
+  StatsdKey = barrel_lib:binary_join([<<"barrel">>, HostWithoutDots, Node|MetricName], <<".">>),
+  send(Server, StatsdKey, Value).
 
 send({Peer, Port}, Key, {counter, Value}) ->
   BVal = integer_to_binary(Value),
