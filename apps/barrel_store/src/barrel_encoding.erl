@@ -212,10 +212,10 @@ decode_uvarint_ascending(<< B_0, B/binary >>) ->
 decode_uvarint_ascending_1(B, Len, _Len2) when Len =< ?INT_SMALL ->
   {to_uint64(Len), B};
 decode_uvarint_ascending_1(_B, _Len, Len2) when Len2 < 0; Len2 > 8 ->
-  lager:error("invalid uvarint length of %p", [Len2]),
+  _ = lager:error("invalid uvarint length of %p", [Len2]),
   erlang:error(badarg);
 decode_uvarint_ascending_1(B, _Len, Len2) when byte_size(B) < Len2 ->
-  lager:error("insufficient bytes to decode uvarint value ~p", [B]),
+  _ = lager:error("insufficient bytes to decode uvarint value ~p", [B]),
   erlang:error(badarg);
 decode_uvarint_ascending_1(B0, _Len, Len2) ->
   << B1:Len2/binary, LeftOver/binary >> = B0,
@@ -229,17 +229,17 @@ decode_uvarint_ascending_1(B0, _Len, Len2) ->
 
 
 decode_uvarint_descending(<<>>) ->
-  lager:error("insufficient bytes to decode uvarint value", []),
+  _ = lager:error("insufficient bytes to decode uvarint value", []),
   erlang:error(badarg);
 decode_uvarint_descending(<< B_0, B/binary >>) ->
   Len = ?INT_ZERO - B_0,
   decode_uvarint_descending_1(B, Len).
 
 decode_uvarint_descending_1(_B, Len) when Len < 0; Len > 8 ->
-  lager:error("invalid uvarint length of %p", [Len]),
+  _ = lager:error("invalid uvarint length of %p", [Len]),
   erlang:error(badarg);
 decode_uvarint_descending_1(B, Len) when byte_size(B) < Len ->
-  lager:error("insufficient bytes to decode uvarint value ~p", [B]),
+  _ = lager:error("insufficient bytes to decode uvarint value ~p", [B]),
   erlang:error(badarg);
 decode_uvarint_descending_1(B0, Len) ->
   << B1:Len/binary, LeftOver/binary >> = B0,
