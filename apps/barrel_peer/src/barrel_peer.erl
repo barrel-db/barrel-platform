@@ -296,7 +296,7 @@ changes_since(Conn, Since, Fun, AccIn, Opts) ->
     AttDescription :: att_description(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, term()}.
 attach(Db, DocId, AttDescription, Options) ->
   barrel_httpc_attachments:attach(Db, DocId, AttDescription, Options).
 
@@ -307,7 +307,7 @@ attach(Db, DocId, AttDescription, Options) ->
     Binary :: binary(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, term()}.
 attach(Db, DocId, AttDescription, Binary, Options) ->
   barrel_httpc_attachments:attach(Db, DocId, AttDescription, Binary, Options).
 
@@ -317,7 +317,7 @@ attach(Db, DocId, AttDescription, Binary, Options) ->
     AttId :: att_description(),
     Options :: list(),
     AttDescription :: att_description(),
-    Res :: {ok, AttDescription}.
+    Res :: {ok, AttDescription} | {error, term()}.
 get_attachment(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:get_attachment(Db, DocId, AttId, Options).
 
@@ -327,7 +327,7 @@ get_attachment(Db, DocId, AttId, Options) ->
     AttId :: attid(),
     Options :: list(),
     Binary :: binary(),
-    Res :: {ok, Binary}.
+    Res :: {ok, Binary} | {error, not_found}.
 get_attachment_binary(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:get_attachment_binary(Db, DocId, AttId, Options).
 
@@ -338,7 +338,7 @@ get_attachment_binary(Db, DocId, AttId, Options) ->
     AttDescription :: att_description(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, term()}.
 replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
   barrel_httpc_attachments:replace_attachment(Db, DocId, AttId, AttDescription, Options).
 
@@ -349,7 +349,7 @@ replace_attachment(Db, DocId, AttId, AttDescription, Options) ->
     Binary :: binary(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, term()}.
 replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
   barrel_httpc_attachments:replace_attachment_binary(Db, DocId, AttId, Binary, Options).
 
@@ -359,7 +359,7 @@ replace_attachment_binary(Db, DocId, AttId, Binary, Options) ->
     AttId :: attid(),
     Options :: list(),
     RevId :: revid(),
-    Res :: {ok, DocId, RevId}.
+    Res :: {ok, DocId, RevId} | {error, term()}.
 delete_attachment(Db, DocId, AttId, Options) ->
   barrel_httpc_attachments:delete_attachment(Db, DocId, AttId, Options).
 
