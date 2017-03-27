@@ -7,8 +7,9 @@
          encode_varint_ascending/2, encode_varint_descending/2,
          decode_varint_ascending/1, decode_varint_descending/1,
          encode_uvarint_ascending/2, encode_uvarint_descending/2,
-         decode_uvarint_ascending/1, decode_uvarint_descending/1
-]).
+         decode_uvarint_ascending/1, decode_uvarint_descending/1,
+         encode_binary_ascending/2, encode_binary_descending/2,
+         decode_binary_ascending/1, decode_binary_descending/1]).
 
 %% @doc  encodes the uint32 value using a big-endian 8 byte representation.
 %% The bytes are appended to the supplied buffer and the final buffer is returned.
@@ -254,6 +255,57 @@ decode_uvarint_descending_1(B0, Len) ->
 fold_binary(<< C, Rest/binary >>, Fun, Acc) -> fold_binary(Rest, Fun, Fun(C, Acc));
 fold_binary(<<>>, _Fun, Acc) -> Acc.
 
+
+-define(ESCAPE, 16#00).
+-define(ESCAPED_TERM, 16#01).
+-define(ESCAPED_00, 16#FF).
+-define(ESCAPED_FF, 16#00).
+-define(BYTES_MARKER, 16#12).
+-define(BYTES_MARKER_DESC, (?BYTES_MARKER + 1)).
+
+encode_binary_ascending(B, Bin) ->
+  Bin2 = binary:replace(Bin, << ?ESCAPE >>, << ?ESCAPE, ?ESCAPED_00 >>, [global]),
+  << B/binary, ?BYTES_MARKER, Bin2/binary, ?ESCAPE, ?ESCAPED_TERM >>.
+
+encode_binary_descending(B, Bin) ->
+  Bin2 = reverse(
+           << (binary:replace(Bin, << ?ESCAPE >>, << ?ESCAPE, ?ESCAPED_00 >>, [global]))/binary,
+               ?ESCAPE, ?ESCAPED_TERM >>
+          ),
+  << B/binary, ?BYTES_MARKER_DESC, Bin2/binary >>.
+
+decode_binary_ascending(<< ?BYTES_MARKER, B/binary >>) ->
+  case binary:split(B, << ?ESCAPE, ?ESCAPED_TERM >>) of
+    [Bin, LeftOver] -> {binary:replace(Bin, << ?ESCAPE, ?ESCAPED_00 >>, << ?ESCAPE >>, [global]), LeftOver};
+    _ -> erlang:error(badarg)
+  end;
+decode_binary_ascending(_) ->
+  erlang:error(badarg).
+
+decode_binary_descending(<< ?BYTES_MARKER_DESC, B/binary >>) ->
+  case binary:split(B, reverse(<< ?ESCAPE, ?ESCAPED_TERM >>)) of
+    [Bin, LeftOver] ->
+      Bin2 = binary:replace(
+               reverse(Bin),
+               << ?ESCAPE, ?ESCAPED_00 >>,
+               << ?ESCAPE >>,
+               [global]
+              ),
+      {Bin2, LeftOver};
+    _ ->
+      erlang:error(badarg)
+  end;
+decode_binary_descending(_) ->
+  erlang:error(badarg).
+
+
+reverse(B1) ->
+  S = bit_size(B1),
+  <<V1:S>> = B1,
+  V2 = bnot V1,
+  <<V2:S>>.
+
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -326,15 +378,39 @@ encode_uvarint_descending_test() ->
            { << 16#80, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00 >>, 1 bsl 64 - 1 }],
   test_encode_decode(Tests, fun encode_uvarint_descending/2, fun decode_uvarint_descending/1).
 
+encode_binary_ascending_test() ->
+  Tests = [{ << 16#12, 16#00, 16#ff, 1, "a", 16#00, 16#01 >>, << 0, 1, "a" >> },
+           { << 16#12, 16#00, 16#ff, "a", 16#00, 16#01 >>, << 0, "a" >> },
+           { << 16#12, "a", 16#00, 16#01 >>, <<"a">> },
+           { << 16#12, "b", 16#00, 16#01 >>, <<"b">> },
+           { << 16#12, "b", 16#00, 16#ff, 16#00, 16#01 >>, <<"b", 0 >> },
+           { << 16#12, "b", 16#00, 16#ff, 16#00, 16#ff, 16#00, 16#01 >>, <<"b", 0, 0 >> },
+           { << 16#12, "b", 16#00, 16#ff, 16#00, 16#ff, "a", 16#00, 16#01 >>, <<"b", 0, 0, "a" >> },
+           { << 16#12, "b", 16#ff, 16#00, 16#01 >>, <<"b", 16#ff >> },
+           { << 16#12, $h, $e, $l, $l, $o, 16#00, 16#01 >>, <<"hello">> },
+           { << 16#12, "hello", 16#00, 16#01 >>, <<"hello">> }],
+  test_encode_decode(Tests, fun encode_binary_ascending/2, fun decode_binary_ascending/1).
 
+encode_binary_descending_test() ->
+  Tests = [{ << 16#13, (bnot $h), (bnot $e), (bnot $l), (bnot $l), (bnot $o), 16#ff, 16#fe >>, <<"hello">> },
+           { << 16#13, (bnot $b), 16#00, 16#ff, 16#fe >>, << "b", 16#ff >> },
+           { << 16#13, (bnot $b), 16#ff, 16#00, 16#ff, 16#00, (bnot $a), 16#ff, 16#fe >>, << "b", 0, 0, "a" >> },
+           { << 16#13, (bnot $b), 16#ff, 16#00, 16#ff, 16#00, 16#ff, 16#fe >>, << "b", 0, 0 >> },
+           { << 16#13, (bnot $b), 16#ff, 16#00, 16#ff, 16#fe >>, << "b", 0 >> },
+           { << 16#13, (bnot $b),  16#ff, 16#fe >>, << "b" >> },
+           { << 16#13, (bnot $a),  16#ff, 16#fe >>, << "a" >> },
+           { << 16#13, 16#ff, 16#00, 16#00, (bnot $a),  16#ff, 16#fe >>, << 0, 16#ff, "a" >> },
+           { << 16#13, 16#ff, 16#00, (bnot $a),  16#ff, 16#fe >>, << 0, "a" >> },
+           { << 16#13, 16#ff, 16#00, 16#fe, (bnot $a),  16#ff, 16#fe >>, << 0, 1, "a" >> }],
+ test_encode_decode(Tests, fun encode_binary_descending/2, fun decode_binary_descending/1).
 
 %% == helpers
 
 test_encode_decode([{Encoded, Value} | Rest], Enc, Dec) ->
   io:format("test ~p vs ~p~n", [Encoded, Value]),
   Encoded = Enc(<<>>, Value),
-  io:format("tested ~p vs ~p~n", [Encoded, Value]),
   {Value, <<>>} = Dec(Enc(<<>>, Value)),
+  io:format("tested ~p vs ~p~n", [Encoded, Value]),
   test_encode_decode(Rest, Enc, Dec);
 test_encode_decode([], _Enc, _Dec) ->
   ok.
