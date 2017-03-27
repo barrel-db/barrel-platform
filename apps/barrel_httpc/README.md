@@ -42,3 +42,5 @@ following commands:
     $ cd barrel-platform
     $ splitsh-lite --prefix apps/barrel_httpc
     $ git subtree push --prefix apps/barrel_httpc barrel_httpc master
+
+> barrel maintainer: don't forget to tag the new released package.
