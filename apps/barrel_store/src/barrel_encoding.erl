@@ -457,12 +457,6 @@ encode_binary_descending_test() ->
            { << 16#13, 16#ff, 16#00, 16#fe, (bnot $a),  16#ff, 16#fe >>, << 0, 1, "a" >> }],
  test_encode_decode(Tests, fun encode_binary_descending/2, fun decode_binary_descending/1).
 
-
-
-
-
-
-
 encode_nonsorting_uvarint_test() ->
   TestEncodeFun = fun(I) ->
                       {I, <<>>} = decode_nonsorting_uvarint(encode_nonsorting_uvarint(<<>>, I)),
