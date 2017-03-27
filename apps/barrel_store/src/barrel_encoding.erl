@@ -11,7 +11,9 @@
          encode_binary_ascending/2, encode_binary_descending/2,
          decode_binary_ascending/1, decode_binary_descending/1,
          encode_nonsorting_uvarint/2,
-         decode_nonsorting_uvarint/1]).
+         decode_nonsorting_uvarint/1,
+         encode_float_ascending/2, encode_float_descending/2,
+         decode_float_ascending/1, decode_float_descending/1]).
 
 %% @doc  encodes the uint32 value using a big-endian 8 byte representation.
 %% The bytes are appended to the supplied buffer and the final buffer is returned.
@@ -359,6 +361,52 @@ decode_nonsorting_uvarint(<<>>, _) ->
   {<<>>, 0}.
 
 
+-define(ENCODED_NULL, 16#00).
+-define(ENCODED_NOT_NULL, 16#01).
+-define(FLOAT_NAN, (?ENCODED_NOT_NULL + 1)).
+-define(FLOAT_NEG, (?FLOAT_NAN + 1)).
+-define(FLOAT_ZERO, (?FLOAT_NEG + 1)).
+-define(FLOAT_POS, (?FLOAT_ZERO + 1)).
+-define(FLOAT_NAN_DESC, (?FLOAT_POS + 1)).
+
+encode_float_ascending(B, nan) ->
+  << B/binary, ?FLOAT_NAN >>;
+encode_float_ascending(B, F) when is_float(F) ->
+  << Sign:1, _:11, _:52 >> = BinF = << F/float >>,
+  U = binary:decode_unsigned(BinF),
+  encode_float_ascending(Sign, U, B).
+
+encode_float_ascending(_, 0, B) ->
+  << B/binary, ?FLOAT_ZERO >>;
+encode_float_ascending(0, U, B) ->
+  encode_uint64_ascending(<< B/binary, ?FLOAT_POS >>, U);
+encode_float_ascending(1, U, B) ->
+  encode_uint64_ascending(<< B/binary, ?FLOAT_NEG >>, bnot U ).
+
+encode_float_descending(B, nan) ->
+  << B/binary, ?FLOAT_NAN_DESC >>;
+encode_float_descending(B, F) ->
+  encode_float_ascending(B, -F).
+
+decode_float_ascending(<< ?FLOAT_NAN, B/binary >>) -> {nan, B};
+decode_float_ascending(<< ?FLOAT_NAN_DESC, B/binary >>) -> {nan, B};
+decode_float_ascending(<< ?FLOAT_NEG, B/binary >>) ->
+  {U, LeftOver} = decode_uint64_ascending(B),
+  << F/float >> = binary:encode_unsigned(to_uint64(bnot U)),
+  {F, LeftOver};
+decode_float_ascending(<< ?FLOAT_POS, B/binary >>) ->
+  {U, LeftOver} = decode_uint64_ascending(B),
+  << F/float >> = binary:encode_unsigned(U),
+  {F, LeftOver};
+decode_float_ascending(_) ->
+  erlang:error(badarg).
+
+decode_float_descending(B) ->
+  {F, LeftOver} = decode_float_ascending(B),
+  {-F, LeftOver}.
+
+
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -462,10 +510,13 @@ encode_nonsorting_uvarint_test() ->
                       {I, <<>>} = decode_nonsorting_uvarint(encode_nonsorting_uvarint(<<>>, I)),
                       true
                   end,
-
   _ = lists:map(TestEncodeFun, edge_case_uint64()),
-
   _ = lists:map(TestEncodeFun, rand_pow_distributed_int63(1000)).
+
+encode_float_ascending_test() ->
+  Tests = [{ << 16#03, 16#3f, 16#3c, 16#77, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff >>, -10000.0 },
+           { << 16#03, 16#3f, 16#3c, 16#78, 16#7f, 16#ff, 16#ff, 16#ff, 16#ff >>, -9999.0 }],
+  test_encode_decode(Tests, fun encode_float_ascending/2, fun decode_float_ascending/1).
 
 
 
