@@ -9,7 +9,9 @@
          encode_uvarint_ascending/2, encode_uvarint_descending/2,
          decode_uvarint_ascending/1, decode_uvarint_descending/1,
          encode_binary_ascending/2, encode_binary_descending/2,
-         decode_binary_ascending/1, decode_binary_descending/1]).
+         decode_binary_ascending/1, decode_binary_descending/1,
+         encode_nonsorting_uvarint/2,
+         decode_nonsorting_uvarint/1]).
 
 %% @doc  encodes the uint32 value using a big-endian 8 byte representation.
 %% The bytes are appended to the supplied buffer and the final buffer is returned.
