@@ -268,7 +268,7 @@ encode_binary_ascending(B, Bin) ->
   << B/binary, ?BYTES_MARKER, Bin2/binary, ?ESCAPE, ?ESCAPED_TERM >>.
 
 encode_binary_descending(B, Bin) ->
-  Bin2 = reverse(
+  Bin2 = inverse(
            << (binary:replace(Bin, << ?ESCAPE >>, << ?ESCAPE, ?ESCAPED_00 >>, [global]))/binary,
                ?ESCAPE, ?ESCAPED_TERM >>
           ),
@@ -283,10 +283,10 @@ decode_binary_ascending(_) ->
   erlang:error(badarg).
 
 decode_binary_descending(<< ?BYTES_MARKER_DESC, B/binary >>) ->
-  case binary:split(B, reverse(<< ?ESCAPE, ?ESCAPED_TERM >>)) of
+  case binary:split(B, inverse(<< ?ESCAPE, ?ESCAPED_TERM >>)) of
     [Bin, LeftOver] ->
       Bin2 = binary:replace(
-               reverse(Bin),
+               inverse(Bin),
                << ?ESCAPE, ?ESCAPED_00 >>,
                << ?ESCAPE >>,
                [global]
@@ -299,11 +299,62 @@ decode_binary_descending(_) ->
   erlang:error(badarg).
 
 
-reverse(B1) ->
+inverse(B1) ->
   S = bit_size(B1),
   <<V1:S>> = B1,
   V2 = bnot V1,
   <<V2:S>>.
+
+
+%% @doc encodes a uint64, appends it to the supplied buffer,
+%% and returns the final buffer. The encoding used is similar to
+%% encoding/binary, but with the most significant bits first
+%% - Unsigned integers are serialized 7 bits at a time, starting with the
+%% most significant bits.
+%% - The most significant bit (msb) in each output byte indicates if there
+%% is a continuation byte (msb = 1).
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 7) ->
+  << B/binary, X >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 14) ->
+  << B/binary, (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 21) ->
+  << B/binary, (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 28) ->
+  << B/binary, (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 35) ->
+  << B/binary, (16#80 bor (X bsr 28)), (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)),
+     (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 42) ->
+  << B/binary, (16#80 bor (X bsr 35)), (16#80 bor (X bsr 28)), (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)),
+     (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 49) ->
+  << B/binary, (16#80 bor (X bsr 42)), (16#80 bor (X bsr 35)), (16#80 bor (X bsr 28)), (16#80 bor (X bsr 21)),
+     (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 56) ->
+  << B/binary, (16#80 bor (X bsr 49)), (16#80 bor (X bsr 42)), (16#80 bor (X bsr 35)), (16#80 bor (X bsr 28)),
+     (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) when X < (1 bsl 63) ->
+  << B/binary, (16#80 bor (X bsr 56)), (16#80 bor (X bsr 49)), (16#80 bor (X bsr 42)), (16#80 bor (X bsr 35)),
+     (16#80 bor (X bsr 28)), (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)), (16#80 bor (X bsr 7)), (16#7f band X) >>;
+encode_nonsorting_uvarint(B, X) ->
+  << B/binary, (16#80 bor (X bsr 63)), (16#80 bor (X bsr 56)), (16#80 bor (X bsr 49)), (16#80 bor (X bsr 42)),
+     (16#80 bor (X bsr 35)), (16#80 bor (X bsr 28)), (16#80 bor (X bsr 21)), (16#80 bor (X bsr 14)),
+     (16#80 bor (X bsr 7)), (16#7f band X) >>.
+
+
+%% @doc decodes a value encoded by `encode_nonsorting_uvarint/2'. It
+%% returns the length of the encoded varint and value.
+decode_nonsorting_uvarint(B) ->
+  decode_nonsorting_uvarint(B, 0).
+
+decode_nonsorting_uvarint(<< C, Rest/binary >>, V0) when C < 16#80 ->
+  V1 = V0 bsl 7 + to_uint64(C band 16#7f),
+  {V1, Rest};
+decode_nonsorting_uvarint(<< C, Rest/binary >>, V0) ->
+  V1 = V0 bsl 7 + to_uint64(C band 16#7f),
+  decode_nonsorting_uvarint(Rest, V1);
+decode_nonsorting_uvarint(<<>>, _) ->
+  {<<>>, 0}.
 
 
 -ifdef(TEST).
@@ -404,6 +455,24 @@ encode_binary_descending_test() ->
            { << 16#13, 16#ff, 16#00, 16#fe, (bnot $a),  16#ff, 16#fe >>, << 0, 1, "a" >> }],
  test_encode_decode(Tests, fun encode_binary_descending/2, fun decode_binary_descending/1).
 
+
+
+
+
+
+
+encode_nonsorting_uvarint_test() ->
+  TestEncodeFun = fun(I) ->
+                      {I, <<>>} = decode_nonsorting_uvarint(encode_nonsorting_uvarint(<<>>, I)),
+                      true
+                  end,
+
+  _ = lists:map(TestEncodeFun, edge_case_uint64()),
+
+  _ = lists:map(TestEncodeFun, rand_pow_distributed_int63(1000)).
+
+
+
 %% == helpers
 
 test_encode_decode([{Encoded, Value} | Rest], Enc, Dec) ->
@@ -414,6 +483,30 @@ test_encode_decode([{Encoded, Value} | Rest], Enc, Dec) ->
   test_encode_decode(Rest, Enc, Dec);
 test_encode_decode([], _Enc, _Dec) ->
   ok.
+
+edge_case_uint64() ->
+  Cases = lists:foldl(fun(I, Acc) ->
+                          X = 1 bsl I,
+                          [to_uint64(X+1), to_uint64(X), to_uint64(X-1) | Acc]
+                      end,
+                      [2, 1, 0],
+                      lists:seq(2, 64)),
+  lists:reverse([ 1 bsl 64 - 1 | Cases ]).
+
+rand_pow_distributed_int63(Count) ->
+  Values = lists:foldl(fun(_I, Acc) ->
+                           Digits = rand:uniform(63) + 1,
+                           X = rand:uniform(1 bsl Digits),
+                           Acc2 = case (X bsr (Digits - 1)) of
+                                    0 ->
+                                      [to_uint64(rand:uniform(1 bsl Digits)) | Acc];
+                                    _ -> [X | Acc]
+                                  end,
+                           Acc2
+                       end,
+                       [],
+                       lists:seq(1, Count)),
+  Values.
 
 
 -endif.
