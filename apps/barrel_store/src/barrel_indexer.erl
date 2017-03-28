@@ -48,11 +48,24 @@ stop(Indexer) ->
 start_link(Db, Opts) ->
   gen_server:start_link(?MODULE, [Db, Opts], []).
 
+init_metrics(DbId) ->
+  Counters = [ [<<"store">>, DbId, <<"indexer">>, <<"do_refresh_index">>]
+             ],
+  _ = [ barrel_metrics:init(counter, C) || C <- Counters ],
+
+  Gauges = [ [<<"store">>, DbId, <<"indexer">>, <<"process_queue_length">>]
+           ],
+  _ = [ barrel_metrics:init(gauge, G) || G <- Gauges ],
+  ok.
+
 init([Db, Opts]) ->
+  DbId = Db#db.id,
+  init_metrics(DbId),
   UpdateSeq = last_index_seq(Db),
   IndexChangeSize = maps:get(index_changes_size, Opts, ?DEFAULT_CHANGES_SIZE),
 
   State = #{
+    id => DbId,
     db => Db#db{indexer=self()}, % we probably don't need to set it, but be consistent
     update_seq => UpdateSeq,
     index_changes_size => IndexChangeSize
@@ -90,7 +103,11 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-do_refresh_index(Since, State) ->
+do_refresh_index(Since, #{ id := DbId} = State) ->
+  barrel_metrics:increment([<<"store">>, DbId, <<"indexer">>, <<"do_refresh_index">>]),
+  {message_queue_len, QueueLength} = erlang:process_info(self(), message_queue_len),
+  barrel_metrics:set_value([<<"store">>, DbId, <<"indexer">>, <<"process_queue_length">>], QueueLength),
+
   Changes= fetch_changes(Since, State),
   process_changes(Changes, State).
 
