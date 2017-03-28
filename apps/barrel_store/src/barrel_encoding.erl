@@ -551,7 +551,24 @@ encode_float_ascending_test() ->
            { << 16#05, 16#40, 16#c8, 16#1c, 16#80, 16#00, 16#00, 16#00, 16#00 >>, 12345.0 },
            { << 16#05, 16#40, 16#fe, 16#23, 16#a0, 16#00, 16#00, 16#00, 16#00 >>, 123450.0 },
            { << 16#05, 16#7f, 16#e1, 16#cc, 16#f3, 16#85, 16#eb, 16#c8, 16#a0 >>, 1.0e308 }],
-  test_encode_decode(Tests, fun encode_float_ascending/2, fun decode_float_ascending/1).
+  test_encode_decode(Tests, fun encode_float_ascending/2, fun decode_float_ascending/1),
+
+  %% test ascending order
+  lists:foldl(fun
+                ({_Encoded, Value}, nil) ->
+                  encode_float_ascending(<<>>, Value);
+                ({_Encoded, Value}, Last) ->
+                  New = encode_float_ascending(<<>>, Value),
+                  true = (New > Last),
+                  New
+              end,
+              nil,
+              Tests),
+
+  %% test appending work
+  true = (encode_float_ascending(<<"hello">>, 2.0) > encode_float_ascending(<<"hello">>, 1.0)),
+  true = (encode_float_descending(<<"hello">>, 1.0) > encode_float_descending(<<"hello">>, 2.0)).
+
 
 
 
