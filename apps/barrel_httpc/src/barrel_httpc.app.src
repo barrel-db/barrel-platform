@@ -1,6 +1,6 @@
 {application, barrel_httpc,
   [{description, "barrel-db HTTP client"},
-    {vsn, "0.10.4"},
+    {vsn, "0.10.5"},
     {registered, []},
     {mod, {barrel_httpc_app, []}},
     {applications, [
