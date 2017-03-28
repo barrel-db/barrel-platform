@@ -371,7 +371,7 @@ decode_nonsorting_uvarint(<<>>, _) ->
 
 encode_float_ascending(B, nan) ->
   << B/binary, ?FLOAT_NAN >>;
-encode_float_ascending(B, F) when is_float(F) ->
+encode_float_ascending(B, F) ->
   << Sign:1, _:11, _:52 >> = BinF = << F/float >>,
   U = binary:decode_unsigned(BinF),
   encode_float_ascending(Sign, U, B).
@@ -390,6 +390,7 @@ encode_float_descending(B, F) ->
 
 decode_float_ascending(<< ?FLOAT_NAN, B/binary >>) -> {nan, B};
 decode_float_ascending(<< ?FLOAT_NAN_DESC, B/binary >>) -> {nan, B};
+decode_float_ascending(<< ?FLOAT_ZERO, B/binary >>) -> {0, B};
 decode_float_ascending(<< ?FLOAT_NEG, B/binary >>) ->
   {U, LeftOver} = decode_uint64_ascending(B),
   << F/float >> = binary:encode_unsigned(to_uint64(bnot U)),
@@ -515,7 +516,11 @@ encode_nonsorting_uvarint_test() ->
 
 encode_float_ascending_test() ->
   Tests = [{ << 16#03, 16#3f, 16#3c, 16#77, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff >>, -10000.0 },
-           { << 16#03, 16#3f, 16#3c, 16#78, 16#7f, 16#ff, 16#ff, 16#ff, 16#ff >>, -9999.0 }],
+           { << 16#03, 16#3f, 16#3c, 16#78, 16#7f, 16#ff, 16#ff, 16#ff, 16#ff >>, -9999.0 },
+           { << 16#03, 16#3F, 16#a6, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff >>, -100.0 },
+           { << 16#03, 16#40, 16#0f, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff >>, -1.0 },
+           { << 16#03, 16#40, 16#ab, 16#d9, 16#01, 16#8e, 16#75, 16#79, 16#28 >>, -0.00123 },
+           { << 16#04 >>, 0 } ],
   test_encode_decode(Tests, fun encode_float_ascending/2, fun decode_float_ascending/1).
 
 
