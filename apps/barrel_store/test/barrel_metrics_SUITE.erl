@@ -67,7 +67,7 @@ plugin(_Config) ->
   InitMsgs = collect_all_messages(),
   CountersInit = [ C || {plugin, init, {counter, C}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- CountersInit ],
-  5 = length(CountersInit),
+  6 = length(CountersInit),
   TimersInit = [ G || {plugin, init, {duration, G}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- TimersInit ],
   3 = length(TimersInit),
