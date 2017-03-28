@@ -177,7 +177,7 @@ init_feed(State) ->
              _ -> [{<<"heartbeat">>, ?DEFAULT_HEARTBEAT}|Params0]
            end,
   Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, Params),
-  ReqOpts = [{pool, none}, {async, once}],
+  ReqOpts = [{pool, none}, {async, once}, {recv_timeout, infinity}],
   proc_lib:init_ack(Parent, {ok, self()}),
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
