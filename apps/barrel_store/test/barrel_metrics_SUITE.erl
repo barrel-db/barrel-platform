@@ -73,7 +73,7 @@ plugin(_Config) ->
   3 = length(TimersInit),
   GaugesInit = [ G || {plugin, init, {gauge, G}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- GaugesInit ],
-  1 = length(GaugesInit),
+  2 = length(GaugesInit),
 
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),
