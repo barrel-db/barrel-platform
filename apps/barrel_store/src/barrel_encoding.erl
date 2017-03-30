@@ -15,6 +15,29 @@
          encode_float_ascending/2, encode_float_descending/2,
          decode_float_ascending/1, decode_float_descending/1]).
 
+-define(INT_MIN, 16#80).
+-define(INT_MAX, 16#fd).
+-define(INT_MAX_WIDTH, 8).
+-define(INT_ZERO, (?INT_MIN + ?INT_MAX_WIDTH) ).
+-define(INT_SMALL, (?INT_MAX - ?INT_ZERO - ?INT_MAX_WIDTH) ).
+
+
+-define(ESCAPE, 16#00).
+-define(ESCAPED_TERM, 16#01).
+-define(ESCAPED_00, 16#FF).
+-define(ESCAPED_FF, 16#00).
+-define(BYTES_MARKER, 16#12).
+-define(BYTES_MARKER_DESC, (?BYTES_MARKER + 1)).
+
+-define(ENCODED_NULL, 16#00).
+-define(ENCODED_NOT_NULL, 16#01).
+-define(FLOAT_NAN, (?ENCODED_NOT_NULL + 1)).
+-define(FLOAT_NEG, (?FLOAT_NAN + 1)).
+-define(FLOAT_ZERO, (?FLOAT_NEG + 1)).
+-define(FLOAT_POS, (?FLOAT_ZERO + 1)).
+-define(FLOAT_NAN_DESC, (?FLOAT_POS + 1)).
+
+
 %% @doc  encodes the uint32 value using a big-endian 8 byte representation.
 %% The bytes are appended to the supplied buffer and the final buffer is returned.
 encode_uint32_ascending(B, V) when is_binary(B), is_integer(V), V >= 0 ->
@@ -76,12 +99,6 @@ decode_uint64_descending(B) ->
 to_uint64(N) ->
   Mask = (1 bsl 64) - 1,
   N band Mask.
-
--define(INT_MIN, 16#80).
--define(INT_MAX, 16#fd).
--define(INT_MAX_WIDTH, 8).
--define(INT_ZERO, (?INT_MIN + ?INT_MAX_WIDTH) ).
--define(INT_SMALL, (?INT_MAX - ?INT_ZERO - ?INT_MAX_WIDTH) ).
 
 
 %% @doc EncodeVarintAscending encodes the int64 value using a variable length
@@ -260,13 +277,6 @@ fold_binary(<< C, Rest/binary >>, Fun, Acc) -> fold_binary(Rest, Fun, Fun(C, Acc
 fold_binary(<<>>, _Fun, Acc) -> Acc.
 
 
--define(ESCAPE, 16#00).
--define(ESCAPED_TERM, 16#01).
--define(ESCAPED_00, 16#FF).
--define(ESCAPED_FF, 16#00).
--define(BYTES_MARKER, 16#12).
--define(BYTES_MARKER_DESC, (?BYTES_MARKER + 1)).
-
 encode_binary_ascending(B, Bin) ->
   Bin2 = binary:replace(Bin, << ?ESCAPE >>, << ?ESCAPE, ?ESCAPED_00 >>, [global]),
   << B/binary, ?BYTES_MARKER, Bin2/binary, ?ESCAPE, ?ESCAPED_TERM >>.
@@ -361,13 +371,6 @@ decode_nonsorting_uvarint(<<>>, _) ->
   {<<>>, 0}.
 
 
--define(ENCODED_NULL, 16#00).
--define(ENCODED_NOT_NULL, 16#01).
--define(FLOAT_NAN, (?ENCODED_NOT_NULL + 1)).
--define(FLOAT_NEG, (?FLOAT_NAN + 1)).
--define(FLOAT_ZERO, (?FLOAT_NEG + 1)).
--define(FLOAT_POS, (?FLOAT_ZERO + 1)).
--define(FLOAT_NAN_DESC, (?FLOAT_POS + 1)).
 
 encode_float_ascending(B, nan) ->
   << B/binary, ?FLOAT_NAN >>;
@@ -405,8 +408,6 @@ decode_float_ascending(_) ->
 decode_float_descending(B) ->
   {F, LeftOver} = decode_float_ascending(B),
   {-F, LeftOver}.
-
-
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
