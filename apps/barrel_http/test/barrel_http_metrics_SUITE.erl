@@ -1,4 +1,4 @@
-%% Copyright 2017, Bernard Notarianni
+%% Copyright 2016, Bernard Notarianni
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -12,21 +12,20 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_metrics_SUITE).
+-module(barrel_http_metrics_SUITE).
 -author("Bernard Notarianni").
 
 -behaviour(barrel_stats_plugin).
 
 -export([ all/0
-        , init_per_suite/1
         , end_per_suite/1
-        , init_per_testcase/2
         , end_per_testcase/2
+        , init_per_suite/1
+        , init_per_testcase/2
         ]).
 
--export([ plugin/1
+-export([ count_http/1
         ]).
-
 
 -export([ init/3
         , increment/3
@@ -34,7 +33,8 @@
         , duration/3
         ]).
 
-all() -> [ plugin
+
+all() -> [ count_http
          ].
 
 env() ->
@@ -43,19 +43,18 @@ env() ->
 init_per_suite(Config) ->
   application:stop(barrel_store),
   ok = application:set_env(barrel_store, metrics, env()),
+  {ok, _} = application:ensure_all_started(barrel_http),
   {ok, _} = application:ensure_all_started(barrel_store),
   Config.
 
 init_per_testcase(_, Config) ->
   true = register(test_metric_client, self()),
-  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
-  [{db, <<"testdb">>} | Config].
+  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  Config.
 
-end_per_testcase(_, _Config) ->
-  timer:sleep(10),
-  ok = barrel_store:delete_db(<<"testdb">>),
-  timer:sleep(200),
-  ok.
+end_per_testcase(_, Config) ->
+  ok = barrel_local:delete_db(<<"testdb">>),
+  Config.
 
 end_per_suite(Config) ->
   application:stop(barrel_store),
@@ -63,42 +62,38 @@ end_per_suite(Config) ->
   ok = application:set_env(barrel_store, metrics, undefined),
   Config.
 
-plugin(_Config) ->
-  InitMsgs = collect_all_messages(),
-  CountersInit = [ C || {plugin, init, {counter, C}, _} <- InitMsgs],
-  [ <<"testdb">> = Db || [_,Db,_] <- CountersInit ],
-  6 = length(CountersInit),
-  TimersInit = [ G || {plugin, init, {duration, G}, _} <- InitMsgs],
-  [ <<"testdb">> = Db || [_,Db,_] <- TimersInit ],
-  3 = length(TimersInit),
-  GaugesInit = [ G || {plugin, init, {gauge, G}, _} <- InitMsgs],
-  [ <<"testdb">> = Db || [_,Db,_] <- GaugesInit ],
-  2 = length(GaugesInit),
+r(Req) ->
+  test_lib:req(Req).
 
-  Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
-  barrel_metrics:init(counter, Name),
-  barrel_metrics:increment(Name),
-  barrel_metrics:set_value(Name, 42),
-  barrel_metrics:duration(Name, 123),
+count_http(_Config) ->
+  Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
+  {ok, _, _} = barrel_local:post(<<"testdb">>, Doc, []),
 
-  Msgs = collect_all_messages(),
-  ExpectedEnv = env(),
-  [ {plugin, init, {counter, Name}, ExpectedEnv}
-  , {plugin, increment, Name, 1, ExpectedEnv}
-  , {plugin, set_value, Name, 42, ExpectedEnv}
-  , {plugin, duration, Name, 123, ExpectedEnv}
-  ] = Msgs,
+  #{code := 200} = r(#{method => get,
+                        route => "/dbs/testdb/docs/acceptget"}),
 
-  Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, _} = barrel_local:post(<<"testdb">>, Doc, []),
+  [ {increment, [<<"GET">>,<<"incoming">>]}
+  , {increment, [<<"GET">>,<<"200">>]}
+  ] = http_metrics(),
 
-  %% ensure all metrics have been initialized with plugin function init
-  MsgsPost = collect_all_messages(),
-  Post = [ N || {plugin, _, N , _, _} <- MsgsPost],
-  Init = CountersInit ++ TimersInit ++ GaugesInit,
-  [ true = lists:member(N, Init) || N <- Post ],
+  #{code := 404} = r(#{method => get,
+                       route => "/dbs/testdb/docs/doesnotexist"}),
+
+  [ {increment, [<<"GET">>,<<"incoming">>]}
+  , {increment, [<<"GET">>,<<"404">>]}
+  ] = http_metrics(),
+
+  #{code := 400} = r(#{method => put,
+                       route => "/dbs/testdb/docs/acceptget"}),
+
+  [ {increment, [<<"PUT">>,<<"incoming">>]}
+  , {increment, [<<"PUT">>,<<"400">>]}
+  ] = http_metrics(),
 
   ok.
+
+http_metrics() ->
+  [ {M,N} || {plugin, M, [<<"http">>|N] , _, _} <- collect_all_messages()].
 
 collect_all_messages() ->
   collect_all_messages([]).
