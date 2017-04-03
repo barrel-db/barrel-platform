@@ -70,7 +70,7 @@ plugin(_Config) ->
   6 = length(CountersInit),
   TimersInit = [ G || {plugin, init, {duration, G}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- TimersInit ],
-  3 = length(TimersInit),
+  4 = length(TimersInit),
   GaugesInit = [ G || {plugin, init, {gauge, G}, _} <- InitMsgs],
   [ <<"testdb">> = Db || [_,Db,_] <- GaugesInit ],
   2 = length(GaugesInit),
