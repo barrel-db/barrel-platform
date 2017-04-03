@@ -72,7 +72,7 @@ all() ->
     write_batch,
     write_batch_with_attachment,
     fold_by_id,
-    order_by_key,
+ %%   order_by_key,
     multiple_post,
     multiple_get,
     multiple_delete,

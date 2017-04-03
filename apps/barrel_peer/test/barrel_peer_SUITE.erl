@@ -58,7 +58,7 @@ all() ->
   , create_doc
   , get_revisions
   , fold_by_id
-  , order_by_key
+%%  , order_by_key
   , multiple_post
   , multiple_get
   , multiple_delete
@@ -129,7 +129,7 @@ update_with(Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_peer:post(db(Config), Doc, []),
   {ok, Doc, #{ <<"rev">> := RevId }} = barrel_peer:get(db(Config), <<"a">>, []),
-  
+
   {ok, <<"a">>, RevId2} = barrel_peer:update_with(
     db(Config),
     <<"a">>,
