@@ -564,6 +564,7 @@ init_metrics(DbId) ->
   Durations = [ [<<"store">>, DbId, <<"update_docs">>]
               , [<<"store">>, DbId, <<"local_update">>]
               , [<<"store">>, DbId, <<"index_update">>]
+              , [<<"store">>, DbId, <<"rocksdb">>, <<"write">>]
               ],
   _ = [ barrel_metrics:init(duration, D) || D <- Durations ],
 
@@ -739,7 +740,11 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
             )
           ),
 
-        case rocksdb:write(Store, Batch, [{sync, true}]) of
+        StartWriteTime = os:timestamp(),
+        ResWrite =  rocksdb:write(Store, Batch, [{sync, true}]),
+        barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"rocksdb">>, <<"write">>], StartWriteTime),
+
+        case ResWrite of
           ok ->
             lists:foreach(
               fun(Req) -> send_result(Req, {ok, DocId, WinningRev}) end,
