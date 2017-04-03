@@ -256,15 +256,6 @@ collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N, StartTime) when N > 
 collect_updates(Db, _Ref, MRef, Results, 0, StartTime) ->
   barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"local_update">>], StartTime),
   erlang:demonitor(MRef, [flush]),
-  %% wait for the index refresh?
-  case Db#db.indexer_mode of
-    consistent ->
-      StartIndexTime = os:timestamp(),
-      _ = barrel_indexer:refresh_index(Db#db.indexer, Db#db.updated_seq),
-      barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"index_update">>], StartIndexTime);
-    lazy ->
-      Db#db.indexer ! refresh_index
-  end,
   %% we return results  ordered by operation index
   lists:map(
     fun({_, Result}) -> Result end,
@@ -681,7 +672,8 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
   {message_queue_len, QueueLength} = erlang:process_info(self(), message_queue_len),
   barrel_metrics:set_value([<<"store">>, DbId, <<"update_queue_length">>], QueueLength),
   DocBuckets2 = collect_updates(DbId, DocBuckets),
-  {Updates, NewRid, _} = merge_revtrees(DocBuckets2, Db),
+
+  {Updates, NewRid, _, OldDocs} = merge_revtrees(DocBuckets2, Db),
 
   %% update resource counter
   if
@@ -719,8 +711,16 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         %% revision has changed put the ancestor outside the value
         {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
 
+        {Added, Removed} = barrel_index:diff(
+                              current_body(DocInfo2),
+                              maps:get(DocId, OldDocs)
+                             ),
+
+
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
+
+        SeqMeta2 = SeqMeta#{ add => Added, del => Removed },
 
         %% finally write the batch
         Batch =
@@ -732,7 +732,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
                 DocInfo3,
                 [
                   {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
-                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
+                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta2)},
                   {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
                   {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
                 ]
@@ -796,20 +796,22 @@ maybe_link_rid(#{ id := DocId, rid := Rid, local_seq := 1}, Batch) ->
 maybe_link_rid(_DI, Batch) ->
   Batch.
 
+current_body(#{ current_rev := Rev, body_map := BodyMap }) -> maps:get(Rev, BodyMap).
 
 %% TODO: cache doc infos
 merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
   maps:fold(
-    fun(DocId, Bucket, {Updates, Rid, DocInfos}) ->
-      {DocInfo, Rid2, DocInfos2} = case maps:find(DocId, DocInfos) of
-                  {ok, DI} -> {DI, Rid, DocInfos};
+    fun(DocId, Bucket, {Updates, Rid, DocInfos, OldDocs}) ->
+      {DocInfo, Rid2, DocInfos2, OldDocs2} = case maps:find(DocId, DocInfos) of
+                  {ok, DI} -> {DI, Rid, DocInfos, OldDocs};
                   error ->
                     case get_doc_info_int(Db, DocId, []) of
-                      {ok, DI} ->
-                        {DI, Rid, DocInfos#{ DocId => DI}};
+                      {ok,  DI} ->
+                        OldDoc = current_body(DI),
+                        {DI, Rid, DocInfos#{ DocId => DI}, OldDocs#{ DocId => OldDoc }};
                       {error, not_found} ->
                         DI = empty_doc_info(DocId, Rid +1),
-                        {DI, Rid +1, DocInfos#{ DocId => DI}}
+                        {DI, Rid +1, DocInfos#{ DocId => DI}, OldDocs#{ DocId => #{} } }
                     end
                 end,
 
@@ -836,9 +838,9 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
         {DocInfo, []},
         Bucket
       ),
-      {[Update | Updates], Rid2, DocInfos2}
+      {[Update | Updates], Rid2, DocInfos2, OldDocs2}
     end,
-    {[], LastRid, #{}},
+    {[], LastRid, #{}, #{}},
     DocBuckets
   ).
 

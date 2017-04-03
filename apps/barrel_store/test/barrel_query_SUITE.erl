@@ -30,8 +30,8 @@
 
 all() ->
   [
-    order_by_key,
-    multiple_docs
+    %%order_by_key,
+    %%multiple_docs
   ].
 
 init_per_suite(Config) ->
