@@ -347,7 +347,7 @@ paths:
        201:
          description: New document created
        409:
-         description: Conflict - database already exists
+         description: Conflict - document already exists
 
  /dbs/{database}/system/{docid}:
 
