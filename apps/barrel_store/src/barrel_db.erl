@@ -694,6 +694,8 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         Batch0 = update_index(Added, Rid, Db2#db.updated_seq, 1,
                               update_index(Removed, Rid, Db2#db.updated_seq, 0, [])),
 
+        _ = lager:info("batch index is ~p~n", [Batch0]),
+
         %% finally write the batch
         Batch =
           maybe_update_changes(

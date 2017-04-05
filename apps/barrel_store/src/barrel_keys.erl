@@ -36,9 +36,9 @@ prefix(doc) ->  <<  0, 50, 0 >>;
 prefix(seq) ->  <<  0, 100, 0>>;
 prefix(res) ->  <<  0, 200, 0>>;
 prefix(sys_doc) ->  << 0, 300, 0 >>;
-prefix(idx_last_doc) ->  <<  0, 400, 0 >>;
 prefix(idx_forward_path) ->  <<  0, 410, 0 >>;
 prefix(idx_reverse_path) ->  <<  0, 420, 0 >>;
+prefix(idx_snapshot) -> << 0, 400, 0 >>;
 prefix(_) ->  erlang:error(badarg).
 
 %% metadata keys
@@ -60,20 +60,28 @@ res_key(RId) -> << (prefix(res))/binary, RId:32>>.
 %% index keys
 
 forward_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_ascending(
+  barrel_encoding:encode_uvarint_descending(
     encode_path_forward(prefix(idx_forward_path), Path),
     Seq
    ).
 
 reverse_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_ascending(
+  barrel_encoding:encode_uvarint_descending(
     encode_path_reverse(prefix(idx_reverse_path), Path),
     Seq
    ).
 
+encode_path_forward(Prefix, [P0]) ->
+  enc_1(Prefix, P0);
+encode_path_forward(Prefix, [P0, P1]) ->
+  enc_1(enc_1(Prefix, P0), P1);
 encode_path_forward(Prefix, [P0, P1, P2]) ->
   enc_2(enc_1(enc_1(Prefix, P0), P1), P2).
 
+encode_path_reverse(Prefix, [P0]) ->
+  enc_1(Prefix, P0);
+encode_path_reverse(Prefix, [P0, P1]) ->
+  enc_1(enc_1(Prefix, P1), P0);
 encode_path_reverse(Prefix, [P0, P1, P2]) ->
   enc_1(enc_1(enc_2(Prefix, P2), P1), P0).
 
