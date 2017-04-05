@@ -10,6 +10,8 @@
          decode_uvarint_ascending/1, decode_uvarint_descending/1,
          encode_binary_ascending/2, encode_binary_descending/2,
          decode_binary_ascending/1, decode_binary_descending/1,
+         encode_literal_ascending/2, decode_literal_ascending/1,
+         encode_literal_descending/2, decode_literal_descending/1,
          encode_nonsorting_uvarint/2,
          decode_nonsorting_uvarint/1,
          encode_float_ascending/2, encode_float_descending/2,
@@ -28,6 +30,9 @@
 -define(ESCAPED_FF, 16#00).
 -define(BYTES_MARKER, 16#12).
 -define(BYTES_MARKER_DESC, (?BYTES_MARKER + 1)).
+-define(LITERAL_MARKER, (?BYTES_MARKER_DESC + 1)).
+-define(LITERAL_MARKER_DESC, (?LITERAL_MARKER + 1)).
+
 
 -define(ENCODED_NULL, 16#00).
 -define(ENCODED_NOT_NULL, 16#01).
@@ -319,6 +324,37 @@ inverse(B1) ->
   V2 = bnot V1,
   <<V2:S>>.
 
+encode_literal_ascending(B, L) ->
+  ok = is_literal(L),
+  << B/binary, ?LITERAL_MARKER, (atom_to_binary(L, latin1))/binary, ?ESCAPE, ?ESCAPED_TERM >>.
+
+encode_literal_descending(B, L) ->
+  ok = is_literal(L),
+  Bin2 = inverse(<< (atom_to_binary(L, latin1))/binary, ?ESCAPE, ?ESCAPED_TERM >>),
+  << B/binary, ?LITERAL_MARKER_DESC, Bin2/binary >>.
+
+is_literal(true) -> ok;
+is_literal(false) -> ok;
+is_literal(null) -> ok;
+is_literal(_) -> erlang:error(badarg).
+
+decode_literal_ascending(<< ?LITERAL_MARKER, B/binary >>) ->
+  case binary:split(B, << ?ESCAPE, ?ESCAPED_TERM >>) of
+    [Bin, LeftOver] -> {binary_to_atom(Bin, latin1), LeftOver};
+    _ -> erlang:error(badarg)
+  end;
+decode_literal_ascending(_) ->
+  erlang:error(badarg).
+
+decode_literal_descending(<< ?LITERAL_MARKER_DESC, B/binary >>) ->
+  case binary:split(B, inverse(<< ?ESCAPE, ?ESCAPED_TERM >>)) of
+    [Bin, LeftOver] ->
+      {binary_to_atom(inverse(Bin), latin1), LeftOver};
+    _ ->
+      erlang:error(badarg)
+  end.
+
+
 
 %% @doc encodes a uint64, appends it to the supplied buffer,
 %% and returns the final buffer. The encoding used is similar to
@@ -506,6 +542,19 @@ encode_binary_descending_test() ->
            { << 16#13, 16#ff, 16#00, (bnot $a),  16#ff, 16#fe >>, << 0, "a" >> },
            { << 16#13, 16#ff, 16#00, 16#fe, (bnot $a),  16#ff, 16#fe >>, << 0, 1, "a" >> }],
  test_encode_decode(Tests, fun encode_binary_descending/2, fun decode_binary_descending/1).
+
+
+encode_literal_ascending_test() ->
+  Tests = [{ << 16#14, 16#66, 16#61, 16#6c, 16#73, 16#65, 16#00, 16#01 >>, false },
+           { << 16#14, 16#6e, 16#75, 16#6c, 16#6c, 16#00, 16#01 >>, null },
+           { << 16#14, 16#74, 16#72, 16#75, 16#65, 16#00, 16#01 >>, true } ],
+  test_encode_decode(Tests, fun encode_literal_ascending/2, fun decode_literal_ascending/1).
+
+encode_literal_descending_test() ->
+  Tests = [{ << 16#15, (bnot 16#66), (bnot 16#61), (bnot 16#6c), (bnot 16#73), (bnot 16#65), 16#ff, 16#fe >>, false },
+           { << 16#15, (bnot 16#6e), (bnot 16#75), (bnot 16#6c), (bnot 16#6c), 16#ff, 16#fe >>, null },
+           { << 16#15, (bnot 16#74), (bnot 16#72), (bnot 16#75), (bnot 16#65), 16#ff, 16#fe >>, true } ],
+  test_encode_decode(Tests, fun encode_literal_descending/2, fun decode_literal_descending/1).
 
 encode_nonsorting_uvarint_test() ->
   TestEncodeFun = fun(I) ->
