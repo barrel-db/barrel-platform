@@ -18,7 +18,7 @@
 
 %% API
 -export([
-  split_path/1, split_path/3,
+  split_path/1, split_path/2,
   diff/2,
   analyze/1
 ]).
@@ -29,14 +29,13 @@
 
 %% TODO: make split value configurable. For default go for 3 since most docs are flat anyway.
 
-split_path(Path) -> split_path(Path, [], []).
+split_path(Path) -> split_path(Path, []).
 
-split_path([P1, P2, P3 | Rest], Forward0, Reverse0) ->
+split_path([P1, P2, P3 | Rest], Forward0) ->
   Forward1 = [[P1, P2, P3] | Forward0],
-  Reverse1 = [[P3, P2, P1] | Reverse0],
-  split_path([P2, P3 | Rest], Forward1, Reverse1);
-split_path(_, Forward, Reverse) ->
-  {Forward, Reverse}.
+  split_path([P2, P3 | Rest], Forward1);
+split_path(_, Forward) ->
+  Forward.
 
 %% %% @doc get the operations maintenance to do between
 %% 2 instances of a document
@@ -173,7 +172,6 @@ split_path_test() ->
     [<<"$">>, <<"c">>, <<"b">>]
   ],
 
-  ExpectedReverse = [ lists:reverse(P) || P <- ExpectedForward ],
-  ?assertEqual({ExpectedForward, ExpectedReverse}, split_path(Path)).
+  ?assertEqual(ExpectedForward, split_path(Path)).
 
 -endif.

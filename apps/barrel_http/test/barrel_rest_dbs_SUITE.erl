@@ -66,8 +66,7 @@ db_info(_Config) ->
     <<"id">> := _,
     <<"docs_count">> := _,
     <<"last_update_seq">> := _,
-    <<"system_docs_count">> := _,
-    <<"last_index_seq">> := _} = Info,
+    <<"system_docs_count">> := _} = Info,
   ok.
 
 reject_unknown_database(_Config) ->

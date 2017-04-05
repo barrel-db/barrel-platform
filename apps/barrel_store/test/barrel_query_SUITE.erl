@@ -30,7 +30,7 @@
 
 all() ->
   [
-    %%order_by_key,
+   order_by_key%,
     %%multiple_docs
   ].
 
@@ -73,9 +73,9 @@ order_by_key(_Config) ->
   timer:sleep(400),
   {ok, _Doc1, _Meta1} = barrel_local:get(<<"testdb">>, <<"AndersenFamily">>, []),
 
-  Fun = fun(Id, _D, V, Acc) -> {ok, [{Id, V} | Acc]} end,
-  [{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel_local:query(<<"testdb">>, <<"id">>, Fun, [], []),
-  [{<<"AndersenFamily">>, null}] = barrel_local:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
+  %%Fun = fun(Id, _D, V, Acc) -> {ok, [{Id, V} | Acc]} end,
+  %%[{<<"AndersenFamily">>, <<"AndersenFamily">>}] = barrel_local:query(<<"testdb">>, <<"id">>, Fun, [], []),
+  %%[{<<"AndersenFamily">>, null}] = barrel_local:find_by_key(<<"testdb">>, <<"id/AndersenFamily">>, Fun, [], [] ),
   ok.
 
 

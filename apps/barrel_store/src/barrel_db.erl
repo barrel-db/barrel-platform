@@ -84,8 +84,7 @@ infos(DbName) ->
           id => Db#db.id,
           docs_count => Db#db.docs_count,
           last_update_seq => Db#db.updated_seq,
-          system_docs_count => Db#db.system_docs_count,
-          last_index_seq => Db#db.indexed_seq
+          system_docs_count => Db#db.system_docs_count
          },
         {ok, Info}
     end
@@ -491,39 +490,21 @@ init([DbId, Config]) ->
   {ok, Store} = open_db(DbId, Config),
   #{<<"last_rid">> := LastRid,
     <<"updated_seq">> := Updated,
-    <<"indexed_seq">> := Indexed,
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
 
   ok = init_metrics(DbId),
-
-  %% set indexer mode
-  IndexerMode = barrel_lib:to_atom(
-    maps:get(<<"indexer_mode">>, Config, consistent)
-  ),
-
-  %% validate indexer mode
-  ok = validate_indexer_mode(IndexerMode),
 
   Db =
     #db{id=DbId,
         store=Store,
         pid=self(),
         conf = Config,
-        indexer_mode = IndexerMode,
         last_rid = LastRid,
         updated_seq = Updated,
-        indexed_seq = Indexed,
         docs_count = DocsCount,
         system_docs_count = SystemDocsCount},
-
-  {ok, Indexer} = barrel_indexer:start_link(Db, Config),
-  Db2 = Db#db{indexer = Indexer},
-  {ok, Db2}.
-
-validate_indexer_mode(consistent) -> ok;
-validate_indexer_mode(lazy) -> ok;
-validate_indexer_mode(_) -> erlang:error(bad_indexer_mode).
+  {ok, Db}.
 
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
@@ -537,7 +518,6 @@ init_meta(Store) ->
     end,
     #{<<"last_rid">> => 0,
       <<"updated_seq">> => 0,
-      <<"indexed_seq">> => 0,
       <<"docs_count">> => 0,
       <<"system_docs_count">> => 0},
     []
@@ -592,13 +572,9 @@ handle_call({delete, K}, _From, Db) ->
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 
-handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) ->
+handle_call(delete_db, _From, Db = #db{ id = Id, store = Store }) ->
   Reply  = if
              Store /= nil ->
-               case is_pid(Idx) of
-                 true -> (catch barrel_indexer:stop(Idx));
-                 false -> ok
-               end,
                ok = rocksdb:close(Store),
                TempName = db_path(barrel_lib:uniqid()),
                _ = file:rename(db_path(Id), TempName),
@@ -609,9 +585,9 @@ handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) -
                      _ = lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
                  end
                 ),
-               {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
+               {stop, normal, ok, Db#db{ store=nil}};
              true ->
-               {stop, normal, ok, Db#db{ store=nil, indexer=nil}}
+               {stop, normal, ok, Db#db{ store=nil}}
            end,
   Reply;
 
@@ -630,17 +606,10 @@ terminate(Reason, #db{ id = Id, store = nil }) ->
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok;
 
-terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
-  ok = stop_indexer(Idx),
+terminate(Reason, #db{ id = Id, store = Store }) ->
   %% finally close the database and return its result
   ok = close_store(Id, Store),
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
-  ok.
-
-stop_indexer(Idx) when is_pid(Idx) ->
-  _ = (catch barrel_indexer:stop(Idx)),
-  ok;
-stop_indexer(_) ->
   ok.
 
 close_store(Id, Store) ->
@@ -710,16 +679,20 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         %% revision has changed put the ancestor outside the value
         {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
 
-        {Added, Removed} = barrel_index:diff(
-                              current_body(DocInfo2),
-                              maps:get(DocId, OldDocs)
-                             ),
-
 
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
 
-        SeqMeta2 = SeqMeta#{ add => Added, del => Removed },
+
+
+        %% create update index events.
+        %% TODO: move that code in a cleaner place
+        {Added, Removed} = barrel_index:diff(
+                              current_body(DocInfo2),
+                              maps:get(DocId, OldDocs)
+                             ),
+        Batch0 = update_index(Added, Rid, Db2#db.updated_seq, 1,
+                              update_index(Removed, Rid, Db2#db.updated_seq, 0, [])),
 
         %% finally write the batch
         Batch =
@@ -731,13 +704,14 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
                 DocInfo3,
                 [
                   {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
-                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta2)},
+                  {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
                   {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
                   {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
                 ]
               )
             )
-          ),
+          ) ++ Batch0,
+
 
         case rocksdb:write(Store, Batch, [{sync, true}]) of
           ok ->
@@ -764,6 +738,18 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
     Db#db{last_rid=NewRid},
     Updates
   ).
+
+
+update_index([Path | Rest], Op, Rid, Seq, Batch0) ->
+  Batch1 = lists:foldl(fun(P, Acc) ->
+                          Event = << Rid:64, Op >>,
+                          [ {put, barrel_keys:forward_path_key(P, Seq), Event},
+                            {put, barrel_keys:reverse_path_key(P, Seq), Event} | Acc ]
+                      end, Batch0, barrel_index:split_path(Path)),
+  update_index(Rest, Op, Rid, Seq, Batch1);
+update_index([], _Op, _Rid, _Seq, Batch) ->
+  Batch.
+
 
 backup_ancestor(DocInfo) ->
   #{ id := Id, current_rev := Rev, revtree := Tree, body_map := BodyMap} = DocInfo,

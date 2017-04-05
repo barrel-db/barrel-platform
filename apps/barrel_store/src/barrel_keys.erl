@@ -23,10 +23,12 @@
   seq_key/1,
   sys_key/1,
   rev_key/2,
-  res_key/1,
-  idx_forward_path_key/1,
-  idx_last_doc_key/1,
-  idx_reverse_path_key/1
+  res_key/1
+]).
+
+-export([
+  forward_path_key/2,
+  reverse_path_key/2
 ]).
 
 prefix(db_meta) ->  << 0, 0, 0 >>;
@@ -57,27 +59,40 @@ res_key(RId) -> << (prefix(res))/binary, RId:32>>.
 
 %% index keys
 
-idx_last_doc_key(RID) -> << (prefix(idx_last_doc))/binary, (barrel_lib:to_binary(RID))/binary  >>.
+forward_path_key(Path, Seq) ->
+  barrel_encoding:encode_uvarint_ascending(
+    encode_path_forward(prefix(idx_forward_path), Path),
+    Seq
+   ).
 
-idx_forward_path_key(Path) -> << (prefix(idx_forward_path))/binary, (encode_path(Path))/binary >>.
+reverse_path_key(Path, Seq) ->
+  barrel_encoding:encode_uvarint_ascending(
+    encode_path_reverse(prefix(idx_reverse_path), Path),
+    Seq
+   ).
 
-idx_reverse_path_key(Path) -> << (prefix(idx_reverse_path))/binary, (encode_path(Path))/binary >>.
+encode_path_forward(Prefix, [P0, P1, P2]) ->
+  enc_2(enc_1(enc_1(Prefix, P0), P1), P2).
 
+encode_path_reverse(Prefix, [P0, P1, P2]) ->
+  enc_1(enc_1(enc_2(Prefix, P2), P1), P0).
 
-encode_path(Parts) ->
-  barrel_lib:binary_join(
-    [enc(P) || P <- Parts],
-    <<"/">>
-  ).
+enc_1(B, P) when is_integer(P) ->
+   barrel_encoding:encode_varint_ascending(B, P);
+enc_1(B, P) when is_float(P) ->
+   barrel_encoding:encode_float_ascending(B, P);
+enc_1(B, P)  ->
+  barrel_encoding:encode_nonsorting_uvarint(B, erlang:phash2(P)).
 
-enc(Part) when is_binary(Part) ->
-  Len = byte_size(Part),
-  if
-    Len > 100 ->
-      << P1:100/binary, _/binary>> = Part,
-      sext:encode(P1);
-    true ->
-      sext:encode(Part)
-  end;
-enc(Part) ->
-  sext:encode(Part).
+enc_2(B, P) when is_binary(P) ->
+  barrel_encoding:encode_binary_ascending(B, P);
+enc_2(B, P) when is_integer(P) ->
+  barrel_encoding:encode_varint_ascending(B, P);
+enc_2(B, P) when is_float(P) ->
+  barrel_encoding:encode_float_ascending(B, P);
+enc_2(B, false) ->
+  barrel_encoding:encode_literal_ascending(B, false);
+enc_2(B, null) ->
+  barrel_encoding:encode_literal_ascending(B, null);
+enc_2(B, true) ->
+  barrel_encoding:encode_literal_ascending(B, true).
