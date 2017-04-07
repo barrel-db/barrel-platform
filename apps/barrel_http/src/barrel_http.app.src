@@ -12,7 +12,8 @@
      barrel_store,
      barrel_replicate,
      cowboy,
-     hackney
+     hackney,
+     vmstats
     ]},
    {env, [
     {listen_port, 7080}

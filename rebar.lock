@@ -10,7 +10,7 @@
   1},
  {<<"e2qc">>,
   {git,"https://benoitc@gitlab.com/barrel-db/e2qc.git",
-       {ref,"48b08748e5061477a4878c4df7323d113928f283"}},
+       {ref,"e03621ad3551302c21490190a3a2460107a2568d"}},
   0},
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.7.1">>},0},
@@ -30,7 +30,11 @@
  {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.6.4">>},0},
  {<<"sext">>,{pkg,<<"sext">>,<<"1.4.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
- {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0}]}.
+ {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0},
+ {<<"vmstats">>,
+  {git,"https://github.com/ferd/vmstats.git",
+       {ref,"2d60492dc58815afdad8f0ffde6d03e3ede6a1db"}},
+  0}]}.
 [
 {pkg_hash,[
  {<<"certifi">>, <<"1C787A85B1855BA354F0B8920392C19AA1D06B0EE1362F9141279620A5BE2039">>},
