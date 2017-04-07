@@ -31,8 +31,6 @@
 
 -define(SERVER, ?MODULE).
 
--define(sup(I), {I, {I, start_link, []}, permanent, infinity, supervisor, [I]}).
-
 %%====================================================================
 %% API functions
 %%====================================================================
@@ -47,7 +45,14 @@ start_link() ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
   _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.id}]),
-  
+
+  DbSup = #{id => barrel_db_sup,
+            start => {barrel_db_sup, start_link, []},
+            restart => permanent,
+            shutdown => infinity,
+            type => supervisor,
+            modules => [barrel_db_sup]},
+
   Store =
     #{
       id => barrel_store,
@@ -58,11 +63,27 @@ init([]) ->
       modules => [barrel_store]
     },
 
+  Event = #{id => barrel_event,
+            start => {barrel_event, start_link, []},
+            restart => permanent,
+            shutdown => infinity,
+            type => worker,
+            modules => [barrel_event]},
+
+  Status =  #{id => barrel_task_status,
+              start => {barrel_task_status, start_link, []},
+              restart => permanent,
+              shutdown => infinity,
+              type => worker,
+              modules => [barrel_task_status]},
+
+
+
   Specs = [
-      ?sup(barrel_db_sup)
+      DbSup
     , Store
-    , ?sup(barrel_event)
-    , ?sup(barrel_task_status)
+    , Event
+    , Status
   ],
 
   {ok, { {one_for_one, 4, 3600}, Specs} }.
