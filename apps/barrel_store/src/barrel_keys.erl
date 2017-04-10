@@ -60,13 +60,13 @@ res_key(RId) -> << (prefix(res))/binary, RId:32>>.
 %% index keys
 
 forward_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_descending(
+  barrel_encoding:encode_uvarint_ascending(
     encode_path_forward(prefix(idx_forward_path), Path),
     Seq
    ).
 
 reverse_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_descending(
+  barrel_encoding:encode_uvarint_ascending(
     encode_path_reverse(prefix(idx_reverse_path), Path),
     Seq
    ).

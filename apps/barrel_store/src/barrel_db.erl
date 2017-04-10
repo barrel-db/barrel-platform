@@ -556,9 +556,17 @@ open_db(DbId, Config) ->
   rocksdb:open(Path, DbOpts).
 
 default_rocksdb_options() ->
-  BlockCacheSize = application:get_env(barrel_store, block_cache_size, ?BLK_CACHE_SIZE),
+  BlockCacheSize = case application:get_env(barrel_store, block_cache_size, 0) of
+                     0 ->
+                       MaxSize = barrel_memory_monitor:get_total_memory(),
+                       %% reserve 1GB for system and binaries, and use 30% of the rest
+                       ((MaxSize - 1024 * 1024) * 0.3);
+                     Sz ->
+                       Sz * 1024 * 1024 * 1024
+                   end,
 
   [{max_open_files, 64},
+   {write_buffer_size, 64 * 1024 * 1024}, %% 64MB
    {allow_concurrent_memtable_write, true},
    {enable_write_thread_adaptive_yield, true},
    {table_factory_block_cache_size, BlockCacheSize}
@@ -692,8 +700,8 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
                               current_body(DocInfo2),
                               maps:get(DocId, OldDocs)
                              ),
-        Batch0 = update_index(Added, Rid, Db2#db.updated_seq, 1,
-                              update_index(Removed, Rid, Db2#db.updated_seq, 0, [])),
+        Batch0 = update_index(Added, Rid, Db2#db.updated_seq, index,
+                              update_index(Removed, Rid, Db2#db.updated_seq, unindex, [])),
 
         _ = lager:info("batch index is ~p~n", [Batch0]),
 
@@ -746,17 +754,20 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
     Updates
   ).
 
-
-update_index([Path | Rest], Op, Rid, Seq, Batch0) ->
+update_index([Path | Rest], Rid, Seq, index, Batch0) ->
   Batch1 = lists:foldl(fun(P, Acc) ->
-                          Event = << Rid:64, Op >>,
-                          [ {put, barrel_keys:forward_path_key(P, Seq), Event},
-                            {put, barrel_keys:reverse_path_key(P, Seq), Event} | Acc ]
+                          [ {put, barrel_keys:forward_path_key(P, Rid), <<>>},
+                            {put, barrel_keys:reverse_path_key(P, Rid), <<>>} | Acc ]
                       end, Batch0, barrel_index:split_path(Path)),
-  update_index(Rest, Op, Rid, Seq, Batch1);
-update_index([], _Op, _Rid, _Seq, Batch) ->
+  update_index(Rest, Rid, Seq, index, Batch1);
+update_index([Path | Rest], Rid, Seq, unindex, Batch0) ->
+  Batch1 = lists:foldl(fun(P, Acc) ->
+                          [ {delete, barrel_keys:forward_path_key(P, Rid)},
+                            {delete, barrel_keys:reverse_path_key(P, Rid)} | Acc ]
+                      end, Batch0, barrel_index:split_path(Path)),
+  update_index(Rest, Rid, Seq, unindex, Batch1);
+update_index([], _Rid, _Seq, _Op, Batch) ->
   Batch.
-
 
 backup_ancestor(DocInfo) ->
   #{ id := Id, current_rev := Rev, revtree := Tree, body_map := BodyMap} = DocInfo,
