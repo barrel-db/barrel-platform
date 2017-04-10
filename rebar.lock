@@ -10,7 +10,7 @@
   1},
  {<<"e2qc">>,
   {git,"https://benoitc@gitlab.com/barrel-db/e2qc.git",
-       {ref,"48b08748e5061477a4878c4df7323d113928f283"}},
+       {ref,"a633ecb5d4e0ba0444a7c710630a315862e5cbd6"}},
   0},
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.7.1">>},0},
