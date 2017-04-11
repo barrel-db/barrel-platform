@@ -56,15 +56,14 @@ get_resource(Req0, State = #state{database=Database}) ->
 fold_query(Path, Req0, State = #state{database=Database}) ->
   Options = parse_params(Req0),
   IncludeDocs = proplists:get_value(include_docs, Options, false),
-  OrderBy = proplists:get_value(order_by, Options, order_by_key),
   Req = start_chunked_response(Req0, State),
   Fun =
-    fun(DocId, Doc, Val, {N, Pre}) ->
+    fun(Doc, Meta, {N, Pre}) ->
       Obj = case IncludeDocs of
               true ->
-                #{ <<"id">> => DocId, <<"val">> => Val, <<"doc">> => Doc };
+                #{ <<"id">> => maps:get(<<"id">>, Doc), <<"meta">> => Meta, <<"doc">> => Doc };
               false ->
-                #{ <<"id">> => DocId, <<"val">> => Val}
+                #{ <<"id">> => maps:get(<<"id">>, Doc), <<"meta">> => Meta}
             end,
       Chunk = << Pre/binary, (jsx:encode(Obj))/binary >>,
       ok = cowboy_req:stream_body(Chunk, nofin, Req),
@@ -72,7 +71,7 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
     end,
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
-  {Count, _} = barrel_local:query(Database, Path, Fun, {0, <<"">>}, OrderBy, Options),
+  {Count, _} = barrel_local:walk(Database, Path, Fun, {0, <<"">>}, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -90,14 +89,19 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
 fold_docs(Req0, State = #state{database=Database}) ->
   Options = parse_params(Req0),
   Req = start_chunked_response(Req0, State),
+  IncludeDocs = proplists:get_value(include_docs, Options, false),
 
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
   Fun =
     fun
-
-      (Doc, _Meta, {N, Pre}) ->
-        Obj = #{ id => maps:get(<<"id">>, Doc), <<"val">> => Doc, <<"doc">> => Doc},
+      (Doc, Meta, {N, Pre}) ->
+         Obj = case IncludeDocs of
+              true ->
+                #{ <<"id">> => maps:get(<<"id">>, Doc), <<"meta">> => Meta, <<"doc">> => Doc };
+              false ->
+                #{ <<"id">> => maps:get(<<"id">>, Doc), <<"meta">> => Meta}
+            end,
         Chunk = << Pre/binary, (jsx:encode(Obj))/binary >>,
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
@@ -161,4 +165,7 @@ param(<<"order_by">>, <<"$key">>) ->
 param(<<"order_by">>, <<"$value">>) ->
   {order_by, order_by_value};
 param(<<"order_by">>, _) ->
-  {order_by, order_by_key}.
+  {order_by, order_by_key};
+param(<<"equal_to">>, Equal) ->
+  {equal_to, Equal}.
+

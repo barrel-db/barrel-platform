@@ -28,7 +28,9 @@
 
 -export([
   forward_path_key/2,
-  reverse_path_key/2
+  reverse_path_key/2,
+  encode_path_forward/2,
+  encode_path_reverse/2
 ]).
 
 prefix(db_meta) ->  << 0, 0, 0 >>;
@@ -60,13 +62,13 @@ res_key(RId) -> << (prefix(res))/binary, RId:32>>.
 %% index keys
 
 forward_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_ascending(
+  barrel_encoding:encode_varint_ascending(
     encode_path_forward(prefix(idx_forward_path), Path),
     Seq
    ).
 
 reverse_path_key(Path, Seq) ->
-  barrel_encoding:encode_uvarint_ascending(
+  barrel_encoding:encode_varint_ascending(
     encode_path_reverse(prefix(idx_reverse_path), Path),
     Seq
    ).
@@ -90,7 +92,7 @@ enc_1(B, P) when is_integer(P) ->
 enc_1(B, P) when is_float(P) ->
    barrel_encoding:encode_float_ascending(B, P);
 enc_1(B, P)  ->
-  barrel_encoding:encode_nonsorting_uvarint(B, erlang:phash2(P)).
+  barrel_encoding:encode_varint_ascending(B, erlang:phash2(P)).
 
 enc_2(B, P) when is_binary(P) ->
   barrel_encoding:encode_binary_ascending(B, P);

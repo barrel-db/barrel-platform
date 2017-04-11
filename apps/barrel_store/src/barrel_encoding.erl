@@ -17,6 +17,8 @@
          encode_float_ascending/2, encode_float_descending/2,
          decode_float_ascending/1, decode_float_descending/1]).
 
+-export([pick_encoding/1]).
+
 -define(INT_MIN, 16#80).
 -define(INT_MAX, 16#fd).
 -define(INT_MAX_WIDTH, 8).
@@ -41,6 +43,15 @@
 -define(FLOAT_ZERO, (?FLOAT_NEG + 1)).
 -define(FLOAT_POS, (?FLOAT_ZERO + 1)).
 -define(FLOAT_NAN_DESC, (?FLOAT_POS + 1)).
+
+
+pick_encoding(<< ?BYTES_MARKER, _/binary >>) -> bytes;
+pick_encoding(<< ?BYTES_MARKER_DESC, _/binary >>) -> bytes_desc;
+pick_encoding(<< ?LITERAL_MARKER, _/binary >>) -> literal;
+pick_encoding(<< ?LITERAL_MARKER_DESC, _/binary >>) -> literal_desc;
+pick_encoding(<< M, _/binary >>) when M >= ?INT_MIN, M =< ?INT_MAX -> int;
+pick_encoding(<< M, _/binary >>) when M >= ?FLOAT_NAN, M =< ?FLOAT_NAN_DESC -> float;
+pick_encoding(_) -> erlang:error(badarg).
 
 
 %% @doc  encodes the uint32 value using a big-endian 8 byte representation.

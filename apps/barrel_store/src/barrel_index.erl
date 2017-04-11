@@ -47,8 +47,8 @@ split_path(_, Forward) ->
 diff(D1, D2) ->
   A1 = analyze(D1),
   A2 = analyze(D2),
-  Added = A2 -- A1,
-  Removed = A1 -- A2,
+  Removed = A2 -- A1,
+  Added = A1 -- A2,
   {Added, Removed}.
 
 %% @doc analyze a document and yield paths to update
@@ -159,8 +159,8 @@ diff_test() ->
            <<"b">> => [0, 1, 3],
            <<"d">> => #{ <<"a">> => 1}},
   {Added, Removed} = diff(New, Old),
-  ?assertEqual([[<<"$">>,<<"c">>,<<"a">>,1]], Added),
-  ?assertEqual([[<<"$">>,<<"d">>,<<"a">>,1],[<<"$">>,<<"b">>,2,3]], Removed).
+  ?assertEqual([[<<"$">>,<<"c">>,<<"a">>,1]], Removed),
+  ?assertEqual([[<<"$">>,<<"d">>,<<"a">>,1],[<<"$">>,<<"b">>,2,3]], Added).
 
 
 split_path_test() ->

@@ -30,8 +30,7 @@
   put_system_doc/3,
   get_system_doc/2,
   delete_system_doc/2,
-  query/5,
-  query/6,
+  walk/5,
   get_doc1/7,
   update_docs/2
 ]).
@@ -438,14 +437,11 @@ delete_system_doc(DbName, DocId) ->
     end
   ).
 
-query(DbName, Path, Fun, AccIn, Options) ->
-  query(DbName, Path, Fun, AccIn, order_by_key, Options).
-
-query(DbName, Path, Fun, AccIn, OrderBy, Options) ->
+walk(DbName, Path, Fun, AccIn, Options) ->
   with_db(
     DbName,
     fun(Db) ->
-      barrel_query:query(Db, Path, Fun, AccIn, OrderBy, Options)
+      barrel_walk:walk(Db, Path, Fun, AccIn, Options)
     end
   ).
 
@@ -696,14 +692,11 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
 
         %% create update index events.
         %% TODO: move that code in a cleaner place
-        {Added, Removed} = barrel_index:diff(
-                              current_body(DocInfo2),
-                              maps:get(DocId, OldDocs)
-                             ),
+        NewDoc = current_body(DocInfo3),
+        OldDoc = maps:get(DocId, OldDocs),
+        {Added, Removed} = barrel_index:diff(NewDoc, OldDoc),
         Batch0 = update_index(Added, Rid, Db2#db.updated_seq, index,
                               update_index(Removed, Rid, Db2#db.updated_seq, unindex, [])),
-
-        _ = lager:info("batch index is ~p~n", [Batch0]),
 
         %% finally write the batch
         Batch =
