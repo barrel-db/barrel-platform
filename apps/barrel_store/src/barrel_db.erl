@@ -42,7 +42,8 @@
   exists/1,
   encode_rid/1,
   decode_rid/1,
-  get_current_revision/1
+  get_current_revision/1,
+  delete_db/1
 ]).
 
 %% gen_server callbacks
@@ -463,6 +464,15 @@ start_link(DbId, Config) ->
 get_db(DbPid) when is_pid(DbPid) ->
   gen_server:call(DbPid, get_db).
 
+delete_db(DbPid) ->
+  try gen_server:call(DbPid, delete_db)
+  catch
+    exit:{noproc,_} -> ok;
+    exit:noproc -> ok;
+    %% Handle the case where the monitor triggers
+    exit:{normal, _} -> ok
+  end.
+
 
 db_dir() ->
   Dir = filename:join(barrel_store:data_dir(), "dbs"),
@@ -479,6 +489,7 @@ encode_rid(Rid) -> base64:encode(<< Rid:64 >>).
 decode_rid(Bin) ->
   << Rid:64 >> = base64:decode(Bin),
   Rid.
+
 
 %% TODO: put dbinfo in a template
 init([DbId, Config]) ->
@@ -578,23 +589,9 @@ handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 
 handle_call(delete_db, _From, Db = #db{ id = Id, store = Store }) ->
-  Reply  = if
-             Store /= nil ->
-               ok = rocksdb:close(Store),
-               TempName = db_path(barrel_lib:uniqid()),
-               _ = file:rename(db_path(Id), TempName),
-               %% deletion of the database happen asynchronously
-               spawn(
-                 fun() ->
-                     ok = rocksdb:destroy(TempName, []),
-                     _ = lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
-                 end
-                ),
-               {stop, normal, ok, Db#db{ store=nil}};
-             true ->
-               {stop, normal, ok, Db#db{ store=nil}}
-           end,
-  Reply;
+  ok = (catch rocksdb:close(Store)),
+  ok = delete_db_dir(Id),
+  {stop, normal, ok, Db#db{ store=nil}};
 
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
@@ -606,6 +603,7 @@ handle_info({update_docs, DocBuckets}, Db) ->
   {noreply, NewDb};
 
 handle_info(_Info, State) -> {noreply, State}.
+
 
 terminate(Reason, #db{ id = Id, store = nil }) ->
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
@@ -623,6 +621,23 @@ close_store(Id, Store) ->
   ok.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
+
+
+delete_db_dir(Id) ->
+  TempName = db_path(barrel_lib:uniqid()),
+  case file:rename(db_path(Id), TempName) of
+    ok ->
+      %% deletion of the database happen asynchronously
+      spawn(
+        fun() ->
+            ok = rocksdb:destroy(TempName, []),
+            _ = lager:info("~p: old db files deleleted  in ~p~n", [Id, TempName])
+        end
+       ),
+      ok;
+    _ ->
+      ok
+  end.
 
 empty_doc_info(DocId, Rid) ->
   #{ id => DocId,

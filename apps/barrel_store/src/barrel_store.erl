@@ -56,27 +56,16 @@ create_db(DbId, Config) ->
   _ = lager:warning("barrel_db:create/2 is deprecated", []),
   create_db(Config#{ <<"database_id">> => DbId }).
 
+create_db(#{ << "database_id">> := _DbId } = Config) ->
+  gen_server:call(?MODULE, {create_db, Config});
 create_db(Config) when is_map(Config) ->
-  case maps:find(<<"database_id">>, Config) of
-    error ->
-      DbId = barrel_lib:uniqid(),
-      gen_server:call(?MODULE, {create_db, Config#{ <<"database_id">> => DbId}});
-    {ok, DbId} ->
-      case whereis_db(DbId) of
-        undefined -> gen_server:call(?MODULE, {create_db, Config});
-        _Db ->  {error, db_exists}
-      end
-  end;
-create_db(_) -> erlang:error(bad_database).
+  DbId = barrel_lib:uniqid(),
+  gen_server:call(?MODULE, {create_db, Config#{ <<"database_id">> => DbId}});
+create_db(_) ->
+  erlang:error(badarg).
 
 delete_db(DbId) ->
-  case whereis_db(DbId) of
-    undefined ->
-      _ = lager:info("undefined ~p~n", [DbId]),
-      ok;
-    _ -> gen_server:call(?MODULE, {delete_db, DbId})
-  end.
-
+  gen_server:call(?MODULE, {delete_db, DbId}).
 
 %% TODO: simply return all databases
 databases() ->
@@ -103,8 +92,12 @@ fold_databases_1([], _Fun, Acc) ->
 
 whereis_db(DbId) ->
   case ets:lookup(barrel_dbs, DbId) of
-    [] -> undefined;
-    [Db] -> Db
+    [#db{pid=Pid}=Db] ->
+      case is_process_alive(Pid) of
+        true -> Db;
+        false -> undefined
+      end;
+    [] -> undefined
   end.
 
 get_conf() -> gen_server:call(?MODULE, get_conf).
@@ -146,7 +139,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(_Request, State) ->  {noreply, State}.
 
-handle_info({'EXIT', DbPid, _Reason}, State) ->
+handle_info({'DOWN', _MRef, process, DbPid, _Reason}, State) ->
   NState = db_is_down(DbPid, State),
   {noreply, NState};
 
@@ -178,24 +171,23 @@ do_create_db(Config, State = #{ conf := Conf, db_pids := DbPids }) ->
       Conf2 = Conf#{ <<"databases">> => [ Config | Dbs ] },
       case persist_config(Conf2) of
         ok ->
-          link(DbPid),
-          ets:insert(barrel_dbs, Db),
-          {{ok, Config}, State#{ conf => Conf2, db_pids => DbPids#{ DbPid => DbId }}};
+          Ref = erlang:monitor(process, DbPid),
+          _ = ets:insert(barrel_dbs, Db#db{ref=Ref}),
+          {{ok, Config}, State#{ conf => Conf2, db_pids => DbPids#{ DbPid => DbId}}};
         Error ->
           _ = lager:error(
-            "error creating ~p with config ~p: ~p~n",
-            [DbId, Config, Error]
-          ),
+                "error creating ~p with config ~p: ~p~n",
+                [DbId, Config, Error]
+               ),
           {Error, State}
       end;
-    {error, {already_started, _Pid}} ->
-      {{error, db_exists}, State};
     Error ->
       _ = lager:info(
-        "error creating ~p with config ~p: ~p~n",
-        [DbId, Config, Error]
-      ),
+            "error creating ~p with config ~p: ~p~n",
+            [DbId, Config, Error]
+           ),
       {Error, State}
+
   end.
 
 do_delete_db(DbId, State = #{ conf := Conf, db_pids := DbPids }) ->
@@ -204,29 +196,22 @@ do_delete_db(DbId, State = #{ conf := Conf, db_pids := DbPids }) ->
     [] ->
       _ = lager:info("no database ~p ~n", [DbId]),
       ok;
-    [#db{pid=Pid}] ->
-      unlink(Pid),
-      case gen_server:call(Pid, delete_db) of
-        ok ->
-          _ = lager:info("database ~p deleted ~n", [DbId]),
-          DbPids2 = maps:remove(Pid, DbPids),
-          #{ <<"databases">> := Dbs } = Conf,
-          Dbs2 = lists:filter(
-            fun
-              (#{ <<"database_id">> := Id}) when Id =:= DbId -> false;
-              (_) -> true
-            end,
-            Dbs
-          ),
-          Conf2 = Conf#{ <<"databases">> => Dbs2 },
-          ok = persist_config(Conf2),
-          _ = lager:info("remove database ~p from config~n", [DbId]),
-          {ok, State#{ conf => Conf2, db_pids => DbPids2}};
-        Error ->
-          _ = lager:info("error while deleting database ~p: ~p ~n", [DbId, Error]),
-          {Error, State}
-      end
+    [#db{pid=Pid, ref=Ref}] ->
+      _ = (catch erlang:demonitor(Ref, [flush])),
+      ok = barrel_db:delete_db(Pid),
+      _ = lager:info("database ~p deleted ~n", [DbId]),
+      DbPids2 = maps:remove(Pid, DbPids),
+      #{ <<"databases">> := Dbs } = Conf,
+      Dbs2 = lists:filter(
+               fun (#{ <<"database_id">> := Id}) when Id =:= DbId -> false;
+                   (_) -> true
+               end,Dbs),
+      Conf2 = Conf#{ <<"databases">> => Dbs2 },
+      ok = persist_config(Conf2),
+      _ = lager:info("removed database ~p from config~n", [DbId]),
+      {ok, State#{ conf => Conf2, db_pids => DbPids2}}
   end.
+
 
 db_is_down(Pid, State = #{ db_pids := DbPids }) ->
   case maps:take(Pid, DbPids) of

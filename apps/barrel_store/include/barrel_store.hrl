@@ -14,19 +14,21 @@
   }
 ).
 
--record(db, {
-  name = <<>>,
-  id = <<>>,
-  conf = #{},
-  pid = nil,
-  store = nil,
-  last_rid = 0,
-  updated_seq = 0,
-  docs_count = 0,
-  system_docs_count = 0,
-  deleted_count = 0,
-  deleted = false
-}).
+-record(db,
+  {name = <<>>,
+   id = <<>>,
+   conf = #{},
+   pid = nil,
+   ref = nil,
+   store = nil,
+   last_rid = 0,
+   updated_seq = 0,
+   docs_count = 0,
+   system_docs_count = 0,
+   deleted_count = 0,
+   deleted = false
+  }
+).
 
 
 %% db metadata
