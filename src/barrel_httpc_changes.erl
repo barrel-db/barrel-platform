@@ -219,7 +219,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
         [?MODULE_STRING, Reason]
        ),
       cleanup(Ref, Reason),
-      exit(Reason())
+      exit(Reason)
   after State#state.hackney_timeout ->
       cleanup(Ref, timeout),
       exit(timeout)
