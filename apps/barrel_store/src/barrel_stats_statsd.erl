@@ -43,7 +43,6 @@ start() ->
   start_link().
 
 init(_Type, _Name, _Env) ->
-  start_link(),
   ok.
 
 set_value(Name, Value, _Env) ->
@@ -75,7 +74,7 @@ init(_) ->
   HostWithoutDots = barrel_lib:binary_join(binary:split(Host, <<".">>, [global]), <<"_">>),
   StatsdKey = barrel_lib:binary_join([<<"barrel">>, HostWithoutDots, Node], <<".">>),
   {ok, Socket} = gen_udp:open(0),
-  lager:info("init statsd metrics peer=~p port=~p", [Peer, Port]),
+  _ = lager:info("init statsd metrics peer=~p port=~p", [Peer, Port]),
   {ok, #state{socket={Socket, Peer, Port}, key=StatsdKey}}.
 
 handle_call(terminate, _From, State) ->
