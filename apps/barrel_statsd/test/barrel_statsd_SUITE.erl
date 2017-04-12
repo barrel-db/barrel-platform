@@ -39,14 +39,16 @@ all() -> [ plugin
 
 -define(STATSD_PORT, 8888).
 
-env() ->
-  [{plugin, barrel_stats_statsd},
-   {statsd_server, {{127,0,0,1}, ?STATSD_PORT}}].
 
 init_per_suite(Config) ->
-  application:stop(barrel_store),
-  ok = application:set_env(barrel_store, metrics, env()),
+  _ = application:stop(barrel_store),
+  _ = application:stop(barrel_statsd),
+  ok = application:set_env(barrel_store, metrics,
+                           [{plugin, barrel_statsd}]),
+  ok = application:set_env(barrel_statsd, server,
+                           {{127,0,0,1}, ?STATSD_PORT}),
   {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel_statsd),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -61,13 +63,11 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  ok = application:stop(barrel_store),
   _ = (catch rocksdb:destroy("docs", [])),
   ok = application:set_env(barrel_store, metrics, undefined),
   Config.
 
 plugin(_Config) ->
-  {ok, _} = barrel_stats_statsd:start(),
   start_udp_server(?STATSD_PORT),
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),

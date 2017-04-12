@@ -12,15 +12,14 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_stats_statsd).
+-module(barrel_statsd).
 -author("Bernard Notarianni").
 
 -behaviour(barrel_stats_plugin).
 -bahaviour(gen_server).
 
 %% plugin callbacks
--export([ start/0
-        , init/3
+-export([ init/3
         , increment/3
         , set_value/3
         , duration/3
@@ -38,9 +37,6 @@
 %% Specification for statsd message format:
 %% https://github.com/etsy/statsd/blob/master/docs/metric_types.md
 
-
-start() ->
-  start_link().
 
 init(_Type, _Name, _Env) ->
   ok.
@@ -68,8 +64,12 @@ start_link() ->
 
 %%% Server functions
 init(_) ->
-  Env = application:get_env(barrel_store, metrics, undefined),
-  {Peer, Port} = proplists:get_value(statsd_server, Env),
+  Server = application:get_env(barrel_statsd, server, undefined),
+  init_server(Server).
+
+init_server(undefined) ->
+  {ok, #state{}};
+init_server({Peer, Port}) ->
   [Node, Host] = binary:split(atom_to_binary(node(), utf8), <<"@">>),
   HostWithoutDots = barrel_lib:binary_join(binary:split(Host, <<".">>, [global]), <<"_">>),
   StatsdKey = barrel_lib:binary_join([<<"barrel">>, HostWithoutDots, Node], <<".">>),
@@ -80,6 +80,8 @@ init(_) ->
 handle_call(terminate, _From, State) ->
   {stop, normal, ok, State}.
 
+handle_cast({send, _MetricName, _Value}, #state{socket=undefined}=State) ->
+  {noreply, State};
 handle_cast({send, MetricName, Value}, #state{socket=Socket, key=ServerKey}=State) ->
   MetricJoined = barrel_lib:binary_join(MetricName, <<".">>),
   FullKey = barrel_lib:binary_join([ServerKey, MetricJoined], <<".">>),

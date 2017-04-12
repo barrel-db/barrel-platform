@@ -92,13 +92,6 @@ init(_Args) ->
                 ranch_tcp, [{port, ListenPort}],
                 cowboy_clear, Options1),
 
-  MetricsSpecs = #{
-    id => barrel_metrics_sup,
-    start => {barrel_metrics_sup, start_link, []},
-    type => supervisor,
-    modules => [barrel_metrics_sup]
-   },
-
-  Specs = [HttpSpecs, MetricsSpecs],
+  Specs = [HttpSpecs],
   SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
   {ok, {SupFlags, Specs}}.

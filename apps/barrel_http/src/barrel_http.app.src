@@ -11,6 +11,7 @@
      crypto,
      barrel_store,
      barrel_replicate,
+     barrel_statsd,
      cowboy,
      hackney
     ]},
