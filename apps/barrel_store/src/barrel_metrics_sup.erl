@@ -42,7 +42,8 @@ init([]) ->
     undefined ->
       ignore;
     Env ->
-      Mod = proplists:get_value(metrics, Env),
+      Mod = proplists:get_value(plugin, Env),
+      lager:info("metric plugin = ~p",[Mod]),
       Spec = #{
         id => barrel_metrics,
         start => {Mod, start_link, []},

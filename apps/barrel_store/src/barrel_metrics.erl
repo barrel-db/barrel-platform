@@ -27,6 +27,7 @@
         ]).
 
 start() ->
+  lager:info("start"),
   Env = application:get_env(barrel_store, metrics, undefined),
   case Env of
     undefined -> ok;
@@ -36,7 +37,7 @@ start() ->
   end.
 
 init(Type, Name) ->
-  Env = application:get_env(barrel_store, metrics, undefined),
+  Env = application:get_env(barrel_store, plugin, undefined),
   case Env of
     undefined -> ok;
     Env ->
