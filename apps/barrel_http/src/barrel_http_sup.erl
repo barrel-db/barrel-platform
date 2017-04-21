@@ -51,7 +51,6 @@ init(_Args) ->
   ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
   AccessLog = application:get_env(barrel_http, access_log, ?DEFAULT_ACCESS_LOG),
-  Metrics = application:get_env(barrel_store, metrics, ?DEFAULT_METRICS),
   RequestTimeout = application:get_env(barrel_http, request_timeout, ?DEFAULT_TIMEOUT),
 
   Routes = [ {"/api-doc", barrel_http_redirect,
@@ -82,8 +81,7 @@ init(_Args) ->
                            (_,Acc) -> Acc
                         end,
                         [cowboy_stream_h],
-                        [{access_log, AccessLog},
-                         {metrics, Metrics}]),
+                        [{access_log, AccessLog}]),
 
   Options1 = Options0#{stream_handlers => Streams},
 

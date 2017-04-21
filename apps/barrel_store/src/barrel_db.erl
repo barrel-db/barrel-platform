@@ -226,34 +226,28 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, found};
     Db = #db{pid=DbPid} ->
-      StartTime1 = os:timestamp(),
+      ok = hooks:run(db_start_update_docs, [DbName]),
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
-      barrel_metrics:increment([<<"store">>, DbName, <<"starting_update">>]),
-      StartTime2 = os:timestamp(),
       DbPid ! {update_docs, DocBuckets},
-
       Res = case Async of
               false ->
-                collect_updates(Db, Ref, MRef, [], N, StartTime2);
+                collect_updates(Db, Ref, MRef, [], N);
               true ->
                 ok
             end,
-
-      barrel_metrics:duration_since([<<"store">>, DbName, <<"update_docs">>], StartTime1),
-      barrel_metrics:increment([<<"store">>, DbName, <<"update_docs">>]),
+      ok = hooks:run(db_end_update_docs, [DbName]),
       Res
   end.
 
-collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N, StartTime) when N > 0 ->
+collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N) when N > 0 ->
   receive
     {result, Ref, DbPid, Idx, Result} ->
-      collect_updates(Db, Ref, MRef, [{Idx, Result} | Results], N - 1, StartTime);
+      collect_updates(Db, Ref, MRef, [{Idx, Result} | Results], N - 1);
     {'DOWN', MRef, _, _, Reason} ->
       exit(Reason)
   end;
-collect_updates(Db, _Ref, MRef, Results, 0, StartTime) ->
-  barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"local_update">>], StartTime),
+collect_updates(_Db, _Ref, MRef, Results, 0) ->
   erlang:demonitor(MRef, [flush]),
   %% we return results  ordered by operation index
   lists:map(
@@ -500,7 +494,7 @@ init([DbId, Config]) ->
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
 
-  ok = init_metrics(DbId),
+  _ = init_properties(),
 
   Db =
     #db{id=DbId,
@@ -530,26 +524,12 @@ init_meta(Store) ->
     []
   ).
 
-init_metrics(DbId) ->
-  Counters = [ [<<"store">>, DbId, <<"starting_update">>]
-             , [<<"store">>, DbId, <<"local_update">>]
-             , [<<"store">>, DbId, <<"collect_updates">>]
-             , [<<"store">>, DbId, <<"update_docs">>]
-             , [<<"store">>, DbId, <<"do_update_docs">>]
-             ],
-  _ = [ barrel_metrics:init(counter, C) || C <- Counters ],
+init_properties() ->
+  Props = [{num_docs_updated, 0}],
 
-  Durations = [ [<<"store">>, DbId, <<"update_docs">>]
-              , [<<"store">>, DbId, <<"local_update">>]
-              , [<<"store">>, DbId, <<"index_update">>]
-              , [<<"store">>, DbId, <<"rocksdb">>, <<"write">>]
-              ],
-  _ = [ barrel_metrics:init(duration, D) || D <- Durations ],
-
-  Gauges = [ [<<"store">>, DbId, <<"update_queue_length">>]
-           ],
-  _ = [ barrel_metrics:init(gauge, G) || G <- Gauges ],
-  ok.
+  lists:foreach(fun({K, V}) ->
+                    erlang:put(K, V)
+                end, Props).
 
 open_db(DbId, Config) ->
   Path = db_path(DbId),
@@ -656,10 +636,8 @@ send_result(_, _) ->
 
 do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) ->
   %% try to collect a maximum of updates at once
-  barrel_metrics:increment([<<"store">>, DbId, <<"do_update_docs">>]),
-  {message_queue_len, QueueLength} = erlang:process_info(self(), message_queue_len),
-  barrel_metrics:set_value([<<"store">>, DbId, <<"update_queue_length">>], QueueLength),
   DocBuckets2 = collect_updates(DbId, DocBuckets),
+  erlang:put(num_docs_updated, maps:size(DocBuckets2)),
 
   {Updates, NewRid, _, OldDocs} = merge_revtrees(DocBuckets2, Db),
 
@@ -732,9 +710,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
           ) ++ Batch0,
 
 
-        StartWriteTime = os:timestamp(),
         ResWrite =  rocksdb:write(Store, Batch, [{sync, true}]),
-        barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"rocksdb">>, <<"write">>], StartWriteTime),
 
         case ResWrite of
           ok ->
@@ -971,7 +947,6 @@ merge_updates(DocBuckets1, DocBuckets2) ->
 collect_updates(DbId, DocBuckets0) ->
   receive
     {update_docs, DocBuckets1} ->
-      barrel_metrics:increment([<<"store">>, DbId, <<"collect_updates">>]),
       DocBuckets2 = merge_updates(DocBuckets0, DocBuckets1),
       collect_updates(DbId, DocBuckets2)
   after 0 ->

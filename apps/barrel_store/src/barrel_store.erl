@@ -30,6 +30,8 @@
   start_link/0,
   get_conf/0,
   whereis_db/1,
+  db_pid/1,
+  db_properties/1,
   data_dir/0
 ]).
 
@@ -98,6 +100,34 @@ whereis_db(DbId) ->
         false -> undefined
       end;
     [] -> undefined
+  end.
+
+db_pid(DbId) ->
+  case whereis_db(DbId) of
+    #db{pid=DbPid} -> DbPid;
+    undefined -> undefined
+  end.
+
+db_properties(DbId) ->
+  case whereis_db(DbId) of
+    undefined -> undefined;
+    Db ->
+      #db{ pid = DbPid,
+           last_rid = LastRid,
+           updated_seq = UpdateSeq,
+           docs_count = DocCount,
+           system_docs_count = SystemDocsCount} = Db,
+      Infos = erlang:process_info(DbPid),
+      MsgLen = proplists:get_value(message_queue_len, Infos),
+      PDict = proplists:get_value(dictionary, Infos),
+      DocsUpdated = proplists:get_value(num_docs_updated, PDict),
+
+      #{ last_rid => LastRid,
+         last_update_seq => UpdateSeq,
+         docs_count => DocCount,
+         system_docs_count => SystemDocsCount,
+         message_queue_len => MsgLen,
+         num_docs_updated => DocsUpdated }
   end.
 
 get_conf() -> gen_server:call(?MODULE, get_conf).
