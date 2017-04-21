@@ -6,7 +6,7 @@
   0},
  {<<"cowlib">>,
   {git,"https://github.com/ninenines/cowlib",
-       {ref,"07cde7c6def6eeed0174b270229e7d5175673d87"}},
+       {ref,"e4da2077723a26301de516c8da9b0b330545b5af"}},
   1},
  {<<"e2qc">>,
   {git,"https://benoitc@gitlab.com/barrel-db/e2qc.git",
