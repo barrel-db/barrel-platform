@@ -27,7 +27,7 @@ init(Req, State) ->
   Method = cowboy_req:method(Req),
   route(Req, State#state{method=Method}).
 
-route(Req, #state{method= <<"GET">>}=State) ->
+route(#{method := <<"GET">>} = Req, State) ->
   check_database_db(Req, State);
 route(Req, State) ->
   {ok, Req2, State} = barrel_http_reply:error(405, Req, []),
