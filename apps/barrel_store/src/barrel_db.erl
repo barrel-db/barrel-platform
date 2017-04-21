@@ -226,6 +226,7 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, found};
     Db = #db{pid=DbPid} ->
+      T1 = erlang:monotonic_time(),
       ok = hooks:run(db_start_update_docs, [DbName]),
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
@@ -236,7 +237,9 @@ update_docs(DbName, Batch) ->
               true ->
                 ok
             end,
-      ok = hooks:run(db_end_update_docs, [DbName]),
+      T2 = erlang:monotonic_time(),
+      Time = erlang:convert_time_unit(T2 - T1, native, second),
+      ok = hooks:run(db_end_update_docs, [DbName, Time]),
       Res
   end.
 
