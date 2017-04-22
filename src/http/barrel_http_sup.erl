@@ -55,7 +55,7 @@ init(_Args) ->
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
-           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel_http, "swagger",
+           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel, "swagger",
                                                  [{mimetypes, cow_mimetypes, all}]}}
 
            , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}

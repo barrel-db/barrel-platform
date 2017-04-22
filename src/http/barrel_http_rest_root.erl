@@ -20,8 +20,8 @@
 -export([init/2]).
 
 init(Req, Opts) ->
-  {ok, Vsn} = application:get_key(barrel_http, vsn),
-  {ok, Description} = application:get_key(barrel_http, description),
+  {ok, Vsn} = application:get_key(barrel, vsn),
+  {ok, Description} = application:get_key(barrel, description),
   Doc=#{ description => list_to_binary(Description)
        , version => list_to_binary(Vsn)
        , swagger => <<"/api-doc">>
