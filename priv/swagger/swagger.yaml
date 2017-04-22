@@ -1,0 +1,575 @@
+swagger: 2.0
+info:
+ version: 1.0.0
+ title: Barrel-db API
+
+ description: A document oriented reactive platform.
+
+ contact:
+   email: contact@barrel-db.org
+   url: https://docs.barrel-db.org
+
+ license:
+   name: Apache License 2
+   url: https://www.apache.org/licenses/LICENSE-2.0
+
+schemes:
+ - http
+consumes:
+ - application/json
+produces:
+ - application/text
+
+
+
+paths:
+
+ /dbs:
+
+   get:
+     tags:
+       - Databases
+     summary: Get list of available databases
+     description: Get list of available databases
+     responses:
+       200:
+         description: List of databases
+
+   post:
+     tags:
+       - Databases
+     summary: Create a new database
+     description: Create a new database
+     parameters:
+       -
+         name: body
+         in: body
+         description: New database configuration
+         required: true
+         schema:
+            $ref: '#/definitions/DatabaseConfiguration'
+     responses:
+       201:
+         description: New database created
+       409:
+         description: Conflict - database already exists
+
+ /dbs/{database}:
+
+   get:
+     tags:
+       - Databases
+     summary: Get the database informations
+     description: Get the database informations
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+     responses:
+       200:
+         description: List of databases
+
+
+   delete:
+     tags:
+       - Databases
+     summary: Delete a database
+     description: Delete a database
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+     responses:
+       200:
+         description: database deleted
+
+
+ /dbs/{database}/docs:
+
+   post:
+     tags:
+       - Documents
+     summary: Create a new document
+     description: Create a new document
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: body
+         in: body
+         description: The document to be created
+         required: true
+         schema:
+            $ref: '#/definitions/NewDocument'
+     responses:
+       201:
+         description: New document created
+       409:
+         description: Conflict - database already exists
+
+   get:
+     tags:
+       - Documents
+     summary: Get list of all available documents
+     description: |
+       Get list of all available documents.
+
+       The `x-barrel-id-match` header can be used to provide a list
+       of docids to be retrieved.
+
+       The `A-IM` header can optionnaly be used to ask for the answer
+       to be provided as a stream of Server Side Events.
+     produces:
+       - application/json
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: x-barrel-id-match
+         in: header
+         description: list of docid to be retrieved
+         required: false
+         type: string
+       -
+         name: since
+         in: query
+         description: Starting sequence
+         type: integer
+       -
+         name: max
+         in: query
+         description: maximum keys to return
+         type: integer
+       -
+         name: lte
+         in: query
+         description: lesser or equal to
+         type: string
+       -
+         name: lt
+         in: query
+         description: lesser than
+         type: string
+       -
+         name: gte
+         in: query
+         description: greater or equal to
+         type: string
+       -
+         name: gt
+         in: query
+         description: greater than
+         type: string
+       -
+         name: A-IM
+         in: header
+         description: Get update feed
+         type: string
+         enum:
+           - Incremental feed
+     responses:
+       200:
+         description: List of available documents id
+
+ /dbs/{database}/docs/{docid}:
+
+   get:
+     tags:
+       - Documents
+     summary: Get a document
+     description: |
+       Get a document.
+
+       You can use the `ETag` header to retrieve a specific revision.
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: docid
+         in: path
+         description: document id
+         required: true
+         type: string
+       -
+         name: history
+         in: query
+         description: |
+           retrieve history of revisions in header `x-barrel-revisions-id`
+         required: false
+         type: boolean
+       -
+         name: ETag
+         in: header
+         description: specific revision to be retrieved
+         required: false
+         type: string
+     responses:
+       200:
+         description: Document found
+         headers:
+           ETag:
+             description: revision of the document
+           x-barrel-deleted:
+             description: if document has been deleted
+             type: boolean
+           x-barrel-revisions-id:
+             description: list of history revisions
+       404:
+         description: Document not found
+
+   put:
+     tags:
+       - Documents
+     summary: Update a document
+     description: |
+        Update an existing document. New document should be created using
+        [`POST`](.#!/Documents/post_dbs_database_docs).
+
+        You can use the `ETag` header to pass the revision of last document if you
+        want to ensure it has not been updated.
+
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: docid
+         in: path
+         description: document id
+         required: true
+         type: string
+       -
+         name: ETag
+         in: header
+         description: expected last revision
+         required: false
+         type: string
+       -
+         name: edit
+         in: query
+         description: update a document history
+         required: false
+         type: boolean
+       -
+         name: body
+         in: body
+         description: The document to be updated
+         required: true
+         schema:
+            $ref: '#/definitions/Document'
+     responses:
+       200:
+         description: Document updated
+       404:
+         description: Document not found
+       409:
+         description: Conflict - revision (ETag) does not match
+
+   delete:
+     tags:
+       - Documents
+     summary: Delete a document
+     description: |
+       Delete a document.
+
+       You can use the `ETag` header to pass the revision of last document if you
+       want to ensure it has not been updated.
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: docid
+         in: path
+         description: document id
+         required: true
+         type: string
+       -
+         name: ETag
+         in: header
+         description: expected last revision
+         required: false
+         type: string
+     responses:
+       200:
+         description: Document deleted
+       404:
+         description: Document not found
+       409:
+         description: Revision does not match last server revision
+
+ /dbs/{database}/revsdiff:
+
+   post:
+     tags:
+       - Documents
+     summary: Check for differences in documents history
+     description: Check for differences in documents history
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: body
+         in: body
+         description: The document to be checked
+         required: true
+         schema:
+            $ref: '#/definitions/Revsdiff'
+     responses:
+       201:
+         description: New document created
+       409:
+         description: Conflict - document already exists
+
+ /dbs/{database}/system/{docid}:
+
+   get:
+     tags:
+       - System documents
+     summary: Get a system document
+     description: Reserved for internal documents. You should not use them.
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: docid
+         in: path
+         description: document id
+         required: true
+         type: string
+     responses:
+       200:
+         description: Document found
+       404:
+         description: Document not found
+
+   put:
+     tags:
+       - System documents
+     summary: Create/update a system document.
+     description: Reserved for internal documents. You should not use them.
+     parameters:
+       -
+         name: database
+         in: path
+         description: database id
+         required: true
+         type: string
+       -
+         name: docid
+         in: path
+         description: document id
+         required: true
+         type: string
+       -
+         name: body
+         in: body
+         description: The document to be updated
+         required: true
+         schema:
+            $ref: '#/definitions/NewDocument'
+     responses:
+       200:
+         description: Document updated
+
+ /replicate:
+
+   post:
+     tags:
+       - Replications
+     summary: Create a new replication task
+     description: Create a new replication task
+     parameters:
+       -
+         name: body
+         in: body
+         description: Description of the replication task
+         required: true
+         schema:
+            $ref: '#/definitions/ReplicationTask'
+     responses:
+       200:
+         description: Information about replication task
+       404:
+         description: Replication task not found
+
+ /replicate/{repid}:
+
+   get:
+     tags:
+       - Replications
+     summary: Information about a replication task
+     description: Information about a replication task
+     parameters:
+       -
+         name: repid
+         in: path
+         description: replication id
+         required: true
+         type: string
+     responses:
+       200:
+         description: information about replication task
+       404:
+         description: replication task not found
+
+   put:
+     tags:
+       - Replications
+     summary: Create a replication task
+     description: Create a replication task
+     parameters:
+       -
+         name: body
+         in: body
+         description: Description of the replication task
+         required: true
+         schema:
+            $ref: '#/definitions/ReplicationTask'
+       -
+         name: repid
+         in: path
+         description: replication id
+         required: true
+         type: string
+     responses:
+       200:
+         description: Information about replication task
+       404:
+         description: Replication task not found
+
+   delete:
+     tags:
+       - Replications
+     summary: Delete a replication task
+     description: Delete a replication task
+     parameters:
+       -
+         name: repid
+         in: path
+         description: replication id
+         required: true
+         type: string
+     responses:
+       200:
+         description: Task deleted
+       404:
+         description: Replication task not found
+ /:
+   get:
+     tags:
+       - Server
+     procuces:
+       - application/json
+     summary: Information about Barrel-db version
+     description: Information about Barrel-db version
+
+ /api-doc:
+   get:
+     tags:
+       - Server
+     procuces:
+       - text/html
+     summary: Documentation of the Rest API (Swagger)
+     description: Documentation of the Rest API (Swagger)
+
+
+definitions:
+
+  DatabaseConfiguration:
+    description: Configuration for a database
+    type: object
+    required:
+      - database_id
+    properties:
+      database_id:
+        description: The id (or name) of the database
+        type: string
+        example: mydb
+
+  ReplicationTask:
+    description: Configuration for a replication task
+    type: object
+    required:
+      - source
+      - target
+    properties:
+      source:
+        description: id of the source database
+        type: string
+        example: source
+      target:
+        description: id of the target database
+        type: string
+        example: testdb
+
+  NewDocument:
+    description: New document
+    type: object
+    properties:
+      id:
+        description: Document id
+        type: string
+        example: mydoc
+      value:
+        description: Your app key/value
+        type: string
+        example: 42
+
+  Document:
+    description: Document
+    type: object
+    required:
+      - id
+    properties:
+      id:
+        description: Document id
+        type: string
+        example: mydoc
+      value:
+        description: Your app key/value
+        type: string
+        example: 42
+
+  Revsdiff:
+    description: List of documents to be checked
+    type: object
+    properties:
+      docid1:
+        description: Revisions to be checked for document id docid1
+        example: [1-6532746b2c23e454192a1cb80496902842, 2-f1a74dbfa928054f592c2eaa3362b337]
+      docid2:
+        description: Revisions to be checked for document id docid1
+        example: [1-84d9cfc2f395ce883a41d7ffc1bbcf4e23]
