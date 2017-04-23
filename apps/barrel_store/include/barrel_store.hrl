@@ -35,3 +35,11 @@
 -define(DB_INFO, 1).
 
 -define(DEFAULT_CHANGES_SIZE, 10).
+
+-record(doc, {
+  id :: binary(),
+  revs :: [binary()],
+  body :: map(),
+  deleted = false :: boolean()
+}).
+
