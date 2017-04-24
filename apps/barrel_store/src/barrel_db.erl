@@ -689,7 +689,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         %% TODO: move that code in a cleaner place
         NewDoc = current_body(DocInfo3),
         OldDoc = maps:get(DocId, OldDocs),
-        {Added, Removed} = barrel_index:diff(NewDoc, OldDoc),
+        {Added, Removed} = barrel_index:diff(NewDoc, OldDoc),
         Batch0 = update_index(Added, Rid, Db2#db.updated_seq, index,
                               update_index(Removed, Rid, Db2#db.updated_seq, unindex, [])),
 
@@ -740,13 +740,13 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
     Updates
   ).
 
-update_index([Path | Rest], Rid, Seq, index, Batch0) ->
+update_index([Path | Rest], Rid, Seq, index, Batch0) ->
   Batch1 = lists:foldl(fun(P, Acc) ->
                           [ {put, barrel_keys:forward_path_key(P, Rid), <<>>},
                             {put, barrel_keys:reverse_path_key(P, Rid), <<>>} | Acc ]
                       end, Batch0, barrel_index:split_path(Path)),
   update_index(Rest, Rid, Seq, index, Batch1);
-update_index([Path | Rest], Rid, Seq, unindex, Batch0) ->
+update_index([Path | Rest], Rid, Seq, unindex, Batch0) ->
   Batch1 = lists:foldl(fun(P, Acc) ->
                           [ {delete, barrel_keys:forward_path_key(P, Rid)},
                             {delete, barrel_keys:reverse_path_key(P, Rid)} | Acc ]
@@ -796,7 +796,7 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
                         {DI, Rid, DocInfos#{ DocId => DI}, OldDocs#{ DocId => OldDoc }};
                       {error, not_found} ->
                         DI = empty_doc_info(DocId, Rid +1),
-                        {DI, Rid +1, DocInfos#{ DocId => DI}, OldDocs#{ DocId => #{} } }
+                        {DI, Rid +1, DocInfos#{ DocId => DI}, OldDocs#{ DocId => #{} } }
                     end
                 end,
 
