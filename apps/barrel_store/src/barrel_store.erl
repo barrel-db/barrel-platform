@@ -58,7 +58,7 @@ create_db(DbId, Config) ->
   _ = lager:warning("barrel_db:create/2 is deprecated", []),
   create_db(Config#{ <<"database_id">> => DbId }).
 
-create_db(#{ << "database_id">> := _DbId } = Config) ->
+create_db(#{ << "database_id">> := _DbId } = Config) ->
   gen_server:call(?MODULE, {create_db, Config});
 create_db(Config) when is_map(Config) ->
   DbId = barrel_lib:uniqid(),
@@ -104,7 +104,7 @@ whereis_db(DbId) ->
 
 db_pid(DbId) ->
   case whereis_db(DbId) of
-    #db{pid=DbPid} -> DbPid;
+    #db{pid=DbPid} -> DbPid;
     undefined -> undefined
   end.
 

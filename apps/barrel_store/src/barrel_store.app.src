@@ -11,7 +11,8 @@
      crypto,
      rocksdb,
      uuid,
-     hooks
+     hooks,
+     barrel_stats
     ]},
    {env, []},
    {modules, []},
