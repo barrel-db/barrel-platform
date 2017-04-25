@@ -14,6 +14,8 @@
 -export([
   create/2,
   set/3,
+  reset/2,
+  reset_all/0,
   get_and_remove_raw_data/1,
   merge_histograms/2,
   merge_to/2,
@@ -21,7 +23,6 @@
 ]).
 
 -export([start_link/0]).
-
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2,  handle_info/2, terminate/2,  code_change/3]).
@@ -59,9 +60,16 @@ set(Name, Labels, Value) when is_float(Value) ->
 set(_Name, _Labels, Value) ->
   erlang:error({value_out_of_range, Value}).
 
-
-
-
+reset(Name, Labels) ->
+  Key = {Name, Labels},
+  case erlang:get({barrel_hist_ref, Key}) of
+    undefined ->
+      Ref = ets:lookup_element(?MODULE, Key, 2),
+      erlang:put({barrel_hist_ref, Key}, Ref),
+      hdr_histogram:reset(Ref);
+    Ref ->
+      hdr_histogram:reset(Ref)
+  end.
 
 get_and_remove_raw_data(Metrics) ->
   ets:foldl(
@@ -112,6 +120,11 @@ export(Ref) ->
     Bin when is_binary(Bin) -> {ok, Bin};
     {error, Reason} -> {error, Reason}
   end.
+
+reset_all() ->
+  Histograms = ets:tab2list(barrel_histograms),
+  _ = [hdr_histogram:reset(Ref) ||{_, Ref} <- Histograms],
+  ok.
 
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], [{spawn_opt, [{priority, high}]}]).

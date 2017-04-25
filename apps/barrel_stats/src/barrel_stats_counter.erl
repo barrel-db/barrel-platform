@@ -7,7 +7,8 @@
   record/3,
   set/3,
   value/2,
-  reset/2
+  reset/2,
+  reset_all/0
 ]).
 
 -export([start_link/0]).
@@ -86,6 +87,10 @@ reset(Name, Labels) ->
       mzmetrics:reset_resource_counter(Ref, 0)
   end.
 
+reset_all() ->
+  Counters = ets:tab2list(?MODULE),
+  _ = [mzmetrics:reset_resource_counter(Ref, 0) ||{_, Ref} <- Counters],
+  ok.
 
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).

@@ -30,7 +30,8 @@ start_link() ->
 init([]) ->
   Counters = child_spec(worker, counters, barrel_stats_counter, permanent, []),
   Histograms = child_spec(worker, histograms, barrel_stats_histogram, permanent, []),
-  {ok, { {one_for_all, 0, 1}, [Counters, Histograms]} }.
+  Stats = child_spec(worker, stats, barrel_stats, permanent, []),
+  {ok, { {one_for_all, 0, 1}, [Counters, Histograms, Stats]} }.
 
 %%====================================================================
 %% Internal functions
