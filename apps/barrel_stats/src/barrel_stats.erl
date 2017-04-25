@@ -11,7 +11,7 @@
 
 %% API
 -export([
-  record_count/1, record_count/2, record_count/3,
+  record_count/1, record_count/2,
   set_count/3,
   get_count/2,
   reset_count/2,
@@ -33,7 +33,7 @@
      help := metric_help(),
      mod => atom() }.
 -type metric_name() :: list() | atom() | binary().
--type metric_type() :: collector | counter | histogram.
+-type metric_type() ::  counter | histogram.
 -type metric_help() :: string() | binary().
 
 -export_type([
@@ -49,14 +49,13 @@
 -define(STATS, barrel_stats).
 -define(STATS_CACHE, barrel_stats_cache).
 
+-define(UPDATE_INTERVAL_MS, 10000). % 10s
+
 record_count(Name) ->
-  barrel_stats_counter:record(Name, #{}, 1).
+  barrel_stats_counter:record(Name, #{}).
 
 record_count(Name, Labels) ->
-  barrel_stats_counter:record(Name, Labels, 1).
-
-record_count(Name, Labels, Val) ->
-  barrel_stats_counter:record(Name, Labels, Val).
+  barrel_stats_counter:record(Name, Labels).
 
 set_count(Name, Labels, Val) ->
   barrel_stats_counter:set(Name, Labels, Val).
@@ -97,8 +96,7 @@ timeit(Name, Labels, M, F, A) ->
   measure_time(Name, Time, Labels),
   Val.
 
-%% @doc register a metric or a collector.
-%% A collector is a collections of metrics that will be collected by the stats process.
+%% @doc register a metric or a list of metrics.
 -spec register_metric(Metric) -> Result when
   Metric :: metric(),
   Result :: ok | {error, already_exists} | {error, bad_metric}.
@@ -118,7 +116,7 @@ list_metrics() ->
 %% @doc reset all metrics.
 -spec reset_metrics() -> ok.
 reset_metrics() ->
-  lager:info("barrel_stats: reset all metrics", []),
+  _ = lager:info("barrel_stats: reset all metrics", []),
   ok = barrel_stats_counter:reset_all(),
   ok = barrel_stats_histogram:reset_all(),
   true = ets:delete_all_objects(?STATS_CACHE),
@@ -126,7 +124,6 @@ reset_metrics() ->
   ok.
 
 
--spec start_link() -> pid().
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -137,7 +134,17 @@ start_link() ->
 init([]) ->
   _ = ets:new(?STATS, [ordered_set, public, named_table, {read_concurrency, true}]),
   _ = ets:new(?STATS_CACHE, [set, public, named_table, {read_concurrency, true}]),
-  InitState = #{ collectors => #{} },
+  UpdateIntervalMs = application:get_env(barrel_stats, metric_update_interval_ms, ?UPDATE_INTERVAL_MS),
+  erlang:send_after(UpdateIntervalMs, self(), tick),
+  
+  StartTime = erlang:monotonic_time(),
+  InitState =
+    #{
+      collectors => #{},
+      start_time => StartTime,
+      last_tick_time => StartTime,
+      update_interval_ms => UpdateIntervalMs
+      },
   {ok, InitState}.
 
 
@@ -150,15 +157,20 @@ handle_call({unregister_metric, Name}, _From, State) ->
   {reply, ok, State2};
 
 handle_call(Req, _From, State) ->
-  lager:error("Unhandled call: ~p", [Req]),
+  _ = lager:error("Unhandled call: ~p", [Req]),
   {stop, {unhandled_call, Req}, State}.
 
 handle_cast(Msg, State) ->
-  lager:error("Unhandled cast: ~p", [Msg]),
+  _ = lager:error("Unhandled cast: ~p", [Msg]),
   {stop, {unhandled_cast, Msg}, State}.
 
+handle_info(tick, State = #{ update_interval_ms := IntervalMs }) ->
+  State2 = tick(State),
+  erlang:send_after(IntervalMs, self(), tick),
+  {noreply, State2};
+
 handle_info(Info, State) ->
-  lager:error("Unhandled info: ~p", [Info]),
+  _ = lager:error("Unhandled info: ~p", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -167,23 +179,33 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-do_declare_metric(#{ name := default, type := collector }, _State) ->
-  {error, already_exists};
-do_declare_metric(#{ name := Name, type := collector, mod := Mod }, State = #{ collectors := Collectors }) ->
-  case maps:is_key(Name, Collectors) of
-    false ->
-      Metrics = Mod:describe(),
-      case add_metrics(Metrics) of
-        ok ->
-          _ = [maybe_init_counter(M) || M <- Metrics],
-          Collectors2 = maps:put(Name, Mod, Collectors),
-          {ok, State#{ collectors => Collectors2 }};
-        Error ->
-          {Error, State}
-      end;
-    true ->
-      {{error, already_exists}, State}
-  end;
+
+%%
+%% Ticker
+%%
+
+tick(#{ last_tick_time := LastTickTime } = State) ->
+  Now = erlang:monotonic_time(),
+  TimeSince = erlang:convert_time_unit(Now - LastTickTime, native, second),
+  case TimeSince of
+    0 ->
+      State;
+    _ ->
+      %State1 = aggregate_metrics(State),
+      %ok = report_metrics(State1),
+      State#{ last_tick_time => Now }
+  end.
+
+
+
+
+
+
+%%
+%% Metric declaration
+%%
+
+
 do_declare_metric(Metric, State) when is_map(Metric)->
   case add_metric(Metric) of
     ok ->
@@ -246,14 +268,10 @@ add_metric(Metric) ->
       Error
   end.
 
-do_unregister_metric(Name, State = #{ collectors := Collectors}) ->
-  case maps:take(Name, Collectors) of
-    {Mod, Collectors2} ->
-      Metrics = Mod:describe(),
-      _ = [ets:delete(?STATS_CACHE, N) || #{name := N} <- Metrics],
-      State#{ collectors => Collectors2 };
-    error ->
-      _ = ets:delete(?STATS_CACHE, Name),
-      State
-  end.
-
+do_unregister_metric(Name, State) ->
+  case ets:take(?STATS_CACHE, Name) of
+    [{Name, #{ type := counter }}] ->
+      _ = barrel_stats_counter:reset(Name);
+    [] -> ok
+  end,
+  State.

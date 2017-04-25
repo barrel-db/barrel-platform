@@ -4,9 +4,11 @@
 %% public api
 -export([
   create/2,
-  record/3,
+  record/2,
   set/3,
   value/2,
+  values/1,
+  reset/1,
   reset/2,
   reset_all/0
 ]).
@@ -16,6 +18,9 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,  code_change/3]).
 
+
+-include_lib("stdlib/include/ms_transform.hrl").
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -24,7 +29,7 @@
 create(Name, Labels) ->
   gen_server:call(?MODULE, {create, Name, Labels}).
 
-record(Name, Labels, Value) ->
+record(Name, Labels) ->
   Key = {Name, Labels},
   case erlang:get({barrel_counter_ref, Key}) of
     undefined ->
@@ -37,9 +42,9 @@ record(Name, Labels, Value) ->
             ets:lookup_element(?MODULE, Key, 2)
         end,
       erlang:put({barrel_counter_ref, Name}, Ref),
-      mzmetrics:incr_resource_counter(Ref, 0, Value);
+      mzmetrics:incr_resource_counter(Ref, 0);
     Ref ->
-      mzmetrics:incr_resource_counter(Ref, 0, Value)
+      mzmetrics:incr_resource_counter(Ref, 0)
   end.
 
 
@@ -76,6 +81,18 @@ value(Name, Labels) ->
     end,
   mzmetrics:get_resource_counter(Ref, 0).
 
+values(Name) ->
+  Spec = ets:fun2ms(fun({{N, _}, _}=Counter) when N =:= Name -> Counter end),
+  Counters = ets:select(?MODULE, Spec),
+  [{{N, L}, mzmetrics:get_resource_counter(Ref, 0)} || {{N, L}, Ref} <- Counters].
+
+
+reset(Name) ->
+  Spec = ets:fun2ms(fun({{N, _}, Ref}) when N =:= Name -> Ref end),
+  Refs = ets:select(?MODULE, Spec),
+  _ = [mzmetrics:reset_resource_counter(Ref, 0) || Ref <- Refs],
+  ok.
+
 reset(Name, Labels) ->
   Key = {Name, Labels},
   case erlang:get({barrel_counter_ref, Key}) of
@@ -109,15 +126,15 @@ handle_call({create, Name, Labels}, _From, State) ->
   {reply, ok, State};
 
 handle_call(Req, _From, State) ->
-  lager:error("Unhandled call: ~p", [Req]),
+  _ = lager:error("Unhandled call: ~p", [Req]),
   {stop, {unhandled_call, Req}, State}.
 
 handle_cast(Msg, State) ->
-  lager:error("Unhandled cast: ~p", [Msg]),
+  _ = lager:error("Unhandled cast: ~p", [Msg]),
   {stop, {unhandled_cast, Msg}, State}.
 
 handle_info(Info, State) ->
-  lager:error("Unhandled info: ~p", [Info]),
+  _ = lager:error("Unhandled info: ~p", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->

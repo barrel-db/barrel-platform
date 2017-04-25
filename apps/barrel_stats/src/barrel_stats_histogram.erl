@@ -14,6 +14,7 @@
 -export([
   create/2,
   set/3,
+  reset/1,
   reset/2,
   reset_all/0,
   get_and_remove_raw_data/1,
@@ -27,6 +28,7 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2,  handle_info/2, terminate/2,  code_change/3]).
 
+-include_lib("stdlib/include/ms_transform.hrl").
 
 -define(SIGNIFICANT_FIGURES, 3).
 -define(HIGHEST_VALUE, 3600000000).
@@ -60,6 +62,13 @@ set(Name, Labels, Value) when is_float(Value) ->
 set(_Name, _Labels, Value) ->
   erlang:error({value_out_of_range, Value}).
 
+
+reset(Name) ->
+  Spec = ets:fun2ms(fun({{N, _}, Ref}) when N =:= Name -> Ref end),
+  Refs = ets:select(barrel_histograms, Spec),
+  _ = [hdr_histogram:reset(Ref) || Ref <- Refs],
+  ok.
+
 reset(Name, Labels) ->
   Key = {Name, Labels},
   case erlang:get({barrel_hist_ref, Key}) of
@@ -70,6 +79,7 @@ reset(Name, Labels) ->
     Ref ->
       hdr_histogram:reset(Ref)
   end.
+
 
 get_and_remove_raw_data(Metrics) ->
   ets:foldl(
@@ -141,15 +151,15 @@ handle_call({create, Name, Labels}, _From, State) ->
   {reply, init_hist(Name, Labels), State};
 
 handle_call(Req, _From, State) ->
-  lager:error("Unhandled call: ~p", [Req]),
+  _ = lager:error("Unhandled call: ~p", [Req]),
   {stop, {unhandled_call, Req}, State}.
 
 handle_cast(Msg, State) ->
-  lager:error("Unhandled cast: ~p", [Msg]),
+  _ = lager:error("Unhandled cast: ~p", [Msg]),
   {stop, {unhandled_cast, Msg}, State}.
 
 handle_info(Info, State) ->
-  lager:error("Unhandled info: ~p", [Info]),
+  _ = ager:error("Unhandled info: ~p", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -159,13 +169,13 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 init_hist(Name, Labels) ->
-  case ets:lookup(barrel_histograms, {Name, Labels}) of
-    [_] ->
-      ok;
-    [] ->
-      {ok, Ref1} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
-      {ok, Ref2} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
-      ets:insert(barrel_histograms, {{Name, Labels}, Ref1, Ref2})
+  {ok, Ref1} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
+  {ok, Ref2} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
+  case ets:insert_new(barrel_histograms, {{Name, Labels}, Ref1, Ref2}) of
+    true -> ok;
+    false ->
+      hdr_histogram:close(Ref1),
+      hdr_histogram:close(Ref2)
   end,
   ok.
 

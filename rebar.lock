@@ -16,7 +16,7 @@
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.7.1">>},0},
  {<<"hdr_histogram">>,
   {git,"https://github.com/benoitc/hdr_histogram_erl.git",
-       {ref,"eb3aff80c532551bd4d5cdb86abaebed883da298"}},
+       {ref,"47f874baf21f8dbdd57e6fb827f333d62b9e009d"}},
   0},
  {<<"hooks">>,{pkg,<<"hooks">>,<<"2.0.1">>},0},
  {<<"idna">>,{pkg,<<"idna">>,<<"4.0.0">>},1},
