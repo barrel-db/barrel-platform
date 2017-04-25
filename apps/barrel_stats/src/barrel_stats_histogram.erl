@@ -41,6 +41,7 @@
 create(Name, Labels) ->
   gen_server:call(?MODULE, {create, Name, Labels}).
 
+set(_Name, #{ le := _ }, _Value) -> {error, invalid_tag};
 set(Name, Labels, Value) when is_integer(Value), Value >= 0 ->
   Key = {Name, Labels},
   case erlang:get({barrel_hist_ref, Key}) of
@@ -108,6 +109,21 @@ get_histogram(Data, Datapoints) ->
             (max) -> hdr_histogram:max(Ref);
             (mean) -> hdr_histogram:mean(Ref);
             (median) -> hdr_histogram:median(Ref);
+            (count) -> K;
+            (sum) ->
+              {ok,Itr} = hdr_iter:open(record, Ref, []),
+              try
+                Counts = hdr_iter:each(Itr,
+                  fun({_,Attrs}, Acc) ->
+                    
+                    {value_from_index, C} = lists:keyfind(value_from_index, 1, Attrs),
+                    [C|Acc]
+                  end,
+                  []),
+                lists:sum(Counts)
+              after
+                hdr_iter:close(Itr)
+              end;
             (N) when N =< 100 ->
               hdr_histogram:percentile(Ref, erlang:float(N));
             (N) when N =< 1000 ->
@@ -120,8 +136,6 @@ get_histogram(Data, Datapoints) ->
   after
     hdr_histogram:close(Ref)
   end.
-  
-
 
 merge_histograms(DataList, Datapoints) ->
   {ok, Ref} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
@@ -134,6 +148,7 @@ merge_histograms(DataList, Datapoints) ->
             (max) -> hdr_histogram:max(Ref);
             (mean) -> hdr_histogram:mean(Ref);
             (median) -> hdr_histogram:median(Ref);
+            (count) -> hdr_histogram:get_total_count(Ref);
             (N) when N =< 100 ->
               hdr_histogram:percentile(Ref, erlang:float(N));
             (N) when N =< 1000 ->

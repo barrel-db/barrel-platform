@@ -48,11 +48,19 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,  code_change/3]).
+-include_lib("stdlib/include/ms_transform.hrl").
+
 
 -define(STATS, barrel_stats).
 -define(STATS_CACHE, barrel_stats_cache).
 
 -define(UPDATE_INTERVAL_MS, 10000). % 10s
+
+-define(DATAPOINTS, [min, max, mean, count, sum, 50, 75, 90, 95, 99, 999]).
+
+%%
+%% API
+%%
 
 record_count(Name) ->
   barrel_stats_counter:record(Name, #{}).
@@ -88,19 +96,12 @@ get_measure_time(Name, Labels) ->
 reset_measure_time(Name, Labels) ->
   barrel_stats_histogram:reset(Name, Labels).
 
+
 get_stat(Name, Labels, Type) ->
   Key = {{Name, Labels}, Type},
-  
   case ets:lookup(?STATS, Key) of
     [] -> undefined;
-    [{Key, Val}] ->
-      case Type of
-        counter -> Val;
-        histogram ->
-          Datapoints = [min, max, mean, 50, 75, 90, 95, 99, 999],
-          barrel_stats_histogram:get_histogram(Val, Datapoints)
-        
-      end
+    [{Key, Val}] -> Val
   end.
 
 timeit(Name, Labels, F) ->
@@ -250,11 +251,10 @@ tick(#{ last_tick_time := LastTickTime } = State) ->
   end.
 
 
-
 get_metrics() ->
   Metrics = ets:tab2list(?STATS_CACHE),
   lists:foreach(
-    fun({Name, #{ type := Type }}) ->
+    fun({Name, #{ type := Type }=Metric}) ->
       case Type of
         counter ->
           Counters = barrel_stats_counter:values(Name),
@@ -269,21 +269,21 @@ get_metrics() ->
               end
             end, Counters);
         histogram ->
+          Datapoints = maps:get(datapoints, Metric, ?DATAPOINTS),
           Hists = barrel_stats_histogram:get_and_remove_raw_data(Name),
           lists:foreach(
             fun({_Name, Labels, Bin}) ->
-              ets:insert(?STATS, {{{Name, Labels}, Type}, Bin})
+              Hist = barrel_stats_histogram:get_histogram(Bin, Datapoints),
+              ets:insert(?STATS, {{{Name, Labels}, Type}, Hist})
             end, Hists)
       end
     end, Metrics),
   ok.
   
 
-
 %%
 %% Metric declaration
 %%
-
 
 do_declare_metric(Metric, State) when is_map(Metric)->
   case add_metric(Metric) of

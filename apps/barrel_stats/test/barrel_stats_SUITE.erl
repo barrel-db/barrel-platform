@@ -131,10 +131,12 @@ tick(_Config) ->
 histogram(_Config) ->
   ok = barrel_stats:set_update_interval(30000),
   ok = barrel_stats:register_metric(#{ name => "h", type => histogram, help => ""}),
-  _ = [barrel_stats:measure_time("h", rand:uniform(1000)) || _ <- [1, 1000 | lists:seq(1, 10000)]],
+  _ = [barrel_stats:measure_time("h", I) || I <- lists:seq(1, 1000)],
   _ = barrel_stats:refresh(),
   Hist = barrel_stats:get_measure_time("h"),
   true = is_list(Hist),
   1 = proplists:get_value(min, Hist),
   1000 = proplists:get_value(max, Hist),
+  Sum = lists:sum(lists:seq(1, 1000)),
+  Sum = proplists:get_value(sum, Hist),
   ok.
