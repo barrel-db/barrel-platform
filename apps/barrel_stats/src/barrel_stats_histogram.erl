@@ -159,7 +159,7 @@ handle_cast(Msg, State) ->
   {stop, {unhandled_cast, Msg}, State}.
 
 handle_info(Info, State) ->
-  _ = ager:error("Unhandled info: ~p", [Info]),
+  _ = lager:error("Unhandled info: ~p", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->
