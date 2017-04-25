@@ -24,9 +24,24 @@
   reset_metrics/0
 ]).
 
-
 -export([start_link/0]).
 
+
+-type metric() ::
+  #{ type := metric_type(),
+     name := metric_name(),
+     help := metric_help(),
+     mod => atom() }.
+-type metric_name() :: list() | atom() | binary().
+-type metric_type() :: collector | counter | histogram.
+-type metric_help() :: string() | binary().
+
+-export_type([
+  metric/0,
+  metric_name/0,
+  metric_type/0,
+  metric_help/0
+]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,  code_change/3]).
@@ -82,16 +97,26 @@ timeit(Name, Labels, M, F, A) ->
   measure_time(Name, Time, Labels),
   Val.
 
+%% @doc register a metric or a collector.
+%% A collector is a collections of metrics that will be collected by the stats process.
+-spec register_metric(Metric) -> Result when
+  Metric :: metric(),
+  Result :: ok | {error, already_exists} | {error, bad_metric}.
 register_metric(Spec) ->
   gen_server:call(?MODULE, {register_metric, Spec}).
 
+%% @doc unregister a metric or a collector
+-spec unregister_metric(Name :: metric_name()) -> ok.
 unregister_metric(Name) ->
   gen_server:call(?MODULE, {unregister_metric, Name}).
 
-
+%% @doc lista all registered metric
+-spec list_metrics() -> [metric()].
 list_metrics() ->
   [M || {_, M} <- ets:tab2list(?STATS_CACHE)].
 
+%% @doc reset all metrics.
+-spec reset_metrics() -> ok.
 reset_metrics() ->
   lager:info("barrel_stats: reset all metrics", []),
   ok = barrel_stats_counter:reset_all(),
