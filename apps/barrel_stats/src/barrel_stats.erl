@@ -241,11 +241,9 @@ tick(#{ last_tick_time := LastTickTime } = State) ->
   TimeSince = erlang:convert_time_unit(Now - LastTickTime, native, millisecond),
   case TimeSince of
     0 ->
-      ct:print("notick", []),
       State;
     _ ->
       ok = get_metrics(),
-      ct:print("tick", []),
       %State1 = aggregate_metrics(State),
       %ok = report_metrics(State1),
       State#{ last_tick_time => Now }
@@ -273,7 +271,7 @@ get_metrics() ->
         histogram ->
           Hists = barrel_stats_histogram:get_and_remove_raw_data(Name),
           lists:foreach(
-            fun({{_Name, Labels}, Bin}) ->
+            fun({_Name, Labels, Bin}) ->
               ets:insert(?STATS, {{{Name, Labels}, Type}, Bin})
             end, Hists)
       end

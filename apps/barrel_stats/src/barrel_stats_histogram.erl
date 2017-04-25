@@ -100,7 +100,7 @@ get_and_remove_raw_data(Name) ->
 get_histogram(Data, Datapoints) ->
   {ok, Ref} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
   try
-    import_hdr_data(Ref, Data),
+    ok = import_hdr_data(Ref, Data),
     case hdr_histogram:get_total_count(Ref) of
       K when K > 0 ->
         Stats = lists:map(

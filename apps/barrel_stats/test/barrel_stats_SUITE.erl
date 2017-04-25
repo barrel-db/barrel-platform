@@ -30,7 +30,8 @@
   register_metrics/1,
   register_bad_metrics/1,
   counter/1,
-  tick/1
+  tick/1,
+  histogram/1
 ]).
 
 
@@ -41,7 +42,8 @@ all() ->
     register_metrics,
     register_bad_metrics,
     counter,
-    tick
+    tick,
+    histogram
   ].
 
 init_per_suite(Config) ->
@@ -120,4 +122,19 @@ tick(_Config) ->
   ok = barrel_stats:register_metric(#{ name => "c", type => counter, help => ""}),
   ok = barrel_stats:record_count("c", #{ tag => "tag"}),
   timer:sleep(50),
-  1 = barrel_stats:get_count("c", #{ tag => "tag"}).
+  1 = barrel_stats:get_count("c", #{ tag => "tag"}),
+  ok = barrel_stats:record_count("c", #{ tag => "tag"}),
+  timer:sleep(50),
+  2 = barrel_stats:get_count("c", #{ tag => "tag"}).
+
+
+histogram(_Config) ->
+  ok = barrel_stats:set_update_interval(30000),
+  ok = barrel_stats:register_metric(#{ name => "h", type => histogram, help => ""}),
+  _ = [barrel_stats:measure_time("h", rand:uniform(1000)) || _ <- [1, 1000 | lists:seq(1, 10000)]],
+  _ = barrel_stats:refresh(),
+  Hist = barrel_stats:get_measure_time("h"),
+  true = is_list(Hist),
+  1 = proplists:get_value(min, Hist),
+  1000 = proplists:get_value(max, Hist),
+  ok.
