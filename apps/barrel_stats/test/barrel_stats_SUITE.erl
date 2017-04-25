@@ -28,7 +28,9 @@
   register_metric/1,
   register_bad_metric/1,
   register_metrics/1,
-  register_bad_metrics/1
+  register_bad_metrics/1,
+  counter/1,
+  tick/1
 ]).
 
 
@@ -37,7 +39,9 @@ all() ->
     register_metric,
     register_bad_metric,
     register_metrics,
-    register_bad_metrics
+    register_bad_metrics,
+    counter,
+    tick
   ].
 
 init_per_suite(Config) ->
@@ -94,3 +98,26 @@ register_bad_metrics(_Config) ->
   {error, bad_metric} = barrel_stats:register_metric(Metrics),
   [] = barrel_stats:list_metrics(),
   ok.
+
+counter(_Config) ->
+  ok = barrel_stats:set_update_interval(10),
+  ok = barrel_stats:register_metric(#{ name => "c", type => counter, help => ""}),
+  ok = barrel_stats:record_count("c", #{ tag => "tag"}),
+  ok = barrel_stats:refresh(),
+  1 = barrel_stats:get_count("c", #{ tag => "tag"}),
+  undefined = barrel_stats:get_count("c", #{ tag => "tag1"}),
+  ok = barrel_stats:record_count("c", #{ tag => "tag1"}),
+  ok = barrel_stats:refresh(),
+  1 = barrel_stats:get_count("c", #{ tag => "tag1"}),
+  ok = barrel_stats:record_count("c", #{ tag => "tag"}),
+  ok = barrel_stats:refresh(),
+  1 = barrel_stats:get_count("c", #{ tag => "tag1"}),
+  2 = barrel_stats:get_count("c", #{ tag => "tag"}).
+  
+  
+tick(_Config) ->
+  ok = barrel_stats:set_update_interval(10),
+  ok = barrel_stats:register_metric(#{ name => "c", type => counter, help => ""}),
+  ok = barrel_stats:record_count("c", #{ tag => "tag"}),
+  timer:sleep(50),
+  1 = barrel_stats:get_count("c", #{ tag => "tag"}).

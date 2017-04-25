@@ -12,16 +12,19 @@
 %% API
 -export([
   record_count/1, record_count/2,
-  set_count/3,
-  get_count/2,
+  set_count/2, set_count/3,
+  get_count/1, get_count/2,
   reset_count/2,
-  measure_time/3,
+  measure_time/2, measure_time/3,
+  get_measure_time/1, get_measure_time/2,
   reset_measure_time/2,
   timeit/3, timeit/4, timeit/5,
   register_metric/1,
   unregister_metric/1,
   list_metrics/0,
-  reset_metrics/0
+  reset_metrics/0,
+  refresh/0,
+  set_update_interval/1
 ]).
 
 -export([start_link/0]).
@@ -57,20 +60,48 @@ record_count(Name) ->
 record_count(Name, Labels) ->
   barrel_stats_counter:record(Name, Labels).
 
+set_count(Name, Val) ->
+  set_count(Name, #{}, Val).
+
 set_count(Name, Labels, Val) ->
   barrel_stats_counter:set(Name, Labels, Val).
 
+get_count(Name) -> get_count(Name, #{}).
+
 get_count(Name, Labels) ->
-  barrel_stats_counter:value(Name, Labels).
+  get_stat(Name, Labels, counter).
 
 reset_count(Name, Labels) ->
   barrel_stats_counter:reset(Name, Labels).
 
-reset_measure_time(Name, Labels) ->
-  barrel_stats_histogram:reset(Name, Labels).
+measure_time(Name, Value) ->
+  barrel_stats_histogram:set(Name, #{}, Value).
 
 measure_time(Name, Labels, Value) ->
   barrel_stats_histogram:set(Name, Labels, Value).
+
+get_measure_time(Name) -> get_measure_time(Name, #{}).
+
+get_measure_time(Name, Labels) ->
+  get_stat(Name, Labels, histogram).
+
+reset_measure_time(Name, Labels) ->
+  barrel_stats_histogram:reset(Name, Labels).
+
+get_stat(Name, Labels, Type) ->
+  Key = {{Name, Labels}, Type},
+  
+  case ets:lookup(?STATS, Key) of
+    [] -> undefined;
+    [{Key, Val}] ->
+      case Type of
+        counter -> Val;
+        histogram ->
+          Datapoints = [min, max, mean, 50, 75, 90, 95, 99, 999],
+          barrel_stats_histogram:get_histogram(Val, Datapoints)
+        
+      end
+  end.
 
 timeit(Name, Labels, F) ->
   T1 = erlang:monotonic_time(),
@@ -123,6 +154,15 @@ reset_metrics() ->
   true = ets:delete_all_objects(?STATS),
   ok.
 
+%% @doc force refreshing of the metrics
+-spec refresh() -> ok.
+refresh() ->
+  gen_server:call(?MODULE, refresh).
+
+%% @doc update interval in which the metrics will be extracted
+-spec set_update_interval(Interval :: non_neg_integer()) -> ok.
+set_update_interval(IntervalMs) ->
+  gen_server:call(?MODULE, {set_interval, IntervalMs}).
 
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -135,7 +175,7 @@ init([]) ->
   _ = ets:new(?STATS, [ordered_set, public, named_table, {read_concurrency, true}]),
   _ = ets:new(?STATS_CACHE, [set, public, named_table, {read_concurrency, true}]),
   UpdateIntervalMs = application:get_env(barrel_stats, metric_update_interval_ms, ?UPDATE_INTERVAL_MS),
-  erlang:send_after(UpdateIntervalMs, self(), tick),
+  TRef = erlang:send_after(UpdateIntervalMs, self(), tick),
   
   StartTime = erlang:monotonic_time(),
   InitState =
@@ -143,6 +183,7 @@ init([]) ->
       collectors => #{},
       start_time => StartTime,
       last_tick_time => StartTime,
+      ticker => TRef,
       update_interval_ms => UpdateIntervalMs
       },
   {ok, InitState}.
@@ -156,6 +197,17 @@ handle_call({unregister_metric, Name}, _From, State) ->
   State2 = do_unregister_metric(Name, State),
   {reply, ok, State2};
 
+handle_call(refresh, _From, State) ->
+  ok = get_metrics(),
+  {reply, ok, State};
+
+
+handle_call({set_interval, IntervalMs}, _From, State) ->
+  #{ ticker := TRef } = State,
+  _ = erlang:cancel_timer(TRef),
+  TRef2 = erlang:send_after(IntervalMs, self(), tick),
+  {reply, ok, State#{ ticker => TRef2, update_interval_ms => IntervalMs }};
+
 handle_call(Req, _From, State) ->
   _ = lager:error("Unhandled call: ~p", [Req]),
   {stop, {unhandled_call, Req}, State}.
@@ -166,8 +218,8 @@ handle_cast(Msg, State) ->
 
 handle_info(tick, State = #{ update_interval_ms := IntervalMs }) ->
   State2 = tick(State),
-  erlang:send_after(IntervalMs, self(), tick),
-  {noreply, State2};
+  TRef = erlang:send_after(IntervalMs, self(), tick),
+  {noreply, State2#{ ticker => TRef }};
 
 handle_info(Info, State) ->
   _ = lager:error("Unhandled info: ~p", [Info]),
@@ -186,11 +238,14 @@ code_change(_OldVsn, State, _Extra) ->
 
 tick(#{ last_tick_time := LastTickTime } = State) ->
   Now = erlang:monotonic_time(),
-  TimeSince = erlang:convert_time_unit(Now - LastTickTime, native, second),
+  TimeSince = erlang:convert_time_unit(Now - LastTickTime, native, millisecond),
   case TimeSince of
     0 ->
+      ct:print("notick", []),
       State;
     _ ->
+      ok = get_metrics(),
+      ct:print("tick", []),
       %State1 = aggregate_metrics(State),
       %ok = report_metrics(State1),
       State#{ last_tick_time => Now }
@@ -198,7 +253,33 @@ tick(#{ last_tick_time := LastTickTime } = State) ->
 
 
 
-
+get_metrics() ->
+  Metrics = ets:tab2list(?STATS_CACHE),
+  lists:foreach(
+    fun({Name, #{ type := Type }}) ->
+      case Type of
+        counter ->
+          Counters = barrel_stats_counter:values(Name),
+          lists:foreach(
+            fun({{_Name, Labels}, Value}) ->
+              _ = barrel_stats_counter:set(Name, Labels, -Value),
+              try
+                ets:update_counter(?STATS, {{Name, Labels}, Type}, {2, Value})
+              catch
+                error:badarg ->
+                  ets:insert_new(?STATS, {{{Name, Labels}, Type}, Value})
+              end
+            end, Counters);
+        histogram ->
+          Hists = barrel_stats_histogram:get_and_remove_raw_data(Name),
+          lists:foreach(
+            fun({{_Name, Labels}, Bin}) ->
+              ets:insert(?STATS, {{{Name, Labels}, Type}, Bin})
+            end, Hists)
+      end
+    end, Metrics),
+  ok.
+  
 
 
 %%
@@ -226,7 +307,7 @@ do_declare_metric(_, State) ->
   {{error, bad_metric}, State}.
 
 maybe_init_counter(#{ name := Name, type := counter }) ->
-  _ = barrel_stats_counter:set(Name, #{}, 0),
+  _ = ets:insert_new(?STATS, {{{Name, #{}}, counter}, 0}),
   ok;
 maybe_init_counter(_) ->
   ok.

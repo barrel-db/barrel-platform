@@ -45,7 +45,8 @@ record(Name, Labels) ->
       mzmetrics:incr_resource_counter(Ref, 0);
     Ref ->
       mzmetrics:incr_resource_counter(Ref, 0)
-  end.
+  end,
+  ok.
 
 
 set(Name, Labels, Value) ->
@@ -64,7 +65,8 @@ set(Name, Labels, Value) ->
       mzmetrics:update_resource_counter(Ref, 0, Value);
     Ref ->
       mzmetrics:update_resource_counter(Ref, 0, Value)
-  end.
+  end,
+  ok.
 
 value(Name, Labels) ->
   Key = {Name, Labels},

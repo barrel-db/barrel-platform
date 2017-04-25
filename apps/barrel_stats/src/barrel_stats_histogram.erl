@@ -18,6 +18,7 @@
   reset/2,
   reset_all/0,
   get_and_remove_raw_data/1,
+  get_histogram/2,
   merge_histograms/2,
   merge_to/2,
   export/1
@@ -81,18 +82,46 @@ reset(Name, Labels) ->
   end.
 
 
-get_and_remove_raw_data(Metrics) ->
-  ets:foldl(
-    fun ({{Name, Labels}, Ref1, Ref2}, Acc) ->
-      case lists:member(Name, Metrics) andalso hdr_histogram:rotate(Ref1, Ref2) of
+get_and_remove_raw_data(Name) ->
+  Spec = ets:fun2ms(fun({{N, _}, _, _}=Hist) when N =:= Name -> Hist end),
+  Hists = ets:select(barrel_histograms, Spec),
+  lists:foldl(
+    fun ({{N, Labels}, Ref1, Ref2}, Acc) ->
+      case hdr_histogram:rotate(Ref1, Ref2) of
         Bin when is_binary(Bin) ->
-          [{Name, Labels, Bin} | Acc];
+          [{N, Labels, Bin} | Acc];
         false ->
           Acc;
         {error, Reason} ->
           erlang:error({hdr_histogram_rotate_error, Reason})
       end
-    end, [], barrel_histograms).
+    end, [], Hists).
+
+get_histogram(Data, Datapoints) ->
+  {ok, Ref} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
+  try
+    import_hdr_data(Ref, Data),
+    case hdr_histogram:get_total_count(Ref) of
+      K when K > 0 ->
+        Stats = lists:map(
+          fun (min) -> hdr_histogram:min(Ref);
+            (max) -> hdr_histogram:max(Ref);
+            (mean) -> hdr_histogram:mean(Ref);
+            (median) -> hdr_histogram:median(Ref);
+            (N) when N =< 100 ->
+              hdr_histogram:percentile(Ref, erlang:float(N));
+            (N) when N =< 1000 ->
+              hdr_histogram:percentile(Ref, N / 10)
+          end, Datapoints),
+        lists:zip(Datapoints, Stats);
+      0 ->
+        [{DP, null} || DP <- Datapoints]
+    end
+  after
+    hdr_histogram:close(Ref)
+  end.
+  
+
 
 merge_histograms(DataList, Datapoints) ->
   {ok, Ref} = hdr_histogram:open(?HIGHEST_VALUE, ?SIGNIFICANT_FIGURES),
