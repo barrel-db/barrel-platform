@@ -8,7 +8,9 @@
   stop_replication/1,
   delete_replication/1,
   where/1,
-  replication_info/1
+  replication_info/1,
+  fold_replication_tasks/2,
+  all_replication_tasks/0
 ]).
 
 %% API
@@ -56,6 +58,20 @@ replication_info(RepId) ->
     undefined -> {error, not_found}
   end.
 
+all_replication_tasks() ->
+  All = fold_replication_tasks(fun(RepId, _, Acc) -> [RepId | Acc] end, []),
+  lists:sort(All).
+
+fold_replication_tasks(UserFun, Acc) ->
+  WrapperFun =
+    fun
+      ({RepId, {Persisted, Pid, _}}, Acc1) ->
+        UserFun(RepId, {Persisted, Pid}, Acc1);
+      (_, Acc1) ->
+        Acc1
+    end,
+  ets:foldl(WrapperFun, Acc, replication_ids).
+
 where(RepId) ->
   case find_repid(RepId) of
     {ok, {_RepId, Pid, _Persisted}} -> Pid;
@@ -71,7 +87,7 @@ find_repid(RepId) ->
 
 
 init([]) ->
-  _ = ets:new(replication_ids, [set, named_table, public]),
+  _ = ets:new(replication_ids, [ordered_set, named_table, public, {read_concurrency, true}]),
 
   self() ! init_config,
   {ok, #{ config => maps:new() }}.
