@@ -57,12 +57,12 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_httpc:create_database(?DB_URL),
+  ok = barrel_httpc:create_database(?DB_URL),
   {ok, Conn} = barrel_httpc:connect(?DB_URL),
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
-  _ = barrel_httpc:delete_database(?DB_URL),
+  ok = barrel_httpc:delete_database(?DB_URL),
   ok.
 
 end_per_suite(Config) ->
@@ -146,8 +146,7 @@ restart_when_server_timeout(Config) ->
     fun(Change) ->
         Self ! {change, Change}
     end,
-  Options = #{since => 0, mode => sse, changes_cb => Callback,
-              max_retry => 2, delay_before_retry => 500},
+  Options = #{since => 0, mode => sse, changes_cb => Callback, retry_timeout=>200},
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
@@ -169,7 +168,7 @@ restart_when_server_timeout(Config) ->
   ok.
 
 heartbeat_collect_change(Config) ->
-  Options = #{since => 0, heartbeat => 100, mode => sse },
+  Options = #{since => 0, heartbeat => 100, mode => sse, retry_timeout => 500},
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
   timer:sleep(500),
   [] = barrel_httpc_changes:changes(Pid),
@@ -184,7 +183,7 @@ heartbeat_and_timeout(Config) ->
   process_flag(trap_exit, true),
 
   %% httpc will timeout before receiving the heartbeat
-  Options1 = #{since => 0, timeout => 50, heartbeat => 100, mode => sse },
+  Options1 = #{since => 0, timeout => 50, heartbeat => 100, mode => sse, retry_timeout => 500 },
   {ok, Pid1} = barrel_httpc_changes:start_link(db(Config), Options1),
   ok = receive
          {'EXIT', Pid1, timeout} ->
@@ -196,7 +195,7 @@ heartbeat_and_timeout(Config) ->
        end,
 
   %% timeout is larger than heartbeat. We will keep receiving changes.
-  Options2 = #{since => 0, timeout => 200, heartbeat => 100, mode => sse },
+  Options2 = #{since => 0, timeout => 200, heartbeat => 100, mode => sse, retry_timeout => 1000 },
   {ok, Pid2} = barrel_httpc_changes:start_link(db(Config), Options2),
   [] = barrel_httpc_changes:changes(Pid2),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},

@@ -48,7 +48,9 @@
 
 -define(DEFAULT_TIMEOUT,   60000).
 -define(DEFAULT_HEARTBEAT, 30000).
--define(DEFAULT_MAX_RETRY, 5).
+-define(DEFAULT_MAX_RETRY, 3).
+
+-define(RETRY_TIMEOUT, 5000).
 
 -record(state, {
           parent             :: pid(),
@@ -138,31 +140,32 @@ parse_change(ChangeBin) ->
   ).
 
 init(Parent, Conn, Options) ->
-  Retry =  maps:get(max_retry, Options, ?DEFAULT_MAX_RETRY),
+  proc_lib:init_ack(Parent, {ok, self()}),
+  %% initialize the state
   State = #state{ parent = Parent,
                   conn = Conn,
                   last_seq = undefined,
-                  retry = Retry,
+                  retry = reset_retry(Options),
                   hackney_timeout = maps:get(timeout, Options, ?DEFAULT_TIMEOUT),
-                  max_retry = maps:get(max_retry, Options, 5),
-                  delay_before_retry = maps:get(delay_before_retry, Options, 500),
                   options = Options},
-  proc_lib:init_ack(Parent, {ok, self()}),
   init_feed(State).
 
-init_feed(#state{retry = 0} = State ) ->
-  cleanup(State, "remote stopped (max retry reached)"),
-  exit(normal);
+reset_retry(Options) ->
+  Retries = maps:get(retry, Options, ?DEFAULT_MAX_RETRY),
+  RetryTimeout =  maps:get(retry_timeout, Options, ?RETRY_TIMEOUT),
+  {Retries, 200, RetryTimeout}.
+
 
 init_feed(State) ->
-  #state{conn = Conn,
-         last_seq = LastSeq,
-         options = Options} = State,
+  #state{
+    conn = Conn,
+    last_seq = LastSeq,
+    options = Options
+  } = State,
+
   Since = case LastSeq of
-            undefined ->
-              maps:get(since, Options, 0);
-            Seq ->
-              Seq
+            undefined -> maps:get(since, Options, 0);
+            Seq -> Seq
           end,
   Headers = case Since of
     0 ->
@@ -180,11 +183,35 @@ init_feed(State) ->
   ReqOpts = [{pool, none}, {async, once}, {recv_timeout, infinity}],
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
-      wait_response(State#state{ref = Ref});
+      wait_response(State#state{ ref = Ref, retry = reset_retry(Options) });
     Error ->
       _ = lager:error("~s: ~p~n", [?MODULE_STRING, Error]),
-      retry_connect(State)
-      %% exit(Error)
+      maybe_retry(State, Error)
+  end.
+
+maybe_retry(State, ExitReason) ->
+  #state{ ref = Ref, retry = {Retries, Delay, Max} } = State,
+  _ = (catch hackney:close(Ref)),
+  if
+    Retries /= 0 ->
+      lager:warning("~s retrying connection...~n", [?MODULE_STRING]),
+      _ = erlang:send_after(Delay, self(), connect),
+      State2 = State#state{ retry={Retries - 1, rand_increment(Delay, Max), Max} },
+      wait_retry(State2);
+    true ->
+      lager:warning("~s: num of retries exceeded the limit.~n", [?MODULE_STRING]),
+      cleanup(State, ExitReason),
+      exit(normal)
+  end.
+
+wait_retry(State = #state{parent = Parent}) ->
+  receive
+    connect ->
+      init_feed(State);
+    {system, From, Request} ->
+      sys:handle_system_msg(
+        Request, From, Parent, ?MODULE, [],
+        {wait_retry, State})
   end.
 
 wait_response(#state{ ref = Ref, options = Options}=State) ->
@@ -194,12 +221,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
       _ = lager:info("[~s] connected to conn=~p", [?MODULE_STRING, Conn]),
       Cb = maps:get(changes_cb, Options, nil),
       Mode = maps:get(mode, Options, binary),
-      MaxRetry = State#state.max_retry,
-      State2 = State#state{changes = queue:new(),
-                           mode = Mode,
-                           retry = MaxRetry,
-                           changes_cb = Cb,
-                           buffer = <<>>},
+      State2 = State#state{changes = queue:new(), mode = Mode, changes_cb = Cb, buffer = <<>>},
       wait_changes(State2);
     {hackney_response, Ref, {status, 404, _}} ->
       _ = lager:error("~s not_found ~n", [?MODULE_STRING]),
@@ -210,8 +232,7 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
         "~s request bad status ~p(~p)~n",
         [?MODULE_STRING, Status, Reason]
       ),
-      cleanup(Ref, {http_error, Status, Reason}),
-      exit({http_error, Status, Reason});
+      maybe_retry(State, {http_error, Status, Reason});
     {hackney_response, Ref, {error, Reason}} ->
       _ = lager:error(
         "~s hackney error: ~p~n",
@@ -220,8 +241,8 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
       cleanup(Ref, Reason),
       exit(Reason)
   after State#state.hackney_timeout ->
-      cleanup(Ref, timeout),
-      exit(timeout)
+    cleanup(State, timeout),
+    exit(timeout)
   end.
 
 wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
@@ -235,7 +256,7 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
       wait_changes(State);
     {hackney_response, Ref, done} ->
       _ = lager:warning("[~s] hackney connection done", [?MODULE_STRING]),
-      retry_connect(State);
+      maybe_retry(State, normal);
     {hackney_response, Ref, Data} when is_binary(Data) ->
       decode_data(Data, State);
     {hackney_response, Ref, Error} ->
@@ -258,14 +279,9 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
     exit(timeout)
   end.
 
-retry_connect(#state{retry = Retry}=State) ->
-  Delay = State#state.delay_before_retry,
-  timer:sleep(Delay),
-  _ = lager:warning("[~s] try to reconnect (~p)", [?MODULE_STRING, Retry]),
-  LastSeq = State#state.last_seq,
-  init_feed(State#state{since = LastSeq, retry = Retry-1}).
 
-
+system_continue(_, _, {wait_retry, State}) ->
+  wait_retry(State);
 system_continue(_, _, {wait_changes, State}) ->
   wait_changes(State).
 
@@ -365,3 +381,21 @@ parse_options(Options) ->
     [],
     Options
   ).
+
+rand_increment(N) ->
+  %% New delay chosen from [N, 3N], i.e. [0.5 * 2N, 1.5 * 2N]
+  Width = N bsl 1,
+  N + rand:uniform(Width + 1) - 1.
+
+rand_increment(N, Max) ->
+  %% The largest interval for [0.5 * Time, 1.5 * Time] with maximum Max is
+  %% [Max div 3, Max].
+  MaxMinDelay = Max div 3,
+  if
+    MaxMinDelay =:= 0 ->
+      rand:uniform(Max);
+    N > MaxMinDelay ->
+      rand_increment(MaxMinDelay);
+    true ->
+      rand_increment(N)
+  end.

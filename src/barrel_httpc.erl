@@ -226,7 +226,9 @@ connect(Url) ->
       {ok, #{ pool => PoolName, db_url => Url}};
     {ok, 404, _} ->
       _ = hackney_pool:stop_pool(PoolName),
-      {error, not_found}
+      {error, not_found};
+    Error ->
+      Error
   end.
 
 %% @doc retrieve a document by its key
