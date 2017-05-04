@@ -66,9 +66,13 @@ delete(RepId, Source, Target) ->
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
 
 %% default is always a local db.
-rep_resource({_Mod, _Uri}=Res) -> Res;
-rep_resource(DbId) when is_binary(DbId) -> {barrel_local, DbId};
-rep_resource(_) -> erlang:error(bad_replication_uri).
+rep_resource({_Mod, _Uri}=Res) ->
+  Res;
+rep_resource(DbId) when is_binary(DbId) ->
+  DefaultBackend = application:get_env(barrel_replicate, default_backend, barrel_local),
+  {DefaultBackend, DbId};
+rep_resource(_) ->
+  erlang:error(bad_replication_uri).
 
 
 %% gen_server callbacks
