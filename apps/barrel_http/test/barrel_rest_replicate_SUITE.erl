@@ -21,6 +21,7 @@
          init_per_testcase/2]).
 
 -export([ accept_post_get/1
+        , accept_local_db/1
         , accept_put_get/1
         , accept_delete/1
         , reject_replication_name_unknown/1
@@ -29,6 +30,7 @@
         ]).
 
 all() -> [ accept_post_get
+         , accept_local_db
          , accept_put_get
          , accept_delete
          , reject_replication_name_unknown
@@ -86,6 +88,30 @@ accept_post_get(_Config) ->
   %% retrieve it replicated in target db
   {200, _} = test_lib:req(get, "/dbs/dbb/docs/mouse"),
 
+  {404, _} = test_lib:req(get, "/replicate/doesnotexist"),
+  {200, R2} = test_lib:req(get, "/replicate/" ++ RepId),
+  Metrics = jsx:decode(R2, [return_maps]),
+  #{<<"docs_read">> := 1,
+    <<"docs_written">> := 1} = Metrics,
+  io:format("replication name ~p~n", [RepId]),
+  ok = barrel_local:delete_replication(RepId),
+  ok.
+
+accept_local_db(_Config) ->
+  {404, _} = test_lib:req(get, "/dbs/dbb/mouse"),
+  %% create a replication task from one db to the other
+  Request = #{<<"source">> => <<"dba">>, <<"target">> => <<"dbb">>},
+  {200, R} = test_lib:req(post, "/replicate", Request),
+  #{<<"replication_id">> := RepIdBin} = jsx:decode(R, [return_maps]),
+  RepId = binary_to_list(RepIdBin),
+
+  %% put one doc in source db
+  Mouse = "{\"id\": \"mouse\", \"name\" : \"jerry\"}",
+  {201, _} = test_lib:req(post, "/dbs/dba/docs", Mouse),
+  timer:sleep(500),
+  %% retrieve it replicated in target db
+  {200, _} = test_lib:req(get, "/dbs/dbb/docs/mouse"),
+  
   {404, _} = test_lib:req(get, "/replicate/doesnotexist"),
   {200, R2} = test_lib:req(get, "/replicate/" ++ RepId),
   Metrics = jsx:decode(R2, [return_maps]),

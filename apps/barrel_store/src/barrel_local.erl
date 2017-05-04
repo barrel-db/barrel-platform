@@ -32,6 +32,12 @@
 ]).
 
 -export([
+  put_system_doc/3,
+  get_system_doc/2,
+  delete_system_doc/2
+]).
+
+-export([
   walk/5
 ]).
 
@@ -45,7 +51,12 @@
   create_db/1,
   create_db/2,
   delete_db/1,
-  db_infos/1
+  db_infos/1,
+  connect/1
+]).
+
+-export([
+  database_infos/1
 ]).
 
 -export([
@@ -164,10 +175,22 @@ delete_db(DbId) ->
   barrel_store:delete_db(DbId).
 
 
+
+
 -spec db_infos(Db::db()) ->
   {ok, DbInfos::db_infos()} | {error, term()}.
 db_infos(Db) ->
   barrel_db:infos(Db).
+
+
+
+%% new db handling api
+connect(DbId) -> {ok, DbId}.
+
+database_infos(Db) ->
+  barrel_db:infos(Db).
+
+
 
 %% Database API.
 
@@ -270,8 +293,14 @@ write_batch(Db, Updates, Options) when is_list(Options) ->
   barrel_db:update_docs(Db, Batch);
 write_batch(_, _, _) -> erlang:error(badarg).
 
+put_system_doc(DbName, DocId, Doc) ->
+  barrel_db:put_system_doc(DbName, DocId, Doc).
 
+get_system_doc(DbName, DocId) ->
+  barrel_db:get_system_doc(DbName, DocId).
 
+delete_system_doc(DbName, DocId) ->
+  barrel_db:delete_system_doc(DbName, DocId).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when

@@ -102,7 +102,7 @@ start_changes_feed_process(Source, StartSeq) ->
   case Source of
     {barrel_httpc, Conn} ->
       barrel_httpc_changes:start_link(Conn, SseOptions);
-    Db ->
+    {barrel_local, Db} ->
       barrel_local_changes:start_link(Db, SseOptions)
   end.
 
