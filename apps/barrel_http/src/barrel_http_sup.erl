@@ -85,7 +85,7 @@ init(_Args) ->
 
   Options1 = Options0#{stream_handlers => Streams},
 
-  lager:info("starting HTTP server on port ~p", [ListenPort]),
+  _  = lager:info("starting HTTP server on port ~p", [ListenPort]),
   Http = ranch:child_spec(
            barrel_http, NbAcceptors,
            ranch_tcp, [{port, ListenPort}],
