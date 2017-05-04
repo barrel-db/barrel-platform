@@ -68,6 +68,12 @@
 ]).
 
 
+-export([
+  start_changes_listener/2,
+  stop_changes_listener/1,
+  get_changes/1
+]).
+
 -type dbname() :: binary().
 -type db() :: atom().
 
@@ -387,3 +393,16 @@ replication_info(Name) ->
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
+
+
+
+%% CHANGES API
+
+start_changes_listener(DbId, Options) ->
+  barrel_local_changes:start_link(DbId, Options).
+
+stop_changes_listener(ListenerPid) ->
+  barrel_local_changes:stop(ListenerPid).
+
+get_changes(ListenerPid) ->
+  barrel_local_changes:changes(ListenerPid).

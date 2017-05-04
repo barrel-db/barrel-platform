@@ -65,14 +65,19 @@ delete(RepId, Source, Target) ->
 
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
 
+%% default is always a local db.
+rep_resource({_Mod, _Uri}=Res) -> Res;
+rep_resource(DbId) when is_binary(DbId) -> {barrel_local, DbId};
+rep_resource(_) -> erlang:error(bad_replication_uri).
+
 
 %% gen_server callbacks
 
 init({RepId, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
 
-  {ok, Source} = maybe_connect(Source0),
-  {ok, Target} = maybe_connect(Target0),
+  {ok, Source} = maybe_connect(rep_resource(Source0)),
+  {ok, Target} = maybe_connect(rep_resource(Target0)),
 
   Metrics = barrel_replicate_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
@@ -99,12 +104,8 @@ start_changes_feed_process(Source, StartSeq) ->
         Self ! {change, Change}
     end,
   SseOptions = #{since => StartSeq, mode => sse, changes_cb => Callback },
-  case Source of
-    {barrel_httpc, Conn} ->
-      barrel_httpc_changes:start_link(Conn, SseOptions);
-    {barrel_local, Db} ->
-      barrel_local_changes:start_link(Db, SseOptions)
-  end.
+  {Backend, SourceUri} = Source,
+  Backend:start_changes_listener(SourceUri, SseOptions).
 
 handle_call(info, _From, State) ->
   RepId = State#st.id,

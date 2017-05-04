@@ -81,8 +81,7 @@ one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
   RepConfig = #{<<"source">> => <<"source">>,
                 <<"target">> => <<"testdb">>},
-  {ok, #{<<"replication_id">> := RepId}} =
-    barrel_replicate:start_replication(RepConfig, Options),
+  {ok, #{<<"replication_id">> := RepId}} = barrel_replicate:start_replication(RepConfig, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
