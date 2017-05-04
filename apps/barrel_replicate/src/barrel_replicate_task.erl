@@ -65,14 +65,23 @@ delete(RepId, Source, Target) ->
 
 replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
 
+%% default is always a local db.
+rep_resource({_Mod, _Uri}=Res) ->
+  Res;
+rep_resource(DbId) when is_binary(DbId) ->
+  DefaultBackend = application:get_env(barrel_replicate, default_backend, barrel_local),
+  {DefaultBackend, DbId};
+rep_resource(_) ->
+  erlang:error(bad_replication_uri).
+
 
 %% gen_server callbacks
 
 init({RepId, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
 
-  {ok, Source} = maybe_connect(Source0),
-  {ok, Target} = maybe_connect(Target0),
+  {ok, Source} = maybe_connect(rep_resource(Source0)),
+  {ok, Target} = maybe_connect(rep_resource(Target0)),
 
   Metrics = barrel_replicate_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
@@ -90,8 +99,7 @@ init({RepId, Source0, Target0, Options}) ->
   ok = barrel_replicate_metrics:create_task(Metrics, Options),
   barrel_replicate_metrics:update_task(Metrics),
   {ok, State}.
-
-
+  
 start_changes_feed_process(Source, StartSeq) ->
   Self = self(),
   Callback =
@@ -99,12 +107,8 @@ start_changes_feed_process(Source, StartSeq) ->
         Self ! {change, Change}
     end,
   SseOptions = #{since => StartSeq, mode => sse, changes_cb => Callback },
-  case Source of
-    {barrel_httpc, Conn} ->
-      barrel_httpc_changes:start_link(Conn, SseOptions);
-    Db ->
-      barrel_local_changes:start_link(Db, SseOptions)
-  end.
+  {Backend, SourceUri} = Source,
+  Backend:start_changes_listener(SourceUri, SseOptions).
 
 handle_call(info, _From, State) ->
   RepId = State#st.id,
@@ -187,25 +191,14 @@ terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 
-%% TODO: check if the backend is registered or the db exists
 maybe_connect({Backend, Uri}) ->
   {ok, Conn} = Backend:connect(Uri),
-  {ok, {Backend, Conn}};
+  {ok, {Backend, Conn}}.
 
-%% maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri);
-maybe_connect(Db) -> {ok, Db}.
-
+%% TODO: really handle closing
 %% maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.
 
-
-database_exist(Db) when is_binary(Db) ->
-  case barrel_store:whereis_db(Db) of
-    undefined ->
-      false;
-    _ ->
-      true
-  end;
 database_exist({Backend, Uri}) ->
   case catch Backend:database_infos(Uri) of
     {ok, _} -> true;

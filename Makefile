@@ -6,10 +6,11 @@ REBAR ?= $(SUPPORTDIR)/rebar3
 
 all: compile
 
-compile: ## Apply dependencies and compile everything (default)
+compile:
 	@$(REBAR) compile
 
-rel: ## Create a barrel release
+## Create a barrel release
+rel:
 	@$(REBAR) as prod release
 
 devrel: ## Create a barrel release
@@ -33,6 +34,10 @@ dialyzer:
 test: cleantest dialyzer
 	@$(REBAR) eunit
 	@$(REBAR) ct
+
+cover:
+	@$(REBAR) cover
+
 
 help: ## This documentation
 	@echo Build commands for barrel platform:

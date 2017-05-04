@@ -25,9 +25,6 @@ init(Req, _Opts) ->
   Method = cowboy_req:method(Req),
   route(Req, #state{method=Method}).
 
-
-
-
 route(Req, #state{method= <<"POST">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"PUT">>}=State) ->
@@ -77,8 +74,8 @@ check_json_properties(Req, State) ->
 
 read_json_properties(Req, State) ->
   Body = State#state.body,
-  State2 = State#state{source = maps:get(<<"source">>, Body, undefined),
-                       target = maps:get(<<"target">>, Body, undefined),
+  State2 = State#state{source = resource(maps:get(<<"source">>, Body, undefined)),
+                       target = resource(maps:get(<<"target">>, Body, undefined)),
                        started = maps:get(<<"started">>, Body, undefined),
                        persisted = maps:get(<<"persisted">>, Body, undefined)},
   route2(Req, State2).
@@ -90,20 +87,33 @@ route2(Req, #state{method= <<"PUT">>}=State) ->
 
 
 check_source_db_exist(Req, #state{source=SourceUrl}=State) ->
-  case barrel_http_lib:req(get, SourceUrl) of
-    {200, _} ->
+  case is_db_exist(SourceUrl) of
+    true ->
       check_target_db_exist(Req, State);
-    _Else ->
+    false ->
       barrel_http_reply:error(400, "source database not found", Req, State)
   end.
 
 check_target_db_exist(Req, #state{target=TargetUrl}=State) ->
-  case barrel_http_lib:req(get, TargetUrl) of
-    {200, _} ->
+  case is_db_exist(TargetUrl) of
+    true ->
       create_resource(Req, State);
-    _ ->
+    false ->
       barrel_http_reply:error(400, "target database not found", Req, State)
   end.
+
+
+is_db_exist({barrel_httpc, Url}) ->
+  case barrel_http_lib:req(get, Url) of
+    {200, _} -> true;
+    _ -> false
+  end;
+is_db_exist({barrel_local, DbName}) ->
+  case barrel_local:db_infos(DbName) of
+    {ok, _Info} -> true;
+    _ -> false
+  end.
+
 
 
 
@@ -119,8 +129,8 @@ get_resource(Req, State) ->
 
 create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
   ReqRepid = cowboy_req:binding(repid, Req),
-  SourceConn = {barrel_httpc, SourceUrl},
-  TargetConn = {barrel_httpc, TargetUrl},
+  SourceConn = SourceUrl,
+  TargetConn = TargetUrl,
   {ok, Rep} = case ReqRepid of
                 undefined ->
                   RepConfig = #{<<"source">> => SourceConn,
@@ -139,6 +149,11 @@ create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
 delete_resource(Req, #state{repid=Repid}=State) ->
   ok = barrel_replicate:delete_replication(Repid),
   barrel_http_reply:code(200, Req, State).
+
+resource(<<"http://", _/binary>> = Url) -> {barrel_httpc, Url};
+resource(<<"https://", _/binary>> = Url) -> {barrel_httpc, Url};
+resource(undefined) -> undefined;
+resource(DbName) -> {barrel_local, DbName}.
 
 %% =============================================================================
 %% Check posted JSON properties

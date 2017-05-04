@@ -18,7 +18,7 @@
 
 %% API
 -export([
-  split_path/1, split_path/3,
+  split_path/1, split_path/2,
   diff/2,
   analyze/1
 ]).
@@ -29,14 +29,13 @@
 
 %% TODO: make split value configurable. For default go for 3 since most docs are flat anyway.
 
-split_path(Path) -> split_path(Path, [], []).
+split_path(Path) -> split_path(Path, []).
 
-split_path([P1, P2, P3 | Rest], Forward0, Reverse0) ->
+split_path([P1, P2, P3 | Rest], Forward0) ->
   Forward1 = [[P1, P2, P3] | Forward0],
-  Reverse1 = [[P3, P2, P1] | Reverse0],
-  split_path([P2, P3 | Rest], Forward1, Reverse1);
-split_path(_, Forward, Reverse) ->
-  {Forward, Reverse}.
+  split_path([P2, P3 | Rest], Forward1);
+split_path(_, Forward) ->
+  Forward.
 
 %% %% @doc get the operations maintenance to do between
 %% 2 instances of a document
@@ -48,8 +47,8 @@ split_path(_, Forward, Reverse) ->
 diff(D1, D2) ->
   A1 = analyze(D1),
   A2 = analyze(D2),
-  Added = A2 -- A1,
-  Removed = A1 -- A2,
+  Removed = A2 -- A1,
+  Added = A1 -- A2,
   {Added, Removed}.
 
 %% @doc analyze a document and yield paths to update
@@ -160,8 +159,8 @@ diff_test() ->
            <<"b">> => [0, 1, 3],
            <<"d">> => #{ <<"a">> => 1}},
   {Added, Removed} = diff(New, Old),
-  ?assertEqual([[<<"$">>,<<"c">>,<<"a">>,1]], Added),
-  ?assertEqual([[<<"$">>,<<"d">>,<<"a">>,1],[<<"$">>,<<"b">>,2,3]], Removed).
+  ?assertEqual([[<<"$">>,<<"c">>,<<"a">>,1]], Removed),
+  ?assertEqual([[<<"$">>,<<"d">>,<<"a">>,1],[<<"$">>,<<"b">>,2,3]], Added).
 
 
 split_path_test() ->
@@ -173,7 +172,6 @@ split_path_test() ->
     [<<"$">>, <<"c">>, <<"b">>]
   ],
 
-  ExpectedReverse = [ lists:reverse(P) || P <- ExpectedForward ],
-  ?assertEqual({ExpectedForward, ExpectedReverse}, split_path(Path)).
+  ?assertEqual(ExpectedForward, split_path(Path)).
 
 -endif.

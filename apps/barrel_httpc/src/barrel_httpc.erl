@@ -51,6 +51,14 @@
   delete_system_doc/2
 ]).
 
+-export([
+  start_changes_listener/2,
+  stop_changes_listener/1,
+  get_changes/1
+]).
+
+
+
 -include_lib("hackney/include/hackney_lib.hrl").
 
 
@@ -825,6 +833,47 @@ delete_system_doc(Conn, DocId) ->
     {ok, 200, _, _JsonBody} -> ok;
     Error -> Error
   end.
+
+%% @doc start a change listener on the database.
+%% This function create a process that will listen on the changes feed API.
+%% If not callback is given, changes are queued in the process and need
+%% to be fetched using the `fetch_changes' function. When a callback is given,
+%% a change is passed to the function, no state is kept in the process.
+%% a change given to the callback or in the list is under the following form
+%% #{
+%%   <<"id">> := binary(),  % id of the document updated
+%%   <<"seq">> := non_neg_integer(), % sequence of the change
+%%   <<"changes">> => [revid(], % revision id of the change or
+%%                              % the full history if history is true (from last to first),
+%%   <<"deleted">> => true | false % present if deleted
+%%}
+%%
+%% In case the connection is lost or closed, it will retry to connect, at most
+%% `max_retry` times (default=5 times), waiting `delay_before_retry` ms between each
+%% try (default=500 ms)
+-spec start_changes_listener(Conn, ListenerOptions) -> Res when
+  Conn :: barrel_httpc:conn(),
+  ListenerOptions :: barrel_httpc_changes:listener_options(),
+  ListenerPid :: pid(),
+  Res :: {ok, ListenerPid} | {error, any()}.
+start_changes_listener(Conn, ListenerOptions) ->
+  barrel_httpc_changes:start_link(Conn, ListenerOptions).
+
+%% @doc stop a change listener
+-spec stop_changes_listener(ListenerPid) -> Res when
+  ListenerPid :: pid(),
+  Res :: ok.
+stop_changes_listener(ListenerPid) ->
+  barrel_httpc_changes:stop(ListenerPid).
+
+%% @doc fetch all changes received by a listener à that time.
+%% Only useful when no changes callback is given.
+%% Otherwise the list will always be empty.
+-spec get_changes(ListenerPid) -> Changes when
+  ListenerPid :: pid(),
+  Changes :: [barrel_httpc:change()].
+get_changes(ListenerPid) ->
+  barrel_httpc_changes:changes(ListenerPid).
 
 
 %% internal

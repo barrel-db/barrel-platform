@@ -59,7 +59,7 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
@@ -81,7 +81,7 @@ accept_get(_Config) ->
   #{code := 200,
     doc := Doc,
     headers := H} = r(#{method => get,
-                        route => "/dbs/testdb/docs/acceptget"}),
+                       route => "/dbs/testdb/docs/acceptget"}),
 
   RevId = proplists:get_value(<<"ETag">>, H),
   ok.

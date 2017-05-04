@@ -21,7 +21,7 @@
   is_batch/1
 ]).
 
--include_lib("barrel_common/include/barrel_common.hrl").
+-include("barrel_store.hrl").
 
 -type batch() :: tuple().
 -type batch_op() :: {put, Doc :: barrel_local:doc()} |

@@ -33,10 +33,6 @@ handle_post(Req) ->
 handle(Req, State) ->
   check_params(Req, State).
 
-terminate(_Reason, _Req, #state{database=Db, method=Method, start_time=StartTime}) ->
-  Key = [<<"rest">>, Db, Method, <<"duration">>],
-  barrel_metrics:duration_since(Key, StartTime),
-  ok;
 terminate(_, _, _) ->
   ok.
 

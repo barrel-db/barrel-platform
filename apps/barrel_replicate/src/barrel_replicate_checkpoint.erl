@@ -143,17 +143,13 @@ write_checkpoint_doc(Db, RepId, Checkpoint) ->
   put_system_doc(Db, checkpoint_docid(RepId), Checkpoint).
 
 put_system_doc({Mod, ModState}, Id, Doc) ->
-  Mod:put_system_doc(ModState, Id, Doc);
-put_system_doc(Db, Id, Doc) when is_binary(Db) ->
-  barrel_db:put_system_doc(Db, Id, Doc).
+  Mod:put_system_doc(ModState, Id, Doc).
 
 read_checkpoint_doc(Db, RepId) ->
   get_system_doc(Db, checkpoint_docid(RepId)).
 
 get_system_doc({Mod, ModState}, Id) ->
-  Mod:get_system_doc(ModState, Id);
-get_system_doc(Db, Id) when is_binary(Db) ->
-  barrel_db:get_system_doc(Db, Id).
+  Mod:get_system_doc(ModState, Id).
 
 
 delete(Checkpoint) ->
@@ -168,9 +164,7 @@ delete_checkpoint_doc(Db, RepId) ->
   delete_system_doc(Db, checkpoint_docid(RepId)).
 
 delete_system_doc({Mod, ModState}, Id) ->
-  Mod:delete_system_doc(ModState, Id);
-delete_system_doc(Db, Id) when is_binary(Db) ->
-  barrel_db:delete_system_doc(Db, Id).
+  Mod:delete_system_doc(ModState, Id).
 
 checkpoint_docid(RepId) ->
   <<"replication-checkpoint-", RepId/binary>>.

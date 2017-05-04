@@ -30,8 +30,7 @@
   put_system_doc/3,
   get_system_doc/2,
   delete_system_doc/2,
-  query/5,
-  query/6,
+  walk/5,
   get_doc1/7,
   update_docs/2
 ]).
@@ -43,7 +42,8 @@
   exists/1,
   encode_rid/1,
   decode_rid/1,
-  get_current_revision/1
+  get_current_revision/1,
+  delete_db/1
 ]).
 
 %% gen_server callbacks
@@ -57,7 +57,6 @@
 ]).
 
 -include("barrel_store.hrl").
--include_lib("barrel_common/include/barrel_common.hrl").
 
 %% internal processes
 -define(default_timeout, 5000).
@@ -84,8 +83,7 @@ infos(DbName) ->
           id => Db#db.id,
           docs_count => Db#db.docs_count,
           last_update_seq => Db#db.updated_seq,
-          system_docs_count => Db#db.system_docs_count,
-          last_index_seq => Db#db.indexed_seq
+          system_docs_count => Db#db.system_docs_count
          },
         {ok, Info}
     end
@@ -227,44 +225,32 @@ update_docs(DbName, Batch) ->
   case barrel_store:whereis_db(DbName) of
     undefined -> {error, found};
     Db = #db{pid=DbPid} ->
-      StartTime1 = os:timestamp(),
+      T1 = erlang:monotonic_time(),
+      ok = hooks:run(db_start_update_docs, [DbName]),
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
-      barrel_metrics:increment([<<"store">>, DbName, <<"starting_update">>]),
-      StartTime2 = os:timestamp(),
       DbPid ! {update_docs, DocBuckets},
-
       Res = case Async of
               false ->
-                collect_updates(Db, Ref, MRef, [], N, StartTime2);
+                collect_updates(Db, Ref, MRef, [], N);
               true ->
                 ok
             end,
-
-      barrel_metrics:duration_since([<<"store">>, DbName, <<"update_docs">>], StartTime1),
-      barrel_metrics:increment([<<"store">>, DbName, <<"update_docs">>]),
+      T2 = erlang:monotonic_time(),
+      Time = erlang:convert_time_unit(T2 - T1, native, second),
+      ok = hooks:run(db_end_update_docs, [DbName, Time]),
       Res
   end.
 
-collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N, StartTime) when N > 0 ->
+collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N) when N > 0 ->
   receive
     {result, Ref, DbPid, Idx, Result} ->
-      collect_updates(Db, Ref, MRef, [{Idx, Result} | Results], N - 1, StartTime);
+      collect_updates(Db, Ref, MRef, [{Idx, Result} | Results], N - 1);
     {'DOWN', MRef, _, _, Reason} ->
       exit(Reason)
   end;
-collect_updates(Db, _Ref, MRef, Results, 0, StartTime) ->
-  barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"local_update">>], StartTime),
+collect_updates(_Db, _Ref, MRef, Results, 0) ->
   erlang:demonitor(MRef, [flush]),
-  %% wait for the index refresh?
-  case Db#db.indexer_mode of
-    consistent ->
-      StartIndexTime = os:timestamp(),
-      _ = barrel_indexer:refresh_index(Db#db.indexer, Db#db.updated_seq),
-      barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"index_update">>], StartIndexTime);
-    lazy ->
-      Db#db.indexer ! refresh_index
-  end,
   %% we return results  ordered by operation index
   lists:map(
     fun({_, Result}) -> Result end,
@@ -448,14 +434,11 @@ delete_system_doc(DbName, DocId) ->
     end
   ).
 
-query(DbName, Path, Fun, AccIn, Options) ->
-  query(DbName, Path, Fun, AccIn, order_by_key, Options).
-
-query(DbName, Path, Fun, AccIn, OrderBy, Options) ->
+walk(DbName, Path, Fun, AccIn, Options) ->
   with_db(
     DbName,
     fun(Db) ->
-      barrel_query:query(Db, Path, Fun, AccIn, OrderBy, Options)
+      barrel_walk:walk(Db, Path, Fun, AccIn, Options)
     end
   ).
 
@@ -477,6 +460,15 @@ start_link(DbId, Config) ->
 get_db(DbPid) when is_pid(DbPid) ->
   gen_server:call(DbPid, get_db).
 
+delete_db(DbPid) ->
+  try gen_server:call(DbPid, delete_db)
+  catch
+    exit:{noproc,_} -> ok;
+    exit:noproc -> ok;
+    %% Handle the case where the monitor triggers
+    exit:{normal, _} -> ok
+  end.
+
 
 db_dir() ->
   Dir = filename:join(barrel_store:data_dir(), "dbs"),
@@ -494,45 +486,28 @@ decode_rid(Bin) ->
   << Rid:64 >> = base64:decode(Bin),
   Rid.
 
+
 %% TODO: put dbinfo in a template
 init([DbId, Config]) ->
   process_flag(trap_exit, true),
   {ok, Store} = open_db(DbId, Config),
   #{<<"last_rid">> := LastRid,
     <<"updated_seq">> := Updated,
-    <<"indexed_seq">> := Indexed,
     <<"docs_count">> := DocsCount,
     <<"system_docs_count">> := SystemDocsCount}  = init_meta(Store),
 
-  ok = init_metrics(DbId),
-
-  %% set indexer mode
-  IndexerMode = barrel_lib:to_atom(
-    maps:get(<<"indexer_mode">>, Config, consistent)
-  ),
-
-  %% validate indexer mode
-  ok = validate_indexer_mode(IndexerMode),
+  _ = init_properties(),
 
   Db =
     #db{id=DbId,
         store=Store,
         pid=self(),
         conf = Config,
-        indexer_mode = IndexerMode,
         last_rid = LastRid,
         updated_seq = Updated,
-        indexed_seq = Indexed,
         docs_count = DocsCount,
         system_docs_count = SystemDocsCount},
-
-  {ok, Indexer} = barrel_indexer:start_link(Db, Config),
-  Db2 = Db#db{indexer = Indexer},
-  {ok, Db2}.
-
-validate_indexer_mode(consistent) -> ok;
-validate_indexer_mode(lazy) -> ok;
-validate_indexer_mode(_) -> erlang:error(bad_indexer_mode).
+  {ok, Db}.
 
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
@@ -546,32 +521,17 @@ init_meta(Store) ->
     end,
     #{<<"last_rid">> => 0,
       <<"updated_seq">> => 0,
-      <<"indexed_seq">> => 0,
       <<"docs_count">> => 0,
       <<"system_docs_count">> => 0},
     []
   ).
 
-init_metrics(DbId) ->
-  Counters = [ [<<"store">>, DbId, <<"starting_update">>]
-             , [<<"store">>, DbId, <<"local_update">>]
-             , [<<"store">>, DbId, <<"collect_updates">>]
-             , [<<"store">>, DbId, <<"update_docs">>]
-             , [<<"store">>, DbId, <<"do_update_docs">>]
-             ],
-  _ = [ barrel_metrics:init(counter, C) || C <- Counters ],
+init_properties() ->
+  Props = [{num_docs_updated, 0}],
 
-  Durations = [ [<<"store">>, DbId, <<"update_docs">>]
-              , [<<"store">>, DbId, <<"local_update">>]
-              , [<<"store">>, DbId, <<"index_update">>]
-              , [<<"store">>, DbId, <<"rocksdb">>, <<"write">>]
-              ],
-  _ = [ barrel_metrics:init(duration, D) || D <- Durations ],
-
-  Gauges = [ [<<"store">>, DbId, <<"update_queue_length">>]
-           ],
-  _ = [ barrel_metrics:init(gauge, G) || G <- Gauges ],
-  ok.
+  lists:foreach(fun({K, V}) ->
+                    erlang:put(K, V)
+                end, Props).
 
 open_db(DbId, Config) ->
   Path = db_path(DbId),
@@ -585,9 +545,17 @@ open_db(DbId, Config) ->
   rocksdb:open(Path, DbOpts).
 
 default_rocksdb_options() ->
-  BlockCacheSize = application:get_env(barrel_store, block_cache_size, ?BLK_CACHE_SIZE),
+  BlockCacheSize = case application:get_env(barrel_store, block_cache_size, 0) of
+                     0 ->
+                       MaxSize = barrel_memory_monitor:get_total_memory(),
+                       %% reserve 1GB for system and binaries, and use 30% of the rest
+                       ((MaxSize - 1024 * 1024) * 0.3);
+                     Sz ->
+                       Sz * 1024 * 1024 * 1024
+                   end,
 
   [{max_open_files, 64},
+   {write_buffer_size, 64 * 1024 * 1024}, %% 64MB
    {allow_concurrent_memtable_write, true},
    {enable_write_thread_adaptive_yield, true},
    {table_factory_block_cache_size, BlockCacheSize}
@@ -602,28 +570,10 @@ handle_call({delete, K}, _From, Db) ->
 handle_call(get_db, _From, Db) ->
   {reply, {ok, Db}, Db};
 
-handle_call(delete_db, _From, Db = #db{ id = Id, store = Store, indexer=Idx }) ->
-  Reply  = if
-             Store /= nil ->
-               case is_pid(Idx) of
-                 true -> (catch barrel_indexer:stop(Idx));
-                 false -> ok
-               end,
-               ok = rocksdb:close(Store),
-               TempName = db_path(barrel_lib:uniqid()),
-               _ = file:rename(db_path(Id), TempName),
-               %% deletion of the database happen asynchronously
-               spawn(
-                 fun() ->
-                     ok = rocksdb:destroy(TempName, []),
-                     _ = lager:debug("~p: old db files deleleted  in ~p~n", [Id, TempName])
-                 end
-                ),
-               {stop, normal, ok, Db#db{ store=nil, indexer=nil}};
-             true ->
-               {stop, normal, ok, Db#db{ store=nil, indexer=nil}}
-           end,
-  Reply;
+handle_call(delete_db, _From, Db = #db{ id = Id, store = Store }) ->
+  ok = (catch rocksdb:close(Store)),
+  ok = delete_db_dir(Id),
+  {stop, normal, ok, Db#db{ store=nil}};
 
 handle_call(_Request, _From, State) ->
   {reply, {error, bad_call}, State}.
@@ -636,21 +586,15 @@ handle_info({update_docs, DocBuckets}, Db) ->
 
 handle_info(_Info, State) -> {noreply, State}.
 
+
 terminate(Reason, #db{ id = Id, store = nil }) ->
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
   ok;
 
-terminate(Reason, #db{ id = Id, store = Store, indexer=Idx }) ->
-  ok = stop_indexer(Idx),
+terminate(Reason, #db{ id = Id, store = Store }) ->
   %% finally close the database and return its result
   ok = close_store(Id, Store),
   _ = lager:info("terminate db ~p: ~p~n", [Id, Reason]),
-  ok.
-
-stop_indexer(Idx) when is_pid(Idx) ->
-  _ = (catch barrel_indexer:stop(Idx)),
-  ok;
-stop_indexer(_) ->
   ok.
 
 close_store(Id, Store) ->
@@ -659,6 +603,23 @@ close_store(Id, Store) ->
   ok.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
+
+
+delete_db_dir(Id) ->
+  TempName = db_path(barrel_lib:uniqid()),
+  case file:rename(db_path(Id), TempName) of
+    ok ->
+      %% deletion of the database happen asynchronously
+      spawn(
+        fun() ->
+            ok = rocksdb:destroy(TempName, []),
+            _ = lager:info("~p: old db files deleleted  in ~p~n", [Id, TempName])
+        end
+       ),
+      ok;
+    _ ->
+      ok
+  end.
 
 empty_doc_info(DocId, Rid) ->
   #{ id => DocId,
@@ -677,11 +638,10 @@ send_result(_, _) ->
 
 do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) ->
   %% try to collect a maximum of updates at once
-  barrel_metrics:increment([<<"store">>, DbId, <<"do_update_docs">>]),
-  {message_queue_len, QueueLength} = erlang:process_info(self(), message_queue_len),
-  barrel_metrics:set_value([<<"store">>, DbId, <<"update_queue_length">>], QueueLength),
   DocBuckets2 = collect_updates(DbId, DocBuckets),
-  {Updates, NewRid, _} = merge_revtrees(DocBuckets2, Db),
+  erlang:put(num_docs_updated, maps:size(DocBuckets2)),
+
+  {Updates, NewRid, _, OldDocs} = merge_revtrees(DocBuckets2, Db),
 
   %% update resource counter
   if
@@ -719,8 +679,19 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         %% revision has changed put the ancestor outside the value
         {DocInfo3, Ancestor} = backup_ancestor(DocInfo2),
 
+
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
+
+
+
+        %% create update index events.
+        %% TODO: move that code in a cleaner place
+        NewDoc = current_body(DocInfo3),
+        OldDoc = maps:get(DocId, OldDocs),
+        {Added, Removed} = barrel_index:diff(NewDoc, OldDoc),
+        Batch0 = update_index(Added, Rid, Db2#db.updated_seq, index,
+                              update_index(Removed, Rid, Db2#db.updated_seq, unindex, [])),
 
         %% finally write the batch
         Batch =
@@ -738,11 +709,10 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
                 ]
               )
             )
-          ),
+          ) ++ Batch0,
 
-        StartWriteTime = os:timestamp(),
+
         ResWrite =  rocksdb:write(Store, Batch, [{sync, true}]),
-        barrel_metrics:duration_since([<<"store">>, Db#db.id, <<"rocksdb">>, <<"write">>], StartWriteTime),
 
         case ResWrite of
           ok ->
@@ -770,6 +740,21 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
     Updates
   ).
 
+update_index([Path | Rest], Rid, Seq, index, Batch0) ->
+  Batch1 = lists:foldl(fun(P, Acc) ->
+                          [ {put, barrel_keys:forward_path_key(P, Rid), <<>>},
+                            {put, barrel_keys:reverse_path_key(P, Rid), <<>>} | Acc ]
+                      end, Batch0, barrel_index:split_path(Path)),
+  update_index(Rest, Rid, Seq, index, Batch1);
+update_index([Path | Rest], Rid, Seq, unindex, Batch0) ->
+  Batch1 = lists:foldl(fun(P, Acc) ->
+                          [ {delete, barrel_keys:forward_path_key(P, Rid)},
+                            {delete, barrel_keys:reverse_path_key(P, Rid)} | Acc ]
+                      end, Batch0, barrel_index:split_path(Path)),
+  update_index(Rest, Rid, Seq, unindex, Batch1);
+update_index([], _Rid, _Seq, _Op, Batch) ->
+  Batch.
+
 backup_ancestor(DocInfo) ->
   #{ id := Id, current_rev := Rev, revtree := Tree, body_map := BodyMap} = DocInfo,
   case barrel_revtree:parent(Rev, Tree) of
@@ -796,20 +781,22 @@ maybe_link_rid(#{ id := DocId, rid := Rid, local_seq := 1}, Batch) ->
 maybe_link_rid(_DI, Batch) ->
   Batch.
 
+current_body(#{ current_rev := Rev, body_map := BodyMap }) -> maps:get(Rev, BodyMap).
 
 %% TODO: cache doc infos
 merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
   maps:fold(
-    fun(DocId, Bucket, {Updates, Rid, DocInfos}) ->
-      {DocInfo, Rid2, DocInfos2} = case maps:find(DocId, DocInfos) of
-                  {ok, DI} -> {DI, Rid, DocInfos};
+    fun(DocId, Bucket, {Updates, Rid, DocInfos, OldDocs}) ->
+      {DocInfo, Rid2, DocInfos2, OldDocs2} = case maps:find(DocId, DocInfos) of
+                  {ok, DI} -> {DI, Rid, DocInfos, OldDocs};
                   error ->
                     case get_doc_info_int(Db, DocId, []) of
-                      {ok, DI} ->
-                        {DI, Rid, DocInfos#{ DocId => DI}};
+                      {ok,  DI} ->
+                        OldDoc = current_body(DI),
+                        {DI, Rid, DocInfos#{ DocId => DI}, OldDocs#{ DocId => OldDoc }};
                       {error, not_found} ->
                         DI = empty_doc_info(DocId, Rid +1),
-                        {DI, Rid +1, DocInfos#{ DocId => DI}}
+                        {DI, Rid +1, DocInfos#{ DocId => DI}, OldDocs#{ DocId => #{} } }
                     end
                 end,
 
@@ -836,9 +823,9 @@ merge_revtrees(DocBuckets, Db = #db{last_rid=LastRid}) ->
         {DocInfo, []},
         Bucket
       ),
-      {[Update | Updates], Rid2, DocInfos2}
+      {[Update | Updates], Rid2, DocInfos2, OldDocs2}
     end,
-    {[], LastRid, #{}},
+    {[], LastRid, #{}, #{}},
     DocBuckets
   ).
 
@@ -962,7 +949,6 @@ merge_updates(DocBuckets1, DocBuckets2) ->
 collect_updates(DbId, DocBuckets0) ->
   receive
     {update_docs, DocBuckets1} ->
-      barrel_metrics:increment([<<"store">>, DbId, <<"collect_updates">>]),
       DocBuckets2 = merge_updates(DocBuckets0, DocBuckets1),
       collect_updates(DbId, DocBuckets2)
   after 0 ->

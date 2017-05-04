@@ -32,8 +32,13 @@
 ]).
 
 -export([
-  query/5,
-  query/6
+  put_system_doc/3,
+  get_system_doc/2,
+  delete_system_doc/2
+]).
+
+-export([
+  walk/5
 ]).
 
 -export([
@@ -46,7 +51,12 @@
   create_db/1,
   create_db/2,
   delete_db/1,
-  db_infos/1
+  db_infos/1,
+  connect/1
+]).
+
+-export([
+  database_infos/1
 ]).
 
 -export([
@@ -57,6 +67,12 @@
   replication_info/1
 ]).
 
+
+-export([
+  start_changes_listener/2,
+  stop_changes_listener/1,
+  get_changes/1
+]).
 
 -type dbname() :: binary().
 -type db() :: atom().
@@ -151,7 +167,7 @@
 
 -deprecated([create_db/2]).
 
--include_lib("barrel_common/include/barrel_common.hrl").
+-include("barrel_store.hrl").
 
 create_db(DbId, Config) ->
   _ = lager:warning("barrel_db:create/2 is deprecated", []),
@@ -165,10 +181,22 @@ delete_db(DbId) ->
   barrel_store:delete_db(DbId).
 
 
+
+
 -spec db_infos(Db::db()) ->
   {ok, DbInfos::db_infos()} | {error, term()}.
 db_infos(Db) ->
   barrel_db:infos(Db).
+
+
+
+%% new db handling api
+connect(DbId) -> {ok, DbId}.
+
+database_infos(Db) ->
+  barrel_db:infos(Db).
+
+
 
 %% Database API.
 
@@ -271,8 +299,14 @@ write_batch(Db, Updates, Options) when is_list(Options) ->
   barrel_db:update_docs(Db, Batch);
 write_batch(_, _, _) -> erlang:error(badarg).
 
+put_system_doc(DbName, DocId, Doc) ->
+  barrel_db:put_system_doc(DbName, DocId, Doc).
 
+get_system_doc(DbName, DocId) ->
+  barrel_db:get_system_doc(DbName, DocId).
 
+delete_system_doc(DbName, DocId) ->
+  barrel_db:delete_system_doc(DbName, DocId).
 
 %% @doc fold all docs by Id
 -spec fold_by_id(Db, Fun, AccIn, Options) -> AccOut | Error when
@@ -310,7 +344,7 @@ changes_since(Db, Since, Fun, Acc, Opts) ->
   barrel_db:changes_since(Db, Since, Fun, Acc, Opts).
 
 %% @doc find in the index a document by its path
--spec query(Db, Path, Fun, AccIn, Options) -> AccOut | Error when
+-spec walk(Db, Path, Fun, AccIn, Options) -> AccOut | Error when
   Db::db(),
   Path :: binary(),
   FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
@@ -319,27 +353,14 @@ changes_since(Db, Since, Fun, Acc, Opts) ->
   AccIn :: any(),
   AccOut :: any(),
   Error :: {error, term()}.
-query(Db, Path, Fun, AccIn, Opts) ->
-  barrel_db:query(Db, Path, Fun, AccIn, Opts).
+walk(Db, Path, Fun, AccIn, Opts) ->
+  barrel_db:walk(Db, Path, Fun, AccIn, Opts).
 
-%% @doc find in the index a document
--spec query(Db, Path, Fun, AccIn, OrderBy, Options) -> AccOut | Error when
-  Db::db(),
-  Path :: binary(),
-  FunRes :: {ok, Acc2::any()} | stop | {stop, Acc2::any()},
-  Fun :: fun((DocId :: docid(), Doc :: doc(), Val :: any(), Acc1 :: any()) -> FunRes),
-  OrderBy :: order_by_key | order_by_value | {order_by_child, ChildKey :: binary()},
-  Options :: fold_options(),
-  AccIn :: any(),
-  AccOut :: any(),
-  Error :: {error, term()}.
-query(Db, Path, Fun, AccIn, OrderBy, Opts) ->
-  barrel_db:query(Db, Path, Fun, AccIn, OrderBy, Opts).
 
 %% @deprecated
 find_by_key(Db, Path, Fun, AccIn, Opts) ->
   _ = lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
-  barrel_db:query(Db, Path, Fun, AccIn, Opts).
+  barrel_local:walk(Db, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Db, DocId, RevIds) -> Res when
@@ -372,3 +393,16 @@ replication_info(Name) ->
     Pid when is_pid(Pid) -> barrel_replicate_task:info(Pid);
     undefined -> {error, not_found}
   end.
+
+
+
+%% CHANGES API
+
+start_changes_listener(DbId, Options) ->
+  barrel_local_changes:start_link(DbId, Options).
+
+stop_changes_listener(ListenerPid) ->
+  barrel_local_changes:stop(ListenerPid).
+
+get_changes(ListenerPid) ->
+  barrel_local_changes:changes(ListenerPid).

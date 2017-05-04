@@ -15,17 +15,12 @@ test:
     - _build/test/logs
 
   script:
-    - ./support/rebar3 eunit
-    - ./support/rebar3 ct
-    - ./support/rebar3 dialyzer
-    - ./support/rebar3 cover
+    - make test
 
 pages:
     stage: deploy
     script:
-      - ./support/rebar3 eunit
-      - ./support/rebar3 ct
-      - ./support/rebar3 cover
+      - make test cover
       - mv _build/test/cover/ public/
     artifacts:
       paths:

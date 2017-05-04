@@ -50,10 +50,7 @@
    ].
 
 init_per_suite(Config) ->
-
-
   {ok, _} = application:ensure_all_started(barrel_replicate),
-
   {ok, _} = application:ensure_all_started(barrel_store),
   {ok, _} = application:ensure_all_started(barrel_replicate),
   Config.
@@ -81,8 +78,7 @@ one_doc(_Config) ->
   Options = [{metrics_freq, 100}],
   RepConfig = #{<<"source">> => <<"source">>,
                 <<"target">> => <<"testdb">>},
-  {ok, #{<<"replication_id">> := RepId}} =
-    barrel_replicate:start_replication(RepConfig, Options),
+  {ok, #{<<"replication_id">> := RepId}} = barrel_replicate:start_replication(RepConfig, Options),
   %% Info = barrel_replicate:info(Pid),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
