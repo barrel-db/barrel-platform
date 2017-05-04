@@ -63,9 +63,7 @@
           mode               :: term(),
           changes_cb,
           buffer,
-          retry              :: non_neg_integer(),
-          delay_before_retry :: non_neg_integer(),
-          max_retry          :: non_neg_integer(),
+          retry              :: {non_neg_integer(), non_neg_integer(), non_neg_integer()},
           options            :: map()
          }).
 %% fetch all changes received by a listener à that time.
@@ -144,7 +142,6 @@ init(Parent, Conn, Options) ->
   %% initialize the state
   State = #state{ parent = Parent,
                   conn = Conn,
-                  last_seq = undefined,
                   retry = reset_retry(Options),
                   hackney_timeout = maps:get(timeout, Options, ?DEFAULT_TIMEOUT),
                   options = Options},
@@ -194,12 +191,12 @@ maybe_retry(State, ExitReason) ->
   _ = (catch hackney:close(Ref)),
   if
     Retries /= 0 ->
-      lager:warning("~s retrying connection...~n", [?MODULE_STRING]),
+      _ = lager:warning("~s retrying connection...~n", [?MODULE_STRING]),
       _ = erlang:send_after(Delay, self(), connect),
       State2 = State#state{ retry={Retries - 1, rand_increment(Delay, Max), Max} },
       wait_retry(State2);
     true ->
-      lager:warning("~s: num of retries exceeded the limit.~n", [?MODULE_STRING]),
+      _ = lager:warning("~s: num of retries exceeded the limit.~n", [?MODULE_STRING]),
       cleanup(State, ExitReason),
       exit(normal)
   end.
