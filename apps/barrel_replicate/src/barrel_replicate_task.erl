@@ -99,8 +99,7 @@ init({RepId, Source0, Target0, Options}) ->
   ok = barrel_replicate_metrics:create_task(Metrics, Options),
   barrel_replicate_metrics:update_task(Metrics),
   {ok, State}.
-
-
+  
 start_changes_feed_process(Source, StartSeq) ->
   Self = self(),
   Callback =
