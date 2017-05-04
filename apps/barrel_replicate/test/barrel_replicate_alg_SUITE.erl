@@ -80,11 +80,14 @@ changes() ->
 one_doc(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
-
   Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
-  {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
-
+  {ok, _} = barrel_replicate_alg:replicate(
+    {barrel_local, <<"source">>},
+    {barrel_local, <<"testdb">>},
+    Changes,
+    Metrics
+  ),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
 
@@ -96,11 +99,14 @@ source_not_empty(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, _RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, Doc2, _} = barrel_local:get(<<"source">>, <<"a">>, []),
-
   Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
-  {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
-
+  {ok, _} = barrel_replicate_alg:replicate(
+    {barrel_local, <<"source">>},
+    {barrel_local, <<"testdb">>},
+    Changes,
+    Metrics
+  ),
   {ok, Doc2, _} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok.
 
@@ -109,11 +115,14 @@ deleted_doc(_Config) ->
   {ok, <<"a">>, RevId} = barrel_local:post(<<"source">>, Doc, []),
   {ok, #{ <<"id">> := <<"a">>}, #{<<"rev">> := RevId }} = barrel_local:get(<<"source">>, <<"a">>, []),
   {ok, _, _} = barrel_local:delete(<<"source">>, <<"a">>, [{rev, RevId}]),
-
   Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
-  {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
-
+  {ok, _} = barrel_replicate_alg:replicate(
+    {barrel_local, <<"source">>},
+    {barrel_local, <<"testdb">>},
+    Changes,
+    Metrics
+  ),
   {error, not_found} = barrel_local:get(<<"testdb">>, <<"a">>, []),
   ok.
 
@@ -124,10 +133,14 @@ deleted_doc(_Config) ->
 random_activity(_Config) ->
   Scenario = scenario(),
   ExpectedResults = play_scenario(Scenario, <<"source">>),
-
   Metrics = barrel_replicate_metrics:new(),
   Changes = changes(),
-  {ok, _} = barrel_replicate_alg:replicate(<<"source">>, <<"testdb">>, Changes, Metrics),
+  {ok, _} = barrel_replicate_alg:replicate(
+    {barrel_local, <<"source">>},
+    {barrel_local, <<"testdb">>},
+    Changes,
+    Metrics
+  ),
   ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>),
   ok = purge_scenario(ExpectedResults, <<"source">>),
   ok = purge_scenario(ExpectedResults, <<"testdb">>),

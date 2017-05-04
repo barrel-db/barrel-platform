@@ -192,25 +192,14 @@ terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 
-%% TODO: check if the backend is registered or the db exists
 maybe_connect({Backend, Uri}) ->
   {ok, Conn} = Backend:connect(Uri),
-  {ok, {Backend, Conn}};
+  {ok, {Backend, Conn}}.
 
-%% maybe_connect({Backend, Uri, Options}) -> Backend:connect(Uri);
-maybe_connect(Db) -> {ok, Db}.
-
+%% TODO: really handle closing
 %% maybe_close({Mod, ModState}) -> Mod:disconnect(ModState);
 maybe_close(_) -> ok.
 
-
-database_exist(Db) when is_binary(Db) ->
-  case barrel_store:whereis_db(Db) of
-    undefined ->
-      false;
-    _ ->
-      true
-  end;
 database_exist({Backend, Uri}) ->
   case catch Backend:database_infos(Uri) of
     {ok, _} -> true;

@@ -59,8 +59,8 @@ end_per_suite(Config) ->
 
 checkpoints(_Config) ->
   RepId = <<"repdid">>,
-  Source = <<"source">>,
-  Target = <<"testdb">>,
+  Source = {barrel_local, <<"source">>},
+  Target = {barrel_local, <<"testdb">>},
   Options = [{checkpoint_size, 5}],
   C0 = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   C1 = barrel_replicate_checkpoint:set_last_seq(4, C0),
@@ -90,8 +90,8 @@ checkpoints(_Config) ->
 
 history_size(_Config) ->
   RepId = <<"repdid">>,
-  Source = <<"source">>,
-  Target = <<"testdb">>,
+  Source = {barrel_local, <<"source">>},
+  Target = {barrel_local, <<"testdb">>},
   Options = [{checkpoint_size, 5}, {checkpoint_max_history, 3}],
 
   replication_session([5,10,12], Source, Target, Options, RepId),

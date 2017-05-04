@@ -77,11 +77,7 @@ get(Db, Id, Opts) when is_binary(Db) ->
   barrel_db:get(Db, Id, Opts).
 
 put_rev({Mod, ModState}, Doc, History, Deleted, Opts) ->
-  Mod:put_rev(ModState, Doc, History, Deleted, Opts);
-put_rev(Db, Doc, History, Deleted, Opts) when is_binary(Db) ->
-  barrel_local:put_rev(Db, Doc, History, Deleted, Opts).
+  Mod:put_rev(ModState, Doc, History, Deleted, Opts).
 
 revsdiff({Mod, ModState}, DocId, History) ->
-  Mod:revsdiff(ModState, DocId, History);
-revsdiff(Conn, DocId, History) ->
-  barrel_local:revsdiff(Conn, DocId, History).
+  Mod:revsdiff(ModState, DocId, History).
