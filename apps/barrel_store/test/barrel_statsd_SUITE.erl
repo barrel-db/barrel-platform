@@ -67,7 +67,6 @@ end_per_suite(Config) ->
   Config.
 
 plugin(_Config) ->
-  {ok, _} = barrel_stats_statsd:start(),
   start_udp_server(?STATSD_PORT),
   Name = [<<"replication">>, <<"repid">>, <<"doc_reads">>],
   barrel_metrics:init(counter, Name),

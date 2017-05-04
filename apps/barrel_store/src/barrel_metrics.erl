@@ -17,23 +17,13 @@
 
 %% API
 
--export([ start/0
-        , init/2
+-export([ init/2
         , increment/1
         , increment/2
         , set_value/2
         , duration/2
         , duration_since/2
         ]).
-
-start() ->
-  Env = application:get_env(barrel_store, metrics, undefined),
-  case Env of
-    undefined -> ok;
-    Env ->
-      Plugin = proplists:get_value(plugin, Env),
-      Plugin:start()
-  end.
 
 init(Type, Name) ->
   Env = application:get_env(barrel_store, metrics, undefined),
