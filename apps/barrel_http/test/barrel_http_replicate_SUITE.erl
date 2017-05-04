@@ -86,8 +86,7 @@ one_doc(Config) ->
   TargetConn = proplists:get_value(target_conn, Config),
   RepConfig = #{<<"source">> => SourceConn,
                 <<"target">> => TargetConn},
-  {ok, #{<<"replication_id">> := RepId}} =
-    barrel_replicate:start_replication(RepConfig, []),
+  {ok, #{<<"replication_id">> := RepId}} = barrel_replicate:start_replication(RepConfig, []),
   %% {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   {ok, <<"a">>, RevId} = barrel_local:post(Source, Doc, []),

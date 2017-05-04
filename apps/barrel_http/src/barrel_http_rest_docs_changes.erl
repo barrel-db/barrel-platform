@@ -31,7 +31,7 @@ route(#{method := <<"GET">>} = Req, State) ->
   check_database_db(Req, State);
 route(Req, State) ->
   {ok, Req2, State} = barrel_http_reply:error(405, Req, []),
-  {shutdown, Req2, State}.
+  {stop, Req2}.
 
 check_database_db(Req, State) ->
   Database = cowboy_req:binding(database, Req),
@@ -41,7 +41,7 @@ check_database_db(Req, State) ->
     _Error ->
       _ = lager:info("unknown database requested: ~p~n", [Database]),
       {ok, Req3, S} = barrel_http_reply:error(400, "unknown database", Req, State),
-      {shutdown, Req3, S}
+      {stop, Req3}
   end.
 
 
@@ -51,7 +51,7 @@ check_params(Req, State) ->
   case parse_params(Params, StateDefault) of
     {error, {unknown_param, _}} ->
       {ok, Req2, S} = barrel_http_reply:error(400, "unknown parameter", Req, State),
-      {shutdown, Req2, S};
+      {stop, Req2};
     {ok, State2} ->
       check_eventsource_headers(Req, State2)
   end.
