@@ -147,6 +147,7 @@ init(Parent, Conn, Options) ->
                   max_retry = maps:get(max_retry, Options, 5),
                   delay_before_retry = maps:get(delay_before_retry, Options, 500),
                   options = Options},
+  proc_lib:init_ack(Parent, {ok, self()}),
   init_feed(State).
 
 init_feed(#state{retry = 0} = State ) ->
@@ -154,8 +155,7 @@ init_feed(#state{retry = 0} = State ) ->
   exit(normal);
 
 init_feed(State) ->
-  #state{parent = Parent,
-         conn = Conn,
+  #state{conn = Conn,
          last_seq = LastSeq,
          options = Options} = State,
   Since = case LastSeq of
@@ -178,7 +178,6 @@ init_feed(State) ->
            end,
   Url = barrel_httpc_lib:make_url(Conn, <<"docs">>, Params),
   ReqOpts = [{pool, none}, {async, once}, {recv_timeout, infinity}],
-  proc_lib:init_ack(Parent, {ok, self()}),
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
       wait_response(State#state{ref = Ref});

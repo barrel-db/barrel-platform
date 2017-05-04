@@ -137,9 +137,6 @@ handle_call(stop, _From, State) ->
 handle_cast(shutdown, State) ->
   {stop, normal, State}.
 
-handle_info({ack, _, {ok, _}}, S) ->
-  {noreply, S};
-
 handle_info({change, Change}, S) ->
   Source = S#st.source,
   Target = S#st.target,
