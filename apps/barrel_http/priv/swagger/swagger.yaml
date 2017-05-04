@@ -425,6 +425,15 @@ paths:
        404:
          description: Replication task not found
 
+   get:
+     tags:
+       - Replications
+     summary: Retrieve the list of replications tasks
+     description: Retrieve the list of replications tasks
+     responses:
+       200:
+         description: replication tasks list
+
  /replicate/{repid}:
 
    get:

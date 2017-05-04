@@ -27,9 +27,11 @@
         , reject_replication_name_unknown/1
         , reject_store_unknown/1
         , reject_bad_json /1
+        , list_replication_tasks/1
         ]).
 
 all() -> [ accept_post_get
+         , list_replication_tasks
          , accept_local_db
          , accept_put_get
          , accept_delete
@@ -94,6 +96,18 @@ accept_post_get(_Config) ->
   #{<<"docs_read">> := 1,
     <<"docs_written">> := 1} = Metrics,
   io:format("replication name ~p~n", [RepId]),
+  ok = barrel_local:delete_replication(RepIdBin),
+  ok.
+
+list_replication_tasks(_Config) ->
+  %% create a replication task from one db to the other
+  Request = #{<<"source">> => <<"http://localhost:7080/dbs/dba">>,
+              <<"target">> => <<"http://localhost:7080/dbs/dbb">>},
+  {200, R} = test_lib:req(post, "/replicate", Request),
+  #{<<"replication_id">> := RepId} = jsx:decode(R, [return_maps]),
+  {200, R2} = test_lib:req(get, "/replicate"),
+  #{ <<"tasks">> := Tasks} = jsx:decode(R2, [return_maps]),
+  [RepId] = Tasks,
   ok = barrel_local:delete_replication(RepId),
   ok.
 

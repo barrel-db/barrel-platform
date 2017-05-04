@@ -30,7 +30,12 @@ route(Req, #state{method= <<"POST">>}=State) ->
 route(Req, #state{method= <<"PUT">>}=State) ->
   check_body(Req, State);
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_repid(Req, State);
+  case cowboy_req:binding(repid, Req) of
+    undefined ->
+      list_replications(Req, State);
+    _ ->
+      check_repid(Req, State)
+  end;
 route(Req, #state{method= <<"DELETE">>}=State) ->
   check_repid(Req, State);
 route(Req, State) ->
@@ -114,8 +119,9 @@ is_db_exist({barrel_local, DbName}) ->
     _ -> false
   end.
 
-
-
+list_replications(Req, State) ->
+  All = barrel_replicate:all_replication_tasks(),
+  barrel_http_reply:doc(#{ <<"tasks">> => lists:sort(All)}, Req, State).
 
 get_resource(Req, State) ->
   Repid = cowboy_req:binding(repid, Req),

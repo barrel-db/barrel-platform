@@ -146,10 +146,10 @@ list_replication_tasks(_Config) ->
     <<"source">> => <<"source">>,
     <<"target">> => <<"testdb">>},
   {ok, #{<<"replication_id">> := <<"b">>}} = barrel_replicate:start_replication(RepConfig1, Options),
-  [<<"a">>, <<"b">>] = barrel_replicate:all_replication_tasks().
-  
-  
-
+  [<<"a">>, <<"b">>] = barrel_replicate:all_replication_tasks(),
+  ok = barrel_replicate:delete_replication(<<"b">>),
+  [<<"a">>] = barrel_replicate:all_replication_tasks().
+ 
 persistent_replication(_Config) ->
   RepId = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
