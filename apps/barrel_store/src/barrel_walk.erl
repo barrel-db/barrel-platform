@@ -16,7 +16,7 @@
 
 -export([walk/5]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 
 -define(DEFAULT_MAX, 10000).

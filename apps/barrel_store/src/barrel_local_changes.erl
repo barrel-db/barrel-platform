@@ -35,7 +35,7 @@
   system_terminate/4
 ]).
 
--include_lib("barrel_store/include/barrel_store.hrl").
+-include("barrel.hrl").
 
 -define(TIMEOUT, 5000).
 

@@ -29,7 +29,7 @@
   persist_db/1
 ]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 all() ->
   [

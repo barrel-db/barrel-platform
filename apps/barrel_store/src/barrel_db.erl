@@ -56,7 +56,7 @@
   code_change/3
 ]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 %% internal processes
 -define(default_timeout, 5000).

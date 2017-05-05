@@ -167,7 +167,7 @@
 
 -deprecated([create_db/2]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 create_db(DbId, Config) ->
   _ = lager:warning("barrel_db:create/2 is deprecated", []),

@@ -34,7 +34,7 @@
 
 -export_types([docid/0, revid/0]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 %% @doc generate a unique revision id for a document.
 %%

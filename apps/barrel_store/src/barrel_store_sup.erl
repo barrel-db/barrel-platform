@@ -27,7 +27,7 @@
 %% Supervisor callbacks
 -export([init/1]).
 
--include("barrel_store.hrl").
+-include("barrel.hrl").
 
 -define(SERVER, ?MODULE).
 
