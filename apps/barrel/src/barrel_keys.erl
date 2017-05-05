@@ -57,7 +57,7 @@ sys_key(DocId) -> << (prefix(sys_doc))/binary,  DocId/binary>>.
 
 rev_key(DocId, Rev) -> << DocId/binary, 1, Rev/binary >>.
 
-res_key(RId) -> << (prefix(res))/binary, RId:32>>.
+res_key(RId) -> << (prefix(res))/binary, RId:64>>.
 
 %% index keys
 
