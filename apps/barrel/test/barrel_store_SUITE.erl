@@ -38,11 +38,11 @@ all() ->
   ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 end_per_suite(Config) ->
-  application:stop(barrel_store),
+  application:stop(barrel),
   Config.
 
 
@@ -69,14 +69,14 @@ create_db(_Config) ->
 persist_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb">>}} = barrel_store:create_db(<<"testdb">>, #{}),
   [<<"testdb">>] = barrel_store:databases(),
-  ok = application:stop(barrel_store),
+  ok = application:stop(barrel),
   io:format("stopped the database", []),
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   [<<"testdb">>] = barrel_store:databases(),
   io:format("started the database", []),
   ok = barrel_store:delete_db(<<"testdb">>),
   [] = barrel_store:databases(),
-  ok = application:stop(barrel_store),
+  ok = application:stop(barrel),
   timer:sleep(100),
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   [] = barrel_store:databases().

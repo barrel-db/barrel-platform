@@ -39,7 +39,7 @@ all() ->
   ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 init_per_testcase(_, Config) ->

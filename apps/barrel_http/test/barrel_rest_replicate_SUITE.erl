@@ -42,7 +42,7 @@ all() -> [ accept_post_get
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_http),
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -69,7 +69,7 @@ end_per_testcase(_, Config) ->
 end_per_suite(Config) ->
   ok = application:stop(barrel_http),
   ok = application:stop(barrel_replicate),
-  ok = application:stop(barrel_store),
+  ok = application:stop(barrel),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 

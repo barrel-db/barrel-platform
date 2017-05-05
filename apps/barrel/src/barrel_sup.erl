@@ -17,7 +17,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(barrel_store_sup).
+-module(barrel_sup).
 
 -behaviour(supervisor).
 

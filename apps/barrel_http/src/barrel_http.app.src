@@ -9,7 +9,7 @@
      sasl,
      lager,
      crypto,
-     barrel_store,
+     barrel,
      barrel_replicate,
      cowboy,
      hackney

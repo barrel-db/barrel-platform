@@ -53,7 +53,7 @@
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel_replicate),
-  {ok, _} = application:ensure_all_started(barrel_store),
+  {ok, _} = application:ensure_all_started(barrel),
   {ok, _} = application:ensure_all_started(barrel_replicate),
   Config.
 
@@ -69,7 +69,7 @@ end_per_testcase(_, _Config) ->
 
 end_per_suite(Config) ->
   ok = application:stop(barrel_replicate),
-  ok = application:stop(barrel_store),
+  ok = application:stop(barrel),
   Config.
 
 %% =============================================================================
