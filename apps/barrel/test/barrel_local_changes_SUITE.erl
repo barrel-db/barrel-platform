@@ -54,29 +54,29 @@ end_per_suite(Config) ->
   Config.
 
 collect_change(_Config) ->
-  {ok, Pid} = barrel_local_changes:start_link(<<"testdb">>, #{since => 0, mode => sse}),
-  [] = barrel_local_changes:changes(Pid),
+  {ok, Pid} = barrel_changes_listener:start_link(<<"testdb">>, #{since => 0, mode => sse}),
+  [] = barrel_changes_listener:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _RevId} = barrel_local:post(<<"testdb">>, Doc, []),
   timer:sleep(100),
-  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_local_changes:changes(Pid),
-  [] = barrel_local_changes:changes(Pid),
-  ok = barrel_local_changes:stop(Pid).
+  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_changes_listener:changes(Pid),
+  [] = barrel_changes_listener:changes(Pid),
+  ok = barrel_changes_listener:stop(Pid).
 
 collect_changes(_Config) ->
-  {ok, Pid} = barrel_local_changes:start_link(<<"testdb">>, #{since => 0, mode => sse}),
-  [] = barrel_local_changes:changes(Pid),
+  {ok, Pid} = barrel_changes_listener:start_link(<<"testdb">>, #{since => 0, mode => sse}),
+  [] = barrel_changes_listener:changes(Pid),
   Doc = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_local:post(<<"testdb">>, Doc, []),
   timer:sleep(100),
-  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_local_changes:changes(Pid),
-  [] = barrel_local_changes:changes(Pid),
+  [#{ <<"seq">> := 1, <<"id">> := <<"aa">>}] = barrel_changes_listener:changes(Pid),
+  [] = barrel_changes_listener:changes(Pid),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _} = barrel_local:post(<<"testdb">>, Doc2, []),
   {ok, _, _} = barrel_local:get(<<"testdb">>, <<"bb">>, []),
   timer:sleep(100),
-  [#{ <<"seq">> := 2, <<"id">> := <<"bb">>}] = barrel_local_changes:changes(Pid),
-  [] = barrel_local_changes:changes(Pid),
+  [#{ <<"seq">> := 2, <<"id">> := <<"bb">>}] = barrel_changes_listener:changes(Pid),
+  [] = barrel_changes_listener:changes(Pid),
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
   Doc4 = #{ <<"id">> => <<"dd">>, <<"v">> => 1},
   {ok, <<"cc">>, _} = barrel_local:post(<<"testdb">>, Doc3, []),
@@ -87,9 +87,9 @@ collect_changes(_Config) ->
   [
     #{ <<"seq">> := 3, <<"id">> := <<"cc">>},
     #{ <<"seq">> := 4, <<"id">> := <<"dd">>}
-  ] = barrel_local_changes:changes(Pid),
+  ] = barrel_changes_listener:changes(Pid),
   
-  ok = barrel_local_changes:stop(Pid).
+  ok = barrel_changes_listener:stop(Pid).
 
 changes_feed_callback(_Config) ->
   Self = self(),
@@ -98,7 +98,7 @@ changes_feed_callback(_Config) ->
     Self ! {change, Change}
   end,
   Options = #{since => 0, mode => sse, changes_cb => Callback },
-  {ok, Pid} = barrel_local_changes:start_link(<<"testdb">>, Options),
+  {ok, Pid} = barrel_changes_listener:start_link(<<"testdb">>, Options),
   
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
@@ -111,7 +111,7 @@ changes_feed_callback(_Config) ->
     #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
     #{ <<"seq">> := 2, <<"id">> := <<"bb">>}
   ] = collect_changes(2, queue:new()),
-  ok = barrel_local_changes:stop(Pid).
+  ok = barrel_changes_listener:stop(Pid).
 
 
 collect_changes(0, Q) ->

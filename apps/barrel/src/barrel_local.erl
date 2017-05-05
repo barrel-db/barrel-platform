@@ -399,10 +399,10 @@ replication_info(Name) ->
 %% CHANGES API
 
 start_changes_listener(DbId, Options) ->
-  barrel_local_changes:start_link(DbId, Options).
+  barrel_changes_listener:start_link(DbId, Options).
 
 stop_changes_listener(ListenerPid) ->
-  barrel_local_changes:stop(ListenerPid).
+  barrel_changes_listener:stop(ListenerPid).
 
 get_changes(ListenerPid) ->
-  barrel_local_changes:changes(ListenerPid).
+  barrel_changes_listener:changes(ListenerPid).

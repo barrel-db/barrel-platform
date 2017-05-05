@@ -105,7 +105,7 @@ init_feed_changes(Req, #state{feed=eventsource, options=Options}=S) ->
   Since = S#state.since,
   IncludeDoc = proplists:get_value(include_doc, Options, false),
   SseOptions = #{since => Since, mode => sse, changes_cb => Callback, include_doc => IncludeDoc },
-  {ok, Pid} = barrel_local_changes:start_link(Source, SseOptions),
+  {ok, Pid} = barrel_changes_listener:start_link(Source, SseOptions),
 
   Req3 = cowboy_req:stream_reply(200, #{<<"content">> => <<"text/event-stream">>}, Req),
   {ok, Req4, S2} = init_hearbeat(Req3, S),
