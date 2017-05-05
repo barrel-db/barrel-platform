@@ -28,8 +28,11 @@ fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
 
   {ok, Itr} = rocksdb:iterator(Db, ReadOptions),
   try do_fold_prefix(Itr, Prefix, Fun, AccIn, parse_fold_options(Opts))
-  after rocksdb:iterator_close(Itr)
+  after safe_iterator_close(Itr)
   end.
+
+
+safe_iterator_close(Itr) -> (catch rocksdb:iterator_close(Itr)).
 
 do_fold_prefix(Itr, Prefix, Fun, AccIn, Opts = #{ gt := GT, gte := GTE}) ->
   {Start, Inclusive} = case {GT, GTE} of
