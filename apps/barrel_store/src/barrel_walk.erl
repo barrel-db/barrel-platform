@@ -53,7 +53,7 @@ walk(#db{id=Id, store=Store}, Path, Fun, AccIn, Opts) ->
                    end
                end,
 
-  try barrel_rocksdb:fold_prefix(Store, Prefix1, WrapperFun, AccIn, FoldOptions)
+  try barrel_fold:fold_prefix(Store, Prefix1, WrapperFun, AccIn, FoldOptions)
   after rocksdb:release_snapshot(Snapshot)
   end.
 

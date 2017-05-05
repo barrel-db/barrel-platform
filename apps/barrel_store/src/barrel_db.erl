@@ -283,7 +283,7 @@ fold_by_id_int(#db{ store=Store }, UserFun, AccIn, Opts) ->
     end
   end,
 
-  try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, Opts2)
+  try barrel_fold:fold_prefix(Store, Prefix, WrapperFun, AccIn, Opts2)
   after rocksdb:release_snapshot(Snapshot)
   end.
 
@@ -336,7 +336,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
     Fun(Change, Acc)
   end,
 
-  try barrel_rocksdb:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOpts)
+  try barrel_fold:fold_prefix(Store, Prefix, WrapperFun, AccIn, FoldOpts)
   after rocksdb:release_snapshot(Snapshot)
   end.
 
@@ -512,7 +512,7 @@ init([DbId, Config]) ->
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
   Prefix = barrel_keys:prefix(db_meta),
-  barrel_rocksdb:fold_prefix(
+  barrel_fold:fold_prefix(
     Store,
     Prefix,
     fun(<< _:3/binary, Key/binary >>, ValBin, Meta) ->

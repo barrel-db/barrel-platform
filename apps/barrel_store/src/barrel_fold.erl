@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_rocksdb).
+-module(barrel_fold).
 -author("Benoit Chesneau").
 
 %% API
@@ -30,7 +30,6 @@ fold_prefix(Db, Prefix, Fun, AccIn, Opts) ->
   try do_fold_prefix(Itr, Prefix, Fun, AccIn, parse_fold_options(Opts))
   after safe_iterator_close(Itr)
   end.
-
 
 safe_iterator_close(Itr) -> (catch rocksdb:iterator_close(Itr)).
 
