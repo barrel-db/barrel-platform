@@ -1,4 +1,4 @@
-%% Copyright 2016-2017, Benoit Chesneau
+%% Copyright 2017, Benoit Chesneau
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +17,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(barrel_sup).
+-module(barrel_store_sup).
 
 -behaviour(supervisor).
 
@@ -44,26 +44,23 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  StoreSup =
-    #{id => barrel_store_sup,
-      start => {barrel_store_sup, start_link, []},
+  _ = ets:new(barrel_dbs, [ordered_set, named_table, public, {keypos, #db.id}]),
+
+  DbSup = #{id => barrel_db_sup,
+    start => {barrel_db_sup, start_link, []},
+    restart => permanent,
+    shutdown => infinity,
+    type => supervisor,
+    modules => [barrel_db_sup]},
+
+  Store =
+    #{
+      id => barrel_store,
+      start => {barrel_store, start_link, []},
       restart => permanent,
-      shutdown => infinity,
-      type => supervisor,
-      modules => [barrel_store_sup]},
-
-  Event = #{id => barrel_event,
-            start => {barrel_event, start_link, []},
-            restart => permanent,
-            shutdown => infinity,
-            type => worker,
-            modules => [barrel_event]},
-
-  Status =  #{id => barrel_task_status,
-              start => {barrel_task_status, start_link, []},
-              restart => permanent,
-              shutdown => infinity,
-              type => worker,
-              modules => [barrel_task_status]},
-
-  {ok, { {one_for_one, 4, 3600}, [StoreSup, Event, Status]} }.
+      shutdown => 2000,
+      type => worker,
+      modules => [barrel_store]
+    },
+  %% TODO: move to a map
+  {ok, { {one_for_one, 4, 3600}, [DbSup, Store]} }.
