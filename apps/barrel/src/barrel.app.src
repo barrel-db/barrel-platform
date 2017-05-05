@@ -10,6 +10,7 @@
      lager,
      crypto,
      rocksdb,
+     jsx,
      uuid,
      hooks
     ]},
