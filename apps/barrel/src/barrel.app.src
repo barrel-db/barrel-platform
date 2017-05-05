@@ -11,6 +11,7 @@
      crypto,
      rocksdb,
      jsx,
+     jsone,
      uuid,
      hooks
     ]},
