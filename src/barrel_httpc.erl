@@ -111,17 +111,17 @@
 ].
 
 -type batch_op() ::
-  {put, Doc :: barrel_local:doc()} |
-  {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
-  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
-  {put, Doc :: barrel_local:doc(), Attachments :: [attachment()], Rev :: barrel_local:revid()} |
-  {post, Doc :: barrel_local:doc()} |
-  {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
-  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()]} |
-  {post, Doc :: barrel_local:doc(), Attachments :: [attachment()], IsUpsert :: boolean()} |
-  {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
-  {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
-  {put_rev, Doc :: barrel_local:doc(), Attachments :: [attachment()], History :: list(), Deleted :: boolean()}.
+  {put, Doc :: barrel:doc()} |
+  {put, Doc :: barrel:doc(), Rev :: barrel:revid()} |
+  {put, Doc :: barrel:doc(), Attachments :: [attachment()]} |
+  {put, Doc :: barrel:doc(), Attachments :: [attachment()], Rev :: barrel:revid()} |
+  {post, Doc :: barrel:doc()} |
+  {post, Doc :: barrel:doc(), IsUpsert :: boolean()} |
+  {post, Doc :: barrel:doc(), Attachments :: [attachment()]} |
+  {post, Doc :: barrel:doc(), Attachments :: [attachment()], IsUpsert :: boolean()} |
+  {delete, DocId :: barrel:docid(), Rev :: barrel:revid()} |
+  {put_rev, Doc :: barrel:doc(), History :: list(), Deleted :: boolean()} |
+  {put_rev, Doc :: barrel:doc(), Attachments :: [attachment()], History :: list(), Deleted :: boolean()}.
 
 -export_type([
   conn/0,

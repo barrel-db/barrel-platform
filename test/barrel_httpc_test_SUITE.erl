@@ -96,8 +96,8 @@ init_per_testcase(_, Config) ->
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_local:delete_db(<<"testdb">>),
-  ok = barrel_local:delete_db(<<"source">>),
+  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"source">>),
   ok.
 
 end_per_suite(Config) ->
@@ -179,7 +179,7 @@ async_update(Config) ->
    #{ <<"rev">> := RevId } } = barrel_httpc:get(db(Config), <<"a">>, []),
   ok= barrel_httpc:put(db(Config), Doc#{ <<"v">> => 2 }, [{async, true}, {rev, RevId}]),
   timer:sleep(400),
-  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel_local:get(<<"testdb">>, <<"a">>, []).
+  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel:get(<<"testdb">>, <<"a">>, []).
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},
