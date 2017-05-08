@@ -40,11 +40,11 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_local:create_db(<<"testdb">>, #{}),
+  _ = barrel:create_db(<<"testdb">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel_local:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"testdb">>),
   Config.
 
 
@@ -61,9 +61,9 @@ accept_get(_Config) ->
   0 = length(Rows1),
 
   D1 = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, CatRevId} = barrel_local:post(<<"testdb">>, D1, []),
+  {ok, _, CatRevId} = barrel:post(<<"testdb">>, D1, []),
   D2 = #{<<"id">> => <<"dog">>, <<"name">> => <<"dingo">>},
-  {ok, _, DogRevId} = barrel_local:post(<<"testdb">>, D2, []),
+  {ok, _, DogRevId} = barrel:post(<<"testdb">>, D2, []),
 
   {200, R2} = test_lib:req(get, "/dbs/testdb/docs"),
   A2 = jsx:decode(R2, [return_maps]),
@@ -100,7 +100,7 @@ create_docs(Prefix, N, Conn) ->
   B = list_to_binary(S),
   Key = <<Prefix/binary, B/binary>>,
   Doc = #{<<"id">> => Key, <<"v">> => 1},
-  {ok, _, _} = barrel_local:post(Conn, Doc, []),
+  {ok, _, _} = barrel:post(Conn, Doc, []),
   create_docs(Prefix, N-1, Conn).
 
 

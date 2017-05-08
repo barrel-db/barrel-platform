@@ -115,7 +115,7 @@ check_resource_exists(Req, S) ->
 
 check_resource_exists2(Req, S) ->
   #state{ database=Database, docid=DocId, options=Options } = S,
-  case barrel_local:get(Database, DocId, Options) of
+  case barrel:get(Database, DocId, Options) of
     {ok, Doc, Meta} ->
       route2(Req, S#state{doc=Doc, meta=Meta});
     {error, not_found} ->
@@ -142,19 +142,19 @@ create_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel_local:post(Database, Json, [{async, Async}]), Req};
+                       {barrel:post(Database, Json, [{async, Async}]), Req};
                      <<"PUT">> ->
                        #{edit := EditStr}
                          = cowboy_req:match_qs([{edit, [], undefined}], Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           {barrel_local:put(Database, Json, [{async, Async}|Options]), Req };
+                           {barrel:put(Database, Json, [{async, Async}|Options]), Req };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
                            Deleted = maps:get(<<"deleted">>, Json, false),
-                           {barrel_local:put_rev(Database, Doc, History, Deleted, [{async, Async}|Options]), Req }
+                           {barrel:put_rev(Database, Doc, History, Deleted, [{async, Async}|Options]), Req }
                        end
                    end,
   case Result of
@@ -180,7 +180,7 @@ delete_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
 
   #state{ database=Database, docid=DocId, options=Options} = State,
-  Result = barrel_local:delete(Database, DocId, [{async, Async}|Options]),
+  Result = barrel:delete(Database, DocId, [{async, Async}|Options]),
   case Result of
     {ok, DocId, RevId2} ->
       Reply = #{<<"ok">> => true,

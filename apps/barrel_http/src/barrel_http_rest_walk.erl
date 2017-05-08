@@ -71,7 +71,7 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
     end,
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
-  {Count, _} = barrel_local:walk(Database, Path, Fun, {0, <<"">>}, Options),
+  {Count, _} = barrel:walk(Database, Path, Fun, {0, <<"">>}, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -106,7 +106,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -123,7 +123,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
 
 
 start_chunked_response(Req0, #state{database=Database}=State) ->
-  case barrel_local:db_infos(Database) of
+  case barrel:db_infos(Database) of
     {ok, Infos} ->
       Seq = maps:get(last_update_seq, Infos),
       Req = cowboy_req:stream_reply(

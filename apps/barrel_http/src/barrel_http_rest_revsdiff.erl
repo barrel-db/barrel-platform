@@ -27,7 +27,7 @@ route(<<"POST">>, Database, Req, State) ->
   {ok, Body, Req2} = cowboy_req:read_body(Req),
   RequestedDocs = jsx:decode(Body, [return_maps]),
   Result = maps:fold(fun(DocId, RevIds, Acc) ->
-    {ok, Missing, Possible} = barrel_local:revsdiff(Database, DocId, RevIds),
+    {ok, Missing, Possible} = barrel:revsdiff(Database, DocId, RevIds),
                          Acc#{DocId => #{<<"missing">> => Missing,
                                          <<"possible_ancestors">> => Possible}}
                      end,#{}, RequestedDocs),

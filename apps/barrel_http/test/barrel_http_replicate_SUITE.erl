@@ -52,8 +52,8 @@ init_per_testcase(_, Config) ->
    {source, <<"source">>}, {target, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel_local:delete_db(<<"testdb">>),
-  ok = barrel_local:delete_db(<<"source">>),
+  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"source">>),
   ok.
 
 end_per_suite(Config) ->
@@ -89,11 +89,11 @@ one_doc(Config) ->
   {ok, #{<<"replication_id">> := RepId}} = barrel_replicate:start_replication(RepConfig, []),
   %% {ok, Pid} = barrel_replicate:start_replication(SourceConn, TargetConn, []),
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
-  {ok, <<"a">>, RevId} = barrel_local:post(Source, Doc, []),
+  {ok, <<"a">>, RevId} = barrel:post(Source, Doc, []),
   {1, [_]} = source_changes(0),
-  {ok, _, _} = barrel_local:get(Source, <<"a">>, []),
+  {ok, _, _} = barrel:get(Source, <<"a">>, []),
   timer:sleep(200),
-  {ok, Doc, #{ <<"rev">> := RevId}} = barrel_local:get(Target, <<"a">>, []),
+  {ok, Doc, #{ <<"rev">> := RevId}} = barrel:get(Target, <<"a">>, []),
   ok = barrel_replicate:stop_replication(RepId),
   ok.
 
@@ -103,14 +103,14 @@ source_changes(Since) ->
             LastSeq = max(Seq, PreviousLastSeq),
             {ok, {LastSeq, [Change|Changes1]}}
         end,
-  barrel_local:changes_since(<<"source">>, Since, Fun, {Since, []}).
+  barrel:changes_since(<<"source">>, Since, Fun, {Since, []}).
 
 target_not_empty(Config) ->
   {Source, Target} = repctx(Config),
   SourceConn = proplists:get_value(source_conn, Config),
   TargetConn = proplists:get_value(target_conn, Config),
   Doc = #{ <<"id">> => <<"targetnotempty">>, <<"v">> => 1},
-  {ok, <<"targetnotempty">>, RevId} = barrel_local:post(Source, Doc, []),
+  {ok, <<"targetnotempty">>, RevId} = barrel:post(Source, Doc, []),
 
   RepConfig = #{<<"source">> => SourceConn,
                 <<"target">> => TargetConn},
@@ -118,8 +118,8 @@ target_not_empty(Config) ->
     barrel_replicate:start_replication(RepConfig, []),
   timer:sleep(200),
 
-  {ok, Doc, #{ <<"rev">> := RevId}} = barrel_local:get(Target, <<"targetnotempty">>, []),
-  ok = barrel_local:stop_replication(RepId),
+  {ok, Doc, #{ <<"rev">> := RevId}} = barrel:get(Target, <<"targetnotempty">>, []),
+  ok = barrel:stop_replication(RepId),
   ok.
 
 deleted_doc(Config) ->
@@ -128,17 +128,17 @@ deleted_doc(Config) ->
   TargetConn = proplists:get_value(target_conn, Config),
   DocId = <<"tobedeleted">>,
   Doc = #{ <<"id">> => DocId, <<"v">> => 1},
-  {ok, DocId, RevId} = barrel_local:post(Source, Doc, []),
+  {ok, DocId, RevId} = barrel:post(Source, Doc, []),
 
   RepConfig = #{<<"source">> => SourceConn,
                 <<"target">> => TargetConn},
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, []),
-  {ok, _, _} = barrel_local:delete(Source, DocId, [{rev, RevId}]),
-  {error, not_found} = barrel_local:get(Source, DocId, []),
+  {ok, _, _} = barrel:delete(Source, DocId, [{rev, RevId}]),
+  {error, not_found} = barrel:get(Source, DocId, []),
   timer:sleep(400),
-  {error, not_found} = barrel_local:get(Target, DocId, []),
-  ok = barrel_local:stop_replication(RepId),
+  {error, not_found} = barrel:get(Target, DocId, []),
+  ok = barrel:stop_replication(RepId),
   ok.
 
 attachments(Config) ->
@@ -164,7 +164,7 @@ attachments(Config) ->
   #{<<"id">> := AttId,
     <<"blob">> := Blob} = A,
 
-  ok = barrel_local:stop_replication(RepId),
+  ok = barrel:stop_replication(RepId),
   ok.
 
 random_activity(Config) ->
@@ -204,11 +204,11 @@ check(DocName, Map, Config) ->
   DocId = list_to_binary(DocName),
   case maps:get(DocName, Map) of
     deleted ->
-      {error, not_found} = barrel_local:get(Source, DocId, []),
-      {error, not_found} = barrel_local:get(Target, DocId, []);
+      {error, not_found} = barrel:get(Source, DocId, []),
+      {error, not_found} = barrel:get(Target, DocId, []);
     Expected ->
-      {ok, DocSource, _} = barrel_local:get(Source, DocId, []),
-      {ok, DocTarget, _} = barrel_local:get(Target, DocId, []),
+      {ok, DocSource, _} = barrel:get(Source, DocId, []),
+      {ok, DocTarget, _} = barrel:get(Target, DocId, []),
       Expected = maps:get(<<"v">>, DocSource),
       Expected = maps:get(<<"v">>, DocTarget)
   end,
@@ -217,21 +217,21 @@ check(DocName, Map, Config) ->
 put_doc(DocName, Value, Config) ->
   {Source, _Target} = repctx(Config),
   DocId = list_to_binary(DocName),
-  case barrel_local:get(Source, DocId, []) of
+  case barrel:get(Source, DocId, []) of
     {ok, Doc, Meta} ->
       Doc2 = Doc#{<<"v">> => Value},
-      {ok,_,_} = barrel_local:put(Source, Doc2, [{rev, maps:get(<<"rev">>, Meta)}]);
+      {ok,_,_} = barrel:put(Source, Doc2, [{rev, maps:get(<<"rev">>, Meta)}]);
     {error, not_found} ->
       Doc = #{<<"id">> => DocId, <<"v">> => Value},
-      {ok,_,_} = barrel_local:post(Source, Doc, [])
+      {ok,_,_} = barrel:post(Source, Doc, [])
   end.
 
 delete_doc(DocName, Config) ->
   {Source, _Target} = repctx(Config),
   Id = list_to_binary(DocName),
-  {ok, _Doc, Meta} = barrel_local:get(Source, Id, []),
+  {ok, _Doc, Meta} = barrel:get(Source, Id, []),
   RevId = maps:get(<<"rev">>, Meta),
-  barrel_local:delete(Source, Id, [{rev, RevId}]).
+  barrel:delete(Source, Id, [{rev, RevId}]).
 
 generate_scenario() ->
   [ {put, "a", 1}

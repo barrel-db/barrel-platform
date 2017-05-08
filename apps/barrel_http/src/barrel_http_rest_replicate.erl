@@ -113,8 +113,8 @@ is_db_exist({barrel_httpc, Url}) ->
     {200, _} -> true;
     _ -> false
   end;
-is_db_exist({barrel_local, DbName}) ->
-  case barrel_local:db_infos(DbName) of
+is_db_exist({barrel, DbName}) ->
+  case barrel:db_infos(DbName) of
     {ok, _Info} -> true;
     _ -> false
   end.
@@ -159,7 +159,7 @@ delete_resource(Req, #state{repid=Repid}=State) ->
 resource(<<"http://", _/binary>> = Url) -> {barrel_httpc, Url};
 resource(<<"https://", _/binary>> = Url) -> {barrel_httpc, Url};
 resource(undefined) -> undefined;
-resource(DbName) -> {barrel_local, DbName}.
+resource(DbName) -> {barrel, DbName}.
 
 %% =============================================================================
 %% Check posted JSON properties

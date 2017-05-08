@@ -12,7 +12,7 @@
 %% License for the specific language governing permissions and limitations under
 %% the License.
 
--module(barrel_local).
+-module(barrel).
 -author("benoitc").
 
 %% DOC API
@@ -360,7 +360,7 @@ walk(Db, Path, Fun, AccIn, Opts) ->
 %% @deprecated
 find_by_key(Db, Path, Fun, AccIn, Opts) ->
   _ = lager:warning("~s : find_by_key is deprecated", [?MODULE_STRING]),
-  barrel_local:walk(Db, Path, Fun, AccIn, Opts).
+  barrel:walk(Db, Path, Fun, AccIn, Opts).
 
 %% @doc get all revisions ids that differ in a doc from the list given
 -spec revsdiff(Db, DocId, RevIds) -> Res when

@@ -69,7 +69,7 @@ replication_key(RepId) -> {n, l, {barrel_replicate, RepId}}.
 rep_resource({_Mod, _Uri}=Res) ->
   Res;
 rep_resource(DbId) when is_binary(DbId) ->
-  DefaultBackend = application:get_env(barrel_replicate, default_backend, barrel_local),
+  DefaultBackend = application:get_env(barrel_replicate, local_backend, barrel),
   {DefaultBackend, DbId};
 rep_resource(_) ->
   erlang:error(bad_replication_uri).

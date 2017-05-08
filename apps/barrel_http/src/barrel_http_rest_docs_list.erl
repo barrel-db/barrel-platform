@@ -24,7 +24,7 @@
 
 
 get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
-  case barrel_local:db_infos(Database) of
+  case barrel:db_infos(Database) of
     {ok, Info} ->
       Seq = maps:get(last_update_seq, Info),
       get_resource_since(Seq, Database, Req0, State);
@@ -50,7 +50,7 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
     end,
   AccIn = {0, <<"">>},
   Options = [],
-  {Count, _} = barrel_local:multi_get(Database, Fun, AccIn, DocIds, Options),
+  {Count, _} = barrel:multi_get(Database, Fun, AccIn, DocIds, Options),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -82,7 +82,7 @@ get_resource_since(Seq, Database, Req0, #state{idmatch=undefined}=State) ->
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel_local:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -121,7 +121,7 @@ do_write_batch(Json, Req, #state{database=Db}=State) ->
           end,
 
   OPs = maps:get(<<"updates">>, Json),
-  try  barrel_local:write_batch(Db, OPs, [{async, Async}]) of
+  try  barrel:write_batch(Db, OPs, [{async, Async}]) of
     ok ->
       barrel_http_reply:json(200, #{ <<"ok">> => true }, Req, State);
     Results ->

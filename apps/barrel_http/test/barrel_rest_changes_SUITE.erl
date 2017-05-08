@@ -44,7 +44,7 @@ init_per_testcase(_, Config) ->
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel_local:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"testdb">>),
   Config.
 
 end_per_suite(Config) ->
@@ -58,16 +58,16 @@ r(Req) ->
 
 post_cat() ->
   Doc = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
   RevId.
 
 delete_cat(CatRevId) ->
-  {ok, _, RevId} = barrel_local:delete(<<"testdb">>, <<"cat">>, [{rev, CatRevId}]),
+  {ok, _, RevId} = barrel:delete(<<"testdb">>, <<"cat">>, [{rev, CatRevId}]),
   RevId.
 
 post_dog() ->
   Doc = #{<<"id">> => <<"dog">>, <<"name">> => <<"spike">>},
-  {ok, _, RevId} = barrel_local:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
   RevId.
 
 

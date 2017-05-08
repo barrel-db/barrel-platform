@@ -24,12 +24,12 @@
 -include("barrel.hrl").
 
 -type batch() :: tuple().
--type batch_op() :: {put, Doc :: barrel_local:doc()} |
-                    {put, Doc :: barrel_local:doc(), Rev :: barrel_local:revid()} |
-                    {post, Doc :: barrel_local:doc()} |
-                    {post, Doc :: barrel_local:doc(), IsUpsert :: boolean()} |
-                    {delete, DocId :: barrel_local:docid(), Rev :: barrel_local:revid()} |
-                    {put_rev, Doc :: barrel_local:doc(), History :: list(), Deleted :: boolean()} |
+-type batch_op() :: {put, Doc :: barrel:doc()} |
+                    {put, Doc :: barrel:doc(), Rev :: barrel:revid()} |
+                    {post, Doc :: barrel:doc()} |
+                    {post, Doc :: barrel:doc(), IsUpsert :: boolean()} |
+                    {delete, DocId :: barrel:docid(), Rev :: barrel:revid()} |
+                    {put_rev, Doc :: barrel:doc(), History :: list(), Deleted :: boolean()} |
                     map().
 
 -export_type([
@@ -44,8 +44,8 @@ new(Async) ->
   {#{}, self(), make_ref(), Async, 0}.
 
 -spec put(Obj, Rev, BatchIn) -> BatchOut when
-  Obj :: barrel_local:doc(),
-  Rev :: barrel_local:revid(),
+  Obj :: barrel:doc(),
+  Rev :: barrel:revid(),
   BatchIn :: batch(),
   BatchOut :: batch().
 put(Obj, Rev, Batch) ->
@@ -56,7 +56,7 @@ put(Obj, Rev, Batch) ->
   update_batch(Doc#doc.id, Op, Batch).
 
 -spec post(Obj, IsUpsert, BatchIn) -> BatchOut when
-  Obj :: barrel_local:doc(),
+  Obj :: barrel:doc(),
   IsUpsert :: boolean(),
   BatchIn :: batch(),
   BatchOut :: batch().
@@ -78,8 +78,8 @@ post(Obj0, IsUpsert, Batch) ->
 
 
 -spec delete(DocId, Rev, BatchIn) -> BatchOut when
-  DocId :: barrel_local:docid(),
-  Rev :: barrel_local:revid(),
+  DocId :: barrel:docid(),
+  Rev :: barrel:revid(),
   BatchIn :: batch(),
   BatchOut :: batch().
 delete(DocId, Rev, Batch) when is_binary(DocId) ->
@@ -89,8 +89,8 @@ delete(DocId, Rev, Batch) when is_binary(DocId) ->
   update_batch(Doc#doc.id, Op, Batch).
 
 -spec put_rev(Obj, History, Deleted, BatchIn) -> BatchOut when
-  Obj :: barrel_local:doc(),
-  History :: barrel_local:list(),
+  Obj :: barrel:doc(),
+  History :: barrel:list(),
   Deleted :: boolean(),
   BatchIn :: batch(),
   BatchOut :: batch().

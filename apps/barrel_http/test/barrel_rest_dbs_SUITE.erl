@@ -44,13 +44,13 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_local:create_db(<<"testdb">>, #{}),
-  _ = barrel_local:create_db(<<"source">>, #{}),
+  _ = barrel:create_db(<<"testdb">>, #{}),
+  _ = barrel:create_db(<<"source">>, #{}),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel_local:delete_db(<<"testdb">>),
-  ok = barrel_local:delete_db(<<"source">>),
+  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_db(<<"source">>),
   Config.
 
 end_per_suite(Config) ->
@@ -87,7 +87,7 @@ accept_post(_Config) ->
   ok.
 
 reject_bad_json(_Config) ->
-  {400, _} = test_lib:req(post, "/dbs", <<"{badjson">>),
+  {400, _} = test_lib:req(post, "/dbs", <<"{badjson">>),
   ok.
 
 dbs(_Config) ->
