@@ -20,6 +20,7 @@
 -record(state, {conn, method, database, docid, doc}).
 
 init(Req, _Opts) ->
+  barrel_monitor_activity:start(barrel_http_lib:backend_info(Req, system)),
   Method = cowboy_req:method(Req),
   check_database(Req, #state{method=Method}).
 
@@ -34,11 +35,14 @@ check_database(Req, State) ->
       barrel_http_reply:error(404, <<"database not found: ", Database/binary>>, Req, State)
   end.
 
-route(Req, #state{method= <<"PUT">>}=State) ->
+route(Req, #state{method= <<"PUT">>, database=Db}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => update_system_doc, db => Db }),
   create_resource(Req, State);
-route(Req, #state{method= <<"GET">>}=State) ->
+route(Req, #state{method= <<"GET">>, database=Db}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => get_system_doc, db => Db }),
   check_resource_exists(Req, State);
-route(Req, #state{method= <<"DELETE">>}=State) ->
+route(Req, #state{method= <<"DELETE">>, database=Db}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => update_system_doc, db => Db }),
   check_resource_exists(Req, State);
 route(Req, State) ->
   barrel_http_reply:code(405, Req, State).

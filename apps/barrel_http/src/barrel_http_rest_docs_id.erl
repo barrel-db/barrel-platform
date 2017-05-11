@@ -105,7 +105,6 @@ check_id_property(Req, #state{body=Json}=State) ->
       barrel_http_reply:error(400, <<"missing property id in document">>, Req, State)
   end.
 
-
 check_resource_exists(Req, #state{method= <<"DELETE">>}=S) ->
   check_resource_exists2(Req, S);
 check_resource_exists(Req, #state{method= <<"GET">>}=S) ->
@@ -125,13 +124,17 @@ check_resource_exists2(Req, S) ->
   end.
 
 
-route2(Req, #state{method= <<"POST">>}=State) ->
+route2(Req, #state{database=Db, method= <<"POST">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => update, db => Db }),
   create_resource(Req, State);
-route2(Req, #state{method= <<"PUT">>}=State) ->
+route2(Req, #state{database=Db, method= <<"PUT">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => update, db => Db }),
   create_resource(Req, State);
-route2(Req, #state{method= <<"GET">>}=State) ->
+route2(Req, #state{database=Db, method= <<"GET">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => get, db => Db }),
   get_resource(Req, State);
-route2(Req, #state{method= <<"DELETE">>}=State) ->
+route2(Req, #state{database=Db, method= <<"DELETE">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => update, db => Db }),
   delete_resource(Req, State).
 
 

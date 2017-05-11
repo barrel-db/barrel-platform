@@ -29,7 +29,7 @@
          }).
 
 init(StreamID, Req, Opts) ->
-  ok = hooks:run("barrel_http_in", [Req]),
+  ok = hooks:run(barrel_http_in, [Req]),
 	{Commands0, Next} = cowboy_stream:init(StreamID, Req, Opts),
   fold(Commands0, #state{req=Req, next=Next, start_time=erlang:monotonic_time()}).
 
@@ -44,8 +44,7 @@ info(StreamID, Info, State0=#state{next=Next0}) ->
 terminate(StreamID, Reason, #state{next=Next}=State) ->
   #state{status_code=StatusCode, req=Req, start_time=T1} = State,
   T2 = erlang:monotonic_time(),
-  Time = erlang:convert_time_unit(T2 - T1, native, second),
-  ok = hooks:run(barrel_http_out, [Req, StatusCode, Time]),
+  ok = hooks:run(barrel_http_out, [Req, StatusCode, T2 - T1]),
   cowboy_stream:terminate(StreamID, Reason, Next).
 
 fold(Commands, State) ->

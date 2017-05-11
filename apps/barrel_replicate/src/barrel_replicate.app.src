@@ -6,7 +6,8 @@
   {applications,
    [kernel,
     stdlib,
-    lager
+    lager,
+    barrel_common
    ]},
   {env,[]},
   {modules, []},

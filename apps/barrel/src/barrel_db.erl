@@ -90,9 +90,10 @@ infos(DbName) ->
   ).
 
 multi_get(DbName, Fun, AccIn, DocIds, Options) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
-    Db ->
+  transact(
+    multi_get,
+    DbName,
+    fun(Db) ->
       %% parse options
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
@@ -102,35 +103,37 @@ multi_get(DbName, Fun, AccIn, DocIds, Options) ->
       ReadOptions = [{snapshot, Snapshot}],
       Rev = <<"">>,
       GetRevs = fun(DocId, Acc) ->
-                    Res = get_doc1(Db, DocId, Rev,
-                                   WithHistory, MaxHistory,
-                                   Ancestors, ReadOptions),
-                    case Res of
-                      {ok, Doc, Meta} ->
-                        Fun(Doc, Meta, Acc);
-                      _ -> Acc
-                    end
+        Res = get_doc1(Db, DocId, Rev,
+          WithHistory, MaxHistory,
+          Ancestors, ReadOptions),
+        case Res of
+          {ok, Doc, Meta} ->
+            Fun(Doc, Meta, Acc);
+          _ -> Acc
+        end
                 end,
       %% finally retrieve the docs
       try
         lists:foldl(GetRevs, AccIn, DocIds)
       after rocksdb:release_snapshot(Snapshot)
       end
-  end.
-
+    end
+  ).
 
 %% TODO: handle attachment
 get(DbName, DocId, Options) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
-    Db ->
+  transact(
+    get,
+    DbName,
+    fun(Db) ->
       %% parse options
       Rev = proplists:get_value(rev, Options, <<"">>),
       WithHistory = proplists:get_value(history, Options, false),
       MaxHistory = proplists:get_value(max_history, Options, ?IMAX1),
       Ancestors = proplists:get_value(ancestors, Options, []),
       get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, [])
-  end.
+    end
+  ).
 
 get_doc1(Db, DocId, Rev, WithHistory, MaxHistory, Ancestors, ReadOptions) ->
   case get_doc_info_int(Db, DocId, ReadOptions) of
@@ -205,10 +208,11 @@ get_persisted_rev(#db{store=Store}, DocId, RevId, ReadOptions) ->
   end.
 
 get_doc_info(DbName, DocId, ReadOptions) when is_binary(DbName) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
-    Db -> get_doc_info_int(Db, DocId, ReadOptions)
-  end.
+  transact(
+    get_doc_info,
+    DbName,
+    fun(Db) -> get_doc_info_int(Db, DocId, ReadOptions) end
+  ).
 
 get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
   case rocksdb:get(Store, barrel_keys:doc_key(DocId), ReadOptions) of
@@ -222,11 +226,10 @@ get_doc_info_int(#db{store=Store}, DocId, ReadOptions) ->
   end.
 
 update_docs(DbName, Batch) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, found};
-    Db = #db{pid=DbPid} ->
-      T1 = erlang:monotonic_time(),
-      ok = hooks:run(db_start_update_docs, [DbName]),
+  transact(
+    update_docs,
+    DbName,
+    fun(Db = #db{pid=DbPid}) ->
       {DocBuckets, Ref, Async, N} = barrel_write_batch:to_buckets(Batch),
       MRef = erlang:monitor(process, DbPid),
       DbPid ! {update_docs, DocBuckets},
@@ -236,11 +239,9 @@ update_docs(DbName, Batch) ->
               true ->
                 ok
             end,
-      T2 = erlang:monotonic_time(),
-      Time = erlang:convert_time_unit(T2 - T1, native, second),
-      ok = hooks:run(db_end_update_docs, [DbName, Time]),
       Res
-  end.
+    end
+  ).
 
 collect_updates(Db = #db{pid=DbPid}, Ref, MRef, Results, N) when N > 0 ->
   receive
@@ -259,10 +260,11 @@ collect_updates(_Db, _Ref, MRef, Results, 0) ->
 
 
 fold_by_id(DbName, Fun, Acc, Opts) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
-    Db -> fold_by_id_int(Db, Fun, Acc, Opts)
-  end.
+  transact(
+    fold_by_id,
+    DbName,
+    fun(Db) -> fold_by_id_int(Db, Fun, Acc, Opts) end
+  ).
 
 fold_by_id_int(#db{ store=Store }, UserFun, AccIn, Opts) ->
   Prefix = barrel_keys:prefix(doc),
@@ -288,10 +290,11 @@ fold_by_id_int(#db{ store=Store }, UserFun, AccIn, Opts) ->
   end.
 
 changes_since(DbName, Since, Fun, AccIn, Opts) when is_binary(DbName), is_integer(Since) ->
-  case barrel_store:whereis_db(DbName) of
-    undefined -> {error, not_found};
-    Db ->  changes_since_int(Db, Since, Fun, AccIn, Opts)
-  end.
+  transact(
+    changes_since,
+    DbName,
+    fun(Db) -> changes_since_int(Db, Since, Fun, AccIn, Opts) end
+  ).
 
 changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   Since = if
@@ -452,6 +455,16 @@ with_db(DbName, Fun) ->
       {error, not_found};
     Db ->
       Fun(Db)
+  end.
+
+transact(Trans, DbName, Fun) ->
+  case barrel_store:whereis_db(DbName) of
+    undefined -> {error, found};
+    Db ->
+      hooks:run(barrel_start_transaction, [Trans, DbName]),
+      try Fun(Db)
+      after hooks:run(barrel_end_transaction, [Trans, DbName])
+      end
   end.
 
 start_link(DbId, Config) ->
