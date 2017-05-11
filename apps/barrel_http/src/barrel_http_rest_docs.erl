@@ -51,6 +51,7 @@ param_feed(Req) ->
   end.
 
 init(Req, _Opts) ->
+  barrel_monitor_activity:start(barrel_http_lib:backend_info(Req, docs)),
   Path = cowboy_req:path(Req),
   Feed = accepted_feed(Req),
   IsChangesFeed = lists:member(Feed, [<<"normal">>, <<"eventsource">>]),
@@ -123,12 +124,14 @@ parse_header_match_id([DocId|Tail], Acc) ->
   parse_header_match_id(Tail, [Trimmed|Acc]).
 
 
-route_all_docs(Req, #state{method= <<"GET">>, database=Database, docid=undefined}=State) ->
-  barrel_http_rest_docs_list:get_resource(Database, Req, State);
+route_all_docs(Req, #state{method= <<"GET">>, database=Db, docid=undefined}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => list_docs, db => Db }),
+  barrel_http_rest_docs_list:get_resource(Db, Req, State);
 route_all_docs(
   #{headers := #{<<"x-barrel-write-batch">> := <<"true">>}}=Req,
-  #state{method= <<"POST">>, docid=undefined}=State
+  #state{method= <<"POST">>, database=Db, docid=undefined}=State
 ) ->
+  barrel_monitor_activity:update(#{ state => active, query => write_batch, db => Db }),
   barrel_http_rest_docs_list:handle_write_batch(Req, State);
 route_all_docs(Req, State) ->
   barrel_http_rest_docs_id:handle(Req, State).

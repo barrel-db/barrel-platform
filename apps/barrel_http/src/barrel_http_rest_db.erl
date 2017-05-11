@@ -21,6 +21,7 @@
 -record(state, {method, database}).
 
 init(Req, _Opts) ->
+  barrel_monitor_activity:start(barrel_http_lib:backend_info(Req, dbs)),
   Method = cowboy_req:method(Req),
   route(Req, #state{method=Method}).
 
@@ -28,6 +29,7 @@ terminate(_Reason, _Req, _State) ->
   ok.
 
 route(Req, #state{method= <<"HEAD">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => get_db }),
   Database = cowboy_req:binding(database, Req),
   case barrel_http_lib:has_database(Database) of
     true ->
@@ -36,19 +38,21 @@ route(Req, #state{method= <<"HEAD">>}=State) ->
       barrel_http_reply:error(404, <<>>, Req, State)
   end;
 route(Req, #state{method= <<"GET">>}=State) ->
-  check_database_exist(Req, State);
+  Db = cowboy_req:binding(database, Req),
+  barrel_monitor_activity:update(#{ state => active, query => get_db, db => Db }),
+  check_database_exist(Db, Req, State);
 route(Req, #state{method= <<"DELETE">>}=State) ->
-  Database = cowboy_req:binding(database, Req),
-  ok = barrel:delete_db(Database),
+  Db = cowboy_req:binding(database, Req),
+  barrel_monitor_activity:update(#{ state => active, query => delete_db, db => Db }),
+  ok = barrel:delete_db(Db),
   barrel_http_reply:json(200, #{ ok => true }, Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
-check_database_exist(Req, State) ->
-  Database = cowboy_req:binding(database, Req),
-  case barrel_http_lib:has_database(Database) of
+check_database_exist(Db, Req, State) ->
+  case barrel_http_lib:has_database(Db) of
     true ->
-      get_resource(Req, State#state{database=Database});
+      get_resource(Req, State#state{database=Db});
     false ->
       barrel_http_reply:error(404, "database not found", Req, State)
   end.

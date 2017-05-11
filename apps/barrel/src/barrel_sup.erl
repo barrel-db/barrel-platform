@@ -59,11 +59,4 @@ init([]) ->
             type => worker,
             modules => [barrel_event]},
 
-  Status =  #{id => barrel_task_status,
-              start => {barrel_task_status, start_link, []},
-              restart => permanent,
-              shutdown => infinity,
-              type => worker,
-              modules => [barrel_task_status]},
-
-  {ok, { {one_for_one, 4, 3600}, [StoreSup, Event, Status]} }.
+  {ok, { {one_for_one, 4, 3600}, [StoreSup, Event]} }.

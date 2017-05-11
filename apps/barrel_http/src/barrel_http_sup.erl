@@ -50,8 +50,9 @@ start_link() ->
 init(_Args) ->
   ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
-  AccessLog = application:get_env(barrel_http, access_log, ?DEFAULT_ACCESS_LOG),
   RequestTimeout = application:get_env(barrel_http, request_timeout, ?DEFAULT_TIMEOUT),
+
+  _ = prometheus_http:setup(),
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
@@ -68,20 +69,13 @@ init(_Args) ->
            , {"/dbs/:database/docs",          barrel_http_rest_docs, []}
            , {"/dbs/:database/docs/:docid",   barrel_http_rest_docs, []}
            , {"/",                            barrel_http_rest_root, []}
-
+           , {"/metrics",                     barrel_monitor_exporter_handler, {default}}
            ],
   Dispatch = cowboy_router:compile([{'_', Routes}]),
 
   Options0 = #{env => #{dispatch => Dispatch}, request_timeout => RequestTimeout},
 
-  Streams = lists:foldl(fun({access_log, true}, Acc) ->
-                            [barrel_http_access_log|Acc];
-                           ({metrics, M}, Acc) when M =/= undefined ->
-                            [barrel_http_count|Acc];
-                           (_,Acc) -> Acc
-                        end,
-                        [cowboy_stream_h],
-                        [{access_log, AccessLog}]),
+  Streams =  [barrel_http_count, cowboy_stream_h],
 
   Options1 = Options0#{stream_handlers => Streams},
 

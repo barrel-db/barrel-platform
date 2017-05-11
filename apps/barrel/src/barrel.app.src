@@ -13,7 +13,7 @@
      jsx,
      jsone,
      uuid,
-     hooks
+     barrel_common
     ]},
    {env, []},
    {modules, []},

@@ -16,11 +16,11 @@
 -author("Bernard Notarianni").
 
 -export([new/0]).
--export([to_list/1]).
 -export([inc/3]).
 -export([update_times/3]).
 -export([create_task/2]).
 -export([update_task/1]).
+-export([all/0]).
 
 
 new() ->
@@ -37,10 +37,6 @@ new_time_stats() ->
    , period => 10
    , mean => 0
    }.
-
-to_list(Metrics) ->
-  maps:to_list(Metrics).
-
 
 inc(CounterName, Stats, Number) ->
   Counter = maps:get(CounterName, Stats),
@@ -71,11 +67,13 @@ mean([V|Others], Acc, Sum, Size, Period) ->
 %% Storage of collected metrics
 %%==============================================================================
 
-create_task(Metrics, Options) ->
-  ok = barrel_task_status:add_task(to_list(Metrics)),
-  Frequency = proplists:get_value(metrics_freq, Options, 1000),
-  barrel_task_status:set_update_frequency(Frequency),
+create_task(Metrics, _Options) ->
+  ok = barrel_task_status:add_task(barrel_stat_replication, Metrics),
   ok.
 
 update_task(Metrics) ->
-  barrel_task_status:update(to_list(Metrics)).
+  barrel_task_status:update(barrel_stat_replication, Metrics).
+
+
+all() ->
+  barrel_task_status:all(barrel_stat_replication).

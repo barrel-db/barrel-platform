@@ -20,13 +20,16 @@
 -record(state, {method, body}).
 
 init(Req, _Opts) ->
+  barrel_monitor_activity:start(barrel_http_lib:backend_info(Req, dbs)),
   Method = cowboy_req:method(Req),
   route(Req, #state{method=Method}).
 
 
 route(Req, #state{method= <<"GET">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => list_dbs }),
   get_resource(Req, State);
 route(Req, #state{method= <<"POST">>}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => create_db }),
   {ok, Body, Req2} = cowboy_req:read_body(Req),
   check_body(Req2, State#state{body=Body});
 route(Req, State) ->

@@ -17,6 +17,7 @@
 -export([req/2, req/3, req/4]).
 -export([has_store/1]).
 -export([has_database/1]).
+-export([backend_info/2]).
 
 req(Method, Url) ->
   req(Method,Url,[]).
@@ -56,3 +57,12 @@ has_store(Store) ->
     undefined -> false;
     _Db -> true
   end.
+
+
+backend_info(Req, Resource) ->
+  #{ peer := {IP, Port} } = Req,
+  #{backend => http,
+    resource => Resource,
+    backend_req => Req,
+    client_ip => IP,
+    client_port => Port}.

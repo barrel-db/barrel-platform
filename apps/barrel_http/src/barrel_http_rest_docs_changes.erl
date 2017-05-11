@@ -78,13 +78,15 @@ check_eventsource_headers(Req, State) ->
   ContentType = string:to_lower(binary_to_list(ContentTypeBin)),
   route_evensource_headers(ContentType, LastEventIdBin, Req, State).
 
-route_evensource_headers("text/event-stream", LastEventId, Req, State) ->
+route_evensource_headers("text/event-stream", LastEventId, Req, #state{database=Db}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => changes_stream, db => Db }),
   Since = case LastEventId of
             <<"undefined">> -> 0;
             Integer -> binary_to_integer(Integer)
           end,
   init_feed(Req, State#state{feed=eventsource, since=Since});
-route_evensource_headers(_,_, Req, State) ->
+route_evensource_headers(_,_, Req, #state{database=Db}=State) ->
+  barrel_monitor_activity:update(#{ state => active, query => changes_since, db => Db}),
   init_feed(Req, State).
 
 
