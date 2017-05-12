@@ -53,14 +53,28 @@ fold_by_id(#{pool := Pool} = Conn, UserFun, AccIn, Options) ->
       Error
   end.
 
-fold_by_path(#{pool := Pool}= Conn, Path, Fun, AccIn, Options) when is_binary(Path) ->
-  Url = barrel_httpc_lib:make_url(Conn, [<<"walk">>, Path], Options),
+fold_by_path(#{pool := Pool}= Conn, Path, UserFun, AccIn, Options) when is_binary(Path) ->
+  Url = barrel_httpc_lib:make_url(Conn, [<<"walk">>, Path], [{include_docs, true} |Options]),
   Headers = [{<<"Content-Type">>, <<"application/json">>}],
   ReqOpts = [{async, once}, {pool, Pool}],
+  IncludeDoc = proplists:get_value(include_docs, Options, false),
+  WrapperFun =
+    fun
+      (#{ <<"doc">> := Doc} = Obj1, Acc) ->
+        Val = barrel_jsonpointer:get(Path, Doc),
+        Obj2 = case IncludeDoc of
+                 true -> Obj1#{ <<"val">> => Val };
+                 false -> maps:put(<<"val">>, Val, maps:remove(<<"doc">>, Obj1))
+               end,
+        UserFun(Obj2, Acc);
+      (Obj, Acc) ->
+        UserFun(Obj, Acc)
+    end,
+  
   case hackney:request(<<"GET">>, Url, Headers, <<>>, ReqOpts) of
     {ok, Ref} ->
       error_logger:info_msg("wait resp on ~p~n", [Url]),
-      wait_fold_response(Ref, Fun, AccIn);
+      wait_fold_response(Ref, WrapperFun, AccIn);
     Error ->
       Error
   end;
