@@ -24,14 +24,14 @@
 ]).
 
 
-barrel_start_transaction(Trans, _DbName) ->
+barrel_start_transaction(Trans, DbName) ->
   erlang:put(barrel_transaction_start_time, erlang:monotonic_time()),
-  prometheus_counter:inc(barrel_db_transactions, [Trans]).
+  prometheus_counter:inc(barrel_db_transactions, [DbName, Trans]).
 
-barrel_end_transaction(Trans, _DbName) ->
+barrel_end_transaction(Trans, DbName) ->
   T1 = erlang:get(barrel_transaction_start_time),
   T2 = erlang:monotonic_time(),
-  prometheus_histogram:observe(barrel_db_transaction_duration, [Trans], T2 - T1).
+  prometheus_histogram:observe(barrel_db_transaction_duration, [DbName, Trans], T2 - T1).
 
 barrel_http_in(#{ method := Method }) ->
   prometheus_counter:inc(barrel_http_request_total, [Method]),
@@ -48,12 +48,12 @@ init_metrics() ->
   ok = prometheus_counter:new([
     {name, barrel_db_transactions},
     {help, ""},
-    {labels, [type]}]),
+    {labels, [db, type]}]),
 
   ok = prometheus_histogram:new([
     {name, barrel_db_transaction_duration},
     {buckets, microseconds_duration_buckets()},
-    {labels, [type]},
+    {labels, [db, type]},
     {help, ""},
     {duration_unit, microseconds}]),
 
