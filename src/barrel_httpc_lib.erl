@@ -17,7 +17,6 @@
   to_binary/1
 ]).
 
-
 to_hex([]) -> [];
 to_hex(Bin) when is_binary(Bin) ->
   << <<(to_digit(H)),(to_digit(L))>> || <<H:4,L:4>> <= Bin >>;
@@ -52,3 +51,5 @@ binary_join([Head|Tail], Sep) ->
     to_binary(Head),
     Tail
   ).
+
+
