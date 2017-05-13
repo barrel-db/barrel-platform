@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/barrel-db/barrel-platform.png?label=ready&title=Ready)](https://waffle.io/barrel-db/barrel-platform)
 
 <img src="https://raw.githubusercontent.com/barrel-db/media/master/banner/barrel-banner-groupfb.png">
 
