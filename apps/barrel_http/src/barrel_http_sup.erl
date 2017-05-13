@@ -52,7 +52,7 @@ init(_Args) ->
   NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
   RequestTimeout = application:get_env(barrel_http, request_timeout, ?DEFAULT_TIMEOUT),
 
-  _ = prometheus_http:setup(),
+  _ = prometheus_http_impl:setup(),
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
