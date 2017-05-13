@@ -32,7 +32,7 @@ handle(Req, {Registry}) ->
     end,
 
   %% TODO: check method, response only to GET
-  {Code, RespHeaders0, Body} = prometheus_http:reply(
+  {Code, RespHeaders0, Body} = prometheus_http_impl:reply(
     #{path => URI,
       headers => GetHeader,
       registry => Registry,
