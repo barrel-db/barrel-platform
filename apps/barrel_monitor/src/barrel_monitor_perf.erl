@@ -33,10 +33,15 @@ barrel_end_transaction(Trans, DbName) ->
   T2 = erlang:monotonic_time(),
   prometheus_histogram:observe(barrel_db_transaction_duration, [DbName, Trans], T2 - T1).
 
+
+barrel_http_in(#{ path := <<"/metrics", _/binary >> }) ->
+  ok;
 barrel_http_in(#{ method := Method }) ->
   prometheus_counter:inc(barrel_http_request_total, [Method]),
   prometheus_gauge:inc(barrel_http_requests).
 
+barrel_http_out(#{ path := <<"/metrics", _/binary >> }, _StatusCode, _Duration) ->
+  ok;
 barrel_http_out(_Req, StatusCode, Duration) ->
   prometheus_gauge:dec(barrel_http_requests),
   prometheus_counter:inc(barrel_http_response_total, [StatusCode]),
