@@ -15,6 +15,10 @@
 ##+K true
 ##+A 5
 
+# number dirty I/O scheduler threads
+# useful to increase parallelism of queries to rocksdb
++SDio 10
+
 ## Increase number of concurrent ports/sockets
 ##-env ERL_MAX_PORTS 4096
 
