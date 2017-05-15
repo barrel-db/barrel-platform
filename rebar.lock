@@ -9,10 +9,6 @@
   {git,"https://github.com/ninenines/cowlib",
        {ref,"15750e632d9886eb9bfc876ba03402464b8facb3"}},
   1},
- {<<"e2qc">>,
-  {git,"https://benoitc@gitlab.com/barrel-db/e2qc.git",
-       {ref,"8f4f1c2afe0555009218f793f9a19f841652d7d5"}},
-  0},
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"gproc">>,{pkg,<<"gproc">>,<<"0.6.1">>},0},
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.7.1">>},0},
@@ -30,7 +26,10 @@
   {git,"https://github.com/ninenines/ranch",
        {ref,"40809cd2b257a8a53bcb5588ecaa88cc5381ff5c"}},
   1},
- {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.7.0">>},0},
+ {<<"rocksdb">>,
+  {git,"https://gitlab.com/barrel-db/erlang-rocksdb.git",
+       {ref,"914789c4f8f9cc945ab25a392c000e106ea0f976"}},
+  0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0}]}.
 [
@@ -50,7 +49,6 @@
  {<<"prometheus">>, <<"022AB2C03FF58C211537F4941A91F8E465A7F3D1BBDED697815FE2B5187A1750">>},
  {<<"prometheus_httpd">>, <<"BB979C4AA50E5F156EF32F4852A8BFAFCBECBFE066FADA1CF4058894EF05D690">>},
  {<<"quickrand">>, <<"FF3916C50BC10A8DC62417FC6049FEF5EA56D5DBCFCE546FAABFB6188E3BAEAA">>},
- {<<"rocksdb">>, <<"3098C613EEA74B99D0192F19FA83BAF04A39C2A449350B258ED951FEFF56F3E6">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
  {<<"uuid">>, <<"EB803855E12D57B1CC10522781D1B42064FA2E4C576731700EE48D84A9283292">>}]}
 ].
