@@ -5,26 +5,12 @@ before_script:
   - apt-get -y install g++-4.9
   - export CXX=g++-4.9
 
-variables:
-  ERL_AFLAGS: "-smp enable"
-
 test:
   artifacts:
     when: always
     paths:
     - _build/test/logs
+    - _build/test/cover
 
   script:
-    - make test
-
-pages:
-    stage: deploy
-    script:
-      - make test cover
-      - mv _build/test/cover/ public/
-    artifacts:
-      paths:
-        - public
-      expire_in: 30 days
-    only:
-      - master
+    - make test cover
