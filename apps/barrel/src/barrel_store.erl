@@ -13,7 +13,7 @@
 %% the License.
 
 -module(barrel_store).
--author("benoitc").git
+-author("benoitc").
 
 -behaviour(gen_server).
 
@@ -104,7 +104,7 @@ whereis_db(DbId) ->
 
 db_pid(DbId) ->
   case whereis_db(DbId) of
-    #db{pid=DbPid} -> DbPid;
+    #db{pid=DbPid} -> DbPid;
     undefined -> undefined
   end.
 
@@ -144,9 +144,25 @@ start_link() ->
 
 init([]) ->
   process_flag(trap_exit, true),
+  
+  %% initialize the cache
+  %% TODO: make it optionnal for the peer
+  BlockCacheSize = case application:get_env(barrel_store, block_cache_size, 0) of
+                     0 ->
+                       MaxSize = barrel_memory_monitor:get_total_memory(),
+                       %% reserve 1GB for system and binaries, and use 30% of the rest
+                       ((MaxSize - 1024 * 1024) * 0.3);
+                     Sz ->
+                       Sz * 1024 * 1024 * 1024
+                   end,
+  {ok, Cache} = rocksdb:new_lru_cache(trunc(BlockCacheSize)),
+  %% initialize the memory environment
+  %% we share one memory environment across all databases
+  {ok, MemEnv} = rocksdb:mem_env(),
+  
   {ok, Conf} = load_config(),
   self() ! init_dbs,
-  {ok, #{conf => Conf, db_pids => #{}}}.
+  {ok, #{conf => Conf, cache => Cache, mem_env => MemEnv, db_pids => #{}}}.
 
 handle_call({create_db, Config=#{<<"database_id">> := DbId}}, _From, State) ->
   case whereis_db(DbId) of
@@ -192,9 +208,10 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-do_create_db(Config, State = #{ conf := Conf, db_pids := DbPids }) ->
+do_create_db(Config, State) ->
+  #{ conf := Conf, cache := Cache, mem_env := MemEnv, db_pids := DbPids } = State,
   DbId = maps:get(<<"database_id">>, Config),
-  case supervisor:start_child(barrel_db_sup, [DbId, Config]) of
+  case supervisor:start_child(barrel_db_sup, [Cache, MemEnv, DbId, Config]) of
     {ok, DbPid} ->
       #{ <<"databases">> := Dbs } = Conf,
       {ok, Db} = barrel_db:get_db(DbPid),
@@ -225,7 +242,7 @@ do_delete_db(DbId, State = #{ conf := Conf, db_pids := DbPids }) ->
   case ets:take(barrel_dbs, DbId) of
     [] ->
       _ = lager:info("no database ~p ~n", [DbId]),
-      ok;
+      {ok, State};
     [#db{pid=Pid, ref=Ref}] ->
       _ = (catch erlang:demonitor(Ref, [flush])),
       ok = barrel_db:delete_db(Pid),
@@ -256,13 +273,14 @@ db_is_down(Pid, State = #{ db_pids := DbPids }) ->
       end
   end.
 
-load_dbs(#{ conf := Conf, db_pids := DbPids} = State) ->
+load_dbs(State) ->
+  #{ conf := Conf, cache := Cache, mem_env := MemEnv, db_pids := DbPids} = State,
   #{ <<"databases">> := Dbs } = Conf,
   {Loaded, Dbs2, State2} = lists:foldl(
     fun(#{ <<"database_id">> := DbId} = Config, {Acc, Dbs1, State1}) ->
       case barrel_db:exists(DbId, Config) of
         true ->
-          case supervisor:start_child(barrel_db_sup, [DbId, Config]) of
+          case supervisor:start_child(barrel_db_sup, [Cache, MemEnv, DbId, Config]) of
             {ok, DbPid} ->
               link(DbPid),
               #{ <<"databases">> := Dbs } = Conf,

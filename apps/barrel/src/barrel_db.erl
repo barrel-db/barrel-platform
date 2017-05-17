@@ -36,7 +36,7 @@
 ]).
 
 -export([
-  start_link/2,
+  start_link/4,
   get_db/1,
   exists/2,
   exists/1,
@@ -467,8 +467,8 @@ transact(Trans, DbName, Fun) ->
       end
   end.
 
-start_link(DbId, Config) ->
-  gen_server:start_link(?MODULE, [DbId, Config], []).
+start_link(Cache, MemEnv, DbId, Config) ->
+  gen_server:start_link(?MODULE, [Cache, MemEnv, DbId, Config], []).
 
 get_db(DbPid) when is_pid(DbPid) ->
   gen_server:call(DbPid, get_db).
@@ -501,9 +501,9 @@ decode_rid(Bin) ->
 
 
 %% TODO: put dbinfo in a template
-init([DbId, Config]) ->
+init([Cache, MemEnv, DbId, Config]) ->
   process_flag(trap_exit, true),
-  {ok, Store} = open_db(DbId, Config),
+  {ok, Store} = open_db(Cache, MemEnv, DbId, Config),
   #{<<"last_rid">> := LastRid,
     <<"updated_seq">> := Updated,
     <<"docs_count">> := DocsCount,
@@ -546,33 +546,28 @@ init_properties() ->
                     erlang:put(K, V)
                 end, Props).
 
-open_db(DbId, Config) ->
+open_db(Cache, MemEnv, DbId, Config) ->
   Path = db_path(DbId),
   InMemory = maps:get(<<"in_memory">>, Config, false),
-  DbOpts = case InMemory of
-             true ->
-               [{create_if_missing, true}, {in_memory, true} | default_rocksdb_options()];
-             false ->
-               [{create_if_missing, true} | default_rocksdb_options()]
-           end,
+  DbOpts = default_rocksdb_options(Cache, MemEnv, InMemory),
   rocksdb:open(Path, DbOpts).
 
-default_rocksdb_options() ->
-  BlockCacheSize = case application:get_env(barrel_store, block_cache_size, 0) of
-                     0 ->
-                       MaxSize = barrel_memory_monitor:get_total_memory(),
-                       %% reserve 1GB for system and binaries, and use 30% of the rest
-                       ((MaxSize - 1024 * 1024) * 0.3);
-                     Sz ->
-                       Sz * 1024 * 1024 * 1024
-                   end,
-
-  [{max_open_files, 64},
-   {write_buffer_size, 64 * 1024 * 1024}, %% 64MB
-   {allow_concurrent_memtable_write, true},
-   {enable_write_thread_adaptive_yield, true},
-   {table_factory_block_cache_size, BlockCacheSize}
-  ].
+default_rocksdb_options(Cache, _MemEnv, false) ->
+  BlockTableOptions = [{block_cache, Cache}],
+  
+  [{create_if_missing, true},
+    {max_open_files, 64},
+    {write_buffer_size, 64 * 1024 * 1024}, %% 64MB
+    {allow_concurrent_memtable_write, true},
+    {enable_write_thread_adaptive_yield, true},
+    {block_based_table_options, BlockTableOptions}];
+default_rocksdb_options(_Cache, MemEnv, true) ->
+  [{create_if_missing, true},
+    {env, MemEnv},
+    {max_open_files, 64},
+    {write_buffer_size, 64 * 1024 * 1024}, %% 64MB
+    {allow_concurrent_memtable_write, true},
+    {enable_write_thread_adaptive_yield, true}].
 
 handle_call({put, K, V}, _From, Db) ->
   Reply = (catch do_put(K, V, Db)),

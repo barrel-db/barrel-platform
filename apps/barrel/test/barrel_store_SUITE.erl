@@ -42,7 +42,7 @@ init_per_suite(Config) ->
   Config.
 
 end_per_suite(Config) ->
-  application:stop(barrel),
+  ok = application:stop(barrel),
   Config.
 
 
@@ -60,7 +60,7 @@ create_db(_Config) ->
   {ok, #{ <<"database_id">> := <<"testdb1">>}} = barrel_store:create_db(<<"testdb1">>, #{}),
   [<<"testdb">>, <<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb">>),
-  [] = ets:lookup(barrel_dbs, <<"testdb">>),
+  [] = ets:lookup(barrel_dbs, <<"testdb">>),
   [<<"testdb1">>] = barrel_store:databases(),
   ok = barrel_store:delete_db(<<"testdb1">>),
   [] = barrel_store:databases().
