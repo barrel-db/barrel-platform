@@ -13,7 +13,7 @@
 %% the License.
 
 -module(barrel_store).
--author("benoitc").
+-author("benoitc").git
 
 -behaviour(gen_server).
 

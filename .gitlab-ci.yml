@@ -14,3 +14,8 @@ test:
 
   script:
     - make test cover
+
+  cache:
+    paths:
+    - _build/default/lib/rocksdb
+    - _build/test/lib/rocksdb

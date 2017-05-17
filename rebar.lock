@@ -26,10 +26,7 @@
   {git,"https://github.com/ninenines/ranch",
        {ref,"40809cd2b257a8a53bcb5588ecaa88cc5381ff5c"}},
   1},
- {<<"rocksdb">>,
-  {git,"https://gitlab.com/barrel-db/erlang-rocksdb.git",
-       {ref,"914789c4f8f9cc945ab25a392c000e106ea0f976"}},
-  0},
+ {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.8.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0}]}.
 [
@@ -49,6 +46,7 @@
  {<<"prometheus">>, <<"022AB2C03FF58C211537F4941A91F8E465A7F3D1BBDED697815FE2B5187A1750">>},
  {<<"prometheus_httpd">>, <<"BB979C4AA50E5F156EF32F4852A8BFAFCBECBFE066FADA1CF4058894EF05D690">>},
  {<<"quickrand">>, <<"FF3916C50BC10A8DC62417FC6049FEF5EA56D5DBCFCE546FAABFB6188E3BAEAA">>},
+ {<<"rocksdb">>, <<"D2B8E866EE43F41220263949646CB94D8100C830BD8710BCEC759C2A6DE9865B">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
  {<<"uuid">>, <<"EB803855E12D57B1CC10522781D1B42064FA2E4C576731700EE48D84A9283292">>}]}
 ].
