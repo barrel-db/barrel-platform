@@ -74,35 +74,30 @@ reverse_path_key(Path, Seq) ->
    ).
 
 encode_path_forward(Prefix, [P0]) ->
-  enc_1(Prefix, P0);
+  enc(Prefix, P0);
 encode_path_forward(Prefix, [P0, P1]) ->
-  enc_1(enc_1(Prefix, P0), P1);
+  enc(enc(Prefix, P0), P1);
 encode_path_forward(Prefix, [P0, P1, P2]) ->
-  enc_2(enc_1(enc_1(Prefix, P0), P1), P2).
+  enc(enc(enc(Prefix, P0), P1), P2).
 
 encode_path_reverse(Prefix, [P0]) ->
-  enc_1(Prefix, P0);
+  enc(Prefix, P0);
 encode_path_reverse(Prefix, [P0, P1]) ->
-  enc_1(enc_1(Prefix, P1), P0);
+  enc(enc(Prefix, P1), P0);
 encode_path_reverse(Prefix, [P0, P1, P2]) ->
-  enc_1(enc_1(enc_2(Prefix, P2), P1), P0).
+  enc(enc(enc(Prefix, P2), P1), P0).
 
-enc_1(B, P) when is_integer(P) ->
-   barrel_encoding:encode_varint_ascending(B, P);
-enc_1(B, P) when is_float(P) ->
-   barrel_encoding:encode_float_ascending(B, P);
-enc_1(B, P)  ->
-  barrel_encoding:encode_varint_ascending(B, erlang:phash2(P)).
-
-enc_2(B, P) when is_binary(P) ->
+enc(B, P) when is_binary(P) ->
   barrel_encoding:encode_binary_ascending(B, P);
-enc_2(B, P) when is_integer(P) ->
+enc(B, P) when is_integer(P) ->
   barrel_encoding:encode_varint_ascending(B, P);
-enc_2(B, P) when is_float(P) ->
+enc(B, P) when is_float(P) ->
   barrel_encoding:encode_float_ascending(B, P);
-enc_2(B, false) ->
+enc(B, false) ->
   barrel_encoding:encode_literal_ascending(B, false);
-enc_2(B, null) ->
+enc(B, null) ->
   barrel_encoding:encode_literal_ascending(B, null);
-enc_2(B, true) ->
-  barrel_encoding:encode_literal_ascending(B, true).
+enc(B, true) ->
+  barrel_encoding:encode_literal_ascending(B, true);
+enc(B, Else) ->
+  barrel_encoding:encode_binary_ascending(B, barrel_lib:to_binary(Else)).
