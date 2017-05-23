@@ -230,6 +230,9 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
         [?MODULE_STRING, Status, Reason]
       ),
       maybe_retry(State, {http_error, Status, Reason});
+    {hackney_response, Ref, {error, closed}} ->
+      _ = lager:warning("[~s] hackney connection closed", [?MODULE_STRING]),
+      maybe_retry(State, normal);
     {hackney_response, Ref, {error, Reason}} ->
       _ = lager:error(
         "~s hackney error: ~p~n",

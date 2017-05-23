@@ -158,7 +158,6 @@ encode_varint_descending(B, V)  ->
 decode_varint_ascending(<<>>) -> erlang:error(badarg);
 decode_varint_ascending(<< L, _/binary >> = B) ->
   Length = L - ?INT_ZERO,
-  io:format("len is ~p - ~p = ~p~n", [L, ?INT_ZERO, Length]),
   decode_varint_ascending_1(B, Length, -Length).
 
 
