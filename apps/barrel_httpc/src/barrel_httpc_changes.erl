@@ -311,51 +311,41 @@ get_changes(#state{ changes = Q }=State) ->
   Changes = queue:to_list(Q),
   {Changes, State#state{ changes = queue:new() }}.
 
-decode_data(Data, #state{ mode = binary, changes = Q, changes_cb = nil }=State) ->
+decode_data(Data, #state{ mode = binary, last_seq = OldSeq, changes = Q, changes_cb = nil }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
-  Q2  = lists:foldl(
-    fun
-      (<<>>, Q1) -> Q1;
-      (Change, Q1) -> queue:in(Change, Q1)
-    end,
-    Q,
-    Changes
-  ),
-  wait_changes(NewState#state{ changes = Q2 });
-decode_data(Data, #state{ changes = Q, changes_cb = nil }=State) ->
+  DecodeFun = fun(C) -> C end,
+  {LastSeq, Q2} = queue_change(Changes, DecodeFun, OldSeq, Q),
+  wait_changes(NewState#state{ last_seq = LastSeq, changes = Q2 });
+decode_data(Data, #state{ changes = Q, last_seq = OldSeq, changes_cb = nil }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
-  Q2  = lists:foldl(
-    fun
-      (<<>>, Q1) -> Q1;
-      (Change, Q1) -> queue:in(parse_change(Change), Q1)
-    end,
-    Q,
-    Changes
-  ),
-  wait_changes(NewState#state{ changes = Q2 });
-decode_data(Data, #state{ mode = binary, changes_cb = Cb }=State) ->
+  {LastSeq, Q2} = queue_change(Changes, fun parse_change/1, OldSeq, Q),
+  wait_changes(NewState#state{ last_seq = LastSeq, changes = Q2 });
+decode_data(Data, #state{ mode = Mode, last_seq = OldSeq, changes_cb = Cb }=State) ->
   {Changes, NewState} = sse_changes(Data, State),
-  lists:foreach(
-    fun
-      (<<>>) -> ok;
-      (Change) -> Cb(Change)
-    end,
-    Changes
-  ),
-  wait_changes(NewState);
-decode_data(Data, #state{ changes_cb = Cb, last_seq = PreviousSeq }=State) ->
-  {Changes, NewState} = sse_changes(Data, State),
-  LastSeq = lists:foldl(
-              fun
-                (<<>>,Acc) -> Acc;
-                (Change,_) ->
-                  ParsedChange = parse_change(Change),
-                  Cb(ParsedChange),
-                  maps:get(<<"seq">>, ParsedChange)
-              end,
-              PreviousSeq, Changes
-             ),
+  LastSeq = handle_changes(Changes, Mode, Cb, OldSeq),
   wait_changes(NewState#state{last_seq = LastSeq}).
+
+
+queue_change([<<>> | Rest], Fun, Last, Queue) ->
+  queue_change(Rest, Fun, Last, Queue);
+queue_change([Change | Rest], Fun, _Last, Queue) ->
+  #{<<"seq">> := Seq} = parse_change(Change),
+  queue_change(Rest, Fun, Seq, queue:in(Fun(Change), Queue));
+queue_change([], _Fun, Last, Queue) ->
+  {Last, Queue}.
+
+handle_changes([<<>> | Rest], Mode, Cb, Last) ->
+  handle_changes(Rest, Mode, Cb, Last);
+handle_changes([ChangeBin | Rest], Mode, Cb, _Last) ->
+  #{<<"seq">> := Seq} = Change = parse_change(ChangeBin),
+  case Mode of
+    binary -> Cb(ChangeBin);
+    _ -> Cb(Change)
+  end,
+  handle_changes(Rest, Mode, Cb, Seq);
+handle_changes([], _Mode, _Cb, Last) ->
+  Last.
+
 
 sse_changes(Data, #state{ buffer = Buffer }=State) ->
   NewBuffer = << Buffer/binary, Data/binary >>,
