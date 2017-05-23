@@ -20,6 +20,8 @@
 -export([data/4]).
 -export([info/3]).
 -export([terminate/3]).
+-export([early_error/5]).
+
 
 -record(state, {
           next,
@@ -46,6 +48,9 @@ terminate(StreamID, Reason, #state{next=Next}=State) ->
   T2 = erlang:monotonic_time(),
   ok = hooks:run(barrel_http_out, [Req, StatusCode, T2 - T1]),
   cowboy_stream:terminate(StreamID, Reason, Next).
+
+early_error(_StreamID, _Reason, _PartialReq, Resp, _Opts) ->
+  Resp.
 
 fold(Commands, State) ->
   fold(Commands, State, []).

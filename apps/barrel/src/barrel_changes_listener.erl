@@ -89,6 +89,7 @@ parse_change(ChangeBin) ->
 
 
 init_feed(Parent, Db, Options) ->
+  process_flag(trap_exit, true),
   proc_lib:init_ack(Parent, {ok, self()}),
   Since = maps:get(since, Options, 0),
   ChangeCb = maps:get(changes_cb, Options, nil),
@@ -158,6 +159,8 @@ wait_changes(State = #{ parent := Parent , db_ref := Ref}) ->
     {'$barrel_event', _, db_updated} ->
       NewState = get_changes(State),
       wait_changes(NewState);
+    {'EXIT', Parent, _} ->
+      exit(normal);
     {system, From, Request} ->
       sys:handle_system_msg(
         Request, From, Parent, ?MODULE, [],

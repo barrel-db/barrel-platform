@@ -167,12 +167,7 @@ info(_Info, Req, S) ->
   {ok, Req, S}.
 
 
-terminate(_Reason, _Req, State) ->
-  terminate_timer(State),
-  ok.
-
-terminate_timer(#state{timer=undefined}) ->
-  ok;
-terminate_timer(#state{timer=Timer}) ->
-  {ok, cancel} = timer:cancel(Timer),
+terminate(_Reason, _Req, #state{ timer=Timer, changes_since_pid=Pid}) ->
+  _ = (catch barrel_changes_listener:stop(Pid)),
+  _ = (catch timer:cancel(Timer)),
   ok.
