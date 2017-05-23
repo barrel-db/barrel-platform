@@ -1,6 +1,6 @@
 {application, barrel_peer,
  [{description, "barrel embedded in clients"},
-  {vsn, "0.3.1"},
+  {vsn, "0.3.2"},
   {registered, []},
   {mod, { barrel_peer_app, []}},
   {applications,
