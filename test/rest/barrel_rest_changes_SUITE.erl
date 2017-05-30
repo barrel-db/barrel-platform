@@ -35,7 +35,6 @@ all() -> [ accept_get_normal
          ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel_http),
   {ok, _} = application:ensure_all_started(barrel),
   Config.
 
@@ -48,8 +47,7 @@ end_per_testcase(_, Config) ->
   Config.
 
 end_per_suite(Config) ->
-  application:stop(barrel_http),
-  application:stop(barrel),
+  _ = application:stop(barrel),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 

@@ -56,7 +56,7 @@ init(_Args) ->
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
-           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel_http, "swagger",
+           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel, "swagger",
                                                  [{mimetypes, cow_mimetypes, all}]}}
 
            , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
@@ -69,7 +69,7 @@ init(_Args) ->
            , {"/dbs/:database/docs",          barrel_http_rest_docs, []}
            , {"/dbs/:database/docs/:docid",   barrel_http_rest_docs, []}
            , {"/",                            barrel_http_rest_root, []}
-           , {"/metrics",                     barrel_monitor_exporter_handler, {default}}
+           , {"/metrics",                     barrel_prometheus_handler, {default}}
            ],
   Dispatch = cowboy_router:compile([{'_', Routes}]),
 

@@ -6,14 +6,11 @@
 %%% @end
 %%% Created : 11. May 2017 09:20
 %%%-------------------------------------------------------------------
--module(barrel_monitor_perf).
+-module(barrel_prometheus).
 -author("benoitc").
 
 %% API
--export([
-  init_context/0
-]).
-
+-export([init/0]).
 
 %% Hooks
 -export([
@@ -49,13 +46,12 @@ barrel_http_out(_Req, StatusCode, Duration) ->
 
 init_metrics() ->
   %% transactions metrics
-
-  ok = prometheus_counter:new([
+  _ = prometheus_counter:declare([
     {name, barrel_db_transactions},
     {help, ""},
     {labels, [db, type]}]),
 
-  ok = prometheus_histogram:new([
+  _ = prometheus_histogram:declare([
     {name, barrel_db_transaction_duration},
     {buckets, microseconds_duration_buckets()},
     {labels, [db, type]},
@@ -64,22 +60,22 @@ init_metrics() ->
 
   %% HTTP metrics
 
-  ok = prometheus_counter:new([
+  _ = prometheus_counter:declare([
     {name, barrel_http_request_total},
     {help, ""},
     {labels, [method]}]),
 
-  ok = prometheus_gauge:new([
+  _ = prometheus_gauge:declare([
     {name, barrel_http_requests},
     {help, ""}]),
 
-  ok = prometheus_histogram:new([
+  _ = prometheus_histogram:declare([
     {name, barrel_http_request_duration},
     {buckets, microseconds_duration_buckets()},
     {help, ""},
     {duration_unit, microseconds}]),
 
-  ok = prometheus_counter:new([
+  _ = prometheus_counter:declare([
     {name, barrel_http_response_total},
     {help, ""},
     {labels, [status]}]),
@@ -101,4 +97,12 @@ init_hooks() ->
 init_context() ->
   ok = init_metrics(),
   ok = init_hooks(),
+  ok.
+
+init() ->
+  ok = init_context(),
+  %% initialize vm collector
+  ok = prometheus_registry:register_collector(prometheus_vm_memory_collector),
+  ok = prometheus_registry:register_collector(prometheus_vm_statistics_collector),
+  ok = prometheus_registry:register_collector(prometheus_vm_system_info_collector),
   ok.

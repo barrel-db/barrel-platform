@@ -51,9 +51,7 @@ all() ->
   ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel_http),
   {ok, _} = application:ensure_all_started(barrel),
-  {ok, _} = application:ensure_all_started(barrel_httpc),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -66,6 +64,7 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
+  _ = application:stop(barrel),
   Config.
 
 db(Config) -> proplists:get_value(db, Config).
@@ -150,9 +149,9 @@ restart_when_server_timeout(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
   Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
   {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
-  ok = application:stop(barrel_http),
+  ok = application:stop(barrel),
   timer:sleep(200),
-  ok = application:start(barrel_http),
+  ok = application:start(barrel),
   timer:sleep(100),
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
@@ -161,10 +160,10 @@ restart_when_server_timeout(Config) ->
    #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
    #{ <<"seq">> := 2, <<"id">> := <<"bb">>}
   ] = collect_changes(2, queue:new()),
-  ok = application:stop(barrel_http),
+  ok = application:stop(barrel),
   [{error, timeout}] = collect_changes(1, queue:new()),
   ok = barrel_httpc_changes:stop(Pid),
-  ok = application:start(barrel_http),
+  ok = application:start(barrel),
   ok.
 
 heartbeat_collect_change(Config) ->

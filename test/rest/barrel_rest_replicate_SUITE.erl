@@ -41,18 +41,20 @@ all() -> [ accept_post_get
          ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel_http),
   {ok, _} = application:ensure_all_started(barrel),
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel:create_db(<<"dba">>, #{}),
-  _ = barrel:create_db(<<"dbb">>, #{}),
-  _ = barrel:create_db(<<"dbaa">>, #{}),
-  _ = barrel:create_db(<<"dbbb">>, #{}),
-  _ = barrel:create_db(<<"dbaaa">>, #{}),
-  _ = barrel:create_db(<<"dbbbb">>, #{}),
-  _ = barrel:create_db(<<"testdb">>, #{}),
+  _ = (catch file:delete("data/replication.config")),
+  {ok, _} = barrel:create_db(<<"dba">>, #{}),
+  {ok, _} = barrel:create_db(<<"dbb">>, #{}),
+  {ok, _} = barrel:create_db(<<"dbaa">>, #{}),
+  {ok, _} = barrel:create_db(<<"dbbb">>, #{}),
+  {ok, _} = barrel:create_db(<<"dbaaa">>, #{}),
+  {ok, _} = barrel:create_db(<<"dbbbb">>, #{}),
+  {ok, _} = barrel:create_db(<<"testdb">>, #{}),
+  AllDbs = barrel_store:databases(),
+  io:format("all dsb are ~p~n", [AllDbs]),
   Config.
 
 end_per_testcase(_, Config) ->
@@ -67,8 +69,6 @@ end_per_testcase(_, Config) ->
   Config.
 
 end_per_suite(Config) ->
-  ok = application:stop(barrel_http),
-  ok = application:stop(barrel_replicate),
   ok = application:stop(barrel),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
@@ -79,6 +79,7 @@ accept_post_get(_Config) ->
   %% create a replication task from one db to the other
   Request = #{<<"source">> => <<"http://localhost:7080/dbs/dba">>,
               <<"target">> => <<"http://localhost:7080/dbs/dbb">>},
+  io:format("start accept_post_get test ~n", []),
   {200, R} = test_lib:req(post, "/replicate", Request),
   #{<<"replication_id">> := RepIdBin} = jsx:decode(R, [return_maps]),
   RepId = binary_to_list(RepIdBin),

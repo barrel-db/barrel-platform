@@ -11,7 +11,7 @@
 %% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 %% License for the specific language governing permissions and limitations under
 %% the License.
--module(barrel_monitor_exporter_handler).
+-module(barrel_prometheus_handler).
 -author("benoitc").
 
 %% API

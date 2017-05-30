@@ -42,7 +42,7 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  application:stop(barrel),
+  ok = application:stop(barrel),
   Config.
 
 write_and_get(_Config) ->

@@ -13,7 +13,12 @@
      jsx,
      jsone,
      uuid,
-     barrel_common
+     gproc,
+     hooks,
+     hackney,
+     cowboy,
+     prometheus,
+     prometheus_httpd
     ]},
    {env, []},
    {modules, []},

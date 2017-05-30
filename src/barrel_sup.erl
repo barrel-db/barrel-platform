@@ -44,6 +44,10 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
+  %% init metrics
+  %% TODO: make it optionnal
+  barrel_prometheus:init(),
+
   StoreSup =
     #{id => barrel_store_sup,
       start => {barrel_store_sup, start_link, []},
@@ -59,4 +63,27 @@ init([]) ->
             type => worker,
             modules => [barrel_event]},
 
-  {ok, { {one_for_one, 4, 3600}, [StoreSup, Event]} }.
+  ReplicateSup =
+    #{id => barrel_replicate_sup,
+      start => {barrel_replicate_sup, start_link, []},
+      restart => permanent,
+      shutdown => infinity,
+      type => supervisor,
+      modules => [barrel_replicate_sup]},
+
+  HttpSup =
+    #{id => barrel_http_sup,
+      start => {barrel_http_sup, start_link, []},
+      restart => permanent,
+      shutdown => infinity,
+      type => supervisor,
+      modules => [barrel_http_sup]},
+
+  Specs = [
+    StoreSup,
+    Event,
+    ReplicateSup,
+    HttpSup
+  ],
+  
+  {ok, { {one_for_one, 4, 3600}, Specs} }.

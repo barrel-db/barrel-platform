@@ -79,16 +79,12 @@ rep_resource(_) ->
 
 init({RepId, Source0, Target0, Options}) ->
   process_flag(trap_exit, true),
-
   {ok, Source} = maybe_connect(rep_resource(Source0)),
   {ok, Target} = maybe_connect(rep_resource(Target0)),
-
   Metrics = barrel_replicate_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-
   {ok, Pid} = start_changes_feed_process(Source, StartSeq),
-
   State = #st{id=RepId,
               source=Source,
               target=Target,

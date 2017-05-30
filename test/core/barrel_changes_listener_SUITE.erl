@@ -51,6 +51,7 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
+  ok = application:stop(barrel),
   Config.
 
 collect_change(_Config) ->
