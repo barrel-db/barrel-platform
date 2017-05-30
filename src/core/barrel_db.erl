@@ -532,12 +532,12 @@ init_meta(Store) ->
       Val = binary_to_term(ValBin),
       {ok, Meta#{ Key => Val }}
     end,
-    #{<<"last_rid">> => 0,
-      <<"docs_count">> => 0,
+    #{<<"docs_count">> => 0,
       <<"system_docs_count">> => 0},
     []
   ),
-  Meta#{ <<"updated_seq">> => last_sequence(Store) }.
+  Meta#{ <<"last_rid" >> => last_rid(Store),
+         <<"updated_seq">> => last_sequence(Store) }.
 
 init_properties() ->
   Props = [{num_docs_updated, 0}],
@@ -644,24 +644,12 @@ send_result(_, _) ->
   ok.
 
 
-do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) ->
+do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store }) ->
   %% try to collect a maximum of updates at once
   DocBuckets2 = collect_updates(DbId, DocBuckets),
   erlang:put(num_docs_updated, maps:size(DocBuckets2)),
 
   {Updates, NewRid, _, OldDocs} = merge_revtrees(DocBuckets2, Db),
-
-  %% update resource counter
-  if
-    NewRid /= LastRid ->
-      ok = rocksdb:put(
-        Store,
-        barrel_keys:db_meta_key(<<"last_rid">>),
-        term_to_binary(NewRid),
-        []
-      );
-    true -> ok
-  end,
 
   lists:foldl(
     fun
@@ -989,6 +977,24 @@ do_delete(K, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
       Error
   end.
 
+last_rid(Store) ->
+  Prefix = barrel_keys:prefix(res),
+  Sz = byte_size(Prefix),
+  MaxPrefix = << 0, 300, 0>>,
+  with_iterator(
+    Store, [],
+    fun(Itr) ->
+      case rocksdb:iterator_move(Itr, MaxPrefix) of
+        {ok, << Prefix:Sz/binary, RID:64 >>} -> RID;
+        {ok, _, _} ->
+          case rocksdb:iterator_move(Itr, prev) of
+            {ok,  << Prefix:Sz/binary, RID:64 >>, _} -> RID;
+            _ -> 0
+          end;
+        _ ->
+          0
+      end
+    end).
 
 last_sequence(Store) ->
   Prefix = barrel_keys:prefix(seq),
