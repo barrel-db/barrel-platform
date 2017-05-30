@@ -525,7 +525,7 @@ init([Cache, MemEnv, DbId, Config]) ->
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
   Prefix = barrel_keys:prefix(db_meta),
-  barrel_fold:fold_prefix(
+  Meta = barrel_fold:fold_prefix(
     Store,
     Prefix,
     fun(<< _:3/binary, Key/binary >>, ValBin, Meta) ->
@@ -533,11 +533,11 @@ init_meta(Store) ->
       {ok, Meta#{ Key => Val }}
     end,
     #{<<"last_rid">> => 0,
-      <<"updated_seq">> => 0,
       <<"docs_count">> => 0,
       <<"system_docs_count">> => 0},
     []
-  ).
+  ),
+  Meta#{ <<"updated_seq">> => last_sequence(Store) }.
 
 init_properties() ->
   Props = [{num_docs_updated, 0}],
@@ -987,4 +987,30 @@ do_delete(K, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
       ok;
     Error ->
       Error
+  end.
+
+
+last_sequence(Store) ->
+  Prefix = barrel_keys:prefix(seq),
+  Sz = byte_size(Prefix),
+  MaxSeq = 1 bsl 64 - 1,
+  with_iterator(
+    Store, [],
+    fun(Itr) ->
+      case rocksdb:iterator_move(Itr, barrel_keys:seq_key(MaxSeq)) of
+        {ok, << Prefix:Sz/binary, Seq:64 >>} -> Seq;
+        {ok, _, _} ->
+          case rocksdb:iterator_move(Itr, prev) of
+            {ok,  << Prefix:Sz/binary, Seq:64 >>, _} -> Seq;
+            _ -> 0
+          end;
+        _ ->
+          0
+      end
+    end).
+
+with_iterator(Store, ReadOptions, Fun) ->
+  {ok, Itr} = rocksdb:iterator(Store, ReadOptions),
+  try Fun(Itr)
+  after rocksdb:iterator_close(Itr)
   end.

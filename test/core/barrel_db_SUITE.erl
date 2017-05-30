@@ -40,6 +40,7 @@
   docs_count/1,
   fold_by_id/1,
   change_since/1,
+  updated_seq/1,
   change_since_many/1,
   change_since_include_doc/1,
   revsdiff/1,
@@ -67,6 +68,7 @@ all() ->
     get_revisions,
     fold_by_id,
     change_since,
+    updated_seq,
     change_since_many,
     change_since_include_doc,
     revsdiff,
@@ -350,6 +352,17 @@ change_since(_Config) ->
   Doc3 = #{ <<"id">> => <<"cc">>, <<"v">> => 1},
   {ok, <<"cc">>, _RevId3} = barrel:post(<<"testdb">>, Doc3, []),
   [<<"cc">>] = barrel:changes_since(<<"testdb">>, 2, Fun, []),
+  ok.
+
+updated_seq(_Config) ->
+  {ok, #{ last_update_seq := 0 }} = barrel:database_infos(<<"testdb">>),
+  {ok, _, _} = barrel:post(<<"testdb">>, #{ <<"id">> => <<"a">> }, []),
+  {ok, _, _} = barrel:post(<<"testdb">>, #{ <<"id">> => <<"b">> }, []),
+  {ok, #{ last_update_seq := 2 }} = barrel:database_infos(<<"testdb">>),
+  ok = application:stop(barrel),
+  {ok, [barrel]} = application:ensure_all_started(barrel),
+  timer:sleep(200),
+  {ok, #{ last_update_seq := 2 }} = barrel:database_infos(<<"testdb">>),
   ok.
 
 change_deleted(_Config) ->
