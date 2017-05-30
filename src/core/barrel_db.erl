@@ -305,7 +305,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOpts = [
-    {start_key, <<Since:32>>},
+    {start_key, <<Since:64>>},
     {read_options, ReadOptions}
   ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
@@ -315,7 +315,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   fun(Key, BinDocInfo, Acc) ->
     DocInfo = binary_to_term(BinDocInfo),
     [_, SeqBin] = binary:split(Key, Prefix),
-    <<Seq:32>> = SeqBin,
+    <<Seq:64>> = SeqBin,
     RevId = maps:get(current_rev, DocInfo),
     Deleted = maps:get(deleted, DocInfo),
     DocId = maps:get(id, DocInfo),

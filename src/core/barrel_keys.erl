@@ -51,7 +51,7 @@ db_meta_key(Meta) -> << (prefix(db_meta))/binary, (barrel_lib:to_binary(Meta))/b
 
 doc_key(DocId) ->  << (prefix(doc))/binary,  DocId/binary >>.
 
-seq_key(Seq) -> << (prefix(seq))/binary, Seq:32>>.
+seq_key(Seq) -> << (prefix(seq))/binary, Seq:64>>.
 
 sys_key(DocId) -> << (prefix(sys_doc))/binary,  DocId/binary>>.
 
