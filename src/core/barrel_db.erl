@@ -541,7 +541,6 @@ init_meta(Store) ->
 
 init_properties() ->
   Props = [{num_docs_updated, 0}],
-
   lists:foreach(fun({K, V}) ->
                     erlang:put(K, V)
                 end, Props).
@@ -612,7 +611,6 @@ close_store(Id, Store) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-
 delete_db_dir(Id) ->
   TempName = db_path(barrel_lib:uniqid()),
   case file:rename(db_path(Id), TempName) of
@@ -679,8 +677,6 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store }) ->
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
 
-
-
         %% create update index events.
         %% TODO: move that code in a cleaner place
         NewDoc = current_body(DocInfo3),
@@ -700,8 +696,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store }) ->
                 [
                   {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
                   {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
-                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
-                  {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
+                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)}
                 ]
               )
             )

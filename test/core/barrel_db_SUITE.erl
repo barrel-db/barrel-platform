@@ -88,9 +88,7 @@ init_per_testcase(_, Config) ->
   [{db, <<"testdb">>} | Config].
 
 end_per_testcase(_, _Config) ->
-  timer:sleep(10),
   ok = barrel_store:delete_db(<<"testdb">>),
-  timer:sleep(200),
   ok.
 
 end_per_suite(Config) ->
