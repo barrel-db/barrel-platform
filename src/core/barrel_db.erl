@@ -973,40 +973,24 @@ do_delete(K, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
   end.
 
 last_rid(Store) ->
-  Prefix = barrel_keys:prefix(res),
-  Sz = byte_size(Prefix),
   MaxPrefix = << 0, 300, 0>>,
   with_iterator(
     Store, [],
     fun(Itr) ->
-      case rocksdb:iterator_move(Itr, MaxPrefix) of
-        {ok, << Prefix:Sz/binary, RID:64 >>} -> RID;
-        {ok, _, _} ->
-          case rocksdb:iterator_move(Itr, prev) of
-            {ok,  << Prefix:Sz/binary, RID:64 >>, _} -> RID;
-            _ -> 0
-          end;
-        _ ->
-          0
+      case rocksdb:iterator_move(Itr, {seek_for_prev, MaxPrefix}) of
+        {ok, << 0, 200, 0, RID:64 >>, _} -> RID;
+        _ -> 0
       end
     end).
 
 last_sequence(Store) ->
-  Prefix = barrel_keys:prefix(seq),
-  Sz = byte_size(Prefix),
   MaxSeq = 1 bsl 64 - 1,
   with_iterator(
     Store, [],
     fun(Itr) ->
-      case rocksdb:iterator_move(Itr, barrel_keys:seq_key(MaxSeq)) of
-        {ok, << Prefix:Sz/binary, Seq:64 >>} -> Seq;
-        {ok, _, _} ->
-          case rocksdb:iterator_move(Itr, prev) of
-            {ok,  << Prefix:Sz/binary, Seq:64 >>, _} -> Seq;
-            _ -> 0
-          end;
-        _ ->
-          0
+      case rocksdb:iterator_move(Itr, {seek_for_prev, barrel_keys:seq_key(MaxSeq)}) of
+        {ok, << 0, 100, 0, Seq:64/integer >>,  _} -> Seq;
+        _ ->  0
       end
     end).
 
