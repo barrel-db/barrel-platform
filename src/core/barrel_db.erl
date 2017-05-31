@@ -305,7 +305,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   {ok, Snapshot} = rocksdb:snapshot(Store),
   ReadOptions = [{snapshot, Snapshot}],
   FoldOpts = [
-    {start_key, <<Since:32>>},
+    {start_key, <<Since:64>>},
     {read_options, ReadOptions}
   ],
   IncludeDoc = proplists:get_value(include_doc, Opts, false),
@@ -315,7 +315,7 @@ changes_since_int(Db = #db{ store=Store}, Since0, Fun, AccIn, Opts) ->
   fun(Key, BinDocInfo, Acc) ->
     DocInfo = binary_to_term(BinDocInfo),
     [_, SeqBin] = binary:split(Key, Prefix),
-    <<Seq:32>> = SeqBin,
+    <<Seq:64>> = SeqBin,
     RevId = maps:get(current_rev, DocInfo),
     Deleted = maps:get(deleted, DocInfo),
     DocId = maps:get(id, DocInfo),
@@ -525,23 +525,22 @@ init([Cache, MemEnv, DbId, Config]) ->
 %% TODO: use a specific column to store the counters
 init_meta(Store) ->
   Prefix = barrel_keys:prefix(db_meta),
-  barrel_fold:fold_prefix(
+  Meta = barrel_fold:fold_prefix(
     Store,
     Prefix,
     fun(<< _:3/binary, Key/binary >>, ValBin, Meta) ->
       Val = binary_to_term(ValBin),
       {ok, Meta#{ Key => Val }}
     end,
-    #{<<"last_rid">> => 0,
-      <<"updated_seq">> => 0,
-      <<"docs_count">> => 0,
+    #{<<"docs_count">> => 0,
       <<"system_docs_count">> => 0},
     []
-  ).
+  ),
+  Meta#{ <<"last_rid" >> => last_rid(Store),
+         <<"updated_seq">> => last_sequence(Store) }.
 
 init_properties() ->
   Props = [{num_docs_updated, 0}],
-
   lists:foreach(fun({K, V}) ->
                     erlang:put(K, V)
                 end, Props).
@@ -612,7 +611,6 @@ close_store(Id, Store) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-
 delete_db_dir(Id) ->
   TempName = db_path(barrel_lib:uniqid()),
   case file:rename(db_path(Id), TempName) of
@@ -644,24 +642,12 @@ send_result(_, _) ->
   ok.
 
 
-do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) ->
+do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store }) ->
   %% try to collect a maximum of updates at once
   DocBuckets2 = collect_updates(DbId, DocBuckets),
   erlang:put(num_docs_updated, maps:size(DocBuckets2)),
 
   {Updates, NewRid, _, OldDocs} = merge_revtrees(DocBuckets2, Db),
-
-  %% update resource counter
-  if
-    NewRid /= LastRid ->
-      ok = rocksdb:put(
-        Store,
-        barrel_keys:db_meta_key(<<"last_rid">>),
-        term_to_binary(NewRid),
-        []
-      );
-    true -> ok
-  end,
 
   lists:foldl(
     fun
@@ -691,8 +677,6 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
         %% Create the changes index metadata
         SeqMeta = maps:remove(body_map, DocInfo3),
 
-
-
         %% create update index events.
         %% TODO: move that code in a cleaner place
         NewDoc = current_body(DocInfo3),
@@ -712,8 +696,7 @@ do_update_docs(DocBuckets, Db =  #db{id=DbId, store=Store, last_rid=LastRid }) -
                 [
                   {put, barrel_keys:res_key(Rid), term_to_binary(DocInfo3)},
                   {put, barrel_keys:seq_key(Db2#db.updated_seq), term_to_binary(SeqMeta)},
-                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)},
-                  {put, barrel_keys:db_meta_key(<<"updated_seq">>), term_to_binary(Db2#db.updated_seq)}
+                  {put, barrel_keys:db_meta_key(<<"docs_count">>), term_to_binary(Db2#db.docs_count)}
                 ]
               )
             )
@@ -987,4 +970,48 @@ do_delete(K, #db{ id=DbId, store=Store, system_docs_count = Count}) ->
       ok;
     Error ->
       Error
+  end.
+
+last_rid(Store) ->
+  Prefix = barrel_keys:prefix(res),
+  Sz = byte_size(Prefix),
+  MaxPrefix = << 0, 300, 0>>,
+  with_iterator(
+    Store, [],
+    fun(Itr) ->
+      case rocksdb:iterator_move(Itr, MaxPrefix) of
+        {ok, << Prefix:Sz/binary, RID:64 >>} -> RID;
+        {ok, _, _} ->
+          case rocksdb:iterator_move(Itr, prev) of
+            {ok,  << Prefix:Sz/binary, RID:64 >>, _} -> RID;
+            _ -> 0
+          end;
+        _ ->
+          0
+      end
+    end).
+
+last_sequence(Store) ->
+  Prefix = barrel_keys:prefix(seq),
+  Sz = byte_size(Prefix),
+  MaxSeq = 1 bsl 64 - 1,
+  with_iterator(
+    Store, [],
+    fun(Itr) ->
+      case rocksdb:iterator_move(Itr, barrel_keys:seq_key(MaxSeq)) of
+        {ok, << Prefix:Sz/binary, Seq:64 >>} -> Seq;
+        {ok, _, _} ->
+          case rocksdb:iterator_move(Itr, prev) of
+            {ok,  << Prefix:Sz/binary, Seq:64 >>, _} -> Seq;
+            _ -> 0
+          end;
+        _ ->
+          0
+      end
+    end).
+
+with_iterator(Store, ReadOptions, Fun) ->
+  {ok, Itr} = rocksdb:iterator(Store, ReadOptions),
+  try Fun(Itr)
+  after rocksdb:iterator_close(Itr)
   end.
