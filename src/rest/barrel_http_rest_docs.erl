@@ -64,10 +64,14 @@ init(Req, _Opts) ->
       handle(Req2, S3);
     {[<<>>,<<"dbs">>,_,<<"docs">>], true} ->
       S2 = S1#state{handler=changes},
-      {Loop, Req2, S3} = barrel_http_rest_docs_changes:init(Req, S2),
-      case Loop of
-        cowboy_loop -> {cowboy_loop, Req2, S3};
-        ok -> handle(Req2, S3)
+      case barrel_http_rest_docs_changes:init(Req, S2) of
+        {Loop, Req2, S3} ->
+          case Loop of
+            cowboy_loop -> {cowboy_loop, Req2, S3};
+            ok -> handle(Req2, S3)
+          end;
+        {stop, Req2} ->
+          {stop, Req2}
       end;
     _ ->
       S2 = S1#state{handler=list},

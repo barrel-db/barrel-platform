@@ -40,7 +40,7 @@ check_database_db(Req, State) ->
       check_params(Req, State#state{database=Database});
     _Error ->
       _ = lager:info("unknown database requested: ~p~n", [Database]),
-      {ok, Req3, _S} = barrel_http_reply:error(400, "unknown database", Req, State),
+      {ok, Req3, _S} = barrel_http_reply:error(404, "unknown database", Req, State),
       {stop, Req3}
   end.
 

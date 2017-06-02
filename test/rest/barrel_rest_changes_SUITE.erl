@@ -184,7 +184,7 @@ parse_event_source(Bin) ->
 %%=======================================================================
 
 reject_store_unknown(_Config) ->
-  {400, _} = req_changes("/dbs/badstore/docs"),
+  {404, _} = req_changes("/dbs/badstore/docs"),
   ok.
 
 reject_bad_params(_Config) ->
