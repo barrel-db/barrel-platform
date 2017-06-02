@@ -161,8 +161,15 @@ init([]) ->
   {ok, MemEnv} = rocksdb:mem_env(),
   
   {ok, Conf} = load_config(),
-  self() ! init_dbs,
-  {ok, #{conf => Conf, cache => Cache, mem_env => MemEnv, db_pids => #{}}}.
+  %Mself() ! init_dbs,
+  
+  InitState = #{
+    conf => Conf,
+    cache => Cache,
+    mem_env => MemEnv,
+    db_pids => #{}},
+  
+  {ok, init_dbs(InitState)}.
 
 handle_call({create_db, Config=#{<<"database_id">> := DbId}}, _From, State) ->
   case whereis_db(DbId) of
@@ -189,7 +196,17 @@ handle_info({'DOWN', _MRef, process, DbPid, _Reason}, State) ->
   NState = db_is_down(DbPid, State),
   {noreply, NState};
 
-handle_info(init_dbs, State) ->
+handle_info(init_dbs, State) -> {noreply, init_dbs(State)};
+
+handle_info(_Info, State) ->  {noreply, State}.
+
+terminate(_Reason, _State) ->
+  ok.
+
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+
+init_dbs(State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
   %% get databases from sys.config, we only create dbs not already persisted
@@ -198,15 +215,7 @@ handle_info(init_dbs, State) ->
     fun(#{ <<"database_id">> := Id}) -> lists:member(Id, Loaded) /= true  end,
     Dbs0
   ),
-  NState = maybe_create_dbs_from_conf(Dbs, State2),
-  {noreply, NState};
-
-handle_info(_Info, State) ->  {noreply, State}.
-
-terminate(_Reason, _State) ->
-  ok.
-
-code_change(_OldVsn, State, _Extra) -> {ok, State}.
+  maybe_create_dbs_from_conf(Dbs, State2).
 
 do_create_db(Config, State) ->
   #{ conf := Conf, cache := Cache, mem_env := MemEnv, db_pids := DbPids } = State,
