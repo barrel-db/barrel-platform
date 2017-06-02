@@ -138,6 +138,7 @@ parse_change(ChangeBin) ->
   ).
 
 init(Parent, Conn, Options) ->
+  process_flag(trap_exit, true),
   proc_lib:init_ack(Parent, {ok, self()}),
   %% initialize the state
   State = #state{ parent = Parent,
@@ -205,13 +206,16 @@ wait_retry(State = #state{parent = Parent}) ->
   receive
     connect ->
       init_feed(State);
+    {'EXIT', Parent, _} ->
+      cleanup(State, "parent stopped"),
+      exit(normal);
     {system, From, Request} ->
       sys:handle_system_msg(
         Request, From, Parent, ?MODULE, [],
         {wait_retry, State})
   end.
 
-wait_response(#state{ ref = Ref, options = Options}=State) ->
+wait_response(#state{ parent = Parent, ref = Ref, options = Options}=State) ->
   receive
     {hackney_response, Ref, {status, 200, _}} ->
       Conn = State#state.conn,
@@ -239,7 +243,14 @@ wait_response(#state{ ref = Ref, options = Options}=State) ->
         [?MODULE_STRING, Reason]
        ),
       cleanup(Ref, Reason),
-      exit(Reason)
+      exit(Reason);
+    {'EXIT', Parent, _} ->
+      cleanup(State, "parent stopped"),
+      exit(normal);
+    {system, From, Request} ->
+      sys:handle_system_msg(
+        Request, From, Parent, ?MODULE, [],
+        {wait_response, State})
   after State#state.hackney_timeout ->
     cleanup(State, timeout),
     exit(timeout)
@@ -269,6 +280,9 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
     stop ->
       cleanup(State, "listener stopped"),
       exit(normal);
+    {'EXIT', Parent, _} ->
+      cleanup(State, "parent stopped"),
+      exit(normal);
     {system, From, Request} ->
       sys:handle_system_msg(
         Request, From, Parent, ?MODULE, [],
@@ -282,6 +296,8 @@ wait_changes(#state{ parent = Parent, ref = Ref }=State) ->
 
 system_continue(_, _, {wait_retry, State}) ->
   wait_retry(State);
+system_continue(_, _, {wait_response, State}) ->
+  wait_response(State);
 system_continue(_, _, {wait_changes, State}) ->
   wait_changes(State).
 
