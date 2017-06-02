@@ -41,8 +41,8 @@ init([]) ->
   Spec = #{
     id => barrel_db,
     start => {barrel_db, start_link, []},
-    restart => temporary,
-    shutdown => 30000,
+    restart => transient,
+    shutdown => 20000,
     type => worker,
     modules => [barrel_db]
   },
