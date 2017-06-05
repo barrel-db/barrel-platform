@@ -215,12 +215,10 @@ handle_init(ignore, _, _, _, Parent, AckRef) ->
   _ = Parent ! {'IGNORE', self(), AckRef},
   exit(normal);
 handle_init(Other, _, _, _, _, _) ->
-  handle_init(Other).
-
-handle_init({error, Reason}) ->
-  exit(Reason);
-handle_init(Other) ->
-  exit({bad_return_value, Other}).
+  case Other of
+    {error, Reason} -> exit(Reason);
+    _ -> exit({bad_return_value, Other})
+  end.
 
 success(Sock, Opts, Parent, #{ack := AckRef} = Data) ->
   case inet:peername(Sock) of
@@ -263,15 +261,16 @@ failure(Reason, #{socket := LSock} = Data) ->
 -spec terminate(any(), data()) -> no_return().
 terminate(Reason, #{module := Mod, state := State} = Data) ->
   try Mod:acceptor_terminate(Reason, State) of
-    _             -> terminated(Reason, Data)
+    _ -> terminated(Reason, Data)
   catch
-    throw:_       -> terminated(Reason, Data);
+    throw:_ -> terminated(Reason, Data);
     exit:NReason  -> terminated(NReason, Data);
     error:NReason -> terminated({NReason, erlang:get_stacktrace()}, Data)
   end.
 
 terminated(normal, _) ->
-  exit(normal);
+  exit(normal),
+  ok;
 terminated(shutdown, _) ->
   exit(shutdown);
 terminated({shutdown, _} = Shutdown, _) ->
