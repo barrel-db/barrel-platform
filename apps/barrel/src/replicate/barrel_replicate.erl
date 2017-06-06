@@ -140,7 +140,7 @@ config_file() ->
   case init:get_argument(replication_file) of
     {ok, [[P]]} -> P;
     _ ->
-      FileName = case application:get_env(barrel_store, replication_file) of
+      FileName = case application:get_env(barrel, replication_file) of
                    undefined -> ?DEFAULT_CONFIG;
                    {ok, P} -> P
                  end,

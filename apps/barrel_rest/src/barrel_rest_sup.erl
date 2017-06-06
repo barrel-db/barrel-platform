@@ -17,7 +17,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(barrel_http_sup).
+-module(barrel_rest_sup).
 -author("Bernard Notarianni").
 
 -behaviour(supervisor).
@@ -48,15 +48,19 @@ start_link() ->
 %%====================================================================
 
 init(_Args) ->
-  ListenPort = application:get_env(barrel_http, listen_port, ?DEFAULT_PORT),
-  NbAcceptors = application:get_env(barrel_http, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
-  RequestTimeout = application:get_env(barrel_http, request_timeout, ?DEFAULT_TIMEOUT),
+  %% init metrics
+  %% TODO: make it optionnal
+  barrel_prometheus:init(),
+  
+  ListenPort = application:get_env(barrel_rest, listen_port, ?DEFAULT_PORT),
+  NbAcceptors = application:get_env(barrel_rest, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
+  RequestTimeout = application:get_env(barrel_rest, request_timeout, ?DEFAULT_TIMEOUT),
 
   _ = prometheus_http_impl:setup(),
 
   Routes = [ {"/api-doc", barrel_http_redirect,
               [{location, <<"/api-doc/index.html">>}]}
-           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel, "swagger",
+           , {"/api-doc/[...]", cowboy_static, {priv_dir, barrel_rest, "swagger",
                                                  [{mimetypes, cow_mimetypes, all}]}}
 
            , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}

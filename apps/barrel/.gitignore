@@ -18,4 +18,3 @@ _build
 docs
 data
 *.iml
-.gitlab-ci.yml

@@ -134,7 +134,7 @@ get_conf() -> gen_server:call(?MODULE, get_conf).
 
 -spec data_dir() -> string().
 data_dir() ->
-  Dir = application:get_env(barrel_store, data_dir, ?DATA_DIR),
+  Dir = application:get_env(barrel, data_dir, ?DATA_DIR),
   _ = filelib:ensure_dir(filename:join([".",Dir, "dummy"])),
   Dir.
 
@@ -147,7 +147,7 @@ init([]) ->
   
   %% initialize the cache
   %% TODO: make it optionnal for the peer
-  BlockCacheSize = case application:get_env(barrel_store, block_cache_size, 0) of
+  BlockCacheSize = case application:get_env(barrel, block_cache_size, 0) of
                      0 ->
                        MaxSize = barrel_memory_monitor:get_total_memory(),
                        %% reserve 1GB for system and binaries, and use 30% of the rest
@@ -193,7 +193,7 @@ handle_info(init_dbs, State) ->
   %% load databases from config
   {Loaded, State2} = load_dbs(State),
   %% get databases from sys.config, we only create dbs not already persisted
-  Dbs0 = application:get_env(barrel_store, dbs, []),
+  Dbs0 = application:get_env(barrel, dbs, []),
   Dbs = lists:filter(
     fun(#{ <<"database_id">> := Id}) -> lists:member(Id, Loaded) /= true  end,
     Dbs0

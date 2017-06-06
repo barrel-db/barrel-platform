@@ -1,0 +1,23 @@
+{application, barrel_rest,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { barrel_rest_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    sasl,
+    lager,
+    crypto,
+    hackney,
+    cowboy,
+    barrel_httpc,
+    barrel
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.
