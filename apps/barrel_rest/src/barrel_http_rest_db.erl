@@ -44,7 +44,7 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   Db = cowboy_req:binding(database, Req),
   barrel_monitor_activity:update(#{ state => active, query => delete_db, db => Db }),
-  ok = barrel:delete_db(Db),
+  _ = barrel:delete_db(Db),
   barrel_http_reply:json(200, #{ ok => true }, Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).

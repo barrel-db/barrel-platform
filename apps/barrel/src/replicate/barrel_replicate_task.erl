@@ -84,17 +84,22 @@ init({RepId, Source0, Target0, Options}) ->
   Metrics = barrel_replicate_metrics:new(),
   Checkpoint = barrel_replicate_checkpoint:new(RepId, Source, Target, Options),
   StartSeq = barrel_replicate_checkpoint:get_start_seq(Checkpoint),
-  {ok, Pid} = start_changes_feed_process(Source, StartSeq),
-  State = #st{id=RepId,
-              source=Source,
-              target=Target,
-              checkpoint=Checkpoint,
-              changes_since_pid=Pid,
-              metrics=Metrics,
-              options=Options},
-  ok = barrel_replicate_metrics:create_task(Metrics, Options),
-  barrel_replicate_metrics:update_task(Metrics),
-  {ok, State}.
+  case start_changes_feed_process(Source, StartSeq) of
+    {ok, Pid} ->
+      State = #st{id=RepId,
+        source=Source,
+        target=Target,
+        checkpoint=Checkpoint,
+        changes_since_pid=Pid,
+        metrics=Metrics,
+        options=Options},
+      ok = barrel_replicate_metrics:create_task(Metrics, Options),
+      barrel_replicate_metrics:update_task(Metrics),
+      {ok, State};
+    {error, Reason} ->
+      {stop, Reason}
+      
+  end.
   
 start_changes_feed_process(Source, StartSeq) ->
   Self = self(),
@@ -150,13 +155,15 @@ handle_info({change, Change}, S) ->
   {noreply, S2};
 
 
+
 handle_info({'EXIT', Pid, Reason}, #st{changes_since_pid=Pid}=State) ->
   _ = lager:warning("[~s] changes process exited pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   Source = State#st.source,
   Checkpoint = State#st.checkpoint,
-  LastSeq = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
+  
   case database_exist(Source) of
     true ->
+      LastSeq = barrel_replicate_checkpoint:get_last_seq(Checkpoint),
       {ok, NewPid} = start_changes_feed_process(Source, LastSeq),
       _ = lager:warning("[~s] changes process restarted pid=~p",[?MODULE_STRING, NewPid]),
       {noreply, State};
@@ -170,13 +177,24 @@ handle_info({'EXIT', Pid, Reason}, State) ->
   _ = lager:error("[~s] exit from process pid=~p reason=~p",[?MODULE_STRING, Pid, Reason]),
   {stop, Reason, State}.
 
-terminate(_Reason, State = #st{id=RepId, source=Source, target=Target}) ->
+terminate(_Reason, State) ->
+  #st{
+    changes_since_pid = Pid,
+    id = RepId,
+    source = Source,
+    target = Target
+  } = State,
+  
   barrel_replicate_metrics:update_task(State#st.metrics),
   _ = lager:debug(
     "barrel_replicate(~p} terminated: ~p",
     [RepId, _Reason]
   ),
   (catch barrel_replicate_checkpoint:write_checkpoint(State#st.checkpoint)),
+  
+  {Backend, _SourceUri} = Source,
+  _ = (catch Backend:stop(Pid)),
+  
   %% close the connections
   [maybe_close(Conn) || Conn <- [Source, Target]],
   ok.

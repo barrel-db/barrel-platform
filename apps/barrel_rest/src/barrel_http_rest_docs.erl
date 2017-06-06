@@ -71,7 +71,7 @@ init(Req, _Opts) ->
             ok -> handle(Req2, S3)
           end;
         {stop, Req2} ->
-          {stop, Req2}
+          {ok, Req2, S2}
       end;
     _ ->
       S2 = S1#state{handler=list},

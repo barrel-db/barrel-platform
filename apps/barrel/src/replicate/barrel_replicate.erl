@@ -63,6 +63,7 @@ all_replication_tasks() ->
   lists:sort(All).
 
 fold_replication_tasks(UserFun, Acc) ->
+  lager:info("content of tab : ~p~n", [ets:tab2list(replication_ids)]),
   WrapperFun =
     fun
       ({RepId, {Persisted, Pid, _}}, Acc1) ->

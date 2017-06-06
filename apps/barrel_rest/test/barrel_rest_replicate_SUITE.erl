@@ -41,11 +41,12 @@ all() -> [ accept_post_get
          ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_rest),
   Config.
 
 init_per_testcase(_, Config) ->
   _ = (catch file:delete("data/replication.config")),
+  
   {ok, _} = barrel:create_db(<<"dba">>, #{}),
   {ok, _} = barrel:create_db(<<"dbb">>, #{}),
   {ok, _} = barrel:create_db(<<"dbaa">>, #{}),
@@ -53,23 +54,23 @@ init_per_testcase(_, Config) ->
   {ok, _} = barrel:create_db(<<"dbaaa">>, #{}),
   {ok, _} = barrel:create_db(<<"dbbbb">>, #{}),
   {ok, _} = barrel:create_db(<<"testdb">>, #{}),
-  AllDbs = barrel_store:databases(),
-  io:format("all dsb are ~p~n", [AllDbs]),
+  timer:sleep(100),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"dba">>),
-  ok = barrel:delete_db(<<"dbb">>),
-  ok = barrel:delete_db(<<"dbaa">>),
-  ok = barrel:delete_db(<<"dbbb">>),
-  ok = barrel:delete_db(<<"dbaaa">>),
-  ok = barrel:delete_db(<<"dbbbb">>),
-  ok = barrel:delete_db(<<"testdb">>),
-  file:delete("data/replication.config"),
+  _ = barrel:delete_db(<<"dba">>),
+  _ = barrel:delete_db(<<"dbb">>),
+  _ = barrel:delete_db(<<"dbaa">>),
+  _ = barrel:delete_db(<<"dbbb">>),
+  _ = barrel:delete_db(<<"dbaaa">>),
+  _ = barrel:delete_db(<<"dbbbb">>),
+  _ = barrel:delete_db(<<"testdb">>),
+  _ = (catch file:delete("data/replication.config")),
+  timer:sleep(100),
   Config.
 
 end_per_suite(Config) ->
-  ok = application:stop(barrel),
+  ok = application:stop(barrel_rest),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
@@ -94,9 +95,7 @@ accept_post_get(_Config) ->
   {404, _} = test_lib:req(get, "/replicate/doesnotexist"),
   {200, R2} = test_lib:req(get, "/replicate/" ++ RepId),
   Metrics = jsx:decode(R2, [return_maps]),
-  #{<<"docs_read">> := 1,
-    <<"docs_written">> := 1} = Metrics,
-  io:format("replication name ~p~n", [RepId]),
+  #{<<"docs_read">> := 1,  <<"docs_written">> := 1} = Metrics,
   ok = barrel:delete_replication(RepIdBin),
   ok.
 

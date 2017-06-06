@@ -36,6 +36,7 @@ all() ->
 
 init_per_suite(Config) ->
   {ok, _} = application:ensure_all_started(barrel),
+  _ = application:start(barrel),
   Config.
 
 init_per_testcase(_, Config) ->

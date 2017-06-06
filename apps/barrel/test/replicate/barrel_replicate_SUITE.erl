@@ -66,6 +66,7 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
+  ok = application:stop(barrel),
   Config.
 
 %% =============================================================================
@@ -144,7 +145,8 @@ list_replication_tasks(_Config) ->
   {ok, #{<<"replication_id">> := <<"b">>}} = barrel_replicate:start_replication(RepConfig1, Options),
   [<<"a">>, <<"b">>] = barrel_replicate:all_replication_tasks(),
   ok = barrel_replicate:delete_replication(<<"b">>),
-  [<<"a">>] = barrel_replicate:all_replication_tasks().
+  [<<"a">>] = barrel_replicate:all_replication_tasks(),
+  ok = barrel_replicate:delete_replication(<<"a">>).
  
 persistent_replication(_Config) ->
   RepId = <<"a">>,

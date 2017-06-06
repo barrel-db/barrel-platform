@@ -90,5 +90,5 @@ init(_Args) ->
            cowboy_clear, Options1),
 
   Specs = [Http],
-  SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
+  SupFlags = #{strategy => one_for_one, intensity => 5, period => 1},
   {ok, {SupFlags, Specs}}.

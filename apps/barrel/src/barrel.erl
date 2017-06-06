@@ -171,30 +171,20 @@
 
 create_db(DbId, Config) ->
   _ = lager:warning("barrel_db:create/2 is deprecated", []),
-  barrel_store:create_db(Config#{ <<"database_id">> => DbId }).
+  create_db(Config#{ <<"database_id">> => DbId }).
 
-create_db(Config) ->
-  barrel_store:create_db(Config).
-
-
-delete_db(DbId) ->
-  barrel_store:delete_db(DbId).
+create_db(Config) -> barrel_store:create_db(Config).
 
 
+delete_db(DbId) -> barrel_store:delete_db(DbId).
 
-
--spec db_infos(Db::db()) ->
-  {ok, DbInfos::db_infos()} | {error, term()}.
-db_infos(Db) ->
-  barrel_db:infos(Db).
-
-
+-spec db_infos(Db::db()) ->  {ok, DbInfos::db_infos()} | {error, term()}.
+db_infos(Db) ->  barrel_db:infos(Db).
 
 %% new db handling api
 connect(DbId) -> {ok, DbId}.
 
-database_infos(Db) ->
-  barrel_db:infos(Db).
+database_infos(Db) -> barrel_db:infos(Db).
 
 
 

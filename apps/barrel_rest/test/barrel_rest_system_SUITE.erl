@@ -25,7 +25,7 @@
 all() -> [system_doc].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_rest),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -37,7 +37,7 @@ end_per_testcase(_, Config) ->
   Config.
 
 end_per_suite(_Config) ->
-  _ = application:stop(barrel),
+  _ = application:stop(barrel_rest),
   ok.
 
 %% ----------

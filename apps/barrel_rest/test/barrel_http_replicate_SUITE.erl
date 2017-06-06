@@ -41,7 +41,7 @@ all() ->
   ].
 
 init_per_suite(Config) ->
-  {ok, _} = application:ensure_all_started(barrel),
+  {ok, _} = application:ensure_all_started(barrel_rest),
   Config.
 
 init_per_testcase(_, Config) ->
@@ -56,7 +56,8 @@ end_per_testcase(_, _Config) ->
   ok.
 
 end_per_suite(Config) ->
-  ok = application:stop(barrel),
+  ok = application:stop(barrel_rest),
+  _ = (catch file:delete("data/replication.config")),
   _ = (catch rocksdb:destroy("docs", [])),
   Config.
 
