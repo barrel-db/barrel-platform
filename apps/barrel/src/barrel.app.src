@@ -14,11 +14,7 @@
      jsone,
      uuid,
      gproc,
-     hooks,
-     hackney,
-     cowboy,
-     prometheus,
-     prometheus_httpd
+     hooks
     ]},
    {env, []},
    {modules, []},

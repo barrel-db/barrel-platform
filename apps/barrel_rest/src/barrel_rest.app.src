@@ -11,6 +11,8 @@
     crypto,
     hackney,
     cowboy,
+    prometheus,
+    prometheus_httpd,
     barrel_httpc,
     barrel
    ]},

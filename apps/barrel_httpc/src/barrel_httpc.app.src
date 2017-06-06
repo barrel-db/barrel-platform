@@ -5,7 +5,11 @@
   {mod, { barrel_httpc_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+     sasl,
+     lager,
+     crypto,
+     hackney
    ]},
   {env,[]},
   {modules, []},
