@@ -13,6 +13,7 @@ test:
     - _build/test/cover
 
   script:
+    - cd apps/barrel && make test
     - make test cover
 
   cache:
