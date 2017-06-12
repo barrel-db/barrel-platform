@@ -2,6 +2,11 @@ BASEDIR = $(shell pwd)
 SUPPORTDIR = $(BASEDIR)/support
 REBAR ?= $(SUPPORTDIR)/rebar3
 
+OTP_VERSION?=19.3
+BUILD_NAME?=working
+KERL_DEFAULT_INSTALL_DIR?=$(HOME)/.kerl/local/$(OTP_VERSION)/otp
+KERL_CONFIGURE_OPTIONS?=" --disable-hipe --enable-smp-support --enable-threads --enable-kernel-poll --with-wx --without-odbc --enable-dirty-schedulers"
+
 .PHONY: help all rel tar store apply
 
 all: compile
@@ -16,6 +21,7 @@ rel:
 devrel: ## Create a barrel release
 	@$(REBAR) release
 
+
 tar: ## Create a tar file containing a portable release
 	@$(REBAR) as prod tar
 
@@ -28,12 +34,30 @@ distclean: clean ## Clean all build and releases artifacts
 cleantest:
 	@rm -rf _build/test
 
+morning: distclean clean
+	$(MAKE) $(MAKE_FLAGS) shell
+
+erlclean:
+	kerl delete build $(BUILD_NAME)
+
+
+install_erlang:
+	KERL_CONFIGURE_OPTIONS=$(KERL_CONFIGURE_OPTIONS) \
+	KERL_DEFAULT_INSTALL_DIR=$(KERL_DEFAULT_INSTALL_DIR) \
+	kerl build $(OTP_VERSION) $(BUILD_NAME)
+	kerl install $(BUILD_NAME) $(KERL_DEFAULT_INSTALL_DIR)
+	. $(KERL_DEFAULT_INSTALL_DIR)/activate
+
+shell:
+	@$(REBAR) as dev shell
+
+
 dialyzer:
 	@$(REBAR) dialyzer
 
 test: cleantest dialyzer
-	@$(REBAR) eunit
-	@$(REBAR) ct
+	@$(REBAR) as dev eunit
+	@$(REBAR) as dev ct
 
 cover:
 	@$(REBAR) cover
