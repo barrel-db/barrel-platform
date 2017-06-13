@@ -52,6 +52,7 @@
   resource_id/1
 ]).
 
+
 all() ->
   [
     basic_op,
@@ -175,8 +176,19 @@ revision_conflict(_Config) ->
 async_update(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
   ok= barrel:post(<<"testdb">>, Doc, [{async, true}]),
-  timer:sleep(100),
-  {ok, #{ <<"id">> := <<"a">>, <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"a">>, []).
+
+  true = test_util:wait_for_event(50, fun() ->
+				    case barrel:get(<<"testdb">>, <<"a">>, []) of
+
+					{ok, #{ <<"id">> := <<"a">>, <<"v">> := 1}, _} ->
+					    ok;
+					E ->
+					    E
+				    end
+			    end, 10),
+   ok.
+
+
 
 resource_id(_Config) ->
   Doc = #{ <<"id">> => <<"a">>, <<"v">> => 1},
@@ -239,7 +251,7 @@ put_rev(_Config) ->
   {ok, _Doc5, Meta} = barrel:get(<<"testdb">>, DocId, [{history, true}]),
   Revisions = [RevId2, RevId],
   io:format("revisions: ~p~nparsed:~p~n", [Revisions, barrel_doc:parse_revisions(Meta)]),
-  
+
   Revisions = barrel_doc:parse_revisions(Meta).
 
 write_batch(_Config) ->
@@ -256,19 +268,19 @@ write_batch(_Config) ->
     { delete, <<"c">>, Rev3_1},
     { put, D4, <<>>}
   ],
-  
+
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
   {error, not_found} = barrel:get(<<"testdb">>, <<"b">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"c">>, []),
-  
+
   Results = barrel:write_batch(<<"testdb">>, OPs, []),
   true = is_list(Results),
-  
+
   [ {ok, <<"a">>, _},
     {ok, <<"b">>, _},
     {ok, <<"c">>, _},
     {error, not_found} ] = Results,
-  
+
   {ok, #{ <<"v">> := 2}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"b">>, []),
   {error, not_found} = barrel:get(<<"testdb">>, <<"c">>, []).
@@ -287,11 +299,11 @@ write_json_batch(_Config) ->
     #{ <<"op">> => <<"delete">>, <<"id">> => <<"c">>, <<"rev">> => Rev3_1},
     #{ <<"op">> => <<"put">>, <<"doc">> => D4}
   ],
-  
+
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
   {error, not_found} = barrel:get(<<"testdb">>, <<"b">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"c">>, []),
-  
+
   Results = barrel:write_batch(<<"testdb">>, JsonOPs, []),
   true = is_list(Results),
 
@@ -299,7 +311,7 @@ write_json_batch(_Config) ->
     {ok, <<"b">>, _},
     {ok, <<"c">>, _},
     {error, not_found} ] = Results,
-  
+
   {ok, #{ <<"v">> := 2}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
   {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"b">>, []),
   {error, not_found} = barrel:get(<<"testdb">>, <<"c">>, []).
@@ -358,9 +370,18 @@ updated_seq(_Config) ->
   {ok, #{ last_update_seq := 2 }} = barrel:database_infos(<<"testdb">>),
   ok = application:stop(barrel),
   {ok, [barrel]} = application:ensure_all_started(barrel),
-  timer:sleep(200),
-  {ok, #{ last_update_seq := 2 }} = barrel:database_infos(<<"testdb">>),
+  true = test_util:wait_for_event(50, fun() ->
+				    case barrel:database_infos(<<"testdb">>) of
+					{ok, #{ last_update_seq := 2 }}  ->
+					    ok;
+					_  ->
+					    error
+				    end
+		     end, 10),
+
   ok.
+
+
 
 change_deleted(_Config) ->
   Fun = fun(Change, Acc) ->
@@ -421,7 +442,7 @@ change_since_many(_Config) ->
   %% History for doc1 includes creation and deletion
   {21, #{<<"changes">> := HistoryDoc1}} = hd(All),
   2 = length(HistoryDoc1),
-  
+
   [{21, #{<<"id">> := <<"doc1">>}},
    {20, #{<<"id">> := <<"doc20">>}},
    {19, #{<<"id">> := <<"doc19">>}}] = barrel:changes_since(<<"testdb">>, 18, Fun, []),

@@ -35,6 +35,7 @@ cleantest:
 	@rm -rf _build/test
 
 morning: distclean clean
+	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 	$(MAKE) $(MAKE_FLAGS) shell
 
 erlclean:
@@ -49,16 +50,23 @@ install_erlang:
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
 shell:
-	@$(REBAR) as dev shell
+	@$(REBAR) as dev shell --sname barrel
 
 
 dialyzer:
 	@$(REBAR) dialyzer
 
-test: cleantest dialyzer
+test: cleantest dialyzer eunit ct
+
+eunit:
 	@$(REBAR) as dev eunit
+
+ct:
 	@$(REBAR) as dev ct
 
+suite:
+	. $(KERL_DEFAULT_INSTALL_DIR)/activate
+	@$(REBAR) as dev ct --suite $(PWD)/apps/barrel/test/replicate/barrel_replicate_SUITE.erl
 cover:
 	@$(REBAR) cover
 

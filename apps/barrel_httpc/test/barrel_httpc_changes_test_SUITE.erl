@@ -40,13 +40,13 @@
 
 all() ->
   [
-    collect_change,
-    include_doc,
-    collect_changes,
-    changes_feed_callback,
-    restart_when_server_timeout,
-    heartbeat_collect_change,
-    heartbeat_and_timeout,
+    %% collect_change,
+    %% include_doc,
+    %% collect_changes,
+    %% changes_feed_callback,
+    %% restart_when_server_timeout,
+    %% heartbeat_collect_change,
+    %% heartbeat_and_timeout,
     multiple_put
   ].
 
@@ -179,6 +179,7 @@ heartbeat_collect_change(Config) ->
   ok = barrel_httpc_changes:stop(Pid).
 
 heartbeat_and_timeout(Config) ->
+  io:format("Config = ~p.",[Config]),
   process_flag(trap_exit, true),
 
   %% httpc will timeout before receiving the heartbeat
@@ -215,9 +216,10 @@ heartbeat_and_timeout(Config) ->
   ok = barrel_httpc_changes:stop(Pid2),
   ok.
 
+
 multiple_put(Config) ->
   Self = self(),
-
+  lager:notice("Config = ~p.~n~n~n", [Config]),
   %% spawn a change listener
   spawn(
     fun() ->
@@ -242,7 +244,7 @@ multiple_put(Config) ->
         fun() ->
           {ok, DocId, _} = barrel_httpc:post(db(Config), Doc, []),
           Self ! {ok, self()},
-          timer:sleep(100)
+          timer:sleep(200)
         end
       ),
       [Pid | Acc]

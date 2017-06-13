@@ -138,7 +138,8 @@ list_replication_tasks(_Config) ->
     <<"source">> => <<"source">>,
     <<"target">> => <<"testdb">>},
   {ok, #{<<"replication_id">> := RepId}} = barrel_replicate:start_replication(RepConfig, Options),
-  [<<"a">>] = barrel_replicate:all_replication_tasks(),
+	true = lists:member(<<"a">>,barrel_replicate:all_replication_tasks()),
+
   RepConfig1 = #{<<"replication_id">> => <<"b">>,
     <<"source">> => <<"source">>,
     <<"target">> => <<"testdb">>},
@@ -147,7 +148,7 @@ list_replication_tasks(_Config) ->
   ok = barrel_replicate:delete_replication(<<"b">>),
   [<<"a">>] = barrel_replicate:all_replication_tasks(),
   ok = barrel_replicate:delete_replication(<<"a">>).
- 
+
 persistent_replication(_Config) ->
   RepId = <<"a">>,
   Options = [{metrics_freq, 100}, {persist, true}],
@@ -193,7 +194,7 @@ restart_persistent_replication(_Config) ->
     erlang:demonitor(MRef, [flush])
   end,
   {'EXIT', {badarg, _}} = (catch ets:lookup(replication_ids, RepId)),
-  timer:sleep(200),
+  timer:sleep(500),
   ok = barrel_replicate:delete_replication(RepId),
   {ok, [AllConfig3]} = file:consult("data/replication.config"),
   undefined = maps:get(RepId, AllConfig3, undefined),
@@ -227,9 +228,18 @@ delete_database_being_replicated(_Config) ->
   Manager = whereis(barrel_replicate),
   [{<<"sourcedatabasedeleted">>, {false, _Pid, _}}] = ets:lookup(replication_ids, RepId),
   ok = barrel_store:delete_db(<<"tobedeleted">>),
-  timer:sleep(200),
-  Manager = whereis(barrel_replicate),
-  [] = ets:lookup(replication_ids, RepId),
+  true = test_util:wait_for_event(50, fun() ->
+																							try
+																									Manager = whereis(barrel_replicate),
+																									[] = ets:lookup(replication_ids, RepId),
+																									ok
+																							catch
+																									_:_E ->
+																											lager:notice("Error ~p", [_E]),
+																											false
+																							end
+																			end, 10),
+
   ok = barrel_replicate:delete_replication(RepId),
   ok.
 
@@ -247,7 +257,16 @@ random_activity(_Config) ->
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, Options),
   ExpectedResults = play_scenario(Scenario, <<"source">>),
-  timer:sleep(200),
+
+  true =    test_util:wait_for_event(50,fun()  ->
+						try
+						    ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>)
+						catch
+						    _:{badmatch, _} ->
+							false
+						end
+					end, 10),
+
   ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>),
   ok = barrel_replicate:stop_replication(RepId),
   ok = purge_scenario(ExpectedResults, <<"source">>),
@@ -280,6 +299,7 @@ checkpoints(_Config) ->
   ok = purge_scenario(M2, <<"testdb">>),
   ok.
 
+
 play_checkpoint(Scenario, M) ->
   RepId = <<"checkpoints">>,
   Options = [],
@@ -289,8 +309,14 @@ play_checkpoint(Scenario, M) ->
   {ok, #{<<"replication_id">> := RepId}} =
     barrel_replicate:start_replication(RepConfig, Options),
   Expected = play_scenario(Scenario, <<"source">>, M),
-  timer:sleep(200),
-  ok = check_all(Expected, <<"source">>, <<"testdb">>),
+  true =    test_util:wait_for_event(50,fun()  ->
+						try
+						    ok = check_all(Expected, <<"source">>, <<"testdb">>)
+						catch
+						    _:{badmatch, _} ->
+							false
+						end
+					end, 10),
   ok = barrel_replicate:stop_replication(RepId),
   Expected.
 
