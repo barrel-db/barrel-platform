@@ -164,7 +164,7 @@ atomic_attachment(Config) ->
   ok.
 
 atomic_erlang_term_attachment(Config) ->
-  DocId = <<"a">>,
+  DocId = <<"test_document">>,
   Doc = #{<<"id">> => DocId, <<"v">> => 1},
   AttId = <<"myattachement">>,
   Term = {atuple, [a, list], #{a => "map", <<"with">> => <<"binary">>}},
@@ -178,15 +178,17 @@ atomic_erlang_term_attachment(Config) ->
   %% content-type not given for erlang term
   WithoutContentType = [#{<<"id">> => AttId,
                           <<"blob">> => Term}],
-  {ok, <<"a">>, _} = barrel_httpc:post(db(Config), Doc, WithoutContentType, []),
+  {ok, DocId, _} = barrel_httpc:post(db(Config), Doc, WithoutContentType, []),
 
   %% retrieve decoded attachment
   {ok, Doc, [A], _} = barrel_httpc:get(db(Config), DocId,
                                        [{attachments, all}]),
+		lager:warning("Got Document ~p", [A]),
   #{<<"id">> := AttId,
     <<"content-type">> := <<"application/erlang">>,
-    <<"content-length">> := 64,
+    <<"content-length">> := Len,
     <<"blob">> := Term} = A,
+	true = lists:member(Len, [60,64]),
   ok.
 
 attachment_parsing(Config) ->

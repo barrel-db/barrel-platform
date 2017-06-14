@@ -258,14 +258,14 @@ random_activity(_Config) ->
     barrel_replicate:start_replication(RepConfig, Options),
   ExpectedResults = play_scenario(Scenario, <<"source">>),
 
-  true =    test_util:wait_for_event(50,fun()  ->
+  true =    test_util:wait_for_event(5,fun()  ->
 						try
 						    ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>)
 						catch
 						    _:{badmatch, _} ->
 							false
 						end
-					end, 10),
+					end, 100),
 
   ok = check_all(ExpectedResults, <<"source">>, <<"testdb">>),
   ok = barrel_replicate:stop_replication(RepId),
