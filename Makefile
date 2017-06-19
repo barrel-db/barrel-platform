@@ -35,9 +35,6 @@ cleantest:
 	@rm -rf _build/test
 	@rm -rf _build/dev+test
 
-morning: distclean clean
-	. $(KERL_DEFAULT_INSTALL_DIR)/activate
-	$(MAKE) $(MAKE_FLAGS) shell
 
 erlclean:
 	kerl delete build $(BUILD_NAME)
@@ -67,8 +64,6 @@ eunit: activate
 ct: activate
 	@$(REBAR) as dev ct
 
-suite: activate
-	@$(REBAR) as dev ct --suite $(PWD)/apps/barrel_httpc/test/barrel_httpc_test_SUITE.erl
 
 cover:
 	@$(REBAR) cover
