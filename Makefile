@@ -15,14 +15,14 @@ compile:
 	@$(REBAR) compile
 
 ## Create a barrel release
-rel: activate
+rel:
 	@$(REBAR) as prod release
 
 devrel: ## Create a barrel release
 	@$(REBAR) release
 
 
-tar: activate ## Create a tar file containing a portable release
+tar:  ## Create a tar file containing a portable release
 	@$(REBAR) as prod tar
 
 clean:
@@ -47,7 +47,7 @@ install_erlang:
 	kerl install $(BUILD_NAME) $(KERL_DEFAULT_INSTALL_DIR)
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
-shell: activate
+shell:
 	@$(REBAR) as dev shell --sname barrel@localhost
 
 activate:
@@ -58,10 +58,10 @@ dialyzer:
 
 test: cleantest dialyzer eunit ct
 
-eunit: activate
+eunit:
 	@$(REBAR) as dev eunit
 
-ct: activate
+ct:
 	@$(REBAR) as dev ct
 
 
