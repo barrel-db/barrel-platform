@@ -19,7 +19,7 @@
 
 
 -define(DB_URL,<<"http://localhost:7080/dbs/testdb">>).
-
+-define(COUNT, 150).
 %% API
 -export([
   all/0,
@@ -377,6 +377,7 @@ order_by_key(Config) ->
 
 multiple_post(Config) ->
   Self = self(),
+
   Pids  = lists:foldl(
     fun(I, Acc) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
@@ -390,10 +391,10 @@ multiple_post(Config) ->
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 500)
+    lists:seq(1, ?COUNT)
   ),
   ok = wait_pids(Pids),
-  #{ <<"docs_count">> := 500 } = barrel_httpc:database_infos(?DB_URL),
+  #{ <<"docs_count">> :=?COUNT } = barrel_httpc:database_infos(?DB_URL),
   ok.
 
 
@@ -412,10 +413,10 @@ multiple_get(Config) ->
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 500)
+    lists:seq(1, ?COUNT)
   ),
   ok = wait_pids(Pids),
-  #{ <<"docs_count">> := 500 } = barrel_httpc:database_infos(?DB_URL),
+  #{ <<"docs_count">> := ?COUNT } = barrel_httpc:database_infos(?DB_URL),
   Pids1  = lists:foldl(
     fun(I, Acc) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
@@ -428,13 +429,14 @@ multiple_get(Config) ->
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 500)
+    lists:seq(1, ?COUNT)
   ),
   ok = wait_pids(Pids1),
   ok.
 
 multiple_delete(Config) ->
   Self = self(),
+
   Pids  = lists:foldl(
     fun(I, Acc) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
@@ -448,10 +450,10 @@ multiple_delete(Config) ->
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 500)
+    lists:seq(1, ?COUNT)
   ),
-  ok = wait_pids(Pids),
-  #{ <<"docs_count">> := 500 } = barrel_httpc:database_infos(?DB_URL),
+	wait_pids(Pids),
+  #{ <<"docs_count">> := ?COUNT } = barrel_httpc:database_infos(?DB_URL),
   Pids1  = lists:foldl(
     fun(I, Acc) ->
       DocId = << "doc", (integer_to_binary(I))/binary >>,
@@ -465,9 +467,9 @@ multiple_delete(Config) ->
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 500)
+    lists:seq(1, ?COUNT)
   ),
-  ok = wait_pids(Pids1),
+  wait_pids(Pids1),
   #{ <<"docs_count">> := 0 } = barrel_httpc:database_infos(?DB_URL),
   ok.
 
@@ -581,7 +583,7 @@ wait_pids([]) -> ok;
 wait_pids(Pids) ->
   receive
     {ok, Pid} -> wait_pids(Pids -- [Pid])
-  after 5000 -> {error, receive_pids}
+  after 50000 -> {error, receive_pids}
   end.
 
 

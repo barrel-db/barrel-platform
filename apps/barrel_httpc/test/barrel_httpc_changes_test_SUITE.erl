@@ -148,31 +148,31 @@ restart_when_server_timeout(Config) ->
     end,
 	Val = <<"AACC">>,
   Options = #{since => 0, mode => sse, changes_cb => Callback, retry_timeout=>200},
+
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
+
   Doc1 = #{ <<"id">> => Val, <<"v">> => 1},
   {ok, Val, _} = barrel_httpc:post(db(Config), Doc1, []),
 
   ok = application:stop(barrel_rest),
   timer:sleep(500),
   ok = application:start(barrel_rest),
-  timer:sleep(1500),
+  timer:sleep(500),
 
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
 
-	true =	test_util:wait_for_event(50, fun() ->
-																			 case collect_changes(2, queue:new()) of
-
-																					 [
-																						#{ <<"seq">> := 1, <<"id">> := Val},
-																						#{ <<"seq">> := 2, <<"id">> := <<"bb">>}
-																					 ] -> ok;
-																					 [{error,timeout}] ->
-																							 false
-																			 end
-															 end, 50),
+	ok = case collect_changes(2, queue:new()) of
+					 [
+						#{ <<"seq">> := 1, <<"id">> := Val},
+						#{ <<"seq">> := 2, <<"id">> := <<"bb">>}
+					 ] -> ok;
+				_E ->
+						lager:info("Returned ~p~n",[_E]),
+						false
+		end,
   ok = application:stop(barrel_rest),
-  [{error, timeout}] = collect_changes(1, queue:new()),
+  {error, timeout} = collect_changes(1, queue:new()),
   ok = barrel_httpc_changes:stop(Pid),
   ok = application:start(barrel_rest),
   ok.
@@ -287,8 +287,10 @@ collect_changes(I, Q) ->
   receive
     {change, Change} ->
       collect_changes(I-1, queue:in(Change, Q))
-  after 500 ->
-      collect_changes(0, queue:in({error, timeout}, Q))
+  after 5000 ->
+					lager:notice("Queue on Timeout ~p", [Q]),
+					{error, timeout}
+							%collect_changes(0, queue:in({error, timeout}, Q))
   end.
 
 wait_pids([]) -> ok;

@@ -15,14 +15,14 @@ compile:
 	@$(REBAR) compile
 
 ## Create a barrel release
-rel:
+rel: activate
 	@$(REBAR) as prod release
 
 devrel: ## Create a barrel release
 	@$(REBAR) release
 
 
-tar: ## Create a tar file containing a portable release
+tar: activate ## Create a tar file containing a portable release
 	@$(REBAR) as prod tar
 
 clean:
@@ -37,7 +37,7 @@ cleantest:
 
 morning: distclean clean
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
-	$(MAKE) $(MAKE_FLAGS) ct
+	$(MAKE) $(MAKE_FLAGS) shell
 
 erlclean:
 	kerl delete build $(BUILD_NAME)
@@ -50,23 +50,24 @@ install_erlang:
 	kerl install $(BUILD_NAME) $(KERL_DEFAULT_INSTALL_DIR)
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
-shell:
-	@$(REBAR) as dev shell --sname barrel
+shell: activate
+	@$(REBAR) as dev shell --sname barrel@localhost
 
+activate:
+	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
 dialyzer:
 	@$(REBAR) dialyzer
 
 test: cleantest dialyzer eunit ct
 
-eunit:
+eunit: activate
 	@$(REBAR) as dev eunit
 
-ct:
+ct: activate
 	@$(REBAR) as dev ct
 
-suite:
-	. $(KERL_DEFAULT_INSTALL_DIR)/activate
+suite: activate
 	@$(REBAR) as dev ct --suite $(PWD)/apps/barrel_httpc/test/barrel_httpc_test_SUITE.erl
 
 cover:
