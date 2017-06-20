@@ -22,7 +22,7 @@ devrel: ## Create a barrel release
 	@$(REBAR) release
 
 
-tar: ## Create a tar file containing a portable release
+tar:  ## Create a tar file containing a portable release
 	@$(REBAR) as prod tar
 
 clean:
@@ -64,8 +64,6 @@ eunit:
 ct:
 	@$(REBAR) as dev ct
 
-suite:
-	@$(REBAR) as dev ct --suite apps/barrel_httpc/test/barrel_httpc_changes_test_SUITE.erl
 cover:
 	@$(REBAR) cover
 
