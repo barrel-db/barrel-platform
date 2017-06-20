@@ -32,6 +32,10 @@
   1},
  {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.9.0">>},0},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
+ {<<"triq">>,
+  {git,"git://github.com/triqng/triq.git",
+       {ref,"8dfe582451422839a99efb531dc1f618ced09b33"}},
+  0},
  {<<"unicode_util_compat">>,{pkg,<<"unicode_util_compat">>,<<"0.2.0">>},2},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0}]}.
 [

@@ -3,8 +3,8 @@ SUPPORTDIR = $(BASEDIR)/support
 REBAR ?= $(SUPPORTDIR)/rebar3
 
 OTP_VERSION?=19.3
-BUILD_NAME?=working
-KERL_DEFAULT_INSTALL_DIR?=$(HOME)/.kerl/local/$(OTP_VERSION)/otp
+BUILD_NAME?=dirty
+KERL_DEFAULT_INSTALL_DIR?=$(HOME)/.kerl/local/$(BUILD_NAME)/otp
 KERL_CONFIGURE_OPTIONS?=" --disable-hipe --enable-smp-support --enable-threads --enable-kernel-poll --with-wx --without-odbc --enable-dirty-schedulers"
 
 .PHONY: help all rel tar store apply
@@ -63,7 +63,6 @@ eunit:
 
 ct:
 	@$(REBAR) as dev ct
-
 
 cover:
 	@$(REBAR) cover

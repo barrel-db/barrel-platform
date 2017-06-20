@@ -152,25 +152,44 @@ restart_when_server_timeout(Config) ->
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
 
   Doc1 = #{ <<"id">> => Val, <<"v">> => 1},
+	Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
   {ok, Val, _} = barrel_httpc:post(db(Config), Doc1, []),
 
-  ok = application:stop(barrel_rest),
-  timer:sleep(500),
-  ok = application:start(barrel_rest),
-  timer:sleep(500),
 
-  Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
+	SLEEP_TIME=250,
+  ok = application:stop(barrel_rest),
+  timer:sleep(SLEEP_TIME),
+  ok = application:start(barrel_rest),
+
   {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
 
-	ok = case collect_changes(2, queue:new()) of
-					 [
-						#{ <<"seq">> := 1, <<"id">> := Val},
-						#{ <<"seq">> := 2, <<"id">> := <<"bb">>}
-					 ] -> ok;
-				_E ->
-						lager:info("Returned ~p~n",[_E]),
-						false
-		end,
+  lager:notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"),
+	receive
+			{change, #{ <<"seq">> := 2, <<"id">> := <<"bb">>}}  ->
+					ok
+	after 5000 ->
+					lager:notice("Seq 2 timeout",[]),
+					throw(timeout)
+	end,
+		lager:notice("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"),
+
+	receive {change, #{ <<"seq">> := 1, <<"id">> := Val}} ->
+					ok;
+					_E ->
+					lager:notice("Recived 1 ~p",[_E])
+	after 5000 ->
+					lager:notice("Seq 1 timeout",[]),
+					throw(timeout)
+	end,
+	%% ok = case collect_changes(2, queue:new()) of
+	%% 				 [
+	%% 					#{ <<"seq">> := 1, <<"id">> := Val},
+	%% 					#{ <<"seq">> := 2, <<"id">> := <<"bb">>}
+	%% 				 ] -> ok;
+	%% 			_E ->
+	%% 					lager:info("Returned ~p~n",[_E]),
+	%% 					false
+	%% 	end,
   ok = application:stop(barrel_rest),
   {error, timeout} = collect_changes(1, queue:new()),
   ok = barrel_httpc_changes:stop(Pid),
