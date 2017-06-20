@@ -13,6 +13,7 @@
     cowboy,
     prometheus,
     prometheus_httpd,
+    barrel_prometheus,
     barrel_httpc,
     barrel
    ]},
