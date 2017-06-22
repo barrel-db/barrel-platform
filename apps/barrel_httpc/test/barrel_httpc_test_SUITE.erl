@@ -580,10 +580,10 @@ system_docs(_Config) ->
 %% internal
 
 wait_pids([]) -> ok;
-wait_pids(Pids) ->
+wait_pids([Pid|Pids]) ->
   receive
-    {ok, Pid} -> wait_pids(Pids -- [Pid])
-  after 50000 -> {error, receive_pids}
+    {ok, Pid} -> wait_pids(Pids)
+  after 10000 -> {error, receive_pids}
   end.
 
 

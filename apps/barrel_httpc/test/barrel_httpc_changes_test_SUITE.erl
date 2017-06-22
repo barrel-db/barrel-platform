@@ -163,7 +163,7 @@ restart_when_server_timeout(Config) ->
 
   {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
 
-  lager:notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"),
+
 	receive
 			{change, #{ <<"seq">> := 2, <<"id">> := <<"bb">>}}  ->
 					ok
@@ -171,7 +171,7 @@ restart_when_server_timeout(Config) ->
 					lager:notice("Seq 2 timeout",[]),
 					throw(timeout)
 	end,
-		lager:notice("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"),
+
 
 	receive {change, #{ <<"seq">> := 1, <<"id">> := Val}} ->
 					ok;
@@ -209,7 +209,7 @@ heartbeat_collect_change(Config) ->
   ok = barrel_httpc_changes:stop(Pid).
 
 heartbeat_and_timeout(Config) ->
-  io:format("Config = ~p.",[Config]),
+
   process_flag(trap_exit, true),
 
   %% httpc will timeout before receiving the heartbeat
