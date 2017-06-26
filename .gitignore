@@ -19,3 +19,6 @@ docs
 data
 *.iml
 .gitlab-ci.yml
+barrel_platform_*_plt
+rebar3.crashdump
+*~

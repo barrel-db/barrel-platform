@@ -18,6 +18,7 @@
 
 
 -define(DB_URL,<<"http://localhost:7080/dbs/testdb">>).
+-define(SAMPLE_SIZE, 100).
 
 -export([
   collect_change/1,
@@ -40,14 +41,14 @@
 
 all() ->
   [
-    collect_change,
-    include_doc,
-    collect_changes,
-    changes_feed_callback,
-    restart_when_server_timeout,
-    heartbeat_collect_change,
-    heartbeat_and_timeout,
-    multiple_put
+  collect_change,
+  include_doc,
+  collect_changes,
+  changes_feed_callback,
+  heartbeat_collect_change,
+  heartbeat_and_timeout,
+  multiple_put,
+  restart_when_server_timeout
   ].
 
 init_per_suite(Config) ->
@@ -145,23 +146,52 @@ restart_when_server_timeout(Config) ->
     fun(Change) ->
         Self ! {change, Change}
     end,
+  Val = <<"AACC">>,
   Options = #{since => 0, mode => sse, changes_cb => Callback, retry_timeout=>200},
+
   {ok, Pid} = barrel_httpc_changes:start_link(db(Config), Options),
-  Doc1 = #{ <<"id">> => <<"aa">>, <<"v">> => 1},
-  {ok, <<"aa">>, _} = barrel_httpc:post(db(Config), Doc1, []),
-  ok = application:stop(barrel_rest),
-  timer:sleep(200),
-  ok = application:start(barrel_rest),
-  timer:sleep(100),
+
+  Doc1 = #{ <<"id">> => Val, <<"v">> => 1},
   Doc2 = #{ <<"id">> => <<"bb">>, <<"v">> => 1},
-  {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
-  timer:sleep(100),
-  [
-   #{ <<"seq">> := 1, <<"id">> := <<"aa">>},
-   #{ <<"seq">> := 2, <<"id">> := <<"bb">>}
-  ] = collect_changes(2, queue:new()),
+  {ok, Val, _} = barrel_httpc:post(db(Config), Doc1, []),
+
+
+  SLEEP_TIME=250,
   ok = application:stop(barrel_rest),
-  [{error, timeout}] = collect_changes(1, queue:new()),
+  timer:sleep(SLEEP_TIME),
+  ok = application:start(barrel_rest),
+
+  {ok, <<"bb">>, _} = barrel_httpc:post(db(Config), Doc2, []),
+
+
+  receive
+      {change, #{ <<"seq">> := 2, <<"id">> := <<"bb">>}}  ->
+          ok
+  after 5000 ->
+          lager:notice("Seq 2 timeout",[]),
+          throw(timeout)
+  end,
+
+
+  receive {change, #{ <<"seq">> := 1, <<"id">> := Val}} ->
+          ok;
+          _E ->
+          lager:notice("Recived 1 ~p",[_E])
+  after 5000 ->
+          lager:notice("Seq 1 timeout",[]),
+          throw(timeout)
+  end,
+  %% ok = case collect_changes(2, queue:new()) of
+  %%           [
+  %%            #{ <<"seq">> := 1, <<"id">> := Val},
+  %%            #{ <<"seq">> := 2, <<"id">> := <<"bb">>}
+  %%           ] -> ok;
+  %%        _E ->
+  %%            lager:info("Returned ~p~n",[_E]),
+  %%            false
+  %%    end,
+  ok = application:stop(barrel_rest),
+  {error, timeout} = collect_changes(1, queue:new()),
   ok = barrel_httpc_changes:stop(Pid),
   ok = application:start(barrel_rest),
   ok.
@@ -179,6 +209,7 @@ heartbeat_collect_change(Config) ->
   ok = barrel_httpc_changes:stop(Pid).
 
 heartbeat_and_timeout(Config) ->
+
   process_flag(trap_exit, true),
 
   %% httpc will timeout before receiving the heartbeat
@@ -215,9 +246,12 @@ heartbeat_and_timeout(Config) ->
   ok = barrel_httpc_changes:stop(Pid2),
   ok.
 
+
+
 multiple_put(Config) ->
   Self = self(),
-
+  timer:sleep(500),
+  lager:notice("Config = ~p.~n~n~n", [Config]),
   %% spawn a change listener
   spawn(
     fun() ->
@@ -228,7 +262,7 @@ multiple_put(Config) ->
       end,
       Options = #{since => 0, mode => sse, changes_cb => Callback },
       {ok, _Pid} = barrel_httpc_changes:start_link(db(Config), Options),
-      Changes = collect_changes(1000, queue:new()),
+      Changes = collect_changes(?SAMPLE_SIZE, queue:new()),
       Self ! {changes, Changes}
     end
   ),
@@ -242,23 +276,23 @@ multiple_put(Config) ->
         fun() ->
           {ok, DocId, _} = barrel_httpc:post(db(Config), Doc, []),
           Self ! {ok, self()},
-          timer:sleep(100)
+          timer:sleep(200)
         end
       ),
       [Pid | Acc]
     end,
     [],
-    lists:seq(1, 1000)
+    lists:seq(1, ?SAMPLE_SIZE)
   ),
 
-  1000 = length(Pids),
+  ?SAMPLE_SIZE = length(Pids),
   ok = wait_pids(Pids),
 
-  #{ <<"docs_count">> := 1000 } = barrel_httpc:database_infos(?DB_URL),
+  #{ <<"docs_count">> := ?SAMPLE_SIZE } = barrel_httpc:database_infos(?DB_URL),
   receive
     {changes, Changes} ->
       case length(Changes) of
-        1000 -> ok;
+        ?SAMPLE_SIZE -> ok;
         Other ->
           ct:fail("bad changes count=~p",[Other])
       end
@@ -272,8 +306,10 @@ collect_changes(I, Q) ->
   receive
     {change, Change} ->
       collect_changes(I-1, queue:in(Change, Q))
-  after 500 ->
-      collect_changes(0, queue:in({error, timeout}, Q))
+  after 5000 ->
+          lager:notice("Queue on Timeout ~p", [Q]),
+          {error, timeout}
+              %collect_changes(0, queue:in({error, timeout}, Q))
   end.
 
 wait_pids([]) -> ok;

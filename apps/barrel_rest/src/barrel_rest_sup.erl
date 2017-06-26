@@ -38,7 +38,9 @@ start_link() ->
   supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 -define(DEFAULT_NB_ACCEPTORS, 100).
+-ifndef(DEFAULT_PORT).
 -define(DEFAULT_PORT, 7080).
+-endif.
 -define(DEFAULT_ACCESS_LOG, false).
 -define(DEFAULT_METRICS, undefined).
 -define(DEFAULT_TIMEOUT, 60000).
@@ -51,7 +53,7 @@ init(_Args) ->
   %% init metrics
   %% TODO: make it optionnal
   barrel_prometheus:init(),
-  
+
   ListenPort = application:get_env(barrel_rest, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_rest, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
   RequestTimeout = application:get_env(barrel_rest, request_timeout, ?DEFAULT_TIMEOUT),
