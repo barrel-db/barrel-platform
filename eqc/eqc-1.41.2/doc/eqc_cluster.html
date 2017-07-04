@@ -1,0 +1,210 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_cluster</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_cluster</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functions for testing operations with side-effects, which are
+ specified via a collection of abstract state machines with external
+ interactions.
+<p>Copyright © Quviq AB, 2012-2017
+</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p>This module provides functions for testing operations with side-effects, which are
+ specified via a collection of abstract state machines with external
+ interactions. I.e. it is possible to compose several <a href="eqc_component.html"><code>eqc_component</code></a> into one 
+cluster.</p>
+
+ <p>Modules using <tt>eqc_cluster</tt> should include
+ <tt>-include_lib("eqc/include/eqc_cluster.hrl")</tt> to import the functions that
+ <tt>eqc_cluster</tt> provides.</p>
+
+ <p>The majority of the modelling work is put into the models of the components. To cluster 
+components (given that they actually fit together) is straighforward; all that is needed 
+is to define two simple callbacks, and to write a property.</p>
+
+ <h3>Callback Functions</h3>
+ The client module specifies an abstract state machine by defining (either directly in
+ the ungrouped style, or indirectly by the grouped style parse transform) the following
+ functions:
+ <ul>
+ <li> <h3>components/0</h3>
+ <tt>components() :: [atom()]</tt>
+ <p>Returns the list of components that make up the cluster.</p></li>
+
+ <li> <h3>api_spec/0</h3><p>
+ <tt>api_spec() :: <a href="eqc_mocking.html#type-api_spec"><code>eqc_mocking:api_spec()</code></a></tt>.</p>
+
+ <p>Returns the API specification of the clustered components and their
+ surroundings. Normally this function is defined as
+ <pre>api_spec() -&gt; api_spec(?MODULE).</pre>
+ I.e. it can be computed from the API specifications of the separate components.</p>
+
+ For the cluster to be able to correctly identify cluster internal callouts this needs
+ to be specified in the respective API specification. As an example, if we have a fictive
+ communication stack, with a frame layer and a packet layer, the API specification of the
+ frame, with respect to the packet module, could look like:
+ <pre>#api_module{
+    name = packet,
+    functions = [#api_fun{ name = wakeup, arity = 1},
+                 #api_fun{ name = send_ack, arity = 1},
+                 #api_fun{ name = recv, arity = 1}] }.</pre>
+
+ If we later decide to cluster the <tt>frame_eqc</tt> and the <tt>packet_eqc</tt> models,
+ we need to specify that callouts in <tt>frame_eqc</tt> to functions in packet should
+ then be internal to the cluster. This is done by using the <tt>classify</tt> field in
+ <tt>#api_fun</tt>:
+ <pre>#api_module{
+    name = packet,
+    functions = [#api_fun{ name = wakeup, arity = 1, classify = packet_eqc},
+                 #api_fun{ name = send_ack, arity = 1, classify = packet_eqc},
+                 #api_fun{ name = recv, arity = 1, classify = packet_eqc}] }.</pre>
+
+ This ensure that the correct updates are made to the model whenever the
+ <tt>frame_eqc</tt> component makes a callout to packet. If the model function
+ is not named the same as the mocked function (which is often the case when
+ mocking C), the classify field may also be a two-tuple <tt>{Module,
+ Function}</tt>. Further, it might also be necessary to adapt the arguments
+ passed to the model function, in this situation the classify field may also
+ be a three-tuple <tt>{Module, Function, AdaptArgsFun}</tt>, where
+ <tt>AdaptArgsFun</tt> is a function that translates the passed arguments into
+ what the model is expecting. An example could be where the (mocked) function
+ takes a <tt>set</tt> as an argument, but where the model uses a
+ <tt>list</tt>: <tt>{m, f, fun([Set]) -&gt; [sets:to_list(Set)] end}</tt>. I.e.
+ the <tt>AdaptArgsFun</tt> gets a list of arguments as input and should return
+ a list of modified arguments.
+ <p>
+ The most general way to classify a callout is to
+ give a function <tt>ClassifyFun</tt> in the classify field. This function is applied
+ to the arguments to the mocked function and is expected to return a triple
+ <tt>{Module, Function, Arguments}</tt> with the model call corresponding to
+ the mocked call. This can be useful for clusters of parameterised components.
+ For instance, suppose you have a system with a number of resources, where
+ resources are modelled by a component <tt>resource_spec</tt> parameterised by
+ the resource handle, but to access a resource you call a function
+ <tt>use(Handle, Arg)</tt>. You could then use the following classification:
+ <pre>#api_fun{
+   name = use, arity = 2,
+   classify = fun([Handle, Arg]) -&gt; {{resource_spec, Handle}, use, [Arg]} end }
+ </pre>
+ A limitation in this case is that the <tt>use</tt> function will always be
+ mocked, since we cannot know beforehand whether it will be internal to the
+ cluster.</p></li>
+ </ul>
+
+ <h3>Respecting API's</h3><p>
+ When the components are tested in isolation, all of its API functions are normally
+ tested. However, once components are composed into a cluster it is often the case that
+ some API functions are internal. For example, in the fictive communication stack the
+ frame layer has a <tt>send</tt> function. However, this send function is only called 
+from the packet layer; thus, once the two modules are clustered it should not be called 
+directly from the outside.</p>
+
+ To specify this, we should add (given that we are using the grouped modelling style for
+ the component):
+ <pre>send_callers() -&gt; [packet_eqc].</pre><p>
+ I.e. we specify that this API function is only called from <tt>packet_eqc</tt>. The 
+callers definition is only taken into account in a cluster.</p>
+
+ <h3>What Property Should We Test?</h3>
+ This module does <i>not</i> define any properties to test, it only provides
+ functions to make defining such properties easy. A client module will
+ normally contain a property resembling this one, which generates a
+ command sequence using the client state machine, and then tests it:
+ <pre>prop_cluster_correct() -&gt;
+   ?SETUP(fun() -&gt; start_mocking(api_spec(), components()), fun() -&gt; ok end end,
+   ?FORALL(Cmds,commands(?MODULE),
+     begin {H,S,Result} = run_commands(Cmds),
+           pretty_commands(?MODULE,Cmds,{H,S,Result},
+                           Result==ok)
+     end)).</pre>
+ However, in any particular case we may wish to add a little to this
+ basic form, for example to collect statistics, to clean up after
+ test execution, or to setup mocking before test execution.
+ It is to allow this flexibility that the properties to test are
+ placed in the client module, rather than in this one.
+
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-api_arg_c">api_arg_c()</a></h3>
+<p><tt>api_arg_c() = #api_arg_c{type = atom() | string(), stored_type = atom() | string(), name = atom() | string() | {atom(), string()}, dir = in | out, buffer = false | true | {true, non_neg_integer()} | {true, non_neg_integer(), string()}, phantom = boolean(), matched = boolean(), default_val = no | string(), code = no | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_c">api_fun_c()</a></h3>
+<p><tt>api_fun_c() = #api_fun_c{name = atom(), classify = any(), ret = atom() | <a href="#type-api_arg_c">api_arg_c()</a>, args = [<a href="#type-api_arg_c">api_arg_c()</a>], silent = false | {true, any()}}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_erl">api_fun_erl()</a></h3>
+<p><tt>api_fun_erl() = #api_fun{name = atom(), classify = any(), arity = non_neg_integer(), fallback = boolean(), matched = [non_neg_integer()] | fun((any(), any()) -&gt; boolean()) | all}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_module">api_module()</a></h3>
+<p><tt>api_module() = #api_module{name = atom(), fallback = atom(), functions = [<a href="#type-api_fun_erl">api_fun_erl()</a>] | [<a href="#type-api_fun_c">api_fun_c()</a>]}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#api_spec-1">api_spec/1</a></td><td>Computes a cluster api_spec by doing a merge of the api_specs
+  of the components.</td></tr>
+<tr><td valign="top"><a href="#commands-1">commands/1</a></td><td>Generates a list of commands, using the cluster defined
+ in module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#commands-2">commands/2</a></td><td>Generates a list of commands, using the cluster defined in module
+ <tt>Mod</tt>, where custom initial states for some or all components are
+ given by <tt>S</tt>.</td></tr>
+<tr><td valign="top"><a href="#run_commands-1">run_commands/1</a></td><td>Runs a list of commands, checking preconditions before, and
+ postconditions after executing each command.</td></tr>
+<tr><td valign="top"><a href="#run_commands-2">run_commands/2</a></td><td>Behaves like <a href="#run_commands-1"><code>run_commands/1</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="api_spec-1">api_spec/1</a></h3>
+<div class="spec">
+<p><tt>api_spec(Mod::atom()) -&gt; #api_spec{language = erlang | c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt><br/></p>
+</div><p>Computes a cluster api_spec by doing a merge of the api_specs
+  of the components. Components are given by Mod:components().</p>
+
+<h3 class="function"><a name="commands-1">commands/1</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::module()) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>([<a href="eqc_statem.html#type-command">eqc_statem:command()</a>])</tt><br/></p>
+</div><p>Generates a list of commands, using the cluster defined
+ in module <tt>Mod</tt>.</p>
+
+<h3 class="function"><a name="commands-2">commands/2</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::module(), S::[{atom(), term()}]) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>([<a href="eqc_statem.html#type-command">eqc_statem:command()</a>])</tt><br/></p>
+</div><p>Generates a list of commands, using the cluster defined in module
+ <tt>Mod</tt>, where custom initial states for some or all components are
+ given by <tt>S</tt>.</p>
+
+<h3 class="function"><a name="run_commands-1">run_commands/1</a></h3>
+<div class="spec">
+<p><tt>run_commands(Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>]) -&gt; {<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}</tt><br/></p>
+</div><p>Runs a list of commands, checking preconditions before, and
+ postconditions after executing each command. The result contains the history
+ of execution, the state after the last command that was executed
+ successfully, and the reason execution stopped.</p>
+
+<h3 class="function"><a name="run_commands-2">run_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_commands(Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>], Env::[{atom(), term()}]) -&gt; {<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}</tt><br/></p>
+</div><p>Behaves like <a href="#run_commands-1"><code>run_commands/1</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases. For example, if <tt>Env</tt> is <tt>[{x,32}]</tt>,
+ then <tt>{var,x}</tt> may appear in the commands, and will evaluate
+ to 32. The variables names must be atoms (unlike generated variable
+ names, which are numbers).</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:29.</i></p>
+</body>
+</html>

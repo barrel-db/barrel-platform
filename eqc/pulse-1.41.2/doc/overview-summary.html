@@ -1,0 +1,130 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>PULSE ProTest User Level Scheduler for Erlang </title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<h1>PULSE ProTest User Level Scheduler for Erlang </h1>
+<p>Copyright © Quviq AB, 2009-2017.  </p>
+<p>PULSE is a randomizing scheduler for Erlang, which can
+be used to find race conditions in concurrent Erlang code. It was
+initially developed at Chalmers University under the ProTest project
+(www.protest-project.eu) by the ProTest research group, consisting of
+Thomas Arts, Koen Claessen, John Hughes, Michal Palka, Nick Smallbone
+and Hans Svensson--see our paper at ICFP 2009--and released under a
+BSD licence. This version has been extended and integrated into QuickCheck by
+Quviq.</p>
+
+<h2>Concurrency errors</h2>
+
+<p>
+PULSE is used to increase the possibility to find concurrency errors as well
+as to improve the analysis of these errors by offering the ability to create 
+random schedulings and rerun the same scheduling deterministically.
+</p>
+
+<p>
+In order to use PULSE, one needs to instrument the code under test by compiling it 
+with a special flag (see <a href="pulse_instrument.html"><code>pulse_instrument</code></a>). After that, the concurrent processes 
+are run by calling <a href="pulse.html#run-1"><code>pulse:run/1</code></a>. Note that one may need to start the application
+pulse first (which will start QuickCheck).
+</p>
+
+As an example, consider the following "hello world" function:
+<pre>
+helloworld() -&gt;
+  Self = self(),
+  ForwardPid = 
+	  spawn(fun() -&gt;
+		        receive Msg -&gt; Self ! Msg end
+	        end),
+  spawn(fun() -&gt; Self ! hello, ForwardPid ! world end),	
+  receive
+	   M1 -&gt; 
+	      receive
+		      M2 -&gt; [M1,M2]
+	      end
+  end.
+</pre><p>
+This program sends two messages to a receiving process, which returns the messages in
+the way they arrived. Note that on a one core computer, the result is very predictable and 
+always the same. However, when you port this program to a multi-core machine, you may
+now and then see a different execution behaviour. For larger programs, this gets more evident.
+In fact, when you would run each of the processes in a separate Erlang node, one would indeed 
+see more often different orders of the two incoming messages.</p>
+
+The Erlang scheduler, however, is too deterministic to find more than one order in which
+the messages arrive and hence simple unit tests like
+<pre>
+[hello,world] = helloworld().
+</pre><p>
+would pass and let the developer believe the program has this behaviour.</p>
+
+<p>
+When the "hello world" program is compiled with PULSE, then it can be evaluated by using
+more random schedules.
+<pre>
+1&gt; pulse:start().
+ok
+2&gt; pulse:verbose([all]).
+[]
+3&gt; pulse:run(fun() -&gt; examples:helloworld() end).
+PULSE scheduling started
+root spawns 'helloworld.ForwardPid' &lt;0.1360.0&gt; at {"examples.erl",47}
+root spawns helloworld &lt;0.1361.0&gt; at {"examples.erl",52}
+root blocks at {"examples.erl",56}
+helloworld sends hello to root at {"examples.erl",53}
+helloworld sends world to 'helloworld.ForwardPid' at {"examples.erl",54}
+helloworld terminated normal
+'helloworld.ForwardPid' blocks at {"examples.erl",48}
+helloworld delivers world to 'helloworld.ForwardPid'
+'helloworld.ForwardPid' receives world at {"examples.erl",49}
+'helloworld.ForwardPid' sends world to root at {"examples.erl",49}
+'helloworld.ForwardPid' terminated normal
+'helloworld.ForwardPid' delivers world to root
+root receives world at {"examples.erl",57}
+root blocks at {"examples.erl",58}
+helloworld delivers hello to root
+root receives hello at {"examples.erl",59}
+return value [world,hello]
+PULSE scheduling finished
+[world,hello]
+</pre>
+The output is in textual form and its verbosity can be adjusted via <a href="pulse.html#verbose-1"><code>pulse:verbose/1</code></a>. Visualization as a graph
+is supported if graphviz is installed by using the event handler. PULSE does send by default all 
+events to an event handler (pulse_event_terminal). By adding an extra event handler, one can send teh same events also
+to the pulse_event_graph event handler, making it into a graph. 
+</p>
+<pre>
+4&gt; gen_event:which_handlers(pulse_event).
+[pulse_event_terminal]
+5&gt; gen_event:add_handler(pulse_event,pulse_event_graph,[]).
+ok
+6&gt; pulse:rerun().
+</pre>
+
+<p><img src="hello_world.jpeg" heigth="80%"></p>
+
+<p>
+When used with QuickCheck, the macro <tt>?PULSE</tt> is recommended. This macro has the same shape
+as the <tt>?FORALL</tt> macro, i.e., <tt>?PULSE(Result,Generator,Property)</tt> where the 
+generator is a function that is evaluated with a certain schedule, <tt>Result</tt> is the
+result of the function and this can be used in the property. 
+</p>
+
+<pre>
+prop_helloworld() -&gt;
+    ?PULSE(Result,helloworld(), 
+           Result == [hello,world]).
+</pre>
+
+
+
+<hr>
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:25.</i></p>
+</body>
+</html>

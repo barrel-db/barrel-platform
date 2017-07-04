@@ -1,0 +1,7 @@
+%% encoding: UTF-8
+{application,eqc}.
+{modules,[eqc,eqc_c,eqc_c_enum,eqc_cluster,eqc_component,eqc_cover,eqc_ct,
+          eqc_dynamic_cluster,eqc_emacs_mode,eqc_erlang_program,eqc_fsm,
+          eqc_fsm_esi,eqc_fun,eqc_gen,eqc_grammar,eqc_group_commands,
+          eqc_loadtest,eqc_mocking,eqc_mocking_c,eqc_parallelize,eqc_statem,
+          eqc_suite,eqc_symbolic,eqc_temporal]}.

@@ -1,0 +1,532 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_mocking</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_mocking</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functionality for mocking Erlang modules.
+<p>Copyright © Quviq AB, 2013-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+<p><b>Authors:</b> Hans Svensson.</p>
+
+<h2><a name="description">Description</a></h2><p>This module provides functionality for mocking Erlang modules. It is designed to
+  work together with <a href="eqc_component.html"><code>eqc_component</code></a> where callouts can be mocked conveniently  
+using the functionality in this module. However, it is also possible to use this  
+module for traditional mocking, but the documentation focus on the callout use-case.</p>
+ 
+  The mocking technique we use in this module is based on research results from the <a href="http://www.prowessproject.eu/">Prowess project</a> - <a href="http://link.springer.com/chapter/10.1007/978-3-642-54804-8_27"><em>An Expressive
+  Semantics of Mocking</em></a>. In short we use a CSP-like language to specify the
+  behaviour of mocked modules. The behaviour can be described using the following macros:
+  <ul> <li> <h3><tt>?EVENT(Mod, Fun, Args, Result)</tt></h3>
+ 
+  Defines an event. An event consists of an Action, which is matched, and if the action
+  matches the defined result is returned. The action contains module, function and
+  argument.</li>
+ 
+  <li> <h3><tt>?SEQ(Ls)</tt></h3>
+ 
+  Composes a list of languages sequentially.</li>
+ 
+  <li> <h3><tt>?SEQ(L1, L2)</tt></h3>
+ 
+  Composes two languages sequentially.</li>
+ 
+  <li> <h3><tt>?PAR(Ls)</tt></h3>
+ 
+  Composes a list of languages in parallel.</li>
+ 
+  <li> <h3><tt>?PAR(L1, L2)</tt></h3>
+ 
+  Composes two languages in parallel.</li>
+ 
+  <li> <h3><tt>?XALT(L1, L2)</tt></h3>
+ 
+  Introduces a language where either <tt>L1</tt> or <tt>L2</tt> is executed.</li>
+ 
+  <li> <h3><tt>?REPLICATE(L)</tt></h3>
+ 
+  Replication of a language, corresponds roughly to (*) in a regular expression. </li>
+ 
+  <li> <h3><tt>?PERM(Ls)</tt></h3>
+ 
+  Permutation, the language accepts any non-interleaving execution of the languages in
+  Ls. </li>
+  <li> <h3><tt>?SUCCESS</tt></h3>
+ 
+  The empty (successful) language.</li>
+  </ul>
+ 
+  <h3>How to mock a module</h3>
+  To mock a module we need to specify its API in an <em>API specification</em>. Given the
+  API we can also specify the particular behaviour of the defined functions, by defining
+  a <em>mocking langauage specification</em>. As an example we give the mocking
+  specification of a stack; its API consists of three functions <tt>new/0</tt>,
+  <tt>push/2</tt>, and <tt>pop/1</tt>. Its API specification looks like:
+  <pre>
+  api_spec() -&gt; #api_spec{
+    language = erlang,
+    modules  = [ #api_module{
+      name = stack,
+      functions = [ #api_fun{ name = new,  arity = 0 },
+                    #api_fun{ name = push, arity = 2 },
+                    #api_fun{ name = pop,  arity = 1 } ]
+      }]}.
+  </pre>
+  In one test case we expect the stack to be called four times; (1) creating a new stack,
+  (2) pushing the integer 4 onto the stack, (3) pushing 6 onto the stack, and (4) popping
+  one element from the stack expecting 6 to be returned. This could be expressed as:
+  <pre>
+  lang() -&gt; ?SEQ([?EVENT(stack, new,  [],             stack_ref),
+                  ?EVENT(stack, push, [stack_ref, 4], ok),
+                  ?EVENT(stack, push, [stack_ref, 6], ok),
+                  ?EVENT(stack, pop,  [stack_ref],    6)
+                 ]).
+  </pre><p>
+  Where we use an abstract stack reference <tt>stack_ref</tt> to represent the stack during  
+the execution.</p>
+ 
+  The stack can now be 'used' as follows (assuming that the functions defined above
+  reside in the module <tt>stack_mock</tt>):
+  <pre>
+  2&gt; eqc_mocking:start_mocking(stack_mock:api_spec()).
+  {ok,&lt;0.116.0&gt;}
+  3&gt; eqc_mocking:init_lang(stack_mock:lang(), stack_mock:api_spec()).
+  ok
+  4&gt; S = stack:new(), stack:push(S, 4), stack:push(S, 6), stack:pop(S).
+  6
+  5&gt; eqc_mocking:check_callouts(stack_mock:lang()).
+  true
+  6&gt; eqc_mocking:init_lang(stack_mock:lang(), stack_mock:api_spec()).
+  ok
+  7&gt; f(S), S = stack:new(), stack:push(S, 4), stack:push(S, 6).
+  ok
+  8&gt; eqc_mocking:check_callouts(stack_mock:lang()).
+  {expected,{call,stack,pop,[stack_ref]}}
+  9&gt; eqc_mocking:init_lang(stack_mock:lang(), stack_mock:api_spec()).
+  ok
+  10&gt; f(S), S = stack:new(), stack:pop(S).
+  ** exception exit: {{mocking_error,{unexpected,{call,stack,pop,[stack_ref]}}}},
+                      [{eqc_mocking,f5735660_0,
+                                   [stack,pop,[stack_ref]],
+                                   [{file,"../src/eqc_mocking.erl"},{line,375}]},
+                       ... ]}
+       in function  eqc_mocking:do_action/3 (../src/eqc_mocking.erl, line 371)
+  </pre>
+  Noteable in the usage above is that we can call <tt>init_lang/2</tt> many times without
+  restarting the mocking framework in between. Also note that the check
+  <tt>check_callouts/1</tt> checks both that all expected calls where made, and that the
+  calls were made with the expected arguments. If a call is made out of order a failure
+  is reported immediately. If a call is made where the arguments does not match, the
+  default behavior is to also report a failure immediately:
+  <pre>
+  19&gt; eqc_mocking:init_lang(stack_mock:lang(), stack_mock:api_spec()).
+  ok
+  20&gt; f(S), S = stack:new(), stack:push(S, 7), stack:push(S, -3), stack:pop(S).
+  ** exception exit: {{mocking_error,{unexpected,{call,stack,push,[stack_ref,7]}}},
+                     [{eqc_mocking,f5735660_0,
+                                   [stack,push,[stack_ref,7]],
+                                   [{file,"../src/eqc_mocking.erl"},{line,375}]},
+                      ...]}
+       in function  eqc_mocking:do_action/3 (../src/eqc_mocking.erl, line 371)
+  </pre>
+  However, it is sometimes useful not to abort tests prematurely, and a small change
+  to the API specification enables this:
+  <pre>
+  api_spec() -&gt; #api_spec{
+    language = erlang,
+    modules  = [ #api_module{
+      name = stack,
+      functions = [ #api_fun{ name = new,  arity = 0 },
+                    #api_fun{ name = push, arity = 2, matched = [] },
+                    #api_fun{ name = pop,  arity = 1 } ]
+      }]}.
+  </pre>
+  Note the added <tt>matched = []</tt> that tells <tt>eqc_mocking</tt> to not check
+  any of the arguments at call time. (Default is <tt>matched = all</tt>).
+  With this API specification the previous example behaves as follows:
+  <pre>
+  21&gt; c(stack_mock).
+  {ok, stack_mock}
+  22&gt; eqc_mocking:start_mocking(stack_mock:api_spec()).
+  {ok,&lt;0.116.0&gt;}
+  23&gt; eqc_mocking:init_lang(stack_mock:lang(), stack_mock:api_spec()).
+  ok
+  24&gt; f(S), S = stack:new(), stack:push(S, 7), stack:push(S, -3), stack:pop(S).
+  6
+  25&gt; eqc_mocking:check_callouts(stack_mock:lang()).
+  {unexpected,{call,stack,push,[stack_ref,7]},
+              expected,
+              {call,stack,push,[stack_ref,4]}}
+  </pre>
+ 
+  <h3>Stop mocking</h3><p>
+  Once the mocked modules are no longer needed, the function <tt>stop_mocking/0</tt>  
+stops the mocking server and restores (i.e. unloads previously non-existing modules and  
+reverting previously existing modules) the modules to their pre-mocking state.</p>
+ 
+  <h3>Advanced usage - matching arguments</h3>
+  As we saw in the example above, strict argument checking is normally done during
+  execution. This default behaviour is not always the wanted one, it is
+  possible in the API specification to give the matching function that one wants to use!
+  <pre>
+  ... #api_fun{ name = foo, arity = 2, matched = fun([X1, _Y1], [X2, _Y2]) -&gt; X1 == X2 end }
+  </pre>
+  Where the first list of arguments is the <b>actual</b> arguments used in the call of the
+  mocked function and the second list of arguments comes from the language
+  specification. A particular use-case is to check for equality of (some of) the
+  arguments, there is a short-hand notation for this, namely:
+  <pre>
+  ... #api_fun{ name = bar, arity = 3, matched = [1,2] }
+  </pre><p>
+  where we are going to match on the first two arguments of <tt>bar</tt> during  
+execution.</p>
+ 
+  <h3>Advanced usage - ?WILDCARD arguments</h3>
+  Sometimes it is not practical to fully describe the expected arguments of a function
+  call. Therefore, it is possible to use <tt>?WILDCARD</tt> as an argument in a mocking
+  language specification. This means that any argument is accepted in this
+  position. (Note, that the user has to be <b>very</b> careful when mixing
+  <tt>?WILDCARD</tt>'s and custom made matching functions.) For example:
+  <pre>?EVENT(module1, fun1, [Arg1, ?WILDCARD, Arg3], Result)</pre>
+ 
+  <h3>Advanced usage - fallback/passthrough module</h3>
+  Sometimes it is not interesting, or practical, to mock all functions in a
+  module/API. For example some functions are called extremely often, or a function is
+  only called for a side effect that is not interesting at the moment (the canonical
+  example is logging). <tt>eqc_mocking</tt> provide two alternatives in this case, either
+  the user can specify a custom <b>fallback</b> module, or an existing module can be used
+  as a <b>passthrough</b> module. Functionality wise both options are similar, the only
+  difference is where the fallback functions are defined. (In the passthrough case,
+  behind the scene the existing module is temporary re-named, but this is transparent to
+  the user.) As an example, consider the following API specification:
+  <pre>
+  api_spec() -&gt; #api_spec{
+    language = erlang,
+    modules  = [
+      #api_module{ name = modX, fallback = modY,
+                   functions = [#api_fun{ name = f1, arity = 1},
+                                #api_fun{ name = f2, arity = 2}] } ]}.
+  </pre><p>
+  When used, calls to <tt>modX:f1/1</tt> and <tt>modX:f2/2</tt> are handled by the
+  mocking framework, while calls to, for example, <tt>modX:g/2</tt> would just result in
+  a call to <tt>modY:g/2</tt>. If the user wants to use a custom fallback module,
+  <tt>modY</tt> should differ in name from the mocked module <tt>modX</tt>. The API spec
+  is used to generate a module that handles all calls to <tt>modX</tt>. This module will
+  simply call <tt>modY</tt> for all functions not present in API spec. If instead the
+  user want to use the existing functions in <tt>modX</tt> as fallback functions
+  <tt>modY</tt> should be <tt>modX</tt>. <b>Note:</b> To use a module as a passthrough
+  module it must be compiled with <b>debug_info</b>, orelse <tt>eqc_mocking</tt> cannot  
+properly re-name it.</p>
+ 
+  Note that, in both cases, it is possible to have a function that is mocked (i.e. is in
+  the API specification) and also exists in the fallback/passthrough module. For this
+  case there is an attribute in the <tt>#api_fun</tt>-record: <tt>fallback</tt>.
+  <pre>
+  ... #api_fun{ name = foo, arity = 1, fallback = true }
+  </pre><p>
+  If <tt>fallback = true</tt> the call is <b>first</b> handled by the mocking framework,
+  and only if the call cannot be handled (i.e. it is not expected to be called at that
+  point) is it forwarded to the fallback module. If <tt>fallback = false</tt> the  
+fallback is ignored for this function and an unexpected call will result in a mocking  
+error.</p>
+ 
+  <h3>Silent mocking</h3><p>
+  Sometimes you want to mock a module, but are not interested in calls to functions in
+  this module to show up as events. (This is a special case of fallback/passthrough.) For
+  example, if you do not want to start your logging framwork <tt>lager</tt> and want to  
+silently accept all calls to lager:info/2.</p>
+ 
+  This kind of silent mocking is best performed by implementing your own
+  <tt>lager_mock</tt> module, which is less work than specifying the API for each
+  function as a record. The only thing you add to the API spec is:
+  <pre>
+        #api_module{ name = lager, fallback = lager_mock }.
+  </pre>
+ 
+  To quickly create a stub module corresponding to an existing module you can use
+  <tt>create_stubs/2</tt> and <tt>create_api_spec/1</tt>:
+  <pre>
+  17&gt; eqc_mocking:create_stubs(eqc_mocking:create_api_spec(lager), "/tmp/").
+  Writing stub file to: /tmp/lager.erl
+  ok
+  </pre>
+ 
+  <h3>Known limitations</h3>
+  <ul>
+  <li>It is not yet possible to safely validate (using <a href="#validate-1"><code>validate/1</code></a>) a language
+  where custom matching functions are used. (It is not possible to know whether two
+  actions may potentially overlap.)</li>
+  <li>The name of the mocked module(s) should be chosen with care. It should not be a
+  sticky module in Erlang.</li>
+  </ul>
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-api_arg_c">api_arg_c()</a></h3>
+<p><tt>api_arg_c() = #api_arg_c{type = atom() | string(), stored_type = atom() | string(), name = atom() | string() | {atom(), string()}, dir = in | out, buffer = false | true | {true, non_neg_integer()} | {true, non_neg_integer(), string()}, phantom = boolean(), matched = boolean(), default_val = no | string(), code = no | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_c">api_fun_c()</a></h3>
+<p><tt>api_fun_c() = #api_fun_c{name = atom(), classify = any(), ret = atom() | <a href="#type-api_arg_c">api_arg_c()</a>, args = [<a href="#type-api_arg_c">api_arg_c()</a>], silent = false | {true, any()}}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_erl">api_fun_erl()</a></h3>
+<p><tt>api_fun_erl() = #api_fun{name = atom(), classify = any(), arity = non_neg_integer(), fallback = boolean(), matched = [non_neg_integer()] | fun((any(), any()) -&gt; boolean()) | all}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_module">api_module()</a></h3>
+<p><tt>api_module() = #api_module{name = atom(), fallback = atom(), functions = [<a href="#type-api_fun_erl">api_fun_erl()</a>] | [<a href="#type-api_fun_c">api_fun_c()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_spec">api_spec()</a></h3>
+<p><tt>api_spec() = #api_spec{language = erlang | c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-event">event()</a></h3>
+<p><tt>event(Action, Result) = {event, Action, Result}</tt></p>
+<p>  An event. When the language is 'run' an action is matched, and the result (of type
+  Result) is returned.</p>
+
+<h3 class="typedecl"><a name="type-lang">lang()</a></h3>
+<p><tt>lang(Action, Result) = <a href="#type-seq">seq</a>(<a href="#type-lang">lang</a>(Action, Result), <a href="#type-lang">lang</a>(Action, Result)) | <a href="#type-xalt">xalt</a>(<a href="#type-lang">lang</a>(Action, Result), <a href="#type-lang">lang</a>(Action, Result)) | <a href="#type-event">event</a>(Action, Result) | <a href="#type-repl">repl</a>(<a href="#type-lang">lang</a>(Action, Result)) | <a href="#type-par">par</a>(<a href="#type-lang">lang</a>(Action, Result), <a href="#type-lang">lang</a>(Action, Result)) | <a href="#type-perm">perm</a>([<a href="#type-lang">lang</a>(Action, Result)]) | success</tt></p>
+<p>  The type of a mocking language, parameterized on the Action and the Result.</p>
+
+<h3 class="typedecl"><a name="type-par">par()</a></h3>
+<p><tt>par(L1, L2) = {par, L1, L2}</tt></p>
+<p>  Parallel composition of two languages.</p>
+
+<h3 class="typedecl"><a name="type-perm">perm()</a></h3>
+<p><tt>perm(Ls) = {perm, Ls}</tt></p>
+<p>  Permutation, the language accepts any non-interleaving execution of the languages in
+  Ls.</p>
+
+<h3 class="typedecl"><a name="type-repl">repl()</a></h3>
+<p><tt>repl(L) = {repl, L}</tt></p>
+<p>  Replication of a language, corresponds rougly to (*) in a regular expression.</p>
+
+<h3 class="typedecl"><a name="type-seq">seq()</a></h3>
+<p><tt>seq(L1, L2) = {seq, L1, L2}</tt></p>
+<p>  Sequential composition of two languages.</p>
+
+<h3 class="typedecl"><a name="type-xalt">xalt()</a></h3>
+<p><tt>xalt(L1, L2) = {xalt, L1, L2} | {xalt, term(), L1, L2}</tt></p>
+<p>  Choice between two languages. Possibly tagged with a term. All conditionals
+  tagged with the same term must make the same choice.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#callouts_to_mocking-1">callouts_to_mocking/1</a></td><td>Translate a callout-term, as return by eqc_component, to a mocking-language.</td></tr>
+<tr><td valign="top"><a href="#check_callouts-1">check_callouts/1</a></td><td>Checks that the correct callouts have been made.</td></tr>
+<tr><td valign="top"><a href="#create_api_spec-1">create_api_spec/1</a></td><td>Create an API spec for existing module/modules (mocking all functions listed by  
+Module:module_info(exports).</td></tr>
+<tr><td valign="top"><a href="#create_stubs-2">create_stubs/2</a></td><td>Create stub skeletons (.erl file) for modules in an API spec.</td></tr>
+<tr><td valign="top"><a href="#get_choices-0">get_choices/0</a></td><td>Returns the branches taken in any tagged choices.</td></tr>
+<tr><td valign="top"><a href="#get_trace-1">get_trace/1</a></td><td>Returns the trace, i.e.</td></tr>
+<tr><td valign="top"><a href="#get_trace_within-1">get_trace_within/1</a></td><td>Same as 'get_trace' but waits (for Timeout ms) for enough actions to
+  match the current language.</td></tr>
+<tr><td valign="top"><a href="#info-0">info/0</a></td><td>Information about what is currently being mocked.</td></tr>
+<tr><td valign="top"><a href="#init_lang-1">init_lang/1</a></td><td>Initialize the mocking language.</td></tr>
+<tr><td valign="top"><a href="#is_lang-1">is_lang/1</a></td><td>Recognizer for the mocking language.</td></tr>
+<tr><td valign="top"><a href="#merge_spec_modules-1">merge_spec_modules/1</a></td><td>Safely merge multiple specifications of the same module.</td></tr>
+<tr><td valign="top"><a href="#provide_return-2">provide_return/2</a></td><td>Equivalent to <a href="#provide_return-3"><tt>provide_return(L, As, fun (X, Y) -&gt; X == Y end)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#provide_return-3">provide_return/3</a></td><td>Given a language and a sequence of actions tries to provide a list of the
+  respective results.</td></tr>
+<tr><td valign="top"><a href="#small_step-2">small_step/2</a></td><td>Equivalent to <a href="#small_step-3"><tt>small_step(A, L, fun (X, Y) -&gt; X == Y end)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#small_step-3">small_step/3</a></td><td>Implementation of the small step semantics for language.</td></tr>
+<tr><td valign="top"><a href="#start_global_mocking-1">start_global_mocking/1</a></td><td>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, [], [global])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-1">start_mocking/1</a></td><td>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, [], [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-2">start_mocking/2</a></td><td>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, Components, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-3">start_mocking/3</a></td><td>Initialize mocking, mocked modules are created as specified in the supplied
+  callout specification.</td></tr>
+<tr><td valign="top"><a href="#stop_mocking-0">stop_mocking/0</a></td><td>Gracefully stop mocking.</td></tr>
+<tr><td valign="top"><a href="#trace_verification-2">trace_verification/2</a></td><td>Equivalent to <a href="#trace_verification-3"><tt>trace_verification(L, As, fun (X, Y) -&gt; X == Y end)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#trace_verification-3">trace_verification/3</a></td><td>Similar to <a href="#provide_return-3"><code>provide_return/3</code></a>, but returns a boolean if the sequence of
+  actions leads to an accepting state.</td></tr>
+<tr><td valign="top"><a href="#validate-1">validate/1</a></td><td>Validate a mocking language.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="callouts_to_mocking-1">callouts_to_mocking/1</a></h3>
+<div class="spec">
+<p><tt>callouts_to_mocking(CalloutTerm::term()) -&gt; <a href="#type-lang">lang</a>(_Action, _Result)</tt><br/></p>
+</div><p>Translate a callout-term, as return by eqc_component, to a mocking-language.</p>
+
+<h3 class="function"><a name="check_callouts-1">check_callouts/1</a></h3>
+<div class="spec">
+<p><tt>check_callouts(MockLang) -&gt; true | Error</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(_Action, Result)</tt></li><li><tt>Error = {expected, Call} | {expected_one_of, [Call]} | {unexpected, Call} | {unexpected, Call, expected, Call} | {unexpected, Call, expected_one_of, [Call]} | {ambiguous, Call, cant_choose_between, [{Call, '-&gt;', Result}]}</tt></li><li><tt>Call = {call, module(), atom(), [any()]}</tt></li></ul></p>
+</div><p>Checks that the correct callouts have been made. Given a language, checks that the
+  mocked functions called so far matches the language (the argument checking during
+  execution is normaly relaxed, so errors could be undiscovered until here). Also checks
+  that the language is in an "accepting state", i.e. a state where it is ok to stop.</p>
+
+<h3 class="function"><a name="create_api_spec-1">create_api_spec/1</a></h3>
+<div class="spec">
+<p><tt>create_api_spec(Module::module() | [module()]) -&gt; <a href="#type-api_spec">api_spec()</a></tt><br/></p>
+</div><p><p>Create an API spec for existing module/modules (mocking all functions listed by  
+Module:module_info(exports). Don't forget to load the record definitions in your shell  
+or you will not get well formatted output.</p>
+ 
+  <pre>
+ 4&gt; rr(code:lib_dir(eqc) ++ "/include/eqc_mocking_api.hrl").
+ [api_arg_c,api_fun,api_fun_c,api_module,api_spec]
+ 5&gt; eqc_mocking:create_api_spec(foo)
+ #api_spec{language = erlang,mocking = eqc_mocking,config = undefined,
+           modules = [#api_module{name = foo,fallback = undefined,
+                                  functions = [#api_fun{name = bar,classify = undefined,arity = 1,
+                                                        fallback = false,matched = all},
+                                               #api_fun{name = baz,classify = undefined,arity = 3,
+                                                        fallback = false,matched = all}]}]}
+ 6&gt;
+ </pre></p>
+
+<h3 class="function"><a name="create_stubs-2">create_stubs/2</a></h3>
+<div class="spec">
+<p><tt>create_stubs(APISpec::<a href="#type-api_spec">api_spec()</a>, Path::string()) -&gt; ok</tt><br/></p>
+</div><p>Create stub skeletons (.erl file) for modules in an API spec.</p>
+
+<h3 class="function"><a name="get_choices-0">get_choices/0</a></h3>
+<div class="spec">
+<p><tt>get_choices() -&gt; [{term(), left | right}]</tt><br/></p>
+</div><p>Returns the branches taken in any tagged choices.</p>
+
+<h3 class="function"><a name="get_trace-1">get_trace/1</a></h3>
+<div class="spec">
+<p><tt>get_trace(APISpec::<a href="#type-api_spec">api_spec()</a>) -&gt; [_Action]</tt><br/></p>
+</div><p>Returns the trace, i.e. the {Action, Result}-pairs seen so far for the current
+  language.</p>
+
+<h3 class="function"><a name="get_trace_within-1">get_trace_within/1</a></h3>
+<div class="spec">
+<p><tt>get_trace_within(Timeout::integer()) -&gt; reference()</tt><br/></p>
+</div><p>Same as 'get_trace' but waits (for Timeout ms) for enough actions to
+  match the current language. The trace is returned in a message <code>{trace, Ref,
+  Trace}</code> sent to the calling process, where <code>Ref</code> is the result of the call.</p>
+
+<h3 class="function"><a name="info-0">info/0</a></h3>
+<div class="spec">
+<p><tt>info() -&gt; [{atom(), #linfo{}}]</tt><br/></p>
+</div><p>Information about what is currently being mocked.</p>
+
+<h3 class="function"><a name="init_lang-1">init_lang/1</a></h3>
+<div class="spec">
+<p><tt>init_lang(MockLang) -&gt; ok | no_return()</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(_Action, _Result)</tt></li></ul></p>
+</div><p>Initialize the mocking language. This sets the language describing how the mocked
+  modules should behave. Calling this function does not reset the collected trace. Some
+  sanity checks are made, throws an error if the language and the callout specification
+  are inconsistent.</p>
+
+<h3 class="function"><a name="is_lang-1">is_lang/1</a></h3>
+<div class="spec">
+<p><tt>is_lang(MockLang::<a href="#type-lang">lang</a>(_Action, _Result)) -&gt; boolean()</tt><br/></p>
+</div><p>Recognizer for the mocking language.</p>
+
+<h3 class="function"><a name="merge_spec_modules-1">merge_spec_modules/1</a></h3>
+<div class="spec">
+<p><tt>merge_spec_modules(MockMods::[<a href="#type-api_module">api_module()</a>]) -&gt; [<a href="#type-api_module">api_module()</a>] | no_return()</tt><br/></p>
+</div><p>Safely merge multiple specifications of the same module.</p>
+
+<h3 class="function"><a name="provide_return-2">provide_return/2</a></h3>
+<div class="spec">
+<p><tt>provide_return(MockLang, Actions) -&gt; [Result] | Error</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, Result)</tt></li><li><tt>Actions = [Action]</tt></li><li><tt>Error = {expected, Call} | {expected_one_of, [Call]} | {unexpected, Call} | {unexpected, Call, expected, Call} | {unexpected, Call, expected_one_of, [Call]} | {ambiguous, Call, cant_choose_between, [{Call, '-&gt;', Result}]}</tt></li><li><tt>Call = {call, module(), atom(), [any()]}</tt></li></ul></p>
+</div><p>Equivalent to <a href="#provide_return-3"><tt>provide_return(L, As, fun (X, Y) -&gt; X == Y end)</tt></a>.</p>
+
+
+<h3 class="function"><a name="provide_return-3">provide_return/3</a></h3>
+<div class="spec">
+<p><tt>provide_return(MockLang, Actions, MatchFun) -&gt; [Result] | Error</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, Result)</tt></li><li><tt>Actions = [Action]</tt></li><li><tt>MatchFun = fun((Action, Action) -&gt; boolean())</tt></li><li><tt>Error = {expected, Call} | {expected_one_of, [Call]} | {unexpected, Call} | {unexpected, Call, expected, Call} | {unexpected, Call, expected_one_of, [Call]} | {ambiguous, Call, cant_choose_between, [{Call, '-&gt;', Result}]}</tt></li><li><tt>Call = {call, module(), atom(), [any()]}</tt></li></ul></p>
+</div><p>Given a language and a sequence of actions tries to provide a list of the
+  respective results. If the actions does lead to an inconsistent state or if the
+  sequence of actions does not lead to an accepting state a descriptive error is
+  returned.</p>
+
+<h3 class="function"><a name="small_step-2">small_step/2</a></h3>
+<div class="spec">
+<p><tt>small_step(Step, MockLang) -&gt; Res</tt>
+<ul class="definitions"><li><tt>Step = Action</tt></li><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, Result)</tt></li><li><tt>Res = {ok, Result, <a href="#type-lang">lang</a>(Action, Result)} | fail | {ambiguous_callout, boolean()}</tt></li></ul></p>
+</div><p>Equivalent to <a href="#small_step-3"><tt>small_step(A, L, fun (X, Y) -&gt; X == Y end)</tt></a>.</p>
+
+
+<h3 class="function"><a name="small_step-3">small_step/3</a></h3>
+<div class="spec">
+<p><tt>small_step(Step, MockLang, MatchFun) -&gt; Res</tt>
+<ul class="definitions"><li><tt>Step = Action</tt></li><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, Result)</tt></li><li><tt>MatchFun = fun((Action, Action) -&gt; boolean())</tt></li><li><tt>Res = {ok, Result, <a href="#type-lang">lang</a>(Action, Result)} | fail | {ambiguous_callout, boolean()}</tt></li></ul></p>
+</div><p>Implementation of the small step semantics for language.</p>
+
+<h3 class="function"><a name="start_global_mocking-1">start_global_mocking/1</a></h3>
+<div class="spec">
+<p><tt>start_global_mocking(APISpec) -&gt; Result</tt>
+<ul class="definitions"><li><tt>APISpec = #api_spec{language = erlang, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, [], [global])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-1">start_mocking/1</a></h3>
+<div class="spec">
+<p><tt>start_mocking(APISpec) -&gt; Result</tt>
+<ul class="definitions"><li><tt>APISpec = #api_spec{language = erlang, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, [], [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-2">start_mocking/2</a></h3>
+<div class="spec">
+<p><tt>start_mocking(APISpec, Components) -&gt; Result</tt>
+<ul class="definitions"><li><tt>APISpec = #api_spec{language = erlang, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></li><li><tt>Components = [atom()]</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-3"><tt>start_mocking(APISpec, Components, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-3">start_mocking/3</a></h3>
+<div class="spec">
+<p><tt>start_mocking(Spec, Components, Options) -&gt; any()</tt></p>
+</div><p>Initialize mocking, mocked modules are created as specified in the supplied
+  callout specification. Each mocked function is merely calling <a href="#do_action-3"><code>do_action/3</code></a>. If
+  the specification contains an error, an error is thrown. Functions that are modeled by
+  a component in <tt>Components</tt> are not mocked!
+  <p> Options:
+  <ul><li><tt>global</tt> - Use a global gen_server to handle mocked calls.
+  Required if mocked functions are called in a distributed setting.
+  </li></ul></p></p>
+
+<h3 class="function"><a name="stop_mocking-0">stop_mocking/0</a></h3>
+<div class="spec">
+<p><tt>stop_mocking() -&gt; ok</tt><br/></p>
+</div><p>Gracefully stop mocking. Shutdown the mocking server, will try to restore mocked
+  modules to its pre-mocking version.</p>
+
+<h3 class="function"><a name="trace_verification-2">trace_verification/2</a></h3>
+<div class="spec">
+<p><tt>trace_verification(MockLang, Actions) -&gt; boolean()</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, _Result)</tt></li><li><tt>Actions = [Action]</tt></li></ul></p>
+</div><p>Equivalent to <a href="#trace_verification-3"><tt>trace_verification(L, As, fun (X, Y) -&gt; X == Y end)</tt></a>.</p>
+
+
+<h3 class="function"><a name="trace_verification-3">trace_verification/3</a></h3>
+<div class="spec">
+<p><tt>trace_verification(MockLang, Actions, MatchFun) -&gt; boolean()</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="#type-lang">lang</a>(Action, _Result)</tt></li><li><tt>Actions = [Action]</tt></li><li><tt>MatchFun = fun((Action, Action) -&gt; boolean())</tt></li></ul></p>
+</div><p>Similar to <a href="#provide_return-3"><code>provide_return/3</code></a>, but returns a boolean if the sequence of
+  actions leads to an accepting state.</p>
+
+<h3 class="function"><a name="validate-1">validate/1</a></h3>
+<div class="spec">
+<p><tt>validate(MockLang::<a href="#type-lang">lang</a>(_Action, _Result)) -&gt; boolean()</tt><br/></p>
+</div><p>Validate a mocking language. Checks that the mocking language is not ambiguous.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

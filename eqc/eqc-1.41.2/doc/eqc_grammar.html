@@ -1,0 +1,227 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_grammar</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_grammar</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul> Main interface for grammar specifications.
+<p>Copyright © Quviq AB, 2007-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p> Main interface for grammar specifications</p>
+ 
+  <p>This module is used to create generators for grammar files. Note that  
+grammars normally define all valid inputs that a parser must accept.  
+The generators that we create from a grammar represent valid input  
+streams that can be used to feed the parser. Moreover,  
+the result of the parser is a syntax tree. For yecc grammars, we  
+can directly create generators that create such syntax trees.</p>
+ 
+  <p>We support yecc grammars as experimental alpha release.  
+Main limitation in this version is  
+the limited control on the size of the generated token streams or syntax  
+trees. In case of a deeply nested grammar, the generated objects become  
+very large.</p>
+ 
+  <p>Assume you have a grammar specified as <tt>arithm.yrl</tt>, i.e., an  
+Erlang yecc file.</p>
+ 
+  <pre>
+  Nonterminals E uminus.
+  Terminals '*' '-' number.
+  Rootsymbol E.
+ 
+  Left 100 '-'.
+  Left 200 '*'.
+  Unary 300 uminus.
+ 
+  E -&gt; E '-' E: {minus,'$1','$3'}.
+  E -&gt; E '*' E: {times,'$1','$3'}.
+  E -&gt; uminus: '$1'.
+  E -&gt; number: element(3,'$1').
+ 
+  uminus -&gt; '-' E: {minus,'$2'}.
+  </pre>
+ 
+  <p>Assume you want to generate arbitrary lists of tokens that are
+  accepted by the parser of this grammar. <i>In case of yecc grammars
+  the parser is automatically generated and you may find it unnecessary
+  to create streams of tokens. However, the example given shows that
+  running a few tests in that way is cheap and useful. In case you have
+  defined your (optimized) parser by hand, it gets even more useful.</i></p>
+ 
+  In order to create lists of tokens that are accepted by the parser,
+   we need to create generators like<br/>
+  <pre>
+  'E'() -&gt; oneof(['E'(),{'-',nat()},'E'()],...]).
+  </pre><p>
+  Where <tt>{'-',nat()}</tt> is a generator for the token "-", since  
+we represent those tokens with an atom and a line number (standard for  
+the Erlang scanner).</p>
+ 
+  <p>We know that we cannot specify recursive generators like above and that
+  we need a bound on the size. We have to find out base cases and analyze
+  the recursive structure. For example, in this grammar we have a mutual
+  recursive case in which uminus has no direct base case. In addition,
+  we have to worry about how we shrink the generated values in order to
+  find minimal counter examples.<br/>  
+Manually constructing the generators is more work than necessary, since  
+we do have the grammar as specification.</p>
+ 
+  <p>We define a QuickCheck specification that will contain all non-terminals  
+as generator by specifying the terminals, i.e., the tokens that correspond  
+to the terminals of the grammar.</p>
+ 
+  <pre>
+ -module(arithm_eqc).
+ 
+ -compile({parse_transform,eqc_grammar}).
+ -eqc_grammar({yecc_tokens,"../examples/arithm.yrl"}).
+ 
+ -include_lib("eqc/include/eqc.hrl").
+ 
+ -compile(export_all).
+ 
+ number() -&gt;
+    {number,nat(),nat()}.
+ 
+ '*'() -&gt;
+    {'*',nat()}.
+ 
+ '-'() -&gt;
+    {'-',nat()}.
+ 
+ </pre>
+ 
+  <p>We add a compiler option for the parse transformation defined by
+  eqc_grammar or alternatively we can compile it with a special option<br/>  
+viz. c("arithm_eqc",[{parse_transform,eqc_grammar},Options]).</p>
+ 
+  <p>Options may contain all normal compiler options and in addition options  
+to specify which grammar format to use and whether to generate tokens  
+or syntax trees.</p>
+ 
+  Valid options are<br/>
+  <dl>
+  <dt><tt>{eqc_grammar,yecc_tokens,FileName}</tt></dt>
+  <dd>generators for tokens according to
+         grammar specification in FileName, which is a .yrl file </dd>
+  <dt><tt>{eqc_grammar,yecc_tree,FileName}</tt></dt>
+  <dd> generator for syntax trees
+                        that can be generated from a .yrl file </dd>
+  </dl>
+ 
+  As an alternative to passing compiler options, you can also include the
+  option in the module by the attribute notation:
+ <pre>
+  -eqc_grammar({yecc_tokens,FileName}).
+ </pre>
+ 
+  <p>After compilation with this parse transformation, for each non-terminal  
+in the grammar you have a generator that generates arbitrary  
+lists of tokens that the parser for this non-terminal should accept.  
+Alternatively, you created a generator that generates an arbitrary syntax  
+tree.</p>
+ 
+  <p>Note that you can always use the standard Erlang compiler option 'P' if  
+you want to save the generated source code. Only do this for inspection,  
+never as a start of a new module; the link between new code and  
+specification will be lost.</p>
+ 
+  <h3>Tokens in Symbolic Form</h3>
+ 
+  <p>The token generators return a symbolic representation of the parse tree
+  of these tokens. This helps in analyzing the cause of errors found. One
+  should not rely upon the internal format of the symbolic representation,
+  since it may change in the future. One is supposed to use access functions
+  to this data structure, in particular the <a href="#eval-1"><code>eval/1</code></a> function that  
+evaluates a symbolic form and returns a list of tokens.</p>
+ 
+  <h2>Properties</h2><p>  
+Given the generators from the grammar, there are some obvious properties  
+that you can check. We give a few examples here.</p>
+ 
+  <h3>Tokens generator</h3><p>  
+Token generators are used to test a parser, but also to test whether the  
+grammar is specified in the way you expect (in case you define the grammar  
+instead of a specification someone else provides you with).</p>
+ 
+  <b>Property:</b> Parser does not crash and accepts valid lists of tokens
+  <pre>
+  prop_parse() -&gt;
+     ?FORALL(SymbolicExpr,'E'(),
+           begin
+               Tokens = eqc_grammar:eval(SymbolicExpr),
+               case arithm:parse(Tokens) of
+                    {ok,SyntaxTree} -&gt; true;
+                    {error,_} -&gt; false
+               end
+           end).
+  </pre>
+ 
+  <b>Property:</b> What you can parse and print, you can also scan.<br/>
+  If necessary do write the function print, since it is useful for testing!
+  In particulat you will
+  find out when you make your parse tree too complex.
+  <pre>
+  prop_parse_print() -&gt;
+     ?FORALL(SymbolicExpr,'E'(),
+           begin
+               Tokens = eqc_grammar:eval(SymbolicExpr),
+               {ok,SyntaxTree} = arithm:parse(Tokens),
+               String = print(SyntaxTree),
+               {ok,Scanned,_} = arithm_scan:scan(String),
+               equal(Scanned,Tokens)
+           end).
+  </pre><p>  
+Note the function 'equal' here instead of writing '='. The reason is  
+that tokens are equivalent up to the line number in which they occur.  
+The property above applied to the given grammar will reveal a few errors.</p>
+ 
+  <h3>Tree generator</h3><p>  
+A tree generator could be seen as a generated set of tokens which is  
+parsed and produces an abstract syntax tree. Here, however, the  
+syntax tree is directly generated from the grammar, without using  
+the parser. The tree generator is used to test the code that normally  
+uses the result of the parser, but it can also be used to test parser  
+and scanner.</p>
+ 
+  <b>Property:</b> Pretty printer can handle all possible syntax trees
+  <pre>
+  ?FORALL(SyntaxTree,'E'(),
+          begin
+             print(SyntaxTree), true
+          end).
+  </pre>
+ 
+  <b>Property:</b> Scanner works for all syntactically correct code
+  <pre>
+  ?FORALL(SyntaxTree,'E'(),
+          begin
+             Tokens = scan(print(SyntaxTree)),
+             SyntaxTree == parse(Tokens)
+          end).
+  </pre>
+ 
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#eval-1">eval/1</a></td><td>Given a generated syntax tree in symbolic form, produces a list of tokens.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="eval-1">eval/1</a></h3>
+<div class="spec">
+<p><tt>eval(SyntaxTree) -&gt; any()</tt></p>
+</div><p>Given a generated syntax tree in symbolic form, produces a list of tokens.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

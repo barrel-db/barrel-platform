@@ -1,0 +1,284 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_cover</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_cover</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>   
+This module provides a tool for measuring code coverage for Erlang code.
+<p>Copyright © Quviq AB, 2014-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p>   
+This module provides a tool for measuring code coverage for Erlang code.</p>
+  
+   The coverage tool works on code that has been compiled with the
+   <code>eqc_cover</code> parse transform.
+   <pre>
+   17&gt; c(test, [{parse_transform, eqc_cover}]).
+   {ok,test}
+   </pre>
+   Or using an attribute in the module:
+   <pre>
+   -compile({parse_transform, eqc_cover}).
+   </pre>
+  
+   To start collecting coverage data <a href="#start-0"><code>start/0</code></a> is called. After exercising the
+   covered code, <a href="#stop-0"><code>stop/0</code></a> stops data collection and returns the collected data.
+   The common usage of collected data is to visualize it in HTML-format, using
+   <a href="#write_html-2"><code>write_html/2</code></a>:
+   <pre>
+   2&gt; eqc_cover:start().
+   true
+   3&gt; test:a(7).
+   X: 1
+   X: 2
+   X: 3
+   X: 4
+   X: 5
+   X: 6
+   X: 7
+   [ok,ok,ok,ok,ok,ok,ok]
+   4&gt; test:b(5, 9).
+   4
+   5&gt; Data = eqc_cover:stop().
+   ...
+   6&gt; eqc_cover:write_html(Data, []).
+   Coverage of /Users/hans/Quviq/tmp/test.erl: 67.2%
+   ok
+   </pre><p>
+   The resulting HTML-output can be seen <a href="./test_1.erl.html">
+   here</a>.</p>
+  
+   Alternatively a single computation can be measured using <a href="#apply-1"><code>apply/1</code></a>:
+   <pre>
+   12&gt; eqc_cover:apply(fun() -&gt; test:a(0), test:b(2, 7) end).
+   Coverage of /Users/hans/Quviq/tmp/test.erl: 51.6%
+   5
+   </pre><p>
+   The resulting HTML-output can be seen <a href="./test_2.erl.html">
+   here</a>.</p>
+  
+   Using <a href="#stop-1"><code>stop/1</code></a> and <a href="#merge_ticks-2"><code>merge_ticks/2</code></a> it is possible to tag and
+   combine separate runs and get the aggregated coverage data with a
+   break-down per tag. For example,
+   <pre>   13&gt; eqc_cover:start().
+   true
+   14&gt; [ begin test:a(X), test:b(X, 2 * X) end || X &lt;- lists:seq(1, 100) ], ok.
+   ...
+   15&gt; Run1 = eqc_cover:stop("Run 1").
+   ...
+   16&gt; eqc_cover:start().
+   true
+   17&gt; [ begin test:a(X), test:b(2 * X, X) end || X &lt;- lists:seq(1, 10) ], ok.
+   ...
+   18&gt; Run2 = eqc_cover:stop("Run 2").
+   ...
+   19&gt; eqc_cover:write_html(eqc_cover:merge_ticks(Run1, Run2), []).
+   Coverage of /Users/ulfn/work/scratch/test.erl: 95.3%
+   ok</pre><p>
+   The result can be seen <a href="./test_3.erl.html">here</a>.</p>
+  
+   <h4><a name="Modules_using_-on_load()">Modules using -on_load()</a></h4><p>
+   Special care is needed for modules using the <code>-on_load</code> attribute (the
+   most common usage is for Erlang NIFs). Due to limitations in the Erlang VM
+   it is not possible to call the module currently being loaded using a
+   qualified function call--this hangs the Erlang VM. This means that
+   <code>eqc_cover</code> cannot collect coverage data during module loading, and thus,
+   by default, the parse transform skips any modules using <code>-on_load</code>.</p>
+  
+   If there are functions in a module using <code>-on_load</code> that one would like to
+   measure coverage for, it is possible to use the <code>eqc_cover</code> attribute to
+   specificy precisely which functions should be cover compiled:
+   <pre>
+   -eqc_cover({cover, [a/1, b/3, g/0]}).
+   </pre>
+   or to specify which functions should not be cover compiled:
+   <pre>
+   -eqc_cover({skip, [d/2, f/1]}).
+   </pre><p>
+   <b>Note</b>: the parse transform checks that the function in the <code>-on_load</code>   
+attribute is not among the covered functions (but it will not compute the   
+complete call graph for this function!).</p>
+  
+   <h4><a name="Erlang_release_>=_R18.3.4.2">Erlang release &gt;= R18.3.4.2</a></h4>
+   Note that you need to run an Erlang version R18.3.4.2 or later for eqc_cover
+   to work. The coverage collection uses ets:update_counter/4. This function had
+   initially a deadlock bug.
+  
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-html_opt">html_opt()</a></h3>
+<p><tt>html_opt() = {out_dir, string()} | {css_dir, string()} | {js_dir, string()}</tt></p>
+<p>  Specify options for HTML generation. Where the HTML files should be written,
+  and where the necessary css-files and js-files should be written.</p>
+
+<h3 class="typedecl"><a name="type-html_opts">html_opts()</a></h3>
+<p><tt>html_opts() = [<a href="#type-html_opt">html_opt()</a>]</tt></p>
+
+
+<h3 class="typedecl"><a name="type-tick">tick()</a></h3>
+<p><b>abstract datatype</b>: <tt>tick()</tt></p>
+<p>  The abstract data type for a <code>tick</code>, used to count how many times a
+  particular piece of code has been evaluated.</p>
+
+<h3 class="typedecl"><a name="type-ticks">ticks()</a></h3>
+<p><tt>ticks() = [<a href="#type-tick">tick()</a>]</tt></p>
+<p>  A list of ticks.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#apply-1">apply/1</a></td><td>Equivalent to <a href="#apply-2"><tt>apply(F, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#apply-2">apply/2</a></td><td>  
+Measure coverage (and generate HTML output) for single computation.</td></tr>
+<tr><td valign="top"><a href="#apply-3">apply/3</a></td><td>Equivalent to <a href="#apply-4"><tt>apply(M, F, A, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#apply-4">apply/4</a></td><td>Equivalent to <a href="#apply-2"><tt>apply(fun () -&gt; erlang:apply(M, F, A) end, Options)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#compile-1">compile/1</a></td><td>Equivalent to <a href="#compile-2"><tt>compile(File, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#compile-2">compile/2</a></td><td>
+  Compile a module using the <code>eqc_cover</code> parse transform.</td></tr>
+<tr><td valign="top"><a href="#merge_ticks-1">merge_ticks/1</a></td><td>Equivalent to <a href="lists.html#foldr-3"><tt>lists:foldr(fun merge_ticks/2, [], Tickss)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#merge_ticks-2">merge_ticks/2</a></td><td>
+  Merge two sets of collected coverage ticks.</td></tr>
+<tr><td valign="top"><a href="#no_ticks-1">no_ticks/1</a></td><td>  
+Compute an empty set of ticks for a given (list of) module(s).</td></tr>
+<tr><td valign="top"><a href="#start-0">start/0</a></td><td>
+  Start coverage data collection (will implicity stop any ongoing
+  data collection!).</td></tr>
+<tr><td valign="top"><a href="#stop-0">stop/0</a></td><td>Equivalent to <a href="#stop-1"><tt>stop("")</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#stop-1">stop/1</a></td><td>
+  Stop coverage data collection.</td></tr>
+<tr><td valign="top"><a href="#strip_tags-1">strip_tags/1</a></td><td>
+  Strip (replace with "") tags from a collection of ticks.</td></tr>
+<tr><td valign="top"><a href="#write_html-2">write_html/2</a></td><td>  
+Prepare and write HTML output for collected coverage data.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="apply-1">apply/1</a></h3>
+<div class="spec">
+<p><tt>apply(F::function()) -&gt; any()</tt><br/></p>
+</div><p>Equivalent to <a href="#apply-2"><tt>apply(F, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="apply-2">apply/2</a></h3>
+<div class="spec">
+<p><tt>apply(F::function(), Options::<a href="#type-html_opts">html_opts()</a>) -&gt; any()</tt><br/></p>
+</div><p><p>  
+Measure coverage (and generate HTML output) for single computation.</p>
+ 
+  Starts coverage data collection. Evaluates <code>F</code>, stops data
+  collection, and generates HTML output.</p>
+
+<h3 class="function"><a name="apply-3">apply/3</a></h3>
+<div class="spec">
+<p><tt>apply(M::module(), F::atom(), A::[term()]) -&gt; any()</tt><br/></p>
+</div><p>Equivalent to <a href="#apply-4"><tt>apply(M, F, A, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="apply-4">apply/4</a></h3>
+<div class="spec">
+<p><tt>apply(M::module(), F::atom(), A::[term()], Options::<a href="#type-html_opts">html_opts()</a>) -&gt; any()</tt><br/></p>
+</div><p>Equivalent to <a href="#apply-2"><tt>apply(fun () -&gt; erlang:apply(M, F, A) end, Options)</tt></a>.</p>
+
+
+<h3 class="function"><a name="compile-1">compile/1</a></h3>
+<div class="spec">
+<p><tt>compile(File) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="#compile-2"><tt>compile(File, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="compile-2">compile/2</a></h3>
+<div class="spec">
+<p><tt>compile(Mod, Options) -&gt; term()</tt>
+<ul class="definitions"><li><tt>Mod = string() | module()</tt></li><li><tt>Options = term()</tt></li></ul></p>
+</div><p><p>
+  Compile a module using the <code>eqc_cover</code> parse transform.</p>
+ 
+  <p>More or less equivalent to:
+  <code>compile:file(File, [binary, {parse_transform, eqc_cover}] ++ Options)</code></p>
+ 
+  See <a href="compile.html#file-2"><code>compile:file/2</code></a> for more information on possible <code>Options</code>, and
+  <a href="code.html#load_binary-3"><code>code:load_binary/3</code></a> for possible return values.</p>
+
+<h3 class="function"><a name="merge_ticks-1">merge_ticks/1</a></h3>
+<div class="spec">
+<p><tt>merge_ticks(Tickss::[<a href="#type-ticks">ticks()</a>]) -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p>Equivalent to <a href="lists.html#foldr-3"><tt>lists:foldr(fun merge_ticks/2, [], Tickss)</tt></a>.</p>
+
+
+<h3 class="function"><a name="merge_ticks-2">merge_ticks/2</a></h3>
+<div class="spec">
+<p><tt>merge_ticks(Ticks1::<a href="#type-ticks">ticks()</a>, Ticks2::<a href="#type-ticks">ticks()</a>) -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p>
+  Merge two sets of collected coverage ticks.</p>
+
+<h3 class="function"><a name="no_ticks-1">no_ticks/1</a></h3>
+<div class="spec">
+<p><tt>no_ticks(Mods::module() | [module()]) -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p><p>  
+Compute an empty set of ticks for a given (list of) module(s).</p>
+ 
+  Returns coverage data where the measured number of ticks is 0
+  everywhere.</p>
+
+<h3 class="function"><a name="start-0">start/0</a></h3>
+<div class="spec">
+<p><tt>start() -&gt; true</tt><br/></p>
+</div><p>
+  Start coverage data collection (will implicity stop any ongoing
+  data collection!).</p>
+
+<h3 class="function"><a name="stop-0">stop/0</a></h3>
+<div class="spec">
+<p><tt>stop() -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#stop-1"><tt>stop("")</tt></a>.</p>
+
+
+<h3 class="function"><a name="stop-1">stop/1</a></h3>
+<div class="spec">
+<p><tt>stop(Tag::string()) -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p>
+  Stop coverage data collection. Returns the collected coverage data tagged
+  with <code>Tag</code>. When generating HTML for merged coverage data (<a href="#merge_ticks-2"><code>merge_ticks/2</code></a>) containing multiple tags, a break-down of the number of
+  calls per tag will be shown.</p>
+
+<h3 class="function"><a name="strip_tags-1">strip_tags/1</a></h3>
+<div class="spec">
+<p><tt>strip_tags(Data::<a href="#type-ticks">ticks()</a>) -&gt; <a href="#type-ticks">ticks()</a></tt><br/></p>
+</div><p>
+  Strip (replace with "") tags from a collection of ticks.</p>
+
+<h3 class="function"><a name="write_html-2">write_html/2</a></h3>
+<div class="spec">
+<p><tt>write_html(Ticks::<a href="#type-ticks">ticks()</a>, Options::<a href="#type-html_opts">html_opts()</a>) -&gt; ok | {error, atom()}</tt><br/></p>
+</div><p><p>  
+Prepare and write HTML output for collected coverage data.</p>
+ 
+  If no options are given, HTML output is written to the current directory
+  and the css-files and js-files are also copied to the current directory.
+  Configuration options are:
+  <ul><li><tt>{out_dir, string()}</tt>
+  - specify where HTML files are written</li>
+  <li><tt>{css_dir, string()}</tt>
+  - specify where css-files are written (relative to <tt>out_dir</tt>)</li>
+  <li><tt>{js_dir, string()}</tt>
+  - specify where js-files are written (relative to <tt>out_dir</tt>)</li>
+  </ul></p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:29.</i></p>
+</body>
+</html>

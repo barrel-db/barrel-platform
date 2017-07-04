@@ -1,0 +1,803 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_component</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_component</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functions for testing operations with side-effects, 
+which are specified via an abstract state machine with external interactions.
+<p>Copyright © Quviq AB, 2012-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p>This module provides functions for testing operations with side-effects, 
+which are specified via an abstract state machine with external interactions.</p>
+
+ <p>A component state machine is specified by a client module similar to <a href="eqc_statem.html"><code>eqc_statem</code></a>
+ with extra callbacks <tt>callouts</tt> and <tt>return_value</tt> that specifies how the
+ state machine interacts with other components. Given such a component, this module can
+ generate and run command sequences, checking that all postconditions are satisfied and
+ that all external functions are called (via <a href="eqc_mocking.html"><code>eqc_mocking</code></a>). Alternatively one can
+ cluster components together to build large specifications from parts using <a href="eqc_cluster.html"><code>eqc_cluster</code></a>. It will shrink failing sequences by discarding commands that do not 
+contribute to the failure. Thus, it can be used to find minimal command sequences which 
+elicit an unexpected behaviour.</p>
+
+ <p>Component specifications are a special form of <a href="eqc_statem.html"><code>eqc_statem</code></a> specifications.
+ Modules using <tt>eqc_component</tt> should include
+ <tt>-include_lib("eqc/include/eqc_component")</tt> to import the functions that
+ <tt>eqc_component</tt> provides. Do <b>not</b> include <tt>eqc_statem</tt>; functions 
+needed from that module are automatically imported.</p>
+
+ <h3>Symbolic Commands</h3><p>
+ Generated test cases are lists of symbolic commands (<a href="eqc_statem.html#type-command"><code>eqc_statem:command()</code></a>), each 
+of which binds a symbolic variable to the result of a symbolic function call.</p>
+
+ For example,
+ <pre>{set,{var,1},{call,gen_server,start_link,[myserver,[1],[]]},MetaData}</pre><p> is a
+ command to set variable 1 to the result of calling
+ <tt>gen_server:start_link(myserver,[1],[])</tt>. The MetaData contains additional
+ information for different state machine formalisms. In the component formalism, the
+ MetaData contains a callout description that describes what additional functions are
+ expected to be called when calling the function
+ <tt>{call,gen_server,start_link,[myserver,[1],[]]}</tt>. The MetaData can also contain
+ the expected return value, if it is defined by the callouts. The callout description can
+ then be used by <a href="eqc_mocking.html"><code>eqc_mocking</code></a> to mock the environment outside the SUT; or it can
+ be used by <a href="eqc_cluster.html"><code>eqc_cluster</code></a> to correctly combine several components.</p>
+
+ As an example, the language provided to this particular call to start a generic server
+ could be <pre>?CALLOUT(myserver,init,[[1]],{ok,1}).</pre><p> In that case, we do test the
+ <tt>gen_server</tt> module as SUT and make sure it calls the right callbacks. We specify
+ that the callback to be called is <tt>init</tt> in the module <tt>myserver</tt> and that
+ the argument to call it with is the list <tt>[1]</tt>.  We expect the environment to
+ return <tt>{ok,1}</tt> when this function is called. While the SUT and the (mocked)
+ environment are Erlang we only have a single return value; however, if C is used there
+ are out-parameters that can be part of the "return value". (See <a href="eqc_mocking.html"><code>eqc_mocking</code></a> for 
+more details.)</p>
+
+ <p>When a test case is run, then symbolic variables (<a href="eqc_statem.html#type-var"><code>eqc_statem:var()</code></a>) are replaced
+ by the values they were set to, and symbolic calls (<a href="eqc_statem.html#type-call"><code>eqc_statem:call()</code></a>) are 
+performed. In addition, the post-condition of each command is checked. Running a list of 
+commands generates a result which indicates whether any post-condition failed, or any 
+command raised an exception, or whether all commands and checks completed successfully.</p>
+
+ <p>It is very important to keep in mind the difference between <i>symbolic</i> calls and
+ variables, which are used during test case generation, and the values they represent,
+ which are computed during test execution. We refer to the latter as <i>dynamic</i> 
+values. The reason we use symbolic representations (rather than just working with their 
+dynamic values) is to enable us to display, save, analyze, and above all simplify test 
+cases before they are run.</p>
+
+ <h3>Callback Functions</h3>
+  Each command (or API function of the software under test)
+  is specified by a number of functions, which can be grouped together, that
+  represent generation, precondition, postcondition, state update, etc. These
+  functions are named by appending a suffix to the name of the
+  command itself. Apart from the
+  <tt>COMMAND_args</tt> callback, each of these callbacks is optional, and
+  if not provided a <b>default</b> is used. In addition to callbacks for
+  a specific command, there are also a number of general callbacks, such as
+ The client module specifies an abstract state machine by defining the following
+ functions:
+ <ul>
+ <li> <h3>initial_state/0</h3>
+ <tt>initial_state() :: <a href="eqc_statem.html#type-symbolic_state"><code>eqc_statem:symbolic_state()</code></a></tt>.
+ <p>Returns the state in which each test case starts (unless a different initial
+ state is supplied explicitly). This symbolic state is evaluated to
+ construct the initial dynamic state before each test case is executed.</p>
+ </li>
+
+  </ul><p>  
+The following call-back suffixes are provided for eqc_component.</p>
+ 
+  <ul>
+  <li> <h3>_pre/1</h3>
+  <tt>COMMAND_pre(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>) :: bool()</tt>
+  <p>Returns <tt>true</tt> if the command <tt>COMMAND</tt> may be generated in state <tt>S</tt>.
+  The precondition is also used when shrinking to make sure that invalid commands
+  do not pop-up in a test case while shrinking.</p>
+  <b>default</b>: true
+  </li>
+  <li> <h3>_pre/2</h3>
+  <tt>COMMAND_pre(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, Args::[term()]) :: bool()</tt>
+  <p>Returns <tt>true</tt> if the symbolic call <tt>{call,_,COMMAND,Args}</tt> can be performed in the
+  state <tt>S</tt>. The precondition is also used when shrinking to make sure that invalid commands
+  do not pop-up in a test case while shrinking.</p><p>
+  <b>default</b>: true</p>
+ 
+  <p>Preconditions are used to decide whether or not to include
+  candidate commands in test cases, which is why only the <i>symbolic</i> state
+  information is available when preconditions are checked.</p>
+ <p>During shrinking, eqc_component also automatically checks whether the callouts
+ (contained in the MetaData) are valid for this state and this call and re-computes
+ the callouts if they are invalid.</p>
+  </li>
+
+  <li><h3>_adapt/2</h3>
+  <tt>COMMAND_adapt(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, Args::[term()]) :: false | gen(<a href="#type-call"><code>call()</code></a>)</tt>
+  <p> This is an <i>optional</i> callback used during
+  shrinking; when a precondition does not hold, adapt is called to try to repair/patch a
+  call before it is discarded. Typically metadata in the call tuple can be adjusted.
+  After adapt is finished, the precondition is checked again to see whether the changes were sufficient.</p>
+ <p>Note that eqc_component will automatically try to adapt by regenerating callouts by
+ calling <b>_callouts/2</b>; this function should only be defined if additional strategies
+ should be tried. </p>
+  <b>default</b>: false
+  </li>
+ 
+  <li> <h3>_args/1</h3>
+  <tt>COMMAND_args(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>) :: gen([term()])</tt>
+  <p>Generates appropriate arguments for the function under test. The result are arguments Args that are used in
+  the symbolic call
+  <pre>{call, ?MODULE, COMMAND, Args}</pre> in the test case generator, given that <tt>COMMAND_pre(S)</tt>
+  returns true for the symbolic state <tt>S</tt> at generation time.</p>
+  </li>
+ 
+  <li> <h3>{no_suffix}/N</h3>
+  <tt>COMMAND(...) :: term()</tt>
+  <p>This is the function that is called during test case execution.</p>
+  </li>
+
+  <li><h3>_callouts/2</h3><p>
+  <tt>COMMAND_callouts(S::<a href="eqc_statem.html#type-symbolic_state">symbolic_state()</a>, Args::[term()]) :: <a href="eqc_component.html#type-callout"><code>eqc_component:callout()</code></a></tt></p>
+ 
+ <p>Generates an appropriate callout descrition for a freshly generated call. Generating
+ a symbolic call for eqc_component is a two stage process. First a command is generated
+ (exactly as for eqc_statem), then the callout description is generated.</p>
+
+ <p>Callouts are constructed using macros; in fact the macros define a small domain
+ specific language (DSL) for describing callouts. See
+ <a href="#ConstructingCallouts">Constructing Callouts</a> below.</p>
+ 
+  <b>default</b>: <tt>?EMPTY</tt> </li>
+ 
+
+  <li><h3>_next/3</h3>
+  <tt>COMMAND_next(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, V::<a href="#type-var"><code>var()</code></a>, Args::[term()]) :: <a href="#type-symbolic_state"><code>symbolic_state()</code></a></tt>
+  <p>This is the state transition function of the abstract state machine,
+  and it is used during <i>both</i> test generation and test
+  execution. The type above refers to calls during test generation.</p>
+  <p>In this case, it computes the symbolic state after symbolic
+  call <tt>{call, _, COMMAND, Args}</tt>, performed in
+  symbolic state <tt>S</tt>, with result <tt>V</tt>. Because it is applied
+  to symbolic states and symbolic calls, the result of the call must also be symbolic--
+  in fact, <tt>V</tt> is the symbolic variable which will be set to the result
+  of the call.</p>
+  <p>For example, if the state were a list
+  of pids, and <tt>COMMAND</tt> applied to <tt>Args</tt> spawned a new process,
+  then the variable <tt>V</tt>
+  could be added to the state to refer to the pid of the process just spawned.
+  Symbolic function calls can also be included in the next state, to construct parts
+  whose values will only be known during test execution.</p>
+  <p>The same function is used to compute the next <i>dynamic</i> state during
+  test execution. In this case <tt>S</tt> is the previous dynamic state,
+  and <tt>Args</tt> are the actual values
+  passed (not symbolic argument expressions), and <tt>V</tt> is the actual
+  value returned--in other words, all the symbolic inputs are replaced by
+  their values. A correctly written COMMAND_next function does not inspect
+  symbolic inputs--it just includes them as symbolic parts of the result.
+  Thus the same code can construct a dynamic state of the same shape,
+  given actual values instead of symbolic ones. The only difficulty is that
+  COMMAND_next may itself introduce symbolic function calls into its result,
+  which would then be a kind of mixture of a symbolic and dynamic state.
+  To ensure that the state remains dynamic during test execution, any
+  such symbolic calls are performed, and replaced by their values,
+  before test execution continues.</p>
+ <p>Behind the scene the computation of the next state in eqc_component is more involved
+ than for <a href="eqc_statem.html"><code>eqc_statem</code></a> since local commands may also make changes to the next
+ state. In this case the state supplied to the next_state function is the state after the
+ changes made by local commands in the callouts callback.</p>
+ 
+  <p><b>default</b>: <tt>S</tt>, i.e., leave state unchanged</p>
+ 
+  </li>
+  <li><h3>_return/2</h3>
+  <tt>COMMAND_return(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, Args::[term()]) :: term()</tt>
+  <p>This is an <i>optional</i> callback that computes the expected return value from the model state.
+  This return value is used when clustering components.
+  It is often good practice to check the return value in the postcondition by explicitely calling this
+  return callback to
+  check whether the actual returned value is equivalent with the return value computed by this
+  function using the model state.</p>
+  <b>default</b>: <tt>ok</tt>
+  </li>
+ 
+  <li><h3>_post/3</h3>
+  <tt>COMMAND_post(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>, Args::[term()], R::term()) :: bool()</tt>
+  <p>Checks the postcondition of symbolic call <tt>{call,_,COMMAND,Args}</tt>, executed in <i>dynamic</i>
+  state <tt>S</tt>, with result <tt>R</tt>.</p>
+ <p>In addition to the checks defined in the function, it is also checked that the
+ expected callouts were made. Thus, this needs not be checked explicitly!</p>
+  <b>default</b>: true
+  <p>Of course, postconditions are checked during test execution, not test
+  generation.</p>
+  </li>
+ 
+  <a name="process"/>
+  <li><h3>_process/2</h3>
+  <tt>COMMAND_process(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, Args::[term()]) :: default | root | worker | spawn | symbolic_pid()</tt>
+  <p>
+  Specifies which process should execute <tt>COMMAND</tt>. The choices are
+  <ul>
+  <li><b><font size="+1"><tt>root</tt></font></b> The process running the tests. This is the most
+      efficient, but if the command crashes it will take the whole test with
+      it, which results in poor feedback from the failure.</li>
+  <li><b><font size="+1"><tt>worker</tt></font></b> Run the command in a designated worker process.</li>
+  <li><b><font size="+1"><tt>spawn</tt></font></b> Spawn a new worker process to run the command. The pid of
+  the new process is available in the <tt>_callouts</tt> callback as
+  <tt>?SELF</tt>.</li>
+  <li><b><font size="+1"><tt>symbolic_pid()</tt></font></b> A previously spawned worker process.</li>
+  <li><b><font size="+1"><tt>default</tt></font></b> Use the value of the <tt>default_process</tt>
+      parameter, which can be set using <a href="eqc_gen.html#with_parameter-3"><code>eqc_gen:with_parameter/3</code></a>. If
+      the default process is <tt>root</tt> and the command is blocking (see <a href="#blocking">Testing blocking operations</a> below) then
+      <tt>spawn</tt> is used instead, since we must not block the QuickCheck
+      process.
+  </li>
+  </ul></p>
+  <b>default</b>: <tt>default</tt>
+  </li>
+ 
+  <li><h3>_features/3</h3>
+  <tt>COMMAND_features(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>, Args::[term()],R::term()) :: list(any())</tt>
+  <p>Collects a list of features of the symbolic call <tt>{call,_,COMMAND,Args}</tt>, executed in <i>dynamic</i>
+  state <tt>S</tt>, with result <tt>R</tt>.
+  The arguments of the symbolic call are the
+  actual values passed, not any symbolic expressions from which they were computed.
+  The features can be recovered later using <a href="#call_features-1"><code>call_features/1</code></a>.</p>
+  <b>default</b>: []
+  <p>Features are collected during test execution, not test generation.</p>
+  </li>
+  <li><h3>_callers/0</h3><p>
+  <tt>COMMAND_callers() :: [atom()]</tt></p>
+ 
+  <p>Returns a list of allowed callers for the <tt>COMMAND</tt>. This information is only
+  used when the component is part of a cluster. If there are no restrictions for the
+  command, <tt>[anyone]</tt> (the default) can be used. If used in a cluster, during
+  command generation, this command is excluded from generation unless there is at least
+  one caller in the list of callers that is <b>not</b> in the cluster!</p>
+ 
+  <b>default</b>: <tt>[anyone]</tt> </li>
+ 
+  </ul>
+ 
+  <h2>Additional callbacks</h2>
+  In addition to the per-command call-backs described above, the following optional
+  call-backs may be included.
+  <ul>
+  <li><h3>command_precondition_common/2</h3><p>
+  <tt>command_precondition_common(S::<a href="eqc_statem.html#type-symbolic_state">symbolic_state()</a>,COMMAND :: atom()) :: bool()</tt></p>
+ 
+  Used to specify a general command filtering precondition. The condition is applied to
+  the symbolic state <b>before</b> we try to generate a command. A typical usage is:
+  <pre>command_precondition_common(S, Cmd) -&gt;
+    S /= uninitialized orelse Cmd == init.</pre><p>
+  This precondition ensures that unless the state is not <tt>uninitialized</tt> the
+  command must be <tt>init</tt>.</p>
+ 
+  </li>
+ 
+  <li><h3>precondition_common/2</h3><p>
+  <tt>precondition_common(S::<a href="eqc_statem.html#type-symbolic_state">symbolic_state()</a>,Call::[call()]) :: bool()</tt></p>
+ 
+  <p>Used to specify a general precondition. This precondition is applied after command
+  generation, but <b>before</b> the specific (<tt>COMMAND_pre/2</tt> or
+  <tt>COMMAND_pre/3</tt>) is applied. Thus in <tt>COMMAND_pre/2</tt> (or
+  <tt>COMMAND_pre/3</tt>) one may assume that the general precondition holds.</p>
+ 
+  </li>
+ 
+  <li><h3>postcondition_common/3</h3><p>
+  <tt>postcondition_common(S::<a href="eqc_statem.html#type-dynamic_state">symbolic_state()</a>,Call::[call()],Res::term()) :: bool()</tt></p>
+ 
+  Used to specify a general postcondition. This precondition is applied <b>after</b> the
+  specific (<tt>COMMAND_post/3</tt> or <tt>COMMAND_post/4</tt>) is applied. A typical
+  usage for <a href="eqc_component.html"><code>eqc_component</code></a> is to check that all return values follow what we expect:
+  <pre>postcondition_common(S, Call, Res) -&gt;
+    eq(Res, return_value(S, Call)).</pre>
+ 
+  </li>
+  <li><h3>call_features_common/3</h3><p>
+  <tt>call_features_common(S::<a href="eqc_statem.html#type-symbolic_state">symbolic_state()</a>,Call::[call()],Res::term()) :: bool()</tt></p>
+ 
+  Used to specify features for all commands. These features are in
+  addition to the features specified in specific
+  <tt>COMMAND_features</tt> callbacks.  </li>
+ 
+  <li><h3>process_common/2</h3><p>
+  <tt>process_common(S::<a href="eqc_statem.html#type-symbolic_state">symbolic_state()</a>,Call::[call()]) :: default | root | worker | spawn | symbolic_pid()</tt></p>
+ 
+  Used to specify a process for all commands. The process from <tt>process_common</tt> is
+  used if no specfic process (from <tt>COMMAND_process</tt> callbacks) is given.  </li>
+
+ <li><h3>invariant/1</h3>
+ <tt>invariant(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>) :: bool()</tt>
+ <p>
+ This is an <i>optional</i> call-back which can be used to check an
+ invariant during test execution. It is called at the beginning of
+ each command sequence with the initial state as argument, and then
+ after each command is executed with the resulting state as
+ argument. Its argument is always a <i>dynamic</i> state; it is not
+ used during test case generation.  If <tt>invariant</tt> returns
+ anything other than <tt>true</tt>, the test fails. Its intended use
+ is to compare the model state <tt>S</tt> with the actual state of
+ the system under test.
+ </p><p>
+ If <tt>invariant</tt> is not defined by the user, then it is assumed
+ to be <tt>true</tt>.
+ </p>
+ </li>
+
+ <li> <h3>api_spec/0</h3>
+ <tt>api_spec() :: <a href="eqc_mocking.html#type-api_spec"><code>eqc_mocking:api_spec()</code></a></tt>.
+ <p> In case mocking is used, the API specification should be returned by this
+ callback function. See <a href="eqc_mocking.html"><code>eqc_mocking</code></a>/<a href="eqc_mocking_c.html"><code>eqc_mocking_c</code></a> for examples
+ of how the API specification can be written.
+
+ Together with the specification of expected calls (see <tt>?CALLOUT</tt> below) the
+ mocking behavior of components surrounding the SUT is conveniently specified.
+
+ </p> </li>
+  <li><h3>weight/2</h3>
+  <tt>weight(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>, Cmd :: atom()) :: bool()</tt>
+  <p>
+  This is an <i>optional</i> callback which
+  specifies the distribution with which commands are generated. Commands are normally
+  generated with a the <a href="eqc_gen.html#oneof-1">oneof</a> generator unless a weight function
+  is provided. In this case the weight computed from the symbolic state <tt>S</tt> is
+  used as frequency in the <a href="eqc_gen.html#frequency-1">frequency</a> generator (used instead
+  of oneof).</p> </li>
+ </ul>
+
+
+ <a name="ConstructingCallouts"/>
+ <h3>Constructing callouts</h3>
+
+ <p>Callout specifications are built using a macro-based domain specific language
+ and can appear in the <tt>_callouts</tt> callback. A callout specification is 
+a comma-separated sequence of callout 
+commands, representing the behaviour of the system under test.</p>
+
+ <p>To construct callout specifications outside the <tt>callouts</tt> callbacks,
+ say in a helper function, the callouts need to be wrapped in the
+ <tt>?CALLOUTS()</tt> macro. This macro takes an arbitrary number of callout 
+commands as arguments.</p>
+
+ The valid callout commands are the following:
+ <ul>
+ <li><h3><tt>?CALLOUT(Mod, Fun, Args, ResultGen)</tt></h3>
+ Represents an expected callout, that is a call to a mocked function.
+ The function should appear in the <tt>api_spec</tt> to let
+ QuickCheck know that it should be mocked. The last argument is a generator
+ for the return value of the function.
+ If the generated value is needed in the rest of the callout specification,
+ <tt>?MATCH</tt> can be used to bind it.
+ <p>
+ In most cases <tt>Args</tt> is the literal arguments expected by the call,
+ but it may also contain the special values <tt>?WILDCARD</tt> and
+ <tt>?VAR</tt>. In both cases an arbitrary term is accepted at the corresponding
+ position in the call, but <tt>?VAR</tt> also allows the actual value to be
+ bound using a <tt>?MATCH</tt>. In this case the <tt>?CALLOUT</tt> returns a
+ tuple of the bound <tt>?VAR</tt>s and the result generated by
+ <tt>ResultGen</tt>. For instance, suppose you are testing a client that is
+ expected to register itself with a server using a call
+ <tt>server:register({client_id, Id})</tt>, for some <tt>Id</tt> picked by the
+ client. You can then use a <tt>?VAR</tt> to capture the value of <tt>Id</tt>
+ as follows:
+ <pre>
+ ?MATCH({Id, _Ok}, ?CALLOUT(server, register, [{client_id, ?VAR}], ok)),
+ ?APPLY(set_client_id, [Id])
+ </pre>
+ Using a <tt>?VAR</tt> is also useful in combination with <tt>?ASSERT</tt>
+ when you don't know the exact value of an argument, but you want to check
+ some property of it. For instance,
+ <pre>
+ ?MATCH({Arg, _}, ?CALLOUT(do, stuff, [?VAR], ok),
+ ?ASSERT(erlang, is_integer, [Arg])
+ </pre>
+ </p></li>
+
+ <li><h3><tt>?MATCH(Pat, Callout)</tt></h3>
+ This is the callout command equivalent of an Erlang match statement <tt>Pat =
+ Exp</tt>. It binds <tt>Pat</tt> to the result of the callout command
+ <tt>Callout</tt>.
+ </li>
+
+ <li><h3><tt>?MATCH_GEN(Pat, Gen)</tt></h3>
+ QuickCheck generators can be used inside callout specifications. They are
+ typically used to generate the result of mocked functions in the
+ <tt>?CALLOUT</tt> command, but they can also be used freely with the
+ <tt>?MATCH_GEN</tt> command. This generates a value using <tt>Gen</tt> and
+ binds it to <tt>Pat</tt>.
+ </li>
+
+ <li><h3><tt>Pat = Exp</tt></h3>
+
+ Used to run Erlang code at callout construction time, for instance
+ extracting data from the state.
+ </li>
+
+ <li><h3><tt>?APPLY(F, Args)</tt></h3><p>
+ Represents a call to a local command <tt>F</tt>. The local command should
+ have a next state or callouts callback defined (or in some cases just a
+ precondition), but does not necessarily have to be an API command. The <tt>?APPLY</tt> 
+command provides a convenient mechanism for abstraction and reuse of callout 
+specifications.</p>
+
+ <p> As an example, imagine that you have a component that contains three API-functions,
+ <tt>a</tt>, <tt>b</tt>, and <tt>ab</tt>, where <tt>ab</tt> simply calls <tt>a</tt> and
+ <tt>b</tt> in that order. Then, if we have already modelled <tt>a</tt> and <tt>b</tt>
+ we can simply define the callouts of <tt>ab</tt> as:
+ <pre>ab_callouts(_S, Args) -&gt;
+  ?APPLY(a, Args),
+  ?APPLY(b, Args).</pre>
+ (Under the assumption
+ that <tt>a</tt> and <tt>b</tt> takes the same list of arguments.) As with
+ <tt>?CALLOUT</tt> the result of <tt>?APPLY</tt> can be bound using <tt>?MATCH</tt>.</p>
+ </li>
+
+ <li><h3><tt>?APPLY(Mod, F, Args)</tt></h3><p>
+ Represents a call to a command in another component <tt>Mod</tt>. If the 
+component is in the current cluster, the specification in that module is 
+used, otherwise this is a no-op.</p>
+
+ <p>One common use case for this feature is cluster-wide
+ preconditions. For instance, imagine that you have two components and that one has to
+ be started before the other component can be started. Then the start command of the
+ second component should call into the first component and ensure that it is
+ properly started:
+ <pre>%% Component A (a_spec.erl)
+ ensure_started_pre(S, []) -&gt; is_started(S).
+
+ %% Component B (b_spec.erl)
+ start_callouts(_S, []) -&gt;
+   ?APPLY(a_spec, ensure_started, []),
+   ...</pre>
+ </p></li>
+
+ <li><h3><tt>?EMPTY</tt></h3>
+ The default callout definition, no callouts are expected.
+ </li>
+
+ <li><h3><tt>?RET(X)</tt></h3>
+
+ Defines the return value of the callout structure. Note that a defined
+ <tt>return_value</tt>-function takes precedence.
+ </li>
+
+ <li><h3><tt>?SEQ(C1, C2)</tt></h3>
+
+ Perform two callout commands in sequence. Equivalent to <tt>C1, C2</tt>.
+ </li>
+
+ <li><h3><tt>?SEQ(Cs)</tt></h3>
+
+ Defines a callout structure where <tt>Cs</tt> are performed in sequence. (<tt>Cs</tt>
+ should be a list of callout commands.)
+ </li>
+
+ <li><h3><tt>?PAR(C1, C2)</tt></h3>
+
+ Defines a callout specification where <tt>C1</tt> and <tt>C2</tt> are performed in
+ parallel. I.e. the order of the callouts is not specified. Note that when
+ there are <tt>?APPLY</tt> calls in <tt>C1</tt> and <tt>C2</tt> that modify
+ the state, the state changes are applied in the order given.
+ </li>
+
+ <li><h3><tt>?PAR(Cs)</tt></h3>
+
+ Defines a callout structure where <tt>Cs</tt> are performed in parallel. (<tt>Cs</tt>
+ should be a list of callout commands.)
+ </li>
+
+ <li><h3><tt>?EITHER(C1, C2)</tt></h3>
+
+ Defines a callout structure where either <tt>C1</tt> or <tt>C2</tt> is performed (but not both).
+ The fact that we do not know which of the two will be
+ called imposes a restriction on <tt>C1</tt> and <tt>C2</tt>: they may <b>not</b> contain
+ <tt>?APPLY</tt>. The return value of an <tt>?EITHER</tt> is always
+ exactly <tt>'ok'</tt>.</li>
+
+ <li><h3><tt>?EITHER(Tag, C1, C2)</tt></h3>
+
+ Same as <tt>?EITHER(C1, C2)</tt>, but all <tt>?EITHER</tt> calls with the
+ same tag must make the same choice (left or right). The scope of the tag is a
+ single API command, so subsequent calls to the same API function may make a
+ different choice.
+ </li>
+
+ <li><h3><tt>?OPTIONAL(C)</tt></h3>
+
+ Shorthand for <tt>?EITHER(C, ?EMPTY)</tt>.
+ </li>
+
+ <li><h3><tt>?WHEN(Test, C)</tt></h3>
+
+ Equivalent to
+ <pre>case Test of
+   true  -&gt; C;
+   false -&gt; ?EMPTY
+ end</pre>
+ </li>
+
+ <li><h3><tt>?REPLICATE(C)</tt></h3>
+
+ Defines a callout structure where <tt>C</tt> is performed any number of times (including
+ 0). Here <tt>C</tt> is not allowed to modify the state, since we do not know
+ how many times it will be run.
+ </li>
+
+ <li><h3><tt>?FAIL(X)</tt></h3>
+
+ Defines a failure, if we generate a <tt>?FAIL</tt> as part of our callout specification
+ it will fail during postcondition checking, with the error being <tt>X</tt>. This is
+ sometimes useful for marking "impossible" cases in testing. Note that the absence or
+ presence of a ?FAIL is determined at generation time and thus cannot depend on run-time
+ data. This means that ?FAIL can be used as a sanity check on the model, but not for
+ checking run-time postconditions. To do that, use ?ASSERT.</li>
+
+ <li><h3><tt>?ASSERT(Mod, Fun, Args, ErrorMsg)</tt></h3>
+
+ Define an assertion that should be checked at run-time. When checking postconditions,
+ apply(Mod, Fun, Args) is evaluated and if the result is not <tt>true</tt> the
+ postcondition check fails with the error message ErrorMsg. This is used to embed
+ postconditions in the callout language which is often more convenient than writing
+ separate postconditions.</li>
+
+ <li><h3><tt>?SEND(Pid, Msg)</tt></h3>
+
+ Specifies that the message <tt>Msg</tt> is expected to be sent to the process
+ <tt>Pid</tt>. The process must be one of the worker processes (or the root
+ process) executing commands. The pid of the current worker process is
+ available as <tt>?SELF</tt> in the callouts callback of a command, from where
+ it can be saved in the state for future reference. See the <a href="#process">process</a> callback for more information.
+ </li>
+
+ <li><h3><font size="-1"><i>(obsolete)</i></font> <tt>?SAFELET(Pat, G, Callout)</tt></h3>
+
+ Equivalent to <tt>?MATCH_GEN(Pat, G), Callout</tt>.
+ </li>
+
+ <li><h3><font size="-1"><i>(obsolete)</i></font> <tt>?BIND(Pat, C, Body)</tt></h3>
+
+ Equivalent to <tt>?MATCH(Pat, C), Body</tt>.
+ </li>
+
+ <li><h3><font size="-1"><i>(obsolete)</i></font> <tt>?SELFCALL(Fun, Args), ?SELFCALL(Mod, Fun, Args)</tt></h3>
+
+ Equivalent to <tt>?APPLY(Fun, Args)</tt> and <tt>?APPLY(Mod, Fun, Args)</tt>.
+ </li>
+ </ul><p>
+ In addition to the commands listed above, the normal Erlang control
+ structures, like <tt>case</tt> and <tt>if</tt>, are valid callout commands.
+ For <tt>case</tt>, the scrutinee must be an Erlang expression (and not a callout 
+command), but the clause bodies can be callout command sequences.</p>
+
+ <a name="blocking"/>
+ <h4>Testing blocking operations</h4>
+ Component models support testing systems where some operations are blocking.
+ A typical example is a server with a synchronous client API, but which uses
+ an asynchronous API to talk to the underlying layer (for instance a piece of
+ hardware). In this situation, if you are testing the server in isolation,
+ mocking the hardware layer, you need to execute operations corresponding to
+ calls from the hardware while client operations are still in progress. This
+ is possible using the <tt>?BLOCK</tt> and <tt>?UNBLOCK</tt> callout primitives:
+ <ul>
+ <li><h3><tt>?BLOCK</tt></h3>
+   Indicate that the operation blocks at this point, waiting for another
+   operation to unblock it using <tt>?UNBLOCK(Pid, Val)</tt>, where
+   <tt>Pid</tt> is the process executing this operation and can be obtained
+   using the <tt>?SELF</tt> macro.
+   The <tt>Val</tt> argument provided to <tt>?UNBLOCK</tt> is returned by the
+   <tt>?BLOCK</tt> call an can be bound by a <tt>?MATCH</tt>.
+ </li>
+ <li><h3><tt>?UNBLOCK(Pid, Val)</tt></h3>
+   Unblock a blocked operation running in process <tt>Pid</tt>. The value
+   <tt>Val</tt> is provided as the result of the <tt>?BLOCK</tt> call.
+ </li>
+ </ul>
+ A typical use looks as follows:
+ <pre>
+   request_callouts(_S, [Req]) -&gt;
+     ?APPLY(add_request, [?SELF, Req]),
+     ?MATCH(Res, ?BLOCK),
+     ?APPLY(rem_request, [?SELF]),
+     ?RET(Res).
+
+   reply_args(S) -&gt; [elements(pending_requests(S)), result()].
+
+   reply_callouts(_S, [Pid, Res]) -&gt;
+     ?UNBLOCK(Pid, Res).
+ </pre>
+ <p>
+ By default blocking operations are executed in a fresh process, but it's
+ possible to use the <a href="#process">process</a> callback to change this.
+ Postconditions of blocked operations are checked when they complete, but
+ callouts are checked as they happen.
+ </p>
+ For more information about testing blocking operations see
+ <blockquote><i>Ulf Norell, Hans Svensson, and Thomas Arts</i>, 2013. <a href="http://dl.acm.org/citation.cfm?id=2505305.2505310"><b>Testing blocking
+ operations with QuickCheck's component library.</b></a> In Proceedings of the
+ twelfth ACM SIGPLAN workshop on Erlang (Erlang '13).</blockquote>
+
+ <h3>What Property Should We Test?</h3>
+ This module does <i>not</i> define any properties to test, it only provides
+ functions to make defining such properties easy. A client module will
+ normally contain a property resembling this one, which generates a
+ command sequence using the client state machine, and then tests it:
+ <pre>prop_component_correct() -&gt;
+   ?SETUP(fun() -&gt; eqc_mocking:start_mocking(api_spec()), fun() -&gt; ok end end,
+   ?FORALL(Cmds,commands(client),
+     begin {H,S,Result} = run_commands(Cmds),
+           pretty_commands(?MODULE,Cmds,{H,S,Result},
+                           Result==ok)
+     end)).</pre><p> 
+However, in any particular case we may wish to add a little to this 
+basic form, for example to collect statistics, to clean up after 
+test execution, or to setup mocking before test execution. 
+It is to allow this flexibility that the properties to test are 
+placed in the client module, rather than in this one.</p>
+
+ <h3>Example</h3><p>
+ To illustrate how a callout specification could look like we take as an example a <em>
+ mode change</em> operation of a communication component. If the system is <tt>busy</tt>
+ it is not possible to change mode, otherwise the SUT should change mode and make a call
+ to the underlying driver. Note that we are using a local command to do the state update.
+ This is a typical usage of local commands and <tt>?APPLY</tt>, the
+ <tt>set_driver_state</tt> command can also be used in other callout specifications.</p>
+
+ <pre>change_mode_callouts(S, [NewMode]) -&gt;
+   case S#state.driver_state of
+     busy -&gt;
+       %% We can't change mode while sending!
+       ?RET({error, busy});
+     _    -&gt;
+       %% Change mode. Might fail.
+       ?MATCH(Res, ?CALLOUT(driver, change_mode, [NewMode], elements([ok, error]))),
+       ?WHEN(Res == ok, ?APPLY(set_driver_state, [NewMode])),
+       ?RET(Res)
+   end.
+
+ set_driver_state_next(S, _Value, [NewState]) -&gt;
+   S#state{ driver_state = NewState }.
+ </pre>
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-api_arg_c">api_arg_c()</a></h3>
+<p><tt>api_arg_c() = #api_arg_c{type = atom() | string(), stored_type = atom() | string(), name = atom() | string() | {atom(), string()}, dir = in | out, buffer = false | true | {true, non_neg_integer()} | {true, non_neg_integer(), string()}, phantom = boolean(), matched = boolean(), default_val = no | string(), code = no | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_c">api_fun_c()</a></h3>
+<p><tt>api_fun_c() = #api_fun_c{name = atom(), classify = any(), ret = atom() | <a href="#type-api_arg_c">api_arg_c()</a>, args = [<a href="#type-api_arg_c">api_arg_c()</a>], silent = false | {true, any()}}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_erl">api_fun_erl()</a></h3>
+<p><tt>api_fun_erl() = #api_fun{name = atom(), classify = any(), arity = non_neg_integer(), fallback = boolean(), matched = [non_neg_integer()] | fun((any(), any()) -&gt; boolean()) | all}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_module">api_module()</a></h3>
+<p><tt>api_module() = #api_module{name = atom(), fallback = atom(), functions = [<a href="#type-api_fun_erl">api_fun_erl()</a>] | [<a href="#type-api_fun_c">api_fun_c()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_spec">api_spec()</a></h3>
+<p><tt>api_spec() = #api_spec{language = erlang | c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-call">call()</a></h3>
+<p><tt>call() = <a href="eqc_statem.html#type-call">eqc_statem:call()</a></tt></p>
+<p>  A symbolic call. Defined in <a href="eqc_statem.html"><code>eqc_statem</code></a>, <a href="eqc_statem.html#type-call"><code>eqc_statem:call()</code></a>.</p>
+
+<h3 class="typedecl"><a name="type-callout_spec">callout_spec()</a></h3>
+<p><b>abstract datatype</b>: <tt>callout_spec()</tt></p>
+<p>  The type of callouts. Terms of this type is constructed by using the macros described
+  above.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#commands-1">commands/1</a></td><td>Generates a list of commands, using the abstract state machine defined
+ in module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#commands-2">commands/2</a></td><td>Behaves like <a href="#commands-1"><code>commands/1</code></a>, but generates a list of
+ commands starting in state S.</td></tr>
+<tr><td valign="top"><a href="#get_return_value-1">get_return_value/1</a></td><td>Get return value as set by the callouts.</td></tr>
+<tr><td valign="top"><a href="#pretty_commands-4">pretty_commands/4</a></td><td>Pretty-prints the execution history of a failing test, showing the calls made,
+  the actual arguments and results, and (optionally) the model states.</td></tr>
+<tr><td valign="top"><a href="#pretty_commands-5">pretty_commands/5</a></td><td>Like <a href="#pretty_commands-4"><code>pretty_commands/4</code></a>, but also takes the environment
+  passed to <a href="#run_commands-2"><code>run_commands/2</code></a> as an additional parameter.</td></tr>
+<tr><td valign="top"><a href="#pretty_commands-6">pretty_commands/6</a></td><td>Like <a href="#pretty_commands-5"><code>pretty_commands/5</code></a>, but takes an API specification
+  as an additional parameter.</td></tr>
+<tr><td valign="top"><a href="#run_commands-1">run_commands/1</a></td><td>Runs a list of commands specified by an abstract state machine in some
+ client module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#run_commands-2">run_commands/2</a></td><td>Behaves like <a href="#run_commands-1"><code>run_commands/1</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="commands-1">commands/1</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::atom()) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br/></p>
+</div><p>Generates a list of commands, using the abstract state machine defined
+ in module <tt>Mod</tt>. The commands in the sequence are generated by
+ Mod:command/1, starting in the state Mod:initial_state(), and tracking
+ state changes using Mod:next_state/3. Commands are only included in the
+ sequence if their precondition (given by Mod:precondition/2) is satisfied.
+ Sequences are shrunk by discarding commands in such a way that
+ preconditions always hold, and all variables are set before they are used.</p>
+
+<h3 class="function"><a name="commands-2">commands/2</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::atom(), S::<a href="eqc_statem.html#type-symbolic_state">eqc_statem:symbolic_state()</a>) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br/></p>
+</div><p>Behaves like <a href="#commands-1"><code>commands/1</code></a>, but generates a list of
+ commands starting in state S. To ensure the correct state when the
+ commands are run, the first command is <tt>{init,S}</tt>.</p>
+
+<h3 class="function"><a name="get_return_value-1">get_return_value/1</a></h3>
+<div class="spec">
+<p><tt>get_return_value(MetaData::<a href="eqc_statem.html#type-metadata">eqc_statem:metadata()</a>) -&gt; ok | term()</tt><br/></p>
+</div><p>Get return value as set by the callouts. Default value 'ok'.</p>
+
+<h3 class="function"><a name="pretty_commands-4">pretty_commands/4</a></h3>
+<div class="spec">
+<p><tt>pretty_commands(Mod::atom(), Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>], HSRes::{<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}, P::<a href="eqc.html#type-property">eqc:property()</a>) -&gt; <a href="eqc.html#type-property">eqc:property()</a></tt><br/></p>
+</div><p>Pretty-prints the execution history of a failing test, showing the calls made,
+  the actual arguments and results, and (optionally) the model states. Like
+  <tt>?WHENFAIL</tt>, <a href="#pretty_commands-4"><code>pretty_commands/4</code></a> takes the rest of the property as its
+  last argument, and constructs a new property that also pretty-prints. The argument
+  <tt>Cmds</tt> should be the list of commands passed to <a href="#run_commands-1"><code>run_commands/1</code></a>, and
+  <tt>HSRes</tt> should be its result.
+  <p> The pretty-printing can be customized using <a href="eqc_gen.html#with_parameter-3"><code>eqc_gen:with_parameter/3</code></a> to
+  specify
+  <ul>
+  <li><tt>show_states</tt> (<tt>true</tt> or <tt>false</tt>), to determine whether model
+  states should be included in the output,</li>
+  <li><tt>pretty_width</tt> (an integer), to specify the width available for
+  pretty-printing.</li>
+  </ul>
+  Note that these parameters are parameters to the entire property, and can be specified
+  when <a href="eqc.html#quickcheck-1"><code>eqc:quickcheck/1</code></a> is called from the Erlang shell.</p>
+  <p>Alternatively, the simplest way to show the states when a property fails is to call
+  <pre> eqc:quickcheck(eqc_statem:show_states(...property...)).  </pre> from the
+  shell.</p></p>
+
+<h3 class="function"><a name="pretty_commands-5">pretty_commands/5</a></h3>
+<div class="spec">
+<p><tt>pretty_commands(Mod::atom(), Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>], HSRes::{<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}, Env::[{atom(), term()}], P::<a href="eqc.html#type-property">eqc:property()</a>) -&gt; <a href="eqc.html#type-property">eqc:property()</a></tt><br/></p>
+</div><p>Like <a href="#pretty_commands-4"><code>pretty_commands/4</code></a>, but also takes the environment
+  passed to <a href="#run_commands-2"><code>run_commands/2</code></a> as an additional parameter.</p>
+
+<h3 class="function"><a name="pretty_commands-6">pretty_commands/6</a></h3>
+<div class="spec">
+<p><tt>pretty_commands(Mod::atom(), Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>], HSRes::{<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}, Env::[{atom(), term()}], ApiSpec::<a href="#type-api_spec">api_spec()</a> | none, P::<a href="eqc.html#type-property">eqc:property()</a>) -&gt; <a href="eqc.html#type-property">eqc:property()</a></tt><br/></p>
+</div><p>Like <a href="#pretty_commands-5"><code>pretty_commands/5</code></a>, but takes an API specification
+  as an additional parameter.</p>
+
+<h3 class="function"><a name="run_commands-1">run_commands/1</a></h3>
+<div class="spec">
+<p><tt>run_commands(Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>]) -&gt; {<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}</tt><br/></p>
+</div><p>Runs a list of commands specified by an abstract state machine in some
+ client module <tt>Mod</tt>. Before each command is run, its precondition is
+ checked by Mod:precondition/2, and after each command is executed, its
+ postcondition is checked by Mod:postcondition/3. The result contains the
+ <a href="#type-history"><code>history()</code></a> of execution, the state after the last command that was
+ executed successfully, and the <a href="#type-reason"><code>reason()</code></a> execution stopped.</p>
+
+<h3 class="function"><a name="run_commands-2">run_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_commands(Cmds::[<a href="eqc_statem.html#type-command">eqc_statem:command()</a>], Env::[{atom(), term()}]) -&gt; {<a href="eqc_statem.html#type-history">eqc_statem:history()</a>, <a href="eqc_statem.html#type-dynamic_state">eqc_statem:dynamic_state()</a>, <a href="eqc_statem.html#type-reason">eqc_statem:reason()</a>}</tt><br/></p>
+</div><p>Behaves like <a href="#run_commands-1"><code>run_commands/1</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases. For example, if <tt>Env</tt> is <tt>[{x,32}]</tt>,
+ then <tt>{var,x}</tt> may appear in the commands, and will evaluate
+ to 32. The variables names must be atoms (unlike generated variable
+ names, which are numbers).
+ <p>Note: can also be used as <tt>run_commands(Mod, Cmds)</tt> to run command
+ sequences generated with QuickCheck &lt; 1.39.</p></p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

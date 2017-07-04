@@ -1,0 +1,55 @@
+@title QuickCheck
+@version {@version}
+@copyright Quviq AB, 2006-{@year}.
+@doc 
+QuickCheck is a specification-based testing tool for Erlang. Programs
+are tested by writing <i>properties</i> in the source code, such as
+<pre>
+prop_reverse() ->
+  ?FORALL(Xs,list(int()),
+    lists:reverse(lists:reverse(Xs)) == Xs).
+</pre>
+Properties are tested by calling
+<pre>
+eqc:quickcheck(prop_reverse())
+</pre>
+which generates 100 random test cases and checks that the property
+returns <tt>true</tt> in every case.
+
+<p>
+Functions for writing properties are found in module {@link eqc},
+while functions for writing test data generators (such as
+<tt>list(int())</tt> above) are found in module {@link eqc_gen}. Parts
+of the interface are provided via macros, which are defined in
+<tt>eqc.hrl</tt>--this file should be included in every module which
+uses QuickCheck, normally via
+<pre>
+-include_lib("eqc/include/eqc.hrl").
+</pre>
+This header file also imports much of the QuickCheck
+API, so it can be used without explicit module names.
+</p>
+
+<p>
+Software with internal state is tested using a state-machine
+model. {@link eqc_statem} is QuickCheck's state-machine library,
+providing a flexible way to test a stateful API by specifying pre- and
+post-conditions along with an abstract model of the state. 
+{@link eqc_fsm} is a similar library, specialized for testing software
+described by a finite-state diagram such as a statechart.
+</p>
+
+<p>
+{@link eqc_grammar} makes it easy to generate test data from yecc grammars.
+</p>
+
+<p> {@link eqc_c} makes it easy to call C code from Erlang, so that
+QuickCheck properties can be used to test C. No glue code or special
+interface definitions are required---a C module is simply "loaded into
+the Erlang shell", whereupon the functions it defines become callable
+like any Erlang function.  </p>
+
+{@link eqc_emacs_mode} is an installer for a QuickCheck emacs mode;
+use it (once) to install the new emacs mode each time you install a
+new version of QuickCheck.
+

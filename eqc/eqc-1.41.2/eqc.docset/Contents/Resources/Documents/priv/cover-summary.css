@@ -1,0 +1,25 @@
+
+div.meter {
+  background: #D02020;
+  width: 7em;
+  height: 0.8em;
+  vertical-align: center;
+}
+
+div.progress {
+  background: #20C020;
+  height: 0.8em;
+}
+
+td.coverage-bar {
+  width: 15em;
+}
+
+td.percent {
+  text-align: right;
+}
+
+td.blank {
+  padding-top: 0.8em;
+}
+
