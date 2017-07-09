@@ -7,7 +7,7 @@ BUILD_NAME?=dirty-1
 KERL_DEFAULT_INSTALL_DIR?=$(HOME)/.kerl/local/$(BUILD_NAME)/otp
 KERL_CONFIGURE_OPTIONS?=" --disable-hipe --enable-smp-support --enable-threads --enable-kernel-poll --with-wx --without-odbc --enable-dirty-schedulers"
 
-.PHONY: help all rel tar store apply
+.PHONY: help all rel tar store apply eqc
 
 all: compile
 
@@ -57,13 +57,17 @@ activate:
 dialyzer:
 	@$(REBAR) dialyzer
 
-test: cleantest dialyzer eunit ct
+test: cleantest dialyzer eunit ct eqc
 
 eunit:
 	@$(REBAR) as dev eunit
 
 ct:
 	@$(REBAR) as dev ct
+
+eqc:
+		@$(REBAR) as dev eqc
+
 
 cover:
 	@$(REBAR) cover
