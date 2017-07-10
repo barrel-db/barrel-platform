@@ -78,9 +78,9 @@ post_command(#state{keys = Dict}) ->
         false ->
             oneof([
                    {call, barrel, post,  [db(), doc(), []]},
+									 {call, barrel, put,   [db(), doc(), []]}
 %                   {call, barrel, post,  [db(), update_doc(Dict), []]},
-									 {call, barrel, put,   [db(), doc(), []]},
-                   {call, barrel, put,   [db(), update_doc(Dict), []]}
+%                   {call, barrel, put,   [db(), update_doc(Dict), []]}
                   ]
                  )
     end.
