@@ -29,12 +29,12 @@ db() ->
 
 
 id() ->
-		utf8(16).
+		utf8(8).
 
 
 doc()->
 		#{<<"id">> => id(),
-			<<"content">> => utf8(32)}.
+			<<"content">> => utf8(8)}.
 
 post_pre(_S) ->
 		true.
@@ -46,6 +46,16 @@ get_pre(#state{keys = Dict}) ->
 delete_pre(#state{keys = Dict}) ->
 		not(dict:is_empty(Dict)).
 
+get_post(#state{keys= Dict}, [?DB, Id, []], {error, not_found}) ->
+		not(dict:is_key(Id, Dict));
+get_post(#state{keys= Dict}, [?DB, Id, []], {ok, Doc = #{<<"id">> := Id, <<"content">> := _Content} , _rev}) ->
+		{ok, Doc} == dict:find(Id, Dict).
+
+
+delete_post(#state{keys= Dict},[?DB, Id,_] , {error,not_found}) ->
+		not(dict:is_key(Id, Dict));
+delete_post(#state{keys= Dict}, [?DB, Id, []], {ok, Id, _rev}) ->
+		dict:is_key(Id, Dict).
 
 
 post_command(_S) ->
