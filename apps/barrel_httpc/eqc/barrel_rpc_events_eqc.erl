@@ -51,15 +51,37 @@ get_post(#state{keys= Dict}, [?DB, Id, []], {error, not_found}) ->
 get_post(#state{keys= Dict}, [?DB, Id, []], {ok, Doc = #{<<"id">> := Id, <<"content">> := _Content} , _rev}) ->
 		{ok, Doc} == dict:find(Id, Dict).
 
+post_post(#state{keys = Dict} , [?DB, #{<<"id">> := Id}, []], {error, {conflict, doc_exists}}) ->
+		dict:is_key(Id, Dict);
+post_post(_State, _Args, _Ret) ->
+		true.
 
 delete_post(#state{keys= Dict},[?DB, Id,_] , {error,not_found}) ->
 		not(dict:is_key(Id, Dict));
 delete_post(#state{keys= Dict}, [?DB, Id, []], {ok, Id, _rev}) ->
 		dict:is_key(Id, Dict).
 
+update_doc(Dict) ->
+		?LET({Key, NewContent},
+				 {oneof(dict:fetch_keys(Dict)), utf8(9)},
+				 begin
+						 {ok, Doc1} = dict:find(Key, Dict),
+						 Doc1#{<<"content">> => NewContent}
 
-post_command(_S) ->
-		oneof([{call, barrel, post,  [db(), doc(), []]}]).
+				 end).
+
+
+post_command(#state{keys = Dict}) ->
+		case dict:is_empty(Dict) of
+				true ->
+						oneof([{call, barrel, post,  [db(), doc(), []]}]);
+				false ->
+						oneof([
+									 {call, barrel, post,  [db(), doc(), []]},
+									 {call, barrel, post,  [db(), update_doc(Dict), []]}
+									]
+								 )
+		end.
 
 delete_command(#state{keys = Dict}) ->
 		oneof([
@@ -69,14 +91,14 @@ delete_command(#state{keys = Dict}) ->
 
 get_command(#state{keys = Dict}) ->
 		oneof([
-										{call, barrel, get,       [db(), oneof(dict:fetch_keys(Dict)), []]},
+					 {call, barrel, get,       [db(), oneof(dict:fetch_keys(Dict)), []]},
+					 {call, barrel, get,       [db(), utf8(), []]}]).
 
-										{call, barrel, get,       [db(), utf8(), []]}]).
 
 post_next(State = #state{keys = Dict},_V,[_DB, Doc = #{<<"id">> := Id} |_]) ->
 		case dict:is_key(Id, Dict) of
 				true ->
-						State#state {keys = dict:store(Id, Doc, Dict)};
+						State;
 				false ->
 						State#state {keys = dict:store(Id, Doc, Dict)}
 				end.
