@@ -65,9 +65,9 @@ parse_params([{<<"heartbeat">>, HeartBeatBin}|Tail], State) ->
   HeartBeat = binary_to_integer(HeartBeatBin),
   parse_params(Tail, State#state{heartbeat=HeartBeat});
 parse_params([{<<"history">>, <<"all">>}|Tail], State=#state{options=Options}) ->
-  parse_params(Tail, State#state{options=[{history, all} | Options]});
+  parse_params(Tail, State#state{options=Options#{history => all}});
 parse_params([{<<"include_doc">>, <<"true">>}|Tail], State=#state{options=Options}) ->
-  parse_params(Tail, State#state{options=[{include_doc, true} | Options]});
+  parse_params(Tail, State#state{options=Options#{include_doc => true}});
 parse_params([{Param, _Value}|_], _State) ->
   {error, {unknown_param, Param}}.
 
@@ -105,7 +105,7 @@ init_feed_changes(Req, #state{feed=eventsource, options=Options}=S) ->
     end,
   Source = S#state.database,
   Since = S#state.since,
-  IncludeDoc = proplists:get_value(include_doc, Options, false),
+  IncludeDoc = maps:get(include_doc, Options, false),
   SseOptions = #{since => Since, mode => sse, changes_cb => Callback, include_doc => IncludeDoc },
   {ok, Pid} = barrel_changes_listener:start_link(Source, SseOptions),
 
@@ -122,9 +122,11 @@ init_hearbeat(Req, State) ->
 
 
 handle(Req, S) ->
-  Database = S#state.database,
-  Since = S#state.since,
-  Options = S#state.options,
+  #state{
+    database=Database,
+    since=Since,
+    options=Options
+  } = S,
 
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"changes\":[">>, nofin, Req),

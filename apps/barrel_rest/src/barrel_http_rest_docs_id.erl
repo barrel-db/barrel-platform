@@ -46,7 +46,7 @@ check_params(Req, State) ->
       {ok, Body, Req2} = cowboy_req:read_body(Req),
       Options = State#state.options,
       Opts = case S2#state.history of
-                true -> [{history, true}|Options];
+                true -> Options#{history => true};
                 _ -> Options
               end,
       route(Req2, S2#state{body=Body, options=Opts})
@@ -145,19 +145,23 @@ create_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
   {Result, Req4} = case Method of
                      <<"POST">> ->
-                       {barrel:post(Database, Json, [{async, Async}]), Req};
+                       {barrel:post(Database, Json, #{async => Async}), Req};
                      <<"PUT">> ->
-                       #{edit := EditStr}
-                         = cowboy_req:match_qs([{edit, [], undefined}], Req),
+                       #{edit := EditStr} = cowboy_req:match_qs([{edit, [], undefined}], Req),
                        Edit = ((EditStr =:= <<"true">>) orelse (EditStr =:= true)),
                        case Edit of
                          false ->
-                           {barrel:put(Database, Json, [{async, Async}|Options]), Req };
+                           {barrel:put(Database, Json, Options#{async => Async}), Req };
                          true ->
                            Doc = maps:get(<<"document">>, Json),
                            History = maps:get(<<"history">>, Json),
                            Deleted = maps:get(<<"deleted">>, Json, false),
-                           {barrel:put_rev(Database, Doc, History, Deleted, [{async, Async}|Options]), Req }
+                           {
+                             barrel:put_rev(
+                               Database, Doc, History, Deleted, Options#{async => Async}
+                             ),
+                             Req
+                           }
                        end
                    end,
   case Result of
@@ -183,7 +187,7 @@ delete_resource(Req, State) ->
   Async = ((AsyncStr =:= <<"true">>) orelse (AsyncStr =:= true)),
 
   #state{ database=Database, docid=DocId, options=Options} = State,
-  Result = barrel:delete(Database, DocId, [{async, Async}|Options]),
+  Result = barrel:delete(Database, DocId, Options#{async => Async}),
   case Result of
     {ok, DocId, RevId2} ->
       Reply = #{<<"ok">> => true,

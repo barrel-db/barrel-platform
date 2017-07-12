@@ -39,11 +39,11 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_store:create_db(<<"testdb">>, #{}),
+  _ = barrel:create_database(#{ <<"database_id">> => <<"testdb">> }),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_database(<<"testdb">>),
   Config.
 
 end_per_suite(Config) ->
@@ -56,16 +56,16 @@ r(Req) ->
 
 post_cat() ->
   Doc = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, #{}),
   RevId.
 
 delete_cat(CatRevId) ->
-  {ok, _, RevId} = barrel:delete(<<"testdb">>, <<"cat">>, [{rev, CatRevId}]),
+  {ok, _, RevId} = barrel:delete(<<"testdb">>, <<"cat">>, #{rev => CatRevId }),
   RevId.
 
 post_dog() ->
   Doc = #{<<"id">> => <<"dog">>, <<"name">> => <<"spike">>},
-  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, #{}),
   RevId.
 
 

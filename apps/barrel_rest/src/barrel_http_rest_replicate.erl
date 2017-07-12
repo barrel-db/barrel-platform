@@ -114,7 +114,7 @@ is_db_exist({barrel_httpc, Url}) ->
     _ -> false
   end;
 is_db_exist({barrel, DbName}) ->
-  case barrel:db_infos(DbName) of
+  case barrel:database_infos(DbName) of
     {ok, _Info} -> true;
     _ -> false
   end.
@@ -128,7 +128,7 @@ get_resource(Req, State) ->
   case barrel_replicate:replication_info(Repid) of
     {error, not_found} ->
       barrel_http_reply:error(404, "replication task not found", Req, State);
-    Infos ->
+    {ok, Infos} ->
       #{metrics := Metrics} = Infos,
       barrel_http_reply:doc(Metrics, Req, State)
   end.
@@ -141,12 +141,12 @@ create_resource(Req, #state{source=SourceUrl, target=TargetUrl}=State) ->
                 undefined ->
                   RepConfig = #{<<"source">> => SourceConn,
                                 <<"target">> => TargetConn},
-                  barrel_replicate:start_replication(RepConfig, []);
+                  barrel_replicate:start_replication(RepConfig);
                 _ ->
                   RepConfig = #{<<"replication_id">> => ReqRepid,
                                 <<"source">> => SourceConn,
                                 <<"target">> => TargetConn},
-                  barrel_replicate:start_replication(RepConfig, [])
+                  barrel_replicate:start_replication(RepConfig)
               end,
   #{<<"replication_id">> := RepId} = Rep,
   Doc = #{<<"replication_id">> => RepId},

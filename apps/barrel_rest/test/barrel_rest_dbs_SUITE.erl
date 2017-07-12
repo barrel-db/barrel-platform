@@ -43,13 +43,13 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel:create_db(<<"testdb">>, #{}),
-  _ = barrel:create_db(<<"source">>, #{}),
+  _ = barrel:create_database(#{ <<"database_id">> => <<"testdb">> }),
+  _ = barrel:create_database(#{ <<"database_id">> => <<"source">> }),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"testdb">>),
-  ok = barrel:delete_db(<<"source">>),
+  ok = barrel:delete_database(<<"testdb">>),
+  ok = barrel:delete_database(<<"source">>),
   Config.
 
 end_per_suite(Config) ->

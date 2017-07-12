@@ -48,7 +48,7 @@ route(Req, State) ->
   barrel_http_reply:code(405, Req, State).
 
 check_resource_exists(Req, State = #state{ database=Database, docid=DocId}) ->
-  case barrel_db:get_system_doc(Database, DocId) of
+  case barrel:get_system_doc(Database, DocId) of
     {ok, Doc} ->
       route2(Req, State#state{doc=Doc});
     {error, not_found} ->
@@ -66,9 +66,9 @@ get_resource(Req, #state{doc=Doc}=State) ->
 create_resource(Req, State = #state{database=Database, docid=DocId}) ->
   {ok, Body, Req2} = cowboy_req:read_body(Req),
   Doc = jsx:decode(Body, [return_maps]),
-  ok = barrel_db:put_system_doc(Database, DocId, Doc),
+  ok = barrel:put_system_doc(Database, DocId, Doc),
   barrel_http_reply:doc(#{ok => true}, Req2, State).
 
 delete_resource(Req, State = #state{database=Database, docid=DocId}) ->
-  ok = barrel_db:delete_system_doc(Database, DocId),
+  ok = barrel:delete_system_doc(Database, DocId),
   barrel_http_reply:doc(#{ok => true}, Req, State).

@@ -55,7 +55,7 @@ get_resource(Req0, State = #state{database=Database}) ->
 
 fold_query(Path, Req0, State = #state{database=Database}) ->
   Options = parse_params(Req0),
-  IncludeDocs = proplists:get_value(include_docs, Options, false),
+  IncludeDocs = maps:get(include_docs, Options, false),
   Req = start_chunked_response(Req0, State),
   Fun =
     fun(Doc, Meta, {N, Pre}) ->
@@ -71,6 +71,7 @@ fold_query(Path, Req0, State = #state{database=Database}) ->
     end,
   %% start the initial chunk
   ok = cowboy_req:stream_body(<<"{\"docs\":[">>, nofin, Req),
+  _ = lager:info("that's my options ~p~n", [Options]),
   {Count, _} = barrel:walk(Database, Path, Fun, {0, <<"">>}, Options),
 
   %% close the document list and return the calculated count
@@ -106,7 +107,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, #{include_doc => true}),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -123,7 +124,7 @@ fold_docs(Req0, State = #state{database=Database}) ->
 
 
 start_chunked_response(Req0, #state{database=Database}=State) ->
-  case barrel:db_infos(Database) of
+  case barrel:database_infos(Database) of
     {ok, Infos} ->
       Seq = maps:get(last_update_seq, Infos),
       Req = cowboy_req:stream_reply(
@@ -139,33 +140,30 @@ start_chunked_response(Req0, #state{database=Database}=State) ->
 
 parse_params(Req) ->
   Params = cowboy_req:parse_qs(Req),
-  Options = lists:foldl(fun({Param, Value}, Acc) ->
-    [param(Param, Value)|Acc]
-                        end, [], Params),
+  lists:foldl(fun parse_params_fun/2, #{}, Params).
+
+parse_params_fun({<<"start_at">>, StartKey}, Options) ->
+  Options#{start_at => decode_json(StartKey)};
+parse_params_fun({<<"end_at">>, EndKey}, Options) ->
+  Options#{end_at => decode_json(EndKey)};
+parse_params_fun({<<"equal_to">>, EqualTo}, Options) ->
+  Options#{equal_to => decode_json(EqualTo)};
+parse_params_fun({<<"limit_to_last">>, Limit}, Options) ->
+  Options#{equal_to => decode_json(Limit)};
+parse_params_fun({<<"limit_to_first">>, Limit}, Options) ->
+  Options#{limit_to_first => decode_json(Limit)};
+parse_params_fun({<<"include_docs">>, <<"true">>}, Options) ->
+  Options#{include_docs => true};
+parse_params_fun({<<"order_by">>, <<"$key">>}, Options) ->
+  Options#{order_by => order_by_key};
+parse_params_fun({<<"order_by">>, <<"$value">>}, Options) ->
+  Options#{order_by => order_by_value};
+parse_params_fun(_, Options) ->
   Options.
 
-param(<<"start_key">>, StartKey) ->
-  {gte, StartKey};
-param(<<"end_key">>, EndKey) ->
-  {lte, EndKey};
-param(<<"gt">>, StartKey) ->
-  {gt, StartKey};
-param(<<"gte">>, EndKey) ->
-  {gte, EndKey};
-param(<<"lt">>, StartKey) ->
-  {lt, StartKey};
-param(<<"lte">>, EndKey) ->
-  {lte, EndKey};
-param(<<"max">>, MaxBin) ->
-  {max, binary_to_integer(MaxBin)};
-param(<<"include_docs">>, IncludeDocs) ->
-  {include_docs, barrel_lib:to_atom(IncludeDocs)};
-param(<<"order_by">>, <<"$key">>) ->
-  {order_by, order_by_key};
-param(<<"order_by">>, <<"$value">>) ->
-  {order_by, order_by_value};
-param(<<"order_by">>, _) ->
-  {order_by, order_by_key};
-param(<<"equal_to">>, Equal) ->
-  {equal_to, Equal}.
+decode_json(Bin) ->
+  case jsx:is_json(Bin) of
+    true -> jsx:decode(Bin);
+    false -> Bin
+  end.
 

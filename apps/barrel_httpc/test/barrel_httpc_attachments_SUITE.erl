@@ -123,7 +123,7 @@ atomic_attachment(Config) ->
   {ok, <<"a">>, R1} = barrel_httpc:post(db(Config), Doc, Attachments, []),
 
   %% the document is stored with attachments in prop _attachments
-  {ok, StoredDoc, _} = barrel:get(localdb(Config), DocId, []),
+  {ok, StoredDoc, _} = barrel:get(localdb(Config), DocId, #{}),
   B64 = base64:encode(Blob),
   #{<<"_attachments">> :=
       [#{<<"id">> := AttId,
