@@ -22,9 +22,8 @@ prop_barrel_create_delete() ->
 		?SETUP(fun init_db/0,
 					 ?FORALL(Key,
 									 non_empty(utf8()),
-									 begin
-											 run(Key)
-									 end)).
+									 run(Key)
+									 )).
 
 
 run(Key)->

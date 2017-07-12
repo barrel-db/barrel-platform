@@ -11,7 +11,7 @@
 -include_lib("eqc/include/eqc_statem.hrl").
 
 -compile(export_all).
--define(DB, <<"testdb1">>).
+-define(DB, <<"testdb2">>).
 %% -- State and state functions ----------------------------------------------
 -record(state,{
           keys:: dict:dict(binary(), term()),
@@ -29,7 +29,7 @@ db() ->
 
 
 id() ->
-    utf8(12).
+		utf8(6).
 
 
 doc()->
@@ -60,14 +60,21 @@ get_post(#state{keys= Dict}, [_DB, Id, []], {error, not_found}) ->
 get_post(#state{keys= Dict}, [_DB, Id, []],
          {ok, Doc = #{<<"id">> := Id, <<"content">> := _Content} ,
           _rev}) ->
-    {ok, Doc} == dict:find(Id, Dict).
+    {ok, Doc} == dict:find(Id, Dict),
+		true.
 
 %********************************************************************************
 post_pre(_S) ->
     true.
 
+put_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, []], {error, {conflict, doc_exists}}) ->
+     dict:is_key(Id, Dict);
+put_post(_,_,_) ->true.
+
+
 post_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, []], {error, {conflict, doc_exists}}) ->
     dict:is_key(Id, Dict);
+
 post_post(_State, _Args, _Ret) ->
     true.
 
@@ -78,9 +85,9 @@ post_command(#state{keys = Dict}) ->
         false ->
             oneof([
                    {call, barrel, post,  [db(), doc(), []]},
-									 {call, barrel, put,   [db(), doc(), []]}
-%                   {call, barrel, post,  [db(), update_doc(Dict), []]},
-%                   {call, barrel, put,   [db(), update_doc(Dict), []]}
+									 {call, barrel, put,   [db(), doc(), []]},
+									 {call, barrel, post,  [db(), update_doc(Dict), []]},
+                   {call, barrel, put,   [db(), update_doc(Dict), []]}
                   ]
                  )
     end.

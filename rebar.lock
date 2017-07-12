@@ -2,7 +2,7 @@
 [{<<"accept">>,{pkg,<<"accept">>,<<"0.3.3">>},1},
  {<<"barrel">>,
   {git,"https://gitlab.com/barrel-db/barrel.git",
-       {ref,"000041d1be6e80e9c5bc6f007497679fde70728a"}},
+       {ref,"8920f82abf8951dc00b205232b0f46cc15135a12"}},
   0},
  {<<"certifi">>,{pkg,<<"certifi">>,<<"1.2.1">>},1},
  {<<"cowboy">>,
@@ -25,7 +25,7 @@
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.2">>},1},
  {<<"prometheus">>,{pkg,<<"prometheus">>,<<"3.2.3">>},0},
  {<<"prometheus_httpd">>,{pkg,<<"prometheus_httpd">>,<<"2.0.1">>},0},
- {<<"quickrand">>,{pkg,<<"quickrand">>,<<"1.7.0">>},1},
+ {<<"quickrand">>,{pkg,<<"quickrand">>,<<"1.7.1">>},1},
  {<<"ranch">>,
   {git,"https://github.com/ninenines/ranch",
        {ref,"40809cd2b257a8a53bcb5588ecaa88cc5381ff5c"}},
@@ -37,7 +37,7 @@
        {ref,"8dfe582451422839a99efb531dc1f618ced09b33"}},
   0},
  {<<"unicode_util_compat">>,{pkg,<<"unicode_util_compat">>,<<"0.2.0">>},2},
- {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.0">>},0}]}.
+ {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.1">>},0}]}.
 [
 {pkg_hash,[
  {<<"accept">>, <<"548EBB6FB2E8B0D170E75BB6123AEA6CEECB0189BB1231EEADF52EAC08384A97">>},
@@ -54,9 +54,9 @@
  {<<"mimerl">>, <<"993F9B0E084083405ED8252B99460C4F0563E41729AB42D9074FD5E52439BE88">>},
  {<<"prometheus">>, <<"022AB2C03FF58C211537F4941A91F8E465A7F3D1BBDED697815FE2B5187A1750">>},
  {<<"prometheus_httpd">>, <<"BB979C4AA50E5F156EF32F4852A8BFAFCBECBFE066FADA1CF4058894EF05D690">>},
- {<<"quickrand">>, <<"FF3916C50BC10A8DC62417FC6049FEF5EA56D5DBCFCE546FAABFB6188E3BAEAA">>},
+ {<<"quickrand">>, <<"B0C2A41D08C955F055C44BED357660DE443CD9068A33ABA530076910B7333659">>},
  {<<"rocksdb">>, <<"0BFEEDC20C11CAACE9653596CE58B2F265E191F71C415A7906436DFE35376C27">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
  {<<"unicode_util_compat">>, <<"DBBCCF6781821B1C0701845EAF966C9B6D83D7C3BFC65CA2B78B88B8678BFA35">>},
- {<<"uuid">>, <<"EB803855E12D57B1CC10522781D1B42064FA2E4C576731700EE48D84A9283292">>}]}
+ {<<"uuid">>, <<"252D12D1154BC75C40BC03E2E67714BD843DDFAD40FD3BC1541F65F622C9E7FC">>}]}
 ].
