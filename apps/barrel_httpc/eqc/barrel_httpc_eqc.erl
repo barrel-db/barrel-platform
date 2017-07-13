@@ -11,11 +11,11 @@
 
 init_db()->
 		{ok, _} = application:ensure_all_started(barrel_rest),
-		barrel:create_db(#{ <<"database_id">> => ?DB }),
+		barrel:create_database(#{ <<"database_id">> => ?DB }),
     fun delete_db/0.
 
 delete_db() ->
-    ok = barrel:delete_db(?DB),
+    ok = barrel:delete_database(?DB),
     ok.
 
 prop_barrel_create_delete() ->

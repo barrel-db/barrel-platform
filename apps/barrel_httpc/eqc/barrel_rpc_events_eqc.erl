@@ -11,7 +11,7 @@
 -include_lib("eqc/include/eqc_statem.hrl").
 
 -compile(export_all).
--define(DB, <<"testdb2">>).
+-define(DB, <<"testdb3">>).
 %% -- State and state functions ----------------------------------------------
 -record(state,{
           keys:: dict:dict(binary(), term()),
@@ -46,8 +46,8 @@ doc()->
 
 get_command(#state{keys = Dict}) ->
     oneof([
-           {call, barrel, get,       [db(), oneof(dict:fetch_keys(Dict)), []]},
-           {call, barrel, get,       [db(), utf8(), []]}
+           {call, barrel, get,       [db(), oneof(dict:fetch_keys(Dict)), #{}]},
+           {call, barrel, get,       [db(), utf8(), #{}]}
           ]).
 
 
@@ -55,24 +55,20 @@ get_pre(#state{keys = Dict}) ->
     not(dict:is_empty(Dict)).
 
 
-get_post(#state{keys= Dict}, [_DB, Id, []], {error, not_found}) ->
+get_post(#state{keys= Dict}, [_DB, Id, #{}], {error, not_found}) ->
     not(dict:is_key(Id, Dict));
-get_post(#state{keys= Dict}, [_DB, Id, []],
+get_post(#state{keys= Dict}, [_DB, Id, #{}],
          {ok, Doc = #{<<"id">> := Id, <<"content">> := _Content} ,
           _rev}) ->
-    {ok, Doc} == dict:find(Id, Dict),
-		true.
+    {ok, Doc} == dict:find(Id, Dict).
+
 
 %********************************************************************************
 post_pre(_S) ->
     true.
 
-put_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, []], {error, {conflict, doc_exists}}) ->
-     dict:is_key(Id, Dict);
-put_post(_,_,_) ->true.
 
-
-post_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, []], {error, {conflict, doc_exists}}) ->
+post_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, #{}], {error, {conflict, doc_exists}}) ->
     dict:is_key(Id, Dict);
 
 post_post(_State, _Args, _Ret) ->
@@ -81,13 +77,13 @@ post_post(_State, _Args, _Ret) ->
 post_command(#state{keys = Dict}) ->
     case dict:is_empty(Dict) of
         true ->
-            oneof([{call, barrel, post,  [db(), doc(), []]}]);
+            oneof([{call, barrel, post,  [db(), doc(), #{}]}]);
         false ->
             oneof([
-                   {call, barrel, post,  [db(), doc(), []]},
-									 {call, barrel, put,   [db(), doc(), []]},
-									 {call, barrel, post,  [db(), update_doc(Dict), []]},
-                   {call, barrel, put,   [db(), update_doc(Dict), []]}
+                   {call, barrel, post,  [db(), doc(), #{}]},
+									 {call, barrel, put,   [db(), doc(), #{}]},
+									 {call, barrel, post,  [db(), update_doc(Dict), #{}]},
+                   {call, barrel, put,   [db(), update_doc(Dict), #{}]}
                   ]
                  )
     end.
@@ -109,13 +105,13 @@ delete_pre(#state{keys = Dict}) ->
 
 delete_post(#state{keys= Dict},[_DB, Id,_] , {error,not_found}) ->
     not(dict:is_key(Id, Dict));
-delete_post(#state{keys= Dict}, [_DB, Id, []], {ok, Id, _rev}) ->
+delete_post(#state{keys= Dict}, [_DB, Id, #{}], {ok, Id, _rev}) ->
     dict:is_key(Id, Dict).
 
 delete_command(#state{keys = Dict}) ->
     oneof([
-           {call, barrel, delete,    [db(), oneof(dict:fetch_keys(Dict)), []]},
-           {call, barrel, delete,    [db(), utf8(), []]}
+           {call, barrel, delete,    [db(), oneof(dict:fetch_keys(Dict)), #{}]},
+           {call, barrel, delete,    [db(), utf8(), #{}]}
           ]).
 
 
@@ -178,11 +174,11 @@ postcondition_common(_S, _Call, _Res) ->
 
 init_db()->
     {ok, _} = application:ensure_all_started(barrel_rest),
-    barrel:create_db(#{ <<"database_id">> => ?DB }),
+    barrel:create_database(#{ <<"database_id">> => ?DB }),
     fun delete_db/0.
 
 delete_db() ->
-    ok = barrel:delete_db(?DB),
+    ok = barrel:delete_database(?DB),
     ok.
 
 
