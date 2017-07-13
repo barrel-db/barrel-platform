@@ -15,26 +15,33 @@
 %% -- State and state functions ----------------------------------------------
 -record(state,{
           keys:: dict:dict(binary(), term()),
-          online = true :: boolean()
+          online = true :: boolean(),
+					ids
               }).
+
+
+clean_ids(Ids) ->
+		[barrel:delete(?DB, Id, #{}) || Id <- Ids].
 
 %% @doc Returns the state in which each test case starts. (Unless a different
 %%      initial state is supplied explicitly to, e.g. commands/2.)
 -spec initial_state() -> eqc_statem:symbolic_state().
 initial_state() ->
-    #state{keys = dict:new()}.
+		Ids = vector(256, utf8(16)),
+
+    #state{keys = dict:new(), ids= Ids}.
 
 db() ->
     oneof([?DB]).
 
 
-id() ->
-		utf8(6).
+id(Ids) ->
+		oneof(Ids).
 
 
-doc()->
+doc(Ids)->
     #{
-		 <<"id">> => id(),
+		 <<"id">> => id(Ids),
 		 <<"content">> => utf8(8)
 		 }.
 
@@ -44,10 +51,10 @@ doc()->
 %********************************************************************************
 % Validate the results of a call
 
-get_command(#state{keys = Dict}) ->
+get_command(#state{keys = Dict, ids= Ids}) ->
     oneof([
            {call, barrel, get,       [db(), oneof(dict:fetch_keys(Dict)), #{}]},
-           {call, barrel, get,       [db(), utf8(), #{}]}
+           {call, barrel, get,       [db(), id(Ids), #{}]}
           ]).
 
 
@@ -56,6 +63,7 @@ get_pre(#state{keys = Dict}) ->
 
 
 get_post(#state{keys= Dict}, [_DB, Id, #{}], {error, not_found}) ->
+
     not(dict:is_key(Id, Dict));
 get_post(#state{keys= Dict}, [_DB, Id, #{}],
          {ok, Doc = #{<<"id">> := Id, <<"content">> := _Content} ,
@@ -69,30 +77,35 @@ post_pre(_S) ->
 
 
 post_post(#state{keys = Dict} , [_DB, #{<<"id">> := Id}, #{}], {error, {conflict, doc_exists}}) ->
-    dict:is_key(Id, Dict);
+		dict:is_key(Id, Dict);
 
 post_post(_State, _Args, _Ret) ->
     true.
 
-post_command(#state{keys = Dict}) ->
-    case dict:is_empty(Dict) of
+post_command(#state{keys = Dict, ids = Ids}) ->
+
+		case dict:is_empty(Dict) of
         true ->
-            oneof([{call, barrel, post,  [db(), doc(), #{}]}]);
+            oneof([{call, barrel, post,  [db(), doc(Ids), #{}]}]);
         false ->
             oneof([
-                   {call, barrel, post,  [db(), doc(), #{}]},
-									 {call, barrel, put,   [db(), doc(), #{}]},
+                   {call, barrel, post,  [db(), doc(Ids), #{}]},
+									 {call, barrel, put,   [db(), doc(Ids), #{}]},
 									 {call, barrel, post,  [db(), update_doc(Dict), #{}]},
                    {call, barrel, put,   [db(), update_doc(Dict), #{}]}
                   ]
                  )
-    end.
+		end.
 
-post_next(State = #state{keys = Dict},_V,[_DB, Doc = #{<<"id">> := Id} |_]) ->
+
+
+
+post_next(State = #state{keys = Dict},_V,[DB, Doc = #{<<"id">> := Id} |_]) ->
     case dict:is_key(Id, Dict) of
         true ->
-            State;
+            State#state {keys = dict:store(Id, Doc, Dict)};
         false ->
+						barrel:delete(DB, Id, #{}),
             State#state {keys = dict:store(Id, Doc, Dict)}
         end.
 
@@ -108,10 +121,10 @@ delete_post(#state{keys= Dict},[_DB, Id,_] , {error,not_found}) ->
 delete_post(#state{keys= Dict}, [_DB, Id, #{}], {ok, Id, _rev}) ->
     dict:is_key(Id, Dict).
 
-delete_command(#state{keys = Dict}) ->
+delete_command(#state{keys = Dict, ids= Ids}) ->
     oneof([
            {call, barrel, delete,    [db(), oneof(dict:fetch_keys(Dict)), #{}]},
-           {call, barrel, delete,    [db(), utf8(), #{}]}
+           {call, barrel, delete,    [db(), id(Ids), #{}]}
           ]).
 
 
@@ -187,11 +200,17 @@ prop_barrel_rpc_events_eqc() ->
     ?SETUP(fun init_db/0,
            ?FORALL(Cmds, commands(?MODULE),
                    begin
+
                        {H, S, Res} = run_commands(Cmds),
-                       check_command_names(Cmds,
-                                           measure(length, commands_length(Cmds),
-                                                   pretty_commands(?MODULE, Cmds, {H, S, Res},
-                                                                   Res == ok)))
+
+											 ?WHENFAIL(begin
+																		 io:format("~n~n~n Keys : ~p ",[dict:fetch_keys(S#state.keys)])
+																 end,
+
+																 check_command_names(Cmds,
+																										 measure(length, commands_length(Cmds),
+																														 pretty_commands(?MODULE, Cmds, {H, S, Res},
+																																						 Res == ok))))
                    end)).
 
 %% @doc Run property repeatedly to find as many different bugs as
