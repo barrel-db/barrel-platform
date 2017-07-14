@@ -496,6 +496,7 @@ paths:
          description: Task deleted
        404:
          description: Replication task not found
+
  /:
    get:
      tags:
@@ -504,6 +505,22 @@ paths:
        - application/json
      summary: Information about Barrel-db version
      description: Information about Barrel-db version
+
+ /ids:
+    get:
+      tags:
+        - Server
+      procuces:
+        - application/json
+      summary: return a new K-Ordered 16-bytes object ID.
+      description: return a new K-Ordered 16-bytes object ID.
+      parameters:
+             -
+               name: count
+               in: query
+               description: number of object Ids to return
+               required: false
+               type: integer
 
  /api-doc:
    get:
