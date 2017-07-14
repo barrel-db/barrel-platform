@@ -522,6 +522,18 @@ paths:
                required: false
                type: integer
 
+    head:
+       tags:
+         - Server
+       summary: return a new K-Ordered 16-bytes object ID.
+       description: return a new K-Ordered 16-bytes object ID.
+       responses:
+         200:
+           description: OK
+           headers:
+             X-Object-Id:
+               description: a 16-bytes Object ID value
+
  /api-doc:
    get:
      tags:
