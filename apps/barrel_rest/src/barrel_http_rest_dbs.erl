@@ -37,7 +37,7 @@ route(Req, State) ->
 
 
 get_resource(Req, State) ->
-  Dbs = barrel_store:databases(),
+  Dbs = barrel:database_names(),
   barrel_http_reply:doc(Dbs, Req, State).
 
 
@@ -53,7 +53,7 @@ check_body(Req, #state{body=Body}=S) ->
   end.
 
 create_resource(Req, #state{body=Json}=State) ->
-  case barrel:create_db(Json) of
+  case barrel:create_database(Json) of
     {ok, Config} ->
       barrel_http_reply:json(201, Config, Req, State);
     {error, db_exists} ->
@@ -62,4 +62,6 @@ create_resource(Req, #state{body=Json}=State) ->
       _ = lager:error("got server error ~p~n", [Error]),
       barrel_http_reply:error(500, "db error", Req, State)
   end.
+
+
 

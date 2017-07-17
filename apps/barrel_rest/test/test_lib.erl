@@ -29,12 +29,12 @@ req(Request) when is_map(Request) ->
          end,
   Url = <<"http://localhost:7080", (list_to_binary(Route))/binary>>,
   H = [{<<"Content-Type">>, <<"application/json">>} | Headers],
-  case hackney:request(Method, Url, H, Body, []) of
-    {ok, Code, RespHeaders, Ref} ->
-      {ok, Answer} = hackney:body(Ref),
+  case hackney:request(Method, Url, H, Body, [with_body]) of
+    {ok, Code, RespHeaders, RespBody} ->
+      lager:info("body is ~p~n", [RespBody]),
       #{code => Code,
-        body => Answer,
-        doc => jsx:decode(Answer, [return_maps]),
+        body => RespBody,
+        doc => jsx:decode(RespBody, [return_maps]),
         headers => RespHeaders};
     Error -> Error
   end.

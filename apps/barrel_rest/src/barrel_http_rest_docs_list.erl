@@ -1,4 +1,5 @@
 %% Copyright 2016, Bernard Notarianni
+%% Copyright 2017 Benoit Chesneau
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License"); you may not
 %% use this file except in compliance with the License. You may obtain a copy of
@@ -13,7 +14,6 @@
 %% the License.
 
 -module(barrel_http_rest_docs_list).
--author("Bernard Notarianni").
 
 
 %% API
@@ -24,7 +24,7 @@
 
 
 get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
-  case barrel:db_infos(Database) of
+  case barrel:database_infos(Database) of
     {ok, Info} ->
       Seq = maps:get(last_update_seq, Info),
       get_resource_since(Seq, Database, Req0, State);
@@ -49,7 +49,7 @@ get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) 
         {N + 1, <<",">>}
     end,
   AccIn = {0, <<"">>},
-  Options = [],
+  Options = #{},
   {Count, _} = barrel:multi_get(Database, Fun, AccIn, DocIds, Options),
 
   %% close the document list and return the calculated count
@@ -82,7 +82,7 @@ get_resource_since(Seq, Database, Req0, #state{idmatch=undefined}=State) ->
         ok = cowboy_req:stream_body(Chunk, nofin, Req),
         {ok, {N + 1, <<",">>}}
     end,
-  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, [{include_doc, true} | Options]),
+  {Count, _} = barrel:fold_by_id(Database, Fun, {0, <<"">>}, Options#{include_doc => true}),
 
   %% close the document list and return the calculated count
   ok = cowboy_req:stream_body(
@@ -121,7 +121,7 @@ do_write_batch(Json, Req, #state{database=Db}=State) ->
           end,
 
   OPs = maps:get(<<"updates">>, Json),
-  try  barrel:write_batch(Db, OPs, [{async, Async}]) of
+  try  barrel:write_batch(Db, OPs, #{async => Async}) of
     ok ->
       barrel_http_reply:json(200, #{ <<"ok">> => true }, Req, State);
     Results ->
@@ -147,22 +147,19 @@ batch_result({error, Reason}) ->
 
 parse_params(Req) ->
   Params = cowboy_req:parse_qs(Req),
-  Options = lists:foldl(fun({Param, Value}, Acc) ->
-                            [param(Param, Value)|Acc]
-                        end, [], Params),
-  Options.
+  lists:foldl(fun parse_params_fun/2, #{}, Params).
 
-param(<<"start_key">>, StartKey) ->
-  {gte, StartKey};
-param(<<"end_key">>, EndKey) ->
-  {lte, EndKey};
-param(<<"gt">>, StartKey) ->
-  {gt, StartKey};
-param(<<"gte">>, EndKey) ->
-  {gte, EndKey};
-param(<<"lt">>, StartKey) ->
-  {lt, StartKey};
-param(<<"lte">>, EndKey) ->
-  {lte, EndKey};
-param(<<"max">>, MaxBin) ->
-  {max, binary_to_integer(MaxBin)}.
+parse_params_fun({<<"start_key">>, StartKey}, Options) ->
+  Options#{gte =>  StartKey};
+parse_params_fun({<<"end_key">>, EndKey}, Options) ->
+  Options#{lte => EndKey};
+parse_params_fun({<<"gt">>, StartKey}, Options) ->
+  Options#{gt => StartKey};
+parse_params_fun({<<"gte">>, EndKey}, Options) ->
+  Options#{gte => EndKey};
+parse_params_fun({<<"lt">>, StartKey}, Options) ->
+  Options#{lt => StartKey};
+parse_params_fun({<<"lte">>, EndKey}, Options) ->
+  Options#{lte => EndKey};
+parse_params_fun({<<"max">>, MaxBin}, Options) ->
+  Options#{max => binary_to_integer(MaxBin) }.

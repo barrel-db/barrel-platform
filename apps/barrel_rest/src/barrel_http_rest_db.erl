@@ -44,7 +44,7 @@ route(Req, #state{method= <<"GET">>}=State) ->
 route(Req, #state{method= <<"DELETE">>}=State) ->
   Db = cowboy_req:binding(database, Req),
   barrel_monitor_activity:update(#{ state => active, query => delete_db, db => Db }),
-  _ = barrel:delete_db(Db),
+  _ = barrel:delete_database(Db),
   barrel_http_reply:json(200, #{ ok => true }, Req, State);
 route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
@@ -58,7 +58,7 @@ check_database_exist(Db, Req, State) ->
   end.
 
 get_resource(Req, #state{database=Database}=State) ->
-  case barrel:db_infos(Database) of
+  case barrel:database_infos(Database) of
     {ok, Info} ->
       barrel_http_reply:doc(Info, Req, State);
     {error, Error} ->

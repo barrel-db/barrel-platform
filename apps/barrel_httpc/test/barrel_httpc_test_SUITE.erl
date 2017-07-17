@@ -88,14 +88,14 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  _ = barrel_store:create_db(<<"testdb">>, #{}),
-  _ = barrel_store:create_db(<<"source">>, #{}),
+  _ = barrel:create_database(#{ <<"database_id">> => <<"testdb">> }),
+  _ = barrel:create_database(#{ <<"database_id">> => <<"source">> }),
   {ok, Conn} = barrel_httpc:connect(?DB_URL),
   [{db, Conn} | Config].
 
 end_per_testcase(_, _Config) ->
-  ok = barrel:delete_db(<<"testdb">>),
-  ok = barrel:delete_db(<<"source">>),
+  ok = barrel:delete_database(<<"testdb">>),
+  ok = barrel:delete_database(<<"source">>),
   ok.
 
 end_per_suite(Config) ->
@@ -178,7 +178,7 @@ async_update(Config) ->
    #{ <<"rev">> := RevId } } = barrel_httpc:get(db(Config), <<"a">>, []),
   ok= barrel_httpc:put(db(Config), Doc#{ <<"v">> => 2 }, [{async, true}, {rev, RevId}]),
   timer:sleep(400),
-  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel:get(<<"testdb">>, <<"a">>, []).
+  {ok,  #{ <<"id">> := <<"a">>, <<"v">> := 2 }, _ } = barrel:get(<<"testdb">>, <<"a">>, #{}).
 
 bad_doc(Config) ->
   Doc = #{ <<"v">> => 1},

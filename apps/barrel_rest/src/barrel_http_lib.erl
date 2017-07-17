@@ -32,20 +32,16 @@ req(Method, Url, String) when is_list(String) ->
 
 req(Method, Url, Body) when is_binary(Body) ->
   Headers = [{<<"Content-Type">>, <<"application/json">>}],
-  case hackney:request(Method, Url, Headers, Body, []) of
-    {ok, Code, _Headers, Ref} ->
-      {ok, Answer} = hackney:body(Ref),
-      {Code, Answer};
+  case hackney:request(Method, Url, Headers, Body, [with_body]) of
+    {ok, Code, _Headers, RespBody} ->   {Code, RespBody};
     Error -> Error
   end.
 
 req(Method, Url, Body, Rev) when is_binary(Body), is_binary(Rev) ->
   Headers = [{<<"Content-Type">>, <<"application/json">>},
              {<<"ETag">>, Rev}],
-  case hackney:request(Method, Url, Headers, Body, []) of
-    {ok, Code, _Headers, Ref} ->
-      {ok, Answer} = hackney:body(Ref),
-      {Code, Answer};
+  case hackney:request(Method, Url, Headers, Body, [with_body]) of
+    {ok, Code, _Headers, RespBody} ->  {Code, RespBody};
     Error -> Error
   end.
 

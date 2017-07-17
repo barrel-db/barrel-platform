@@ -58,11 +58,11 @@ init_per_suite(Config) ->
   Config.
 
 init_per_testcase(_, Config) ->
-  {ok, _} = barrel_store:create_db(<<"testdb">>, #{}),
+  {ok, _} = barrel:create_database(#{ <<"database_id">> => <<"testdb">> }),
   Config.
 
 end_per_testcase(_, Config) ->
-  ok = barrel:delete_db(<<"testdb">>),
+  ok = barrel:delete_database(<<"testdb">>),
   Config.
 
 end_per_suite(Config) ->
@@ -74,7 +74,7 @@ r(Req) ->
 
 accept_get(_Config) ->
   Doc = #{<<"id">> => <<"acceptget">>, <<"name">> => <<"tom">>},
-  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, #{}),
 
   #{code := 200,
     doc := Doc,
@@ -87,10 +87,10 @@ accept_get(_Config) ->
 accept_get_with_rev(_Config) ->
   DocId = <<"acceptgetrev">>,
   Doc1 = #{<<"id">> => DocId, <<"v">> => 1},
-  {ok, _, RevId1} = barrel:post(<<"testdb">>, Doc1, []),
+  {ok, _, RevId1} = barrel:post(<<"testdb">>, Doc1, #{}),
   Doc2 = #{<<"id">> => DocId, <<"v">> => 2},
-  {ok, _, RevId2} = barrel:put(<<"testdb">>, Doc2, [{rev, RevId1}]),
-  {ok, _, RevId3} = barrel:delete(<<"testdb">>, DocId, [{rev, RevId2}]),
+  {ok, _, RevId2} = barrel:put(<<"testdb">>, Doc2, #{rev => RevId1}),
+  {ok, _, RevId3} = barrel:delete(<<"testdb">>, DocId, #{rev => RevId2}),
   Route = "/dbs/testdb/docs/acceptgetrev",
 
   #{code := 200,
@@ -116,9 +116,9 @@ accept_get_with_rev(_Config) ->
 
 accept_get_with_history(_Config) ->
   D1 = #{<<"id">> => <<"acceptgethist">>, <<"v">> => 1},
-  {ok, _, R1} = barrel:post(<<"testdb">>, D1, []),
+  {ok, _, R1} = barrel:post(<<"testdb">>, D1, #{}),
   D2 = D1#{<<"v">> => 2},
-  {ok, _, R2} = barrel:put(<<"testdb">>, D2, []),
+  {ok, _, R2} = barrel:put(<<"testdb">>, D2, #{}),
 
   #{code := 200,
     headers := Headers,
@@ -135,7 +135,7 @@ accept_get_with_id_match(_Config) ->
          {<<"d">>, 4}, {<<"e">>, 5}, {<<"f">>, 6},
          {<<"g">>, 42}],
   Docs = [#{ <<"id">> => K, <<"v">> => V} || {K,V} <- Kvs],
-  [ {ok,_,_} = barrel:post(<<"testdb">>, D, []) || D <- Docs ],
+  [ {ok,_,_} = barrel:post(<<"testdb">>, D, #{}) || D <- Docs ],
 
   %% query the HTTP API with x-barrel-id-match header
   #{code := 200,
@@ -165,7 +165,7 @@ accept_post(_Config) ->
 
   RevId = proplists:get_value(<<"etag">>, H),
   DocId = maps:get(<<"id">>, J),
-  {ok, Doc, _} = barrel:get(<<"testdb">>, DocId, [{rev, RevId}]),
+  {ok, Doc, _} = barrel:get(<<"testdb">>, DocId, #{rev => RevId}),
   {409, _} = test_lib:req(post, "/dbs/testdb/docs", Doc),
   ok.
 
@@ -175,7 +175,7 @@ accept_put(_Config) ->
                        body => D1,
                        route => "/dbs/testdb/docs/a"}),
 
-  {ok, _, _} = barrel:post(<<"testdb">>, D1, []),
+  {ok, _, _} = barrel:post(<<"testdb">>, D1, #{}),
   D2 = #{<<"id">> => <<"a">>, <<"v">> => 2},
   #{code := 201,
     headers := H,
@@ -183,14 +183,14 @@ accept_put(_Config) ->
                     body => D2,
                     route => "/dbs/testdb/docs/a"}),
   RevId = proplists:get_value(<<"etag">>, H),
-  {ok, D2, _} = barrel:get(<<"testdb">>, <<"a">>, [{rev, RevId}]),
+  {ok, D2, _} = barrel:get(<<"testdb">>, <<"a">>, #{rev => RevId}),
   ok.
 
 accept_put_with_etag(_Config) ->
   D1 = #{<<"id">> => <<"a">>, <<"v">> => 1},
   {404, _} = test_lib:req(put, "/dbs/testdb/docs/a", D1),
 
-  {ok, _, RevId} = barrel:post(<<"testdb">>, D1, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, D1, #{}),
   D2 = #{<<"id">> => <<"a">>, <<"v">> => 2},
 
   #{code := 201,
@@ -201,7 +201,7 @@ accept_put_with_etag(_Config) ->
                      route => "/dbs/testdb/docs/a"}),
 
   RevId2 = proplists:get_value(<<"etag">>, H),
-  {ok, D2, _} = barrel:get(<<"testdb">>, <<"a">>, [{rev, RevId2}]),
+  {ok, D2, _} = barrel:get(<<"testdb">>, <<"a">>, #{rev => RevId2}),
 
   #{code := 409} = r(#{method => put,
                        body => D2,
@@ -214,7 +214,7 @@ accept_delete(_Config) ->
 
   %% delete with etag
   Doc = #{<<"id">> => <<"acceptdelete">>, <<"name">> => <<"tom">>},
-  {ok, _, RevIdBin} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevIdBin} = barrel:post(<<"testdb">>, Doc, #{}),
   RevId = binary_to_list(RevIdBin),
   BadRevId = <<"10-2f25ea96da3fed514795b0ced028d58a">>,
   Url = "/dbs/testdb/docs/acceptdelete",
@@ -226,17 +226,17 @@ accept_delete(_Config) ->
   #{code := 200} = r(#{method => delete,
                        headers => [{"etag", RevId}],
                        route => Url}),
-  {error, not_found} = barrel:get(<<"testdb">>, <<"acceptdelete">>, []),
+  {error, not_found} = barrel:get(<<"testdb">>, <<"acceptdelete">>, #{}),
 
   %% delete without etag: last winning revision
   Doc2 = #{<<"id">> => <<"deletenoetag">>, <<"name">> => <<"tom">>},
-  {ok, _, _} = barrel:post(<<"testdb">>, Doc2, []),
+  {ok, _, _} = barrel:post(<<"testdb">>, Doc2, #{}),
   #{code := 200} = r(#{method => delete,
                        route => "/dbs/testdb/docs/deletenoetag"}),
-  {error, not_found} = barrel:get(<<"testdb">>, <<"deletenoetag">>, []),
+  {error, not_found} = barrel:get(<<"testdb">>, <<"deletenoetag">>, #{}),
 
   %% recreate the same doc
-  {ok, _, RevIdBin2} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevIdBin2} = barrel:post(<<"testdb">>, Doc, #{}),
 
   %% delete with a correct previous revid (but not the last one.)
   #{code := 409} = r(#{method => delete,
@@ -255,8 +255,8 @@ accept_write_batch(_Config) ->
   D2 = #{<<"id">> => <<"b">>, <<"v">> => 1},
   D3 = #{<<"id">> => <<"c">>, <<"v">> => 1},
   D4 = #{<<"id">> => <<"d">>, <<"v">> => 1},
-  {ok, _, Rev1_1} = barrel:post(<<"testdb">>, D1, []),
-  {ok, _, Rev3_1} = barrel:post(<<"testdb">>, D3, []),
+  {ok, _, Rev1_1} = barrel:post(<<"testdb">>, D1, #{}),
+  {ok, _, Rev3_1} = barrel:post(<<"testdb">>, D3, #{}),
   Bulk = #{ <<"updates">> => [
     #{ <<"op">> => <<"put">>, <<"doc">> => D1#{ <<"v">> => 2 }, <<"rev">> => Rev1_1},
     #{ <<"op">> => <<"post">>, <<"doc">> => D2},
@@ -264,9 +264,9 @@ accept_write_batch(_Config) ->
     #{ <<"op">> => <<"put">>, <<"doc">> => D4}
   ]},
 
-  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
-  {error, not_found} = barrel:get(<<"testdb">>, <<"b">>, []),
-  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"c">>, []),
+  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"a">>, #{}),
+  {error, not_found} = barrel:get(<<"testdb">>, <<"b">>, #{}),
+  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"c">>, #{}),
 
   %% make request
   Url = "/dbs/testdb/docs",
@@ -283,9 +283,9 @@ accept_write_batch(_Config) ->
     #{ <<"status">> := <<"error">>, <<"reason">> := <<"not found">>}
   ]} = Resp,
 
-  {ok, #{ <<"v">> := 2}, _} = barrel:get(<<"testdb">>, <<"a">>, []),
-  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"b">>, []),
-  {error, not_found} = barrel:get(<<"testdb">>, <<"c">>, []).
+  {ok, #{ <<"v">> := 2}, _} = barrel:get(<<"testdb">>, <<"a">>, #{}),
+  {ok, #{ <<"v">> := 1}, _} = barrel:get(<<"testdb">>, <<"b">>, #{}),
+  {error, not_found} = barrel:get(<<"testdb">>, <<"c">>, #{}).
 
 reject_store_unknown(_) ->
   Doc = #{<<"name">> => <<"tom">>},
@@ -313,7 +313,7 @@ reject_bad_json(_) ->
 
 post_cat() ->
   Doc = #{<<"id">> => <<"cat">>, <<"name">> => <<"tom">>},
-  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, []),
+  {ok, _, RevId} = barrel:post(<<"testdb">>, Doc, #{}),
   RevId.
 
 revsdiff(_Config) ->
@@ -331,7 +331,7 @@ revsdiff(_Config) ->
 
 put_rev(_Config) ->
   RevId = post_cat(),
-  {ok, Doc, _Meta} = barrel:get(<<"testdb">>, <<"cat">>, []),
+  {ok, Doc, _Meta} = barrel:get(<<"testdb">>, <<"cat">>, #{}),
   {Pos, _} = barrel_doc:parse_revision(RevId),
   NewRev = barrel_doc:revid(Pos +1, RevId, barrel_doc:make_doc(Doc, <<>>, false)),
   History = [NewRev, RevId],

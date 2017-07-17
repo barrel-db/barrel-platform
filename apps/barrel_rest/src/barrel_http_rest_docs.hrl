@@ -27,7 +27,7 @@
           doc,
           meta,
           conn,
-          options=[],
+          options=#{},
           rev,
           since,
           timer,

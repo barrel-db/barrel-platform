@@ -11,7 +11,7 @@
 -include_lib("eqc/include/eqc_statem.hrl").
 
 -compile(export_all).
--define(DB, <<"testdb3">>).
+-define(DB, <<"testdb8">>).
 %% -- State and state functions ----------------------------------------------
 -record(state,{
           keys:: dict:dict(binary(), term()),
@@ -32,7 +32,7 @@ initial_state() ->
     #state{keys = dict:new(), ids= Ids}.
 
 db() ->
-    oneof([?DB]).
+    ?DB.
 
 
 id(Ids) ->
@@ -187,7 +187,11 @@ postcondition_common(_S, _Call, _Res) ->
 
 init_db()->
     {ok, _} = application:ensure_all_started(barrel_rest),
-    barrel:create_database(#{ <<"database_id">> => ?DB }),
+		case barrel:create_database(#{ <<"database_id">> => ?DB }) of
+				{error, db_exists} -> ok;
+				{ok, #{<<"database_id">> := ?DB}}-> ok
+		end,
+
     fun delete_db/0.
 
 delete_db() ->

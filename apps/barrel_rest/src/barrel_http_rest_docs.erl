@@ -104,9 +104,8 @@ check_database_db(Req, State) ->
 parse_headers(Req, State) ->
   Headers = cowboy_req:headers(Req),
   F = fun
-        (<<"etag">>, Etag, S) ->
-          Opt = S#state.options,
-          S#state{options=[{rev, Etag}|Opt]};
+        (<<"etag">>, Etag, #state{options=Options}=S) ->
+          S#state{options=Options#{rev => Etag}};
         (<<"x-barrel-id-match">>, IdsMatch, #state{idmatch=DocIds}=S) ->
           WithParsed = parse_header_match_id(IdsMatch, DocIds),
           S#state{idmatch=WithParsed};

@@ -68,6 +68,7 @@ init(_Args) ->
            , {"/dbs/:database/system/:docid", barrel_http_rest_system, []}
            , {"/replicate",                   barrel_http_rest_replicate, []}
            , {"/replicate/:repid",            barrel_http_rest_replicate, []}
+
            , {"/dbs/:database/revsdiff",      barrel_http_rest_revsdiff, []}
            , {"/dbs/:database/walk/[...]",    barrel_http_rest_walk, []}
            , {"/dbs",                         barrel_http_rest_dbs, []}
@@ -76,6 +77,7 @@ init(_Args) ->
            , {"/dbs/:database/docs/:docid",   barrel_http_rest_docs, []}
            , {"/",                            barrel_http_rest_root, []}
            , {"/metrics",                     barrel_prometheus_handler, {default}}
+           , {"/ids",                         barrel_rest_ids, []}
            ],
   Dispatch = cowboy_router:compile([{'_', Routes}]),
 

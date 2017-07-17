@@ -240,7 +240,7 @@ connect(Url) ->
   Meta :: meta(),
   Attachments :: [attachment()],
   Res :: {ok, Doc, Meta} | {ok, Doc, Attachments, Meta} | {error, not_found} | {error, any()}.
-get(Conn, DocId, Options0) ->
+get(Conn, DocId, Options0) when is_binary(DocId)->
   {WithAttachment, Options1} = maybe_with_attachments(Options0),
   {Headers, Options2} = headers(Options1),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options2),
@@ -333,7 +333,7 @@ maybe_with_attachments([H|Options], W, Acc) ->
   Doc :: doc(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()} | no_return().
-put(Conn, #{ <<"id">> := DocId } = Doc, Options0) ->
+put(Conn, #{ <<"id">> := DocId } = Doc, Options0)  when is_binary(DocId) ->
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   Async = proplists:get_value(async, Options1, false),
@@ -381,7 +381,7 @@ post_put(Conn, Method, Doc, Url, Headers, Async) ->
   DocId :: docid(),
   Options :: write_options(),
   Res :: {ok, docid(), rev()} | {error, conflict} | {error, any()}.
-delete(Conn, DocId, Options0) ->
+delete(Conn, DocId, Options0) when is_binary(DocId) ->
   {Headers, Options1} = headers(Options0),
   Url = barrel_httpc_lib:make_url(Conn, [<<"docs">>, DocId], Options1),
   case request(Conn, <<"DELETE">>, Url, Headers, <<>>) of
