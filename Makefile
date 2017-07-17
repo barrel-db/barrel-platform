@@ -57,7 +57,7 @@ activate:
 dialyzer:
 	@$(REBAR) dialyzer
 
-test: cleantest dialyzer eunit ct eqc
+test: cleantest dialyzer eunit ct
 
 eunit:
 	@$(REBAR) as dev eunit
@@ -66,7 +66,7 @@ ct:
 	@$(REBAR) as dev ct
 
 eqc:
-		@$(REBAR) as dev eqc
+		@$(REBAR) as eqc eqc
 
 
 cover:
