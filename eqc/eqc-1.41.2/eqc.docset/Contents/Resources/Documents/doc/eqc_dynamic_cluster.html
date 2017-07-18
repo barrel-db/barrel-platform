@@ -1,0 +1,128 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_dynamic_cluster</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_dynamic_cluster</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul> 
+This module lets you do dynamic test case generation for a component or 
+cluster of components.
+<p>Copyright © Quviq AB, 2013-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p> 
+This module lets you do dynamic test case generation for a component or 
+cluster of components.</p>
+
+ <p>Dynamic generation means that the next command in a command sequence is not
+ generated until the previous commands have been executed and we have access
+ to their results. This lets us model systems which behave
+ nondeterministically, or systems whose behaviour we don't want to model in
+ detail, in which case we cannot predict the final state of the system without
+ actually running it and see how it behaves. There are two differences between
+ dynamic testing and the ordinary testing that <a href="eqc_component.html"><code>eqc_component</code></a> and
+ <a href="eqc_cluster.html"><code>eqc_cluster</code></a> provides:</p>
+
+ <ul>
+ <li>Command generation, preconditions and next state functions always have
+     access to concrete data, there is never any symbolic data.</li>
+ <li>Self callouts and cluster internal callouts are allowed in
+     <tt>?EITHER</tt>, <tt>?OPTIONAL</tt> and <tt>?REPLICATE</tt>, allowing
+     state updates that depend on which callouts are performed at
+     run-time.</li>
+ </ul>
+
+ <p>Other than the above relaxations there is no difference between a dynamic 
+component or cluster and a normal one. A property for a dynamic component has 
+the following shape:</p>
+
+ <pre>    prop_test() -&gt;
+      ?SETUP(fun() -&gt; eqc_mocking:start_mocking(api_spec()), fun() -&gt; ok end end,
+      ?FORALL(Cmds, dynamic_commands(?MODULE),
+      ?CHECK_COMMANDS(HSR={_History, _FinalState, Result}, ?MODULE, Cmds,
+      pretty_commands(?MODULE, Cmds, HSR,
+        Result == ok)))).</pre>
+
+ <p>The <a href="#dynamic_commands-1"><code>dynamic_commands/1</code></a> generator executes the commands as they are
+ generated, so <tt>Cmds</tt> contains not only the generated commands
+ but their callouts and results, as well as any postcondition or callout
+ specification failures. The <tt><a href="#?CHECK_COMMANDS">?CHECK_COMMANDS</a></tt> macro
+ decomposes the generated commands into a history, a final state and a test
+ result compatible with <a href="eqc_component.html#pretty_commands-4"><code>eqc_component:pretty_commands/4</code></a>.</p>
+
+ <h2>Macros</h2>
+ <a name="?CHECK_COMMANDS"/>
+ <h3>?CHECK_COMMANDS({History, FinalState, Result}, Module, Cmds, Property)</h3>
+
+ <p><tt>?CHECK_COMMANDS</tt> is defined in the
+ <tt>eqc/include/eqc_dynamic_cluster.hrl</tt> header file and binds the
+ history, the final state and result of the commands for use in the property.
+ The result is <tt>ok</tt> when the test succeeded, otherwise it is a
+ description of why it failed. During normal operation
+ <tt>?CHECK_COMMANDS</tt> simply extracts the history and the result already
+ present in the command sequence, but if a test is repeated, either with
+ <a href="eqc.html#check-2"><code>eqc:check/2</code></a> or in an <code>?ALWAYS</code> or a <nobr><code>?SOMETIMES</code></nobr>,
+ <tt>?CHECK_COMMANDS</tt> reruns the sequence discarding the results from the 
+first run.</p>
+
+ <h2>Examples</h2>
+
+ <p>Since there are no symbolic values in a dynamic test it is possible to model 
+components whose behaviour we can't predict precisely. For instance, here is 
+the model for a lock function that is allowed to fail unpredictably:</p>
+
+ <pre> lock_next(S, V, {call, _, lock, []}) -&gt;
+   case V of %% V is never symbolic
+     ok         -&gt; S#state{ lock = locked };
+     {error, _} -&gt; S
+   end.</pre>
+
+ <p>Dynamic components can also make state updates based on callouts that are not
+ certain to happen. For example, we can model a component that can choose to
+ go to sleep by calling a <tt>go_to_sleep</tt> function as follows:</p>
+
+ <pre> main_callouts(_S, []) -&gt;
+   ?OPTIONAL(?SEQ(?CALLOUT(controller, go_to_sleep, [], ok),
+                  ?APPLY(set_mode, [sleeping]))).
+
+ set_mode_next(S, _, [Mode]) -&gt; S#state{ mode = Mode }.</pre>
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#dynamic_commands-1">dynamic_commands/1</a></td><td>Generator for a random command sequence.</td></tr>
+<tr><td valign="top"><a href="#dynamic_commands-2">dynamic_commands/2</a></td><td>Generator for a random command sequence starting from a given initial
+  state.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="dynamic_commands-1">dynamic_commands/1</a></h3>
+<div class="spec">
+<p><tt>dynamic_commands(Mod::module()) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>([<a href="#type-command">command()</a>])</tt><br/></p>
+</div><p>Generator for a random command sequence. <tt>Mod</tt> is the name of a
+  module defining a component or a cluster (see <a href="eqc_component.html"><code>eqc_component</code></a> and
+  <a href="eqc_cluster.html"><code>eqc_cluster</code></a>). The commands are executed as they are generated so the
+  resulting command sequence contains not only the generated commands but also a
+  trace of the execution and any errors encountered during the run. The command
+  sequence should be given to <tt><a href="#?CHECK_COMMANDS">?CHECK_COMMANDS</a></tt> which will
+  decompose it into a history, a final state and the result of the test.</p>
+
+<h3 class="function"><a name="dynamic_commands-2">dynamic_commands/2</a></h3>
+<div class="spec">
+<p><tt>dynamic_commands(Mod::module(), InitState::term()) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>([<a href="#type-command">command()</a>])</tt><br/></p>
+</div><p>Generator for a random command sequence starting from a given initial
+  state. In the case <tt>Mod</tt> defines a cluster <tt>InitState</tt> should
+  be a list of pairs of a component name and the initial state for that
+  component. Only components for which the state is different from the default
+  initial state need to be present in the list. Aside from setting the initial
+  state this function works in the same way as <a href="#dynamic_commands-1"><code>dynamic_commands/1</code></a>.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:29.</i></p>
+</body>
+</html>

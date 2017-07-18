@@ -1,0 +1,218 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module pulse</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module pulse</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>A User Level Scheduler of Erlang resulting from the ProTest project.
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2>A User Level Scheduler of Erlang resulting from the ProTest project.
+  Copyright Developer Team, see licence conditions
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#format-1">format/1</a></td><td>Equivalent to <a href="#format-2"><tt>format(Fmt, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#format-2">format/2</a></td><td>Syncronized io:format.</td></tr>
+<tr><td valign="top"><a href="#get_events-0">get_events/0</a></td><td>Obtain the events  that pulse has used for scheduling processes.</td></tr>
+<tr><td valign="top"><a href="#get_schedule-0">get_schedule/0</a></td><td>Obtain the schedule that pulse has used for scheduling processes.</td></tr>
+<tr><td valign="top"><a href="#get_seed-0">get_seed/0</a></td><td>Obtain the seed that the scheduler uses for scheduling processes.</td></tr>
+<tr><td valign="top"><a href="#import_process-1">import_process/1</a></td><td>When executed by a process not managed by PULSE, this function makes
+  PULSE adopt the process as one of its own.</td></tr>
+<tr><td valign="top"><a href="#is_instrumented-1">is_instrumented/1</a></td><td>
+  Checks whether the code is compiled using the pulse instrument parse transformation.</td></tr>
+<tr><td valign="top"><a href="#rerun-0">rerun/0</a></td><td>Run the same function as before
+  scheduled by pulse.</td></tr>
+<tr><td valign="top"><a href="#rerun_counterexample-2">rerun_counterexample/2</a></td><td>Re-run the last counterexample found by QuickCheck
+  (counterexample returned by
+  eqc:counterexample/0) with the verbosity specified in the first argument
+  (see <a href="#verbose-1"><code>verbose/1</code></a>).</td></tr>
+<tr><td valign="top"><a href="#rerun_counterexample-3">rerun_counterexample/3</a></td><td>Re-run the counterexample for the property with verbosity as
+  specified in first argument.</td></tr>
+<tr><td valign="top"><a href="#rerun_verbose-1">rerun_verbose/1</a></td><td>Run the same function as before
+  scheduled by pulse with verbosity set as in the function
+  <a href="verbose.html"><code>verbose</code></a>.</td></tr>
+<tr><td valign="top"><a href="#run-1">run/1</a></td><td>Equivalent to <a href="#run-2"><tt>run(Fun, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#run-2">run/2</a></td><td>Run a function scheduled by pulse.</td></tr>
+<tr><td valign="top"><a href="#seed-0">seed/0</a></td><td>Seed generator to be used in combination with for example the <tt>seed</tt> option in <a href="#run-2"><code>run/2</code></a>.</td></tr>
+<tr><td valign="top"><a href="#start-0">start/0</a></td><td>Start pulse as an application, it consists of a supervisor
+  tree with an event manager and the pulse process.</td></tr>
+<tr><td valign="top"><a href="#stop-0">stop/0</a></td><td>Stop pulse application.</td></tr>
+<tr><td valign="top"><a href="#verbose-1">verbose/1</a></td><td>Set verbose mode of all attached event handlers to items given  
+as arguments.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="format-1">format/1</a></h3>
+<div class="spec">
+<p><tt>format(Fmt) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="#format-2"><tt>format(Fmt, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="format-2">format/2</a></h3>
+<div class="spec">
+<p><tt>format(Fmt, Args) -&gt; any()</tt></p>
+</div><p>Syncronized io:format. The normal io:format/2 function is a side-effect function and
+  using it for printing debug statements does not work particularly well. When using print
+  commands for debugging in a PULSE context, one should use this format function instead.
+  Note that the printed commands only become visible when the format option is passed to
+  the <a href="#verbose-1"><code>verbose/1</code></a> function.</p>
+
+<h3 class="function"><a name="get_events-0">get_events/0</a></h3>
+<div class="spec">
+<p><tt>get_events() -&gt; <a href="#type-events">events()</a></tt><br/></p>
+</div><p>Obtain the events  that pulse has used for scheduling processes</p>
+
+<h3 class="function"><a name="get_schedule-0">get_schedule/0</a></h3>
+<div class="spec">
+<p><tt>get_schedule() -&gt; <a href="#type-schedule">schedule()</a></tt><br/></p>
+</div><p>Obtain the schedule that pulse has used for scheduling processes</p>
+
+<h3 class="function"><a name="get_seed-0">get_seed/0</a></h3>
+<div class="spec">
+<p><tt>get_seed() -&gt; {<a href="#type-nat">nat()</a>, <a href="#type-nat">nat()</a>, <a href="#type-nat">nat()</a>}</tt><br/></p>
+</div><p>Obtain the seed that the scheduler uses for scheduling processes</p>
+
+<h3 class="function"><a name="import_process-1">import_process/1</a></h3>
+<div class="spec">
+<p><tt>import_process(NameHint) -&gt; any()</tt></p>
+</div><p>When executed by a process not managed by PULSE, this function makes
+  PULSE adopt the process as one of its own. The typical use case is when you
+  have control over (and can instrument) the code executed by a process, but
+  not the code that is spawning the process.</p>
+
+<h3 class="function"><a name="is_instrumented-1">is_instrumented/1</a></h3>
+<div class="spec">
+<p><tt>is_instrumented(Module::atom()) -&gt; bool()</tt><br/></p>
+</div><p>
+  Checks whether the code is compiled using the pulse instrument parse transformation.</p>
+
+<h3 class="function"><a name="rerun-0">rerun/0</a></h3>
+<div class="spec">
+<p><tt>rerun() -&gt; term()</tt><br/></p>
+</div><p>Run the same function as before
+  scheduled by pulse.
+  The result
+  of the scheduled run is one of the possible outcomes of
+  running the function without the scheduler.
+  In this way one need not copy the function to the
+  scheduling process each time.</p>
+
+<h3 class="function"><a name="rerun_counterexample-2">rerun_counterexample/2</a></h3>
+<div class="spec">
+<p><tt>rerun_counterexample(FlagList::[atom()], Property::<a href="#type-property">property()</a>) -&gt; any()</tt><br/></p>
+</div><p>Re-run the last counterexample found by QuickCheck
+  (counterexample returned by
+  eqc:counterexample/0) with the verbosity specified in the first argument
+  (see <a href="#verbose-1"><code>verbose/1</code></a>).
+  Uses eqc:check/2 to re-evaluate the property.</p>
+
+<h3 class="function"><a name="rerun_counterexample-3">rerun_counterexample/3</a></h3>
+<div class="spec">
+<p><tt>rerun_counterexample(FlagList::[atom()], Property::<a href="#type-property">property()</a>, Example::<a href="#type-counterexample">counterexample()</a>) -&gt; any()</tt><br/></p>
+</div><p>Re-run the counterexample for the property with verbosity as
+  specified in first argument. Uses eqc:check/2 to re-evaluate the
+  property.</p>
+
+<h3 class="function"><a name="rerun_verbose-1">rerun_verbose/1</a></h3>
+<div class="spec">
+<p><tt>rerun_verbose(FlagList::[atom()]) -&gt; term()</tt><br/></p>
+</div><p>Run the same function as before
+  scheduled by pulse with verbosity set as in the function
+  <a href="verbose.html"><code>verbose</code></a>. The verbosity is only changed during the rerun.
+  The result
+  of the scheduled run is one of the possible outcomes of
+  running the function without the scheduler.
+  In this way one need not copy the function to the
+  scheduling process each time.</p>
+
+<h3 class="function"><a name="run-1">run/1</a></h3>
+<div class="spec">
+<p><tt>run(Fun::function()) -&gt; term()</tt><br/></p>
+</div><p>Equivalent to <a href="#run-2"><tt>run(Fun, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="run-2">run/2</a></h3>
+<div class="spec">
+<p><tt>run(Fun::function(), Options::<a href="#type-proplist">proplist()</a>) -&gt; term()</tt><br/></p>
+</div><p><p>Run a function scheduled by pulse. The result  
+of the scheduled run is one of the possible outcomes of  
+running the function without the scheduler. The following  
+options can be provided:</p>
+ 
+  <dt><tt>seed</tt></dt>
+     <dd>Specify the seed to generate the random schedule with.
+         If not provided, pulse uses a random seed</dd>
+  <dt><tt>schedule</tt></dt>
+     <dd>One can save a schedule and run the code with that schedule.</dd>
+  <dt><tt>run_timeout</tt></dt>
+     <dd>Deadlock is detected after a certain period of non-activity in the scheduling process.
+      This period is default set to 30 seconds, but can be increased or decreased with this option.</dd>
+  <dt><tt>strategy</tt></dt>
+     <dd>Value: <tt>fair | unfair</tt> (default: <tt>fair</tt>). With unfair
+     strategy PULSE will assign a random priority to each process and use that
+     when deciding which process to schedule.</dd>
+  <dt><tt>single_mailbox</tt></dt>
+     <dd>Value: boolean (default: false). If true PULSE implements instant
+     message delivery. This is how things work in the current implementation
+     of the Erlang VM (within a single node), but it is not guaranteed by the
+     Erlang semantics. Enabling <tt>single_mailbox</tt> prevents PULSE from
+     finding some "false" race conditions that currently cannot appear in
+     practice.</dd>
+ </p>
+
+<h3 class="function"><a name="seed-0">seed/0</a></h3>
+<div class="spec">
+<p><tt>seed() -&gt; <a href="#type-gen">gen</a>(<a href="#type-seed">seed()</a>)</tt><br/></p>
+</div><p>Seed generator to be used in combination with for example the <tt>seed</tt> option in <a href="#run-2"><code>run/2</code></a>.
+  The idea is to have QuickCheck generate a seed with this generator and pass
+  this on to pulse.</p>
+
+<h3 class="function"><a name="start-0">start/0</a></h3>
+<div class="spec">
+<p><tt>start() -&gt; {ok, Pid} | error</tt><br/></p>
+</div><p>Start pulse as an application, it consists of a supervisor
+  tree with an event manager and the pulse process. One can add
+  event handlers dynamically</p>
+
+<h3 class="function"><a name="stop-0">stop/0</a></h3>
+<div class="spec">
+<p><tt>stop() -&gt; ok</tt><br/></p>
+</div><p>Stop pulse application.</p>
+
+<h3 class="function"><a name="verbose-1">verbose/1</a></h3>
+<div class="spec">
+<p><tt>verbose(FlagList::[atom()]) -&gt; [atom()]</tt><br/></p>
+</div><p><p>Set verbose mode of all attached event handlers to items given  
+as arguments. We support flags similar to those in erlang:trace/3.</p>
+ 
+  <p><dt><tt>all</tt></dt>
+     <dd>Set all pulse flags and therewith show all pulse events.</dd>
+  <dt><tt>send</tt></dt>
+     <dd>Show sending of messages.</dd>
+  <dt><tt>'receive'</tt></dt>
+     <dd>Show receiving and delivery of messages.</dd>
+  <dt><tt>procs</tt></dt>
+     <dd>Show process related events:
+     spawn, exit, register, unregister, link, unlink.</dd>
+  <dt><tt>side_effect</tt></dt>
+     <dd>Show side effects. Specify which function calls are side effects when
+     instrumenting the code (see <a href="pulse_instrument.html"><code>pulse_instrument</code></a>).</dd>
+  <dt><tt>format</tt></dt>
+     <dd>Visualize the calls to <a href="#format-2"><code>format/2</code></a> in the verbose output.</dd></p>
+ 
+  The function returns the verbosity settings as they were before
+  changing them (in order to be able to change them back).</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:25.</i></p>
+</body>
+</html>

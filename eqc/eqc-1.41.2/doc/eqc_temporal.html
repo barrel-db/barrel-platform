@@ -1,0 +1,548 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_temporal</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_temporal</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functions for analysing traces of
+ time-stamped events, to express properties such as that deadlines
+ are met.
+<p>Copyright © Quviq AB, 2008-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2>This module provides functions for analysing traces of
+ time-stamped events, to express properties such as that deadlines
+ are met. The analysis is based on an abstract datatype of
+ <i>temporal relations</i>, which represent relations between times
+ in the range 0 to infinity, and arbitrary values. We illustrate how
+ to use the library via a simple example.
+ <h2>Timed Traces of Events</h2>
+ <code>eqc_temporal</code> requires a timed trace of events to analyse--a list
+ of pairs of times (positive integers) and events. For example,
+ <pre>
+ Trace = [{1,{login,alice,office}},
+          {2,{login,bob,home}},
+          {8,{login,bob,phone}},
+          {10,{send,alice,bob,hello}},
+          {11,{logout,alice,office}},
+          {20,{deliver,home,hello}},
+          {30,{deliver,phone,hello}}].
+ </pre>
+ might represent Alice and Bob using an instant messaging
+ application. Typically events are recorded during the execution of a
+ test case, time-stamped with the time since the start of the test,
+ and then analysed using <code>eqc_temporal</code> after the test has finished.
+ <h2>Building a Temporal Relation</h2>
+ Before a trace can be analysed, it must be converted to a
+ <i>temporal relation</i> using <code>from_timed_list</code>:
+ <pre>
+ 51&gt; Events=eqc_temporal:from_timed_list(Trace).
+ [{0,1,[]},
+  {1,2,[{login,alice,office}]},
+  {2,3,[{login,bob,home}]},
+  {3,8,[]},
+  {8,9,[{login,bob,phone}]},
+  {9,10,[]},
+  {10,11,[{send,alice,bob,hello}]},
+  {11,12,[{logout,alice,office}]},
+  {12,20,[]},
+  {20,21,[{deliver,home,hello}]},
+  {21,30,[]},
+  {30,31,[{deliver,phone,hello}]},
+  {31,infinity,[]}]
+ </pre><p>
+ A temporal relation specifies a <i>set of values</i> related to each
+ time. For example, the third line above says that the relation
+ contains <code>{login,bob,home}</code> at all times between <code>2</code> and <code>3</code>,
+ (not including <code>3</code>). That is, the relation contains
+ <code>{login,bob,home}</code> at time 2. This relation contains the same 
+information as the list of events, but in a form which is easier to 
+work with.</p>
+
+ <p><i>Note that the representation of temporal relations may change in
+ future versions, so while displaying the representation as
+ diagnostic information is useful, user code should not
+ <b>manipulate</b> temporal relations except using the functions in
+ this module.</i></p>
+
+ <h2>Stateful Relations</h2>
+ We often need to track state changes as a result of events. We
+ represent states as a temporal relation too, where an entire <i>set
+ of states</i> can be active at each time. For example, many users
+ can be logged in simultaneously to the instant messaging system. We
+ construct a temporal relation of states using the <code>stateful</code> function:
+ <pre>
+ 4&gt; LoggedIn=eqc_temporal:stateful(
+               fun({login,User,Where})-&gt;[{User,Where}] end,
+               fun({User,Where},{logout,User,Where})-&gt;[] end,
+               Events).
+ [{0,1,[]},
+  {1,2,[{alice,office}]},
+  {2,8,[{alice,office},{bob,home}]},
+  {8,11,[{alice,office},{bob,home},{bob,phone}]},
+  {11,infinity,[{bob,home},{bob,phone}]}]
+ </pre>
+ We pass <code>stateful</code> two functions:
+ <ul>
+ <li>One to recognise events that <i>start</i> states--for example,
+ the event <code>{login,User,Where}</code> start the state <code>{User,Where}</code> in
+ the <code>LoggedIn</code> relation,</li>
+ <li>and one to recognise events that <i>transform</i> states--for
+ example, the event <code>{logout,User,Where}</code> transforms the state
+ <code>{User,Where}</code> into no states (the empty list), terminating the
+ state in the <code>LoggedIn</code> relation.</li>
+ </ul>
+ Both functions return a <i>list</i> of states, since many states can
+ be active simultaneously. Notice that we need only match the
+ interesting cases in these functions... unmatched events are simply ignored.
+ <p>
+ The relation constructed shows us exactly which users were logged in
+ at each time, and where.
+ </p>
+ <h2>Tracking Messages in Flight</h2>
+ When Alice sends a message to Bob, <i>two</i> messages are actually
+ created, because Bob is logged in both at home and on his
+ phone. (Look at the event trace--it contains two deliveries). To
+ track the messages in flight, we need to <i>combine</i> send events
+ with the logged-in states of the recipients. The <code>product</code> of
+ <code>Events</code> and <code>LoggedIn</code> contains pairs of events and
+ <code>{User,Where}</code> states, which we can use to construct a relation of
+ message lifetimes. We use <code>stateful</code> again to recognise the
+ beginning and end of each message lifetime.
+ <pre>
+ 8&gt; Messages=eqc_temporal:stateful(
+               fun({{send,A,B,Msg},{B,Where}})-&gt;[{Msg,Where}] end,
+               fun({Msg,Where},{{deliver,Where,Msg},{B,Where}})-&gt;[] end,
+               eqc_temporal:product(Events,LoggedIn)).
+ [{0,10,[]},
+  {10,21,[{hello,home},{hello,phone}]},
+  {21,31,[{hello,phone}]},
+  {31,infinity,[]}]
+ </pre>
+ The first function says that when <code>A</code> sends a message to <code>B</code>,
+ who is logged in at <code>Where</code>, then a message to <code>Where</code> is
+ created in the <code>Messages</code> relation. The second function says that
+ this message is deleted again when a matching <code>deliver</code> event
+ occurs. Looking at the result,
+ we can see that <code>{hello,home}</code> was in flight from time 10 to 20,
+ while <code>{hello,phone}</code> was in flight from 10 to 30.
+ <h2>Checking Deadlines</h2>
+ Suppose messages ought to be delivered within 15 time units. We can
+ construct a temporal relation of the <i>overdue messages</i> using
+ <code>all_past</code>, which contains values which have been active for a
+ given period in the past. This effectively shortens the lifetime of
+ each value by the period given.
+ <pre>
+ 9&gt; Overdue=eqc_temporal:all_past(15,Messages).
+ [{0,25,[]},{25,31,[{hello,phone}]},{31,infinity,[]}]
+ </pre>
+ <code>Overdue</code> contains all messages which have been in flight
+ throughout the previous 15 time units--and so, are now overdue. In
+ this example, <code>{hello,phone}</code> was overdue between times 25 and 31.
+ <h2>Making a Property</h2>
+ Putting these together, we can write a property that computes the
+ messages that ought to be delivered, and checks that they were
+ delivered in time, in only a few lines of code. We just construct
+ the <code>Overdue</code> relation, and check that it is empty, either via
+ <pre>
+ Overdue == eqc_temporal:empty()
+ </pre>
+ or via
+ <pre>
+ eqc_temporal:is_false(Overdue)
+ </pre>
+ (a temporal relation is considered to be false if it contains no values).
+ <p>A complete property based on this idea might look like this:</p>
+ <pre>
+ prop_instant_messenger() -&gt;
+   ?FORALL(Cmds,commands(?MODULE),
+     begin
+       start_trace_recording(),
+       run_commands(?MODULE,Cmds),
+       Trace    = recorded_trace(),
+       Events   = from_timed_list(Trace),
+       LoggedIn = stateful(
+                  fun({login,User,Where})-&gt;[{User,Where}] end,
+                  fun({User,Where},{logout,User,Where})-&gt;[] end,
+                  Events),
+       Messages = stateful(
+                  fun({{send,A,B,Msg},{B,Where}})-&gt;[{Msg,Where}] end,
+                  fun({Msg,Where},{{deliver,Where,Msg},{B,Where}})-&gt;[] end,
+                  product(Events,LoggedIn)),
+       Overdue  = all_past(15,Messages),
+       is_false(Overdue)
+     end).
+ </pre>
+ (where <code>start_trace_recording</code> and <code>recorded_trace</code> are assumed
+ to be defined by the user, in any appropriate way).
+ Note that by including the header file
+ <pre>
+ -include_lib("eqc/include/eqc_temporal.hrl").
+ </pre>
+ then we can import all the eqc_temporal functions automatically.
+ <h2>Tolerating Uncertainty</h2>
+ In the example, the message delivery to Bob's phone missed the
+ deadline, which would cause the property above to fail. Yet in this
+ case, Bob only logged in on his phone just before the original
+ message was sent. In reality, Bob's login might not really be
+ complete, so it may be acceptable for the message to be delivered
+ late--or not at all. Temporal relations can also be used to tolerate
+ this kind of uncertainty, thus avoiding "false positives" during
+ testing. Suppose a login may take up to four time units. Then we can
+ construct
+ <pre>
+ CertainlyLoggedIn = all_past(4,LoggedIn)
+ </pre>
+ containing those users whose logins are certainly complete. By using
+ <code>CertainlyLoggedIn</code> instead of <code>LoggedIn</code> in the definition of
+ <code>Messages</code> above, we avoid creating the overdue message and thus
+ allow the test to pass.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-rel">rel()</a></h3>
+<p><b>abstract datatype</b>: <tt>rel()</tt></p>
+<p>A relation between times and values (arbitrary terms). We say that a value
+ <code>X</code> is true in <code>R</code> at time <code>T</code>, if <code>R</code> relates <code>T</code> to <code>X</code>. A
+ temporal relation <code>R</code> is true at time <code>T</code> if it relates <code>T</code> to some <code>X</code>.</p>
+
+<h3 class="typedecl"><a name="type-time">time()</a></h3>
+<p><tt>time() = integer()</tt></p>
+<p>A non-negative integer.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#all_future-1">all_future/1</a></td><td>Relate values that will stay true for eternity.</td></tr>
+<tr><td valign="top"><a href="#all_future-2">all_future/2</a></td><td>Relate values that will stay true for a given time.</td></tr>
+<tr><td valign="top"><a href="#all_past-1">all_past/1</a></td><td>Relate values that have been true since time 0.</td></tr>
+<tr><td valign="top"><a href="#all_past-2">all_past/2</a></td><td>Relate values that have been true for a given time.</td></tr>
+<tr><td valign="top"><a href="#any_future-1">any_future/1</a></td><td>Relate values that will be true at some point.</td></tr>
+<tr><td valign="top"><a href="#any_future-2">any_future/2</a></td><td>Relate values that will become true at some point within the given time.</td></tr>
+<tr><td valign="top"><a href="#any_past-1">any_past/1</a></td><td>Relate values that have been true at some point.</td></tr>
+<tr><td valign="top"><a href="#any_past-2">any_past/2</a></td><td>Relate values that have been true at some point within the given time.</td></tr>
+<tr><td valign="top"><a href="#at-2">at/2</a></td><td>Compute the values related to <code>Time</code> by <code>R</code>.</td></tr>
+<tr><td valign="top"><a href="#bind-2">bind/2</a></td><td>The bind operation of the temporal relation monad.</td></tr>
+<tr><td valign="top"><a href="#coarsen-2">coarsen/2</a></td><td>Coarsen the resolution of time in a temporal relation, by the
+ factor <tt>K</tt>.</td></tr>
+<tr><td valign="top"><a href="#complement-1">complement/1</a></td><td>The complement of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#completion-1">completion/1</a></td><td>Turn a temporal relation into a total temporal relation.</td></tr>
+<tr><td valign="top"><a href="#constant-1">constant/1</a></td><td>The constant temporal relation.</td></tr>
+<tr><td valign="top"><a href="#domain_size-1">domain_size/1</a></td><td>The total time during which a temporal relation is true.</td></tr>
+<tr><td valign="top"><a href="#elems-1">elems/1</a></td><td>Flatten a set valued temporal relation.</td></tr>
+<tr><td valign="top"><a href="#empty-0">empty/0</a></td><td>The empty temporal relation.</td></tr>
+<tr><td valign="top"><a href="#filter-2">filter/2</a></td><td>Filter a temporal relation by a predicate on the range.</td></tr>
+<tr><td valign="top"><a href="#flatmap-2">flatmap/2</a></td><td>Apply a list valued partial function to the values of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#from_timed_list-1">from_timed_list/1</a></td><td>Construct a temporal relation from a list of time value pairs.</td></tr>
+<tr><td valign="top"><a href="#implies-2">implies/2</a></td><td>Relational implication.</td></tr>
+<tr><td valign="top"><a href="#intersection-2">intersection/2</a></td><td>Intersection of two temporal relations.</td></tr>
+<tr><td valign="top"><a href="#is_false-1">is_false/1</a></td><td>Check if a temporal relation is empty.</td></tr>
+<tr><td valign="top"><a href="#is_subrelation-2">is_subrelation/2</a></td><td>Check if a temporal relation is a subrelation of another temporal relation.</td></tr>
+<tr><td valign="top"><a href="#is_true-1">is_true/1</a></td><td>Check if a temporal relation is total.</td></tr>
+<tr><td valign="top"><a href="#last-1">last/1</a></td><td>Extend a temporal relation to include the most recently related value.</td></tr>
+<tr><td valign="top"><a href="#map-2">map/2</a></td><td>Apply a (partial) function to the values of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#negation-1">negation/1</a></td><td>The negation of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#negation-2">negation/2</a></td><td>The negation of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#partition-2">partition/2</a></td><td>Partition a temporal relation based on its range.</td></tr>
+<tr><td valign="top"><a href="#product-2">product/2</a></td><td>The product of two temporal relations.</td></tr>
+<tr><td valign="top"><a href="#range-1">range/1</a></td><td>The range of a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#restrict-2">restrict/2</a></td><td>Restrict a temporal relation to the domain of another temporal relation.</td></tr>
+<tr><td valign="top"><a href="#ret-1">ret/1</a></td><td>A singleton temporal relation.</td></tr>
+<tr><td valign="top"><a href="#set-1">set/1</a></td><td>Converting a temporal relation to a set valued temporal relation.</td></tr>
+<tr><td valign="top"><a href="#shift-2">shift/2</a></td><td>Shift a temporal relation by a given time.</td></tr>
+<tr><td valign="top"><a href="#slice-3">slice/3</a></td><td>Restrict a temporal relation to a particular time slice.</td></tr>
+<tr><td valign="top"><a href="#split_at-2">split_at/2</a></td><td>Split a temporal relation into two temporal relations with disjoint domains.</td></tr>
+<tr><td valign="top"><a href="#stateful-3">stateful/3</a></td><td>Apply a simple state machine to a temporal relation.</td></tr>
+<tr><td valign="top"><a href="#subtract-2">subtract/2</a></td><td>Subtract one temporal relation from another.</td></tr>
+<tr><td valign="top"><a href="#union-2">union/2</a></td><td>Union of two temporal relations.</td></tr>
+<tr><td valign="top"><a href="#unions-1">unions/1</a></td><td>Take the union of a list of temporal relations.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="all_future-1">all_future/1</a></h3>
+<div class="spec">
+<p><tt>all_future(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that will stay true for eternity.
+ <code>all_future(R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for every <code>T'</code> in the range <code>T</code> to <code>infinity</code>.</p>
+
+<h3 class="function"><a name="all_future-2">all_future/2</a></h3>
+<div class="spec">
+<p><tt>all_future(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that will stay true for a given time.
+   <code>all_future(Time, R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for every <code>T'</code> in the range <code>T</code> to <code>T + Time</code>.</p>
+
+<h3 class="function"><a name="all_past-1">all_past/1</a></h3>
+<div class="spec">
+<p><tt>all_past(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that have been true since time 0.
+ <code>all_past(R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for every <code>T'</code> in the range <code>0</code> to <code>T</code>.</p>
+
+<h3 class="function"><a name="all_past-2">all_past/2</a></h3>
+<div class="spec">
+<p><tt>all_past(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that have been true for a given time.
+   <code>all_past(Time, R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for every <code>T'</code> in the range <code>T - Time</code> to <code>T</code>.</p>
+
+<h3 class="function"><a name="any_future-1">any_future/1</a></h3>
+<div class="spec">
+<p><tt>any_future(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that will be true at some point. <code>any_future(R)</code> relates
+ <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T'</code> to <code>X</code> for some <code>T' &gt;= T</code>.
+ Conceptually equivalent to <code>any_future/2</code> with an infinite time bound.</p>
+
+<h3 class="function"><a name="any_future-2">any_future/2</a></h3>
+<div class="spec">
+<p><tt>any_future(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that will become true at some point within the given time.
+   <code>any_future(Time, R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for any <code>T'</code> in the range <code>T</code> to <code>T + Time</code>.</p>
+
+<h3 class="function"><a name="any_past-1">any_past/1</a></h3>
+<div class="spec">
+<p><tt>any_past(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that have been true at some point. <code>any_past(R)</code> relates
+ <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T'</code> to <code>X</code> for some <code>T' =&lt; T</code>.
+ Conceptually equivalent to <code>any_past/2</code> with an infinite time bound.</p>
+
+<h3 class="function"><a name="any_past-2">any_past/2</a></h3>
+<div class="spec">
+<p><tt>any_past(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Relate values that have been true at some point within the given time.
+   <code>any_past(Time, R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to
+   <code>X</code> for any <code>T'</code> in the range <code>T - Time</code> to <code>T</code>.</p>
+
+<h3 class="function"><a name="at-2">at/2</a></h3>
+<div class="spec">
+<p><tt>at(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; [term()]</tt><br/></p>
+</div><p>Compute the values related to <code>Time</code> by <code>R</code>.</p>
+
+<h3 class="function"><a name="bind-2">bind/2</a></h3>
+<div class="spec">
+<p><tt>bind(R::<a href="#type-rel">rel()</a>, F::fun((term()) -&gt; <a href="#type-rel">rel()</a>)) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The bind operation of the temporal relation monad. <code>bind(R, F)</code> is the union of <code>shift(T, F(X))</code> for each
+ <code>X</code> and <code>T</code> such that <code>F(X)</code> is defined and <code>R</code> relates <code>T</code> to <code>X</code>.
+ <code>F</code> can be partial.</p>
+
+<h3 class="function"><a name="coarsen-2">coarsen/2</a></h3>
+<div class="spec">
+<p><tt>coarsen(K::integer(), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Coarsen the resolution of time in a temporal relation, by the
+ factor <tt>K</tt>. For example, <tt>coarsen(1000,R)</tt> would
+ convert a temporal relation with times in microseconds to a relation
+ with times in milliseconds.</p>
+
+<h3 class="function"><a name="complement-1">complement/1</a></h3>
+<div class="spec">
+<p><tt>complement(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The complement of a temporal relation.
+ <code>complement(R)</code> relates <code>T</code> to <code>X</code>, if <code>X</code> is in the range of <code>R</code>
+ and <code>R</code> does not relate <code>T</code> to <code>X</code>.</p>
+
+<h3 class="function"><a name="completion-1">completion/1</a></h3>
+<div class="spec">
+<p><tt>completion(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#union-2"><tt>union(R, negation(R))</tt></a>.</p>
+<p>Turn a temporal relation into a total temporal relation.</p>
+
+<h3 class="function"><a name="constant-1">constant/1</a></h3>
+<div class="spec">
+<p><tt>constant(X::term()) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The constant temporal relation. <code>constant(X)</code> relates all times to <code>X</code>.</p>
+
+<h3 class="function"><a name="domain_size-1">domain_size/1</a></h3>
+<div class="spec">
+<p><tt>domain_size(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-time">time()</a> | infinity</tt><br/></p>
+</div><p>The total time during which a temporal relation is true.</p>
+
+<h3 class="function"><a name="elems-1">elems/1</a></h3>
+<div class="spec">
+<p><tt>elems(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Flatten a set valued temporal relation. <code>elems(R)</code> relates <code>T</code> to <code>X</code>, if
+ <code>R</code> relates <code>T</code> to <code>Xs</code> and <code>X</code> is a member of <code>Xs</code>.</p>
+
+<h3 class="function"><a name="empty-0">empty/0</a></h3>
+<div class="spec">
+<p><tt>empty() -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The empty temporal relation.</p>
+
+<h3 class="function"><a name="filter-2">filter/2</a></h3>
+<div class="spec">
+<p><tt>filter(P::fun((term()) -&gt; bool()), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Filter a temporal relation by a predicate on the range. <code>filter(P, R)</code> relates
+ <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to <code>X</code> and <code>P(X) == true</code>. <code>P</code>
+ can be partial.</p>
+
+<h3 class="function"><a name="flatmap-2">flatmap/2</a></h3>
+<div class="spec">
+<p><tt>flatmap(F::fun((term()) -&gt; [term()]), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#elems-1"><tt>elems(map(F, R))</tt></a>.</p>
+<p>Apply a list valued partial function to the values of a temporal relation.
+      <code>map(F, R)</code> relates <code>T</code> to <code>Y</code> if <code>R</code> relates <code>T</code> to <code>X</code> and
+      <code>F(X)</code> contains <code>Y</code>. Values in the range of <code>R</code> for which <code>F</code> is not
+      defined are discarded.</p>
+
+<h3 class="function"><a name="from_timed_list-1">from_timed_list/1</a></h3>
+<div class="spec">
+<p><tt>from_timed_list(L::[{<a href="#type-time">time()</a>, term()}]) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Construct a temporal relation from a list of time value pairs.</p>
+
+<h3 class="function"><a name="implies-2">implies/2</a></h3>
+<div class="spec">
+<p><tt>implies(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#union-2"><tt>union(negation(R1), R2)</tt></a>.</p>
+<p>Relational implication. Relates <code>T</code> to <code>none</code> when the condition is
+      not satisfied.</p>
+
+<h3 class="function"><a name="intersection-2">intersection/2</a></h3>
+<div class="spec">
+<p><tt>intersection(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Intersection of two temporal relations. <code>intersection(R1, R2)</code> relates <code>T</code> to <code>X</code>, if
+ both <code>R1</code> and <code>R2</code> relates <code>T</code> to <code>X</code>.</p>
+
+<h3 class="function"><a name="is_false-1">is_false/1</a></h3>
+<div class="spec">
+<p><tt>is_false(R::<a href="#type-rel">rel()</a>) -&gt; bool()</tt><br/></p>
+</div><p>Check if a temporal relation is empty. <code>is_false(R)</code> is true if <code>R</code> is the
+ empty temporal relation.</p>
+
+<h3 class="function"><a name="is_subrelation-2">is_subrelation/2</a></h3>
+<div class="spec">
+<p><tt>is_subrelation(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; bool()</tt><br/></p>
+</div><p>Equivalent to <a href="#is_false-1"><tt>is_false(subtract(R1, R2))</tt></a>.</p>
+<p>Check if a temporal relation is a subrelation of another temporal relation.</p>
+
+<h3 class="function"><a name="is_true-1">is_true/1</a></h3>
+<div class="spec">
+<p><tt>is_true(R::<a href="#type-rel">rel()</a>) -&gt; bool()</tt><br/></p>
+</div><p>Check if a temporal relation is total. <code>is_true(R)</code> is true if <code>R</code> relates
+ every time to a value.</p>
+
+<h3 class="function"><a name="last-1">last/1</a></h3>
+<div class="spec">
+<p><tt>last(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Extend a temporal relation to include the most recently related value.
+ <code>last(R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T'</code> to <code>X</code> for the
+ <i>last</i> time <code>T' =&lt; T</code> in the domain of <code>R</code>.</p>
+
+<h3 class="function"><a name="map-2">map/2</a></h3>
+<div class="spec">
+<p><tt>map(F::fun((term()) -&gt; term()), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Apply a (partial) function to the values of a temporal relation. <code>map(F, R)</code> relates
+      <code>T</code> to <code>Y</code> if <code>R</code> relates <code>T</code> to <code>X</code> and <code>F(X) == Y</code>. Values in the
+      range of <code>R</code> for which <code>F</code> is not defined are discarded.</p>
+
+<h3 class="function"><a name="negation-1">negation/1</a></h3>
+<div class="spec">
+<p><tt>negation(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#negation-2"><tt>negation(none, R)</tt></a>.</p>
+<p>The negation of a temporal relation.</p>
+
+<h3 class="function"><a name="negation-2">negation/2</a></h3>
+<div class="spec">
+<p><tt>negation(None::term(), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The negation of a temporal relation. <code>negation(None, R)</code> relates <code>T</code> to
+ <code>None</code>, if there is no <code>X</code> such that <code>R</code> relates <code>T</code> to <code>X</code>.</p>
+
+<h3 class="function"><a name="partition-2">partition/2</a></h3>
+<div class="spec">
+<p><tt>partition(P::fun((term()) -&gt; bool()), R::<a href="#type-rel">rel()</a>) -&gt; {<a href="#type-rel">rel()</a>, <a href="#type-rel">rel()</a>}</tt><br/></p>
+</div><p>Partition a temporal relation based on its range. Returns one temporal relation with all
+ the values from <code>R</code> satifying <code>P</code> and one with the values not satisfying
+ <code>P</code>.</p>
+
+<h3 class="function"><a name="product-2">product/2</a></h3>
+<div class="spec">
+<p><tt>product(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>The product of two temporal relations. <code>product(R1, R2)</code> relates <code>T</code> to
+      <code>{X, Y}</code> if <code>R1</code> relates <code>T</code> to <code>X</code> and <code>R2</code> relates <code>T</code>
+      to <code>Y</code>.</p>
+
+<h3 class="function"><a name="range-1">range/1</a></h3>
+<div class="spec">
+<p><tt>range(R::<a href="#type-rel">rel()</a>) -&gt; [term()]</tt><br/></p>
+</div><p>The range of a temporal relation. Returns the ordered list of all <code>X</code> such that
+ <code>R</code> relates <code>T</code> to <code>X</code> for some <code>T</code>.</p>
+
+<h3 class="function"><a name="restrict-2">restrict/2</a></h3>
+<div class="spec">
+<p><tt>restrict(R::<a href="#type-rel">rel()</a>, When::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Restrict a temporal relation to the domain of another temporal relation.
+ <code>restrict(R, When)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T</code> to <code>X</code>
+ and <code>When</code> relates <code>T</code> to some <code>Y</code>.</p>
+
+<h3 class="function"><a name="ret-1">ret/1</a></h3>
+<div class="spec">
+<p><tt>ret(X::term()) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>A singleton temporal relation. <code>ret(X)</code> just relates <code>0</code> to <code>X</code>.
+ (It is the return operation for the temporal relation monad.)</p>
+
+<h3 class="function"><a name="set-1">set/1</a></h3>
+<div class="spec">
+<p><tt>set(R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Converting a temporal relation to a set valued temporal relation. <code>set(R)</code> relates <code>T</code>
+ to <a href="#at-2"><code>at(T, R)</code></a>.</p>
+
+<h3 class="function"><a name="shift-2">shift/2</a></h3>
+<div class="spec">
+<p><tt>shift(Time::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Shift a temporal relation by a given time.
+ <code>shift(Time, R)</code> relates <code>T</code> to <code>X</code>, if <code>R</code> relates <code>T - Time</code> to <code>X</code>.
+ Note that if <code>Time &lt; 0</code> the initial part of <code>R</code> will be discarded, since
+ the domain of a temporal relation only includes non-negative times.</p>
+
+<h3 class="function"><a name="slice-3">slice/3</a></h3>
+<div class="spec">
+<p><tt>slice(T0::<a href="#type-time">time()</a>, T1::<a href="#type-time">time()</a>, R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Restrict a temporal relation to a particular time slice.
+ <code>slice(T0, T1, R)</code> is the restriction of <code>R</code> to the domain <code>T0 =&lt; T &lt; T1</code>.</p>
+
+<h3 class="function"><a name="split_at-2">split_at/2</a></h3>
+<div class="spec">
+<p><tt>split_at(P::fun((term()) -&gt; bool()), R::<a href="#type-rel">rel()</a>) -&gt; {<a href="#type-rel">rel()</a>, <a href="#type-rel">rel()</a>}</tt><br/></p>
+</div><p>Split a temporal relation into two temporal relations with disjoint domains. The domain of
+ the input temporal relation is split at the earliest occurrence of a value
+ matching the given predicate.</p>
+
+<h3 class="function"><a name="stateful-3">stateful/3</a></h3>
+<div class="spec">
+<p><tt>stateful(Start::fun((term()) -&gt; [State]), Transform::fun((State, term()) -&gt; [State]), R::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt>
+<ul class="definitions"><li><tt>State = term()</tt></li></ul></p>
+</div><p>Apply a simple state machine to a temporal relation. The <code>Start</code> function maps
+ values to sets of initial states, and <code>Transform</code> maps a state and a value
+ to a (potentially empty) set of new states. A state <code>S</code> is started at time
+ <code>T</code>, if <code>R</code> relates <code>T</code> to <code>X</code> and <code>Start(X)</code> contains <code>S</code>.
+ Whenever <code>Transform(S, Y)</code> is defined for any <code>Y</code> in <code>R</code>, then <code>S</code> is
+ replaced by all the states in <code>Transform(S, Y)</code>. Both <code>Start</code> and
+ <code>Transform</code> can be partial.</p>
+
+<h3 class="function"><a name="subtract-2">subtract/2</a></h3>
+<div class="spec">
+<p><tt>subtract(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Subtract one temporal relation from another.
+ <code>subtract(R1, R2)</code> relates <code>T</code> to <code>X</code>, if <code>R1</code> relates <code>T</code> to <code>X</code>
+ and <code>R2</code> does not relate <code>T</code> to <code>X</code>.</p>
+
+<h3 class="function"><a name="union-2">union/2</a></h3>
+<div class="spec">
+<p><tt>union(R1::<a href="#type-rel">rel()</a>, R2::<a href="#type-rel">rel()</a>) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Union of two temporal relations. <code>union(R1, R2)</code> relates <code>T</code> to <code>X</code>, if one
+ or both of <code>R1</code> and <code>R2</code> relates <code>T</code> to <code>X</code>.</p>
+
+<h3 class="function"><a name="unions-1">unions/1</a></h3>
+<div class="spec">
+<p><tt>unions(Rs::[<a href="#type-rel">rel()</a>]) -&gt; <a href="#type-rel">rel()</a></tt><br/></p>
+</div><p>Take the union of a list of temporal relations.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:29.</i></p>
+</body>
+</html>

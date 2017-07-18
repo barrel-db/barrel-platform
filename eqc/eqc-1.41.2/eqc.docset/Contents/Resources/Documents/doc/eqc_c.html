@@ -1,0 +1,597 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_c</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_c</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul> 
+This module provides functions for testing code written in C.
+<p>Copyright © Quviq AB, 2009-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p> 
+This module provides functions for testing code written in C.</p>
+
+ <p>The purpose of this module is to make it easy to test C programs with 
+QuickCheck. To do this it provides a way to call C functions from Erlang 
+together with a number of functions to manipulate C values.</p>
+
+ <h3><a name="Introduction">Introduction</a></h3>
+ Suppose we have a C file <code>example.c</code> containing the following functions:
+ <pre>
+ // Add two integers
+ int plus (int x, int y) {
+   return x + y;
+ }
+
+ // Sum an array of integers
+ int sum (int *array, int len) {
+   int n;
+   int sum = 0;
+   for (n = 0; n &lt; len; n++)
+     sum += array[n];
+   return sum;
+ } </pre>
+ To make these functions available to call from Erlang, simply call the start
+ function:
+ <pre>
+ 1&gt; <a href="#start-1">eqc_c:start</a>(example).
+ ok </pre>
+ This creates an Erlang module <code>example</code> containing Erlang wrappers for the
+ functions from the C file <code>example.c</code>.
+ <pre>
+ 2&gt; example:plus(3, 4).
+ 7 </pre>
+ The <code>sum</code> function takes a pointer to an array as an argument, so in order
+ to call it we need to get that pointer from somewhere. For instance, using
+ <a href="#create_array-2"><code>create_array/2</code></a> to allocate a new array:
+ <pre>
+ 3&gt; P = <a href="#create_array-2">eqc_c:create_array</a>(int, [1, 2, 3, 4]).
+ {ptr,int,1048864}
+ 4&gt; example:sum(P, 4).
+ 10
+ </pre>
+
+ <h3><a name="Details">Details</a></h3>
+ When calling <a href="#start-1"><code>start/1</code></a>, the C source is preprocessed and analysed and
+ then three things happen:
+ <ul>
+   <li> The specified C source is compiled together with some generated code
+        and a C library provided with the QuickCheck distribution to produce a
+        binary executable. This executable is started and communicates with
+        the Erlang system using file descriptors 3 and 4 for input and output,
+        respectively (except on Windows systems, where stdin and stdout are
+        used). This means that if the C code uses these file descriptors for
+        anything the interface might not work. </li>
+   <li> An Erlang module with the specified name is loaded, containing Erlang
+        wrappers for the functions in the C program (see <a href="#start-2"><code>start/2</code></a> for
+        information on how to specify for which functions to create wrappers).
+        These functions will pass their arguments (after type checking them)
+        to the compiled C program and return the result of calling the
+        corresponding C function. See the definition of the supported <a href="#type-type">C types</a> for how C values are represented in Erlang.</li>
+   <li> An Erlang header file with the same name as the generated Erlang
+        module is created in the current directory containing record
+        definitions for the C structs that appear in the source file. </li>
+ </ul>
+
+ <h4><a name="Global_variables">Global variables</a></h4><p>
+ To access global variables appearing in the C program, the following
+ functions are provided: <a href="#address_of-1"><code>address_of/1</code></a>, <a href="#value_of-1"><code>value_of/1</code></a>, and <a href="#set_value-2"><code>set_value/2</code></a>. The <code>address_of/1</code> function gives you a pointer to the global
+ variable of the specified name, and can also be used to get pointers to
+ exported functions. <code>value_of/1</code> and <code>set_value/2</code> allows you to get and 
+set the value of a global variable.</p>
+
+ <a name="arrays"/>
+ <h4><a name="Working_with_arrays">Working with arrays</a></h4>
+ <b>Arrays in structs or as global variables</b>.
+ When an array appears as a global variable or as a field of a struct it is
+ represented by a list on the Erlang side. For instance, the declarations
+ <pre>
+ int xs[3] = {1, 2, 3};
+ struct arr { int ys[2]; };
+ </pre>
+ can be interacted with as follows
+ <pre>
+ 3&gt; <a href="eqc_c.html#value_of-1">eqc_c:value_of</a>(xs).
+ [1,2,3]
+ 4&gt; <a href="eqc_c.html#alloc-2">eqc_c:alloc</a>({struct, arr}, {arr, [4,5]}).
+ {ptr,{struct,arr},4297064576}
+ </pre>
+
+ <b>Functions taking array arguments</b>.
+ If an array appears as an argument to a function, it is treated as a
+ pointer in C. For instance, the following function expects a pointer to an
+ array as its argument:
+ <pre>
+ int sum(int a[2])
+ {
+   return a[0] + a[1];
+ }
+ </pre>
+ Consequently, the type assigned to this function on the Erlang side is
+ <pre>
+ 5&gt; <a href="eqc_c.html#type_of-1">eqc_c:type_of</a>(sum).
+ {func,int,[{ptr,{array,int}}]}
+ </pre>
+ and it can be called (assuming it's defined in <code>example.c</code>) as
+ <pre>
+ 6&gt; P = <a href="eqc_c.html#create_array-2">eqc_c:create_array</a>(int, [7,11]).
+ {ptr,int,4297064592}
+ 7&gt; example:sum(P).
+ 18
+ </pre><p> 
+Note that a pointer to an integer is happily accepted as a pointer to an 
+array of integers.</p>
+
+ <b>Automatic allocation</b>.
+ For convenience, a single value or a list of values is always accepted
+ whenever a pointer is required. An array containing the given elements will
+ then be allocated and the pointer to it passed along.  This is particularly
+ handy for functions expecting string arguments. For instance,
+ <pre>
+ void hello(char *s)
+ {
+   printf("Hello %s!\n", s);
+ }
+ </pre>
+ can be called as
+ <pre>
+ 8&gt; example:hello("world").
+ Hello world!
+ ok
+ </pre>
+ rather than
+ <pre>
+ 9&gt; example:hello(eqc_c:create_string("world")).
+ Hello world!
+ ok
+ </pre><p> 
+Note that values created in this way will not be freed and can thus cause a 
+memory leak.</p>
+
+ <h4><a name="Badly_behaved_C_programs">Badly behaved C programs</a></h4>
+ If the C program crashes an exception is raised in the calling Erlang process
+ and the C program is restarted. For instance, trying to dereference a null
+ pointer produces the following (the particular exception raised may depend on
+ the platform):
+ <pre>
+ 5&gt; eqc_c:deref({ptr, int, 0}).
+ ** exception error: bus_error </pre><p>
+ In the case of a looping C program a timeout exception is raised in the
+ Erlang process. The timeout value can be set when starting the C program (see
+ <a href="#start-2"><code>start/2</code></a>) or using <a href="#set_timeout-1"><code>set_timeout/1</code></a>. <b>Note</b>: when a timeout
+ occurs a new instance of the C program is started and will be used for
+ subsequent function calls, <i>but the old instance is still running,
+ possibly consuming a lot of resources</i>.</p>
+
+ <h4><a name="Current_limitations">Current limitations</a></h4><p> 
+At the moment there is no support for functions with variable arity. These 
+can appear in your C program, but you will not be able to call functions with 
+variable arity from Erlang.</p>
+
+ <b>Cygwin users</b> need to be aware that many Cygwin header files
+ declare functions which are not actually exported by the Cygwin
+ libraries; these declarations cause link errors if wrappers are
+ generated for them. To avoid this, Cygwin users who need to use
+ <a href="#start-2"><code>start/2</code></a> should either specify <tt>definitions_only</tt> as
+ an option, or specify an <tt>include_functions</tt> or
+ <tt>exclude_functions</tt> option to prevent the problematic
+ wrappers from being generated.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-ptr">ptr()</a></h3>
+<p><tt>ptr() = {ptr, <a href="#type-type">type()</a>, integer()} | 'NULL'</tt></p>
+<p> The value of a C pointer. Contains the memory address as well as the type of
+ the value pointed to.</p>
+
+<h3 class="typedecl"><a name="type-type">type()</a></h3>
+<p><tt>type() = void | bool | char | unsigned_char | short | unsigned_short | int | unsigned_int | long | unsigned_long | long_long | unsigned_long_long | float | double | long_double | complex_float | complex_double | complex_long_double | {ptr, <a href="#type-type">type()</a>} | {func, <a href="#type-type">type()</a>, [<a href="#type-type">type()</a>]} | {closure, <a href="#type-type">type()</a>, [<a href="#type-type">type()</a>]} | {array, integer(), <a href="#type-type">type()</a>} | {array, <a href="#type-type">type()</a>} | {struct, atom()} | {union, atom()} | {enum, atom()} | string()</tt></p>
+<p>   Supported C types.
+ <ul>
+   <li> <code>void</code> can only appear as the target of a pointer or as a return
+        type for a function.</li><p/>
+   <li> <code>bool</code> is the boolean type from <code>stdbool.h</code> (C99) and is
+        represented in Erlang by the atoms <code>true</code> and <code>false</code>.</li><p/>
+   <li> <code>char</code>, <code>unsigned_char</code>, <code>short</code>, <code>unsigned_short</code>, <code>int</code>,
+        <code>unsigned_int</code>, <code>long</code>, <code>unsigned_long</code>, <code>long_long</code>, and
+        <code>unsigned_long_long</code> are represented in Erlang as integers.</li><p/>
+
+   <li> <code>float</code>, <code>double</code>, and <code>long_double</code> are represented as Erlang
+        floats. <b>Note</b>: depending on the platform, precision may be lost
+        for long doubles.</li><p/>
+   <li> <code>complex_float</code>, <code>complex_double</code>, and <code>complex_long_double</code> are
+        represented as pairs of Erlang floats, with the first component being
+        the real part and the second component the imaginary part.</li><p/>
+   <li> A pointer of type <code>{ptr, T}</code> is represented as a <a href="#type-ptr"><code>ptr()</code></a> with
+        the type field set to <code>T</code>.</li><p/>
+   <li> The type <code>{func, Ret, Args}</code> is the type of a function returning a
+        value of type <code>Ret</code> (possibly <code>void</code>) and whose arguments have
+        types <code>Args</code>. Function types can only appear as targets of
+        pointers.</li><p/>
+   <li> A closure (or block) type <code>{closure, Ret, Args}</code> has the same shape
+        as a function type. Closures are supported by some C compilers, for
+        instance gcc on MacOS X 10.6.</li><p/>
+   <li> The value of an array type <code>{array, T}</code> or <code>{array, Len, T}</code> is represented in
+        Erlang as a list of values of type <code>T</code>. If a length <code>Len</code> is specified the list
+        should have <code>Len</code> elements.
+        See <a href="#arrays">working with arrays</a> above for more details.
+        </li><p/>
+   <li> Values of a struct type are represented as values of an Erlang record
+        with the same name and corresponding fields. For instance, the C
+        struct
+        <pre>
+ struct coord {
+   int x, y;
+ };     </pre>
+        is modelled by the Erlang record
+        <pre>
+ -record(coord, {x, y}). </pre>
+        For anonymous structs a name is chosen depending on how the struct is
+        defined. In particular, if it is defined inside a typedef it gets the
+        name of the introduced type. For instance, the definition
+        <pre>
+ typedef struct {
+   int x, y;
+ } coord; </pre>
+        will result in the same Erlang record being generated as in the
+        previous example.
+        </li><p/>
+   <li> Union type values are represented in the same way as struct
+        values--with a record containing a field for each variant of the
+        union. When getting a union value from C all the fields will be
+        populated. On the other hand, when passing a union value to the C code
+        only a single field should be set and the others should be
+        <tt>eqc_c_undefined</tt>, which is the default value. For example,
+        given the C code
+        <pre>
+ union u {
+   int x;
+   bool y;
+ };
+ union u i = { .x = 0 }; </pre>
+        we could have the following interaction
+        <pre>
+ 5&gt; eqc_c:value_of(i).
+ #u{x = 0,y = false}
+ 6&gt; eqc_c:set_value(i, #u{y = true}).
+ ok
+ 7&gt; eqc_c:value_of(i).
+ #u{x = 1,y = true} </pre>
+        For convenience it is also allowed to pass a value matching one of the
+        variants as a union value. So, in place of the set_value call above we
+        could write
+        <pre>
+ 6&gt; eqc_c:set_value(i, true).
+ ok </pre> </li>
+   <li> Values of enumeration types are represented as atoms. For instance,
+        the values of the enumeration type
+        <pre>
+ enum colour { red, green, blue }; </pre>
+        are the atoms <code>red</code>, <code>green</code>, and <code>blue</code>.</li><p/>
+   <li> Defined types are introduced by typedefs in the C code and can be used
+        interchangeably with their definitions. For instance, given
+        <pre>
+ typedef int MyInt; </pre>
+        we can call
+        <pre>
+ 1&gt; <a href="#alloc-2">eqc_c:alloc</a>("MyInt", 17).
+ {ptr,int,2097440} </pre>
+        Note how the typedef has been expanded in the value of the pointer. </li>
+ </ul></p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#add_to_ptr-2">add_to_ptr/2</a></td><td>Add N to a pointer.</td></tr>
+<tr><td valign="top"><a href="#address_of-1">address_of/1</a></td><td>Get a pointer to a C function or global variable.</td></tr>
+<tr><td valign="top"><a href="#alloc-1">alloc/1</a></td><td>Allocate memory for an object of type <code>Type</code>.</td></tr>
+<tr><td valign="top"><a href="#alloc-2">alloc/2</a></td><td>Allocate memory for an object of type <code>Type</code> and initialize it to
+      the value <code>X</code>.</td></tr>
+<tr><td valign="top"><a href="#array_index-2">array_index/2</a></td><td>Return the value at the given index of an array.</td></tr>
+<tr><td valign="top"><a href="#array_index-3">array_index/3</a></td><td>Set the value at the given index of an array.</td></tr>
+<tr><td valign="top"><a href="#cast_ptr-2">cast_ptr/2</a></td><td>Change the type of a pointer.</td></tr>
+<tr><td valign="top"><a href="#create_array-2">create_array/2</a></td><td>Allocate an array of the given type containing the values <code>Xs</code>.</td></tr>
+<tr><td valign="top"><a href="#create_string-1">create_string/1</a></td><td> Allocate a C string containing the given string.</td></tr>
+<tr><td valign="top"><a href="#deref-1">deref/1</a></td><td>Dereference a pointer.</td></tr>
+<tr><td valign="top"><a href="#expand_type-1">expand_type/1</a></td><td>Expand all type definitions in a type.</td></tr>
+<tr><td valign="top"><a href="#free-1">free/1</a></td><td>Free the memory pointed to by a pointer.</td></tr>
+<tr><td valign="top"><a href="#read_array-2">read_array/2</a></td><td>Read the elements of an array.</td></tr>
+<tr><td valign="top"><a href="#read_string-1">read_string/1</a></td><td>Read the value of a null terminated C string.</td></tr>
+<tr><td valign="top"><a href="#restart-0">restart/0</a></td><td>Restart the C program.</td></tr>
+<tr><td valign="top"><a href="#running-0">running/0</a></td><td>Check if the C program is running.</td></tr>
+<tr><td valign="top"><a href="#set_timeout-1">set_timeout/1</a></td><td>Set the timeout for C function calls to <code>N</code> milliseconds.</td></tr>
+<tr><td valign="top"><a href="#set_value-2">set_value/2</a></td><td>Set the value of a global variable.</td></tr>
+<tr><td valign="top"><a href="#sizeof-1">sizeof/1</a></td><td>The size in bytes required to store an object of the given type.</td></tr>
+<tr><td valign="top"><a href="#start-1">start/1</a></td><td>Equivalent to <a href="#start-2"><tt>start(Module, [definitions_only])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start-2">start/2</a></td><td>Set up an interface to a given C file.</td></tr>
+<tr><td valign="top"><a href="#start_functions-2">start_functions/2</a></td><td>Equivalent to <a href="#start-2"><tt>start(Module, [{include_functions, Functions}])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#stop-0">stop/0</a></td><td>Stop the C program.</td></tr>
+<tr><td valign="top"><a href="#store-2">store/2</a></td><td>Store a value at the location pointed to by a pointer.</td></tr>
+<tr><td valign="top"><a href="#type_info-1">type_info/1</a></td><td>Get information on a type.</td></tr>
+<tr><td valign="top"><a href="#type_of-1">type_of/1</a></td><td>Get the type of a C function or global variable.</td></tr>
+<tr><td valign="top"><a href="#type_of-2">type_of/2</a></td><td>Get the type of a C function or global variable.</td></tr>
+<tr><td valign="top"><a href="#value_of-1">value_of/1</a></td><td>Get the value of a global variable.</td></tr>
+<tr><td valign="top"><a href="#write_array-2">write_array/2</a></td><td>Store values in the array pointed to be the first argument.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="add_to_ptr-2">add_to_ptr/2</a></h3>
+<div class="spec">
+<p><tt>add_to_ptr(Ptr::<a href="#type-ptr">ptr()</a>, N::integer()) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Add N to a pointer. Equivalent to <code>Ptr += N</code> in C. In other words
+      the value of the resulting pointer depends on the size of the type
+      pointed to.</p>
+
+<h3 class="function"><a name="address_of-1">address_of/1</a></h3>
+<div class="spec">
+<p><tt>address_of(X::atom()) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Get a pointer to a C function or global variable.</p>
+
+<h3 class="function"><a name="alloc-1">alloc/1</a></h3>
+<div class="spec">
+<p><tt>alloc(Type::<a href="#type-type">type()</a>) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Allocate memory for an object of type <code>Type</code>. The allocated memory
+      is initialized with zeroes.</p>
+
+<h3 class="function"><a name="alloc-2">alloc/2</a></h3>
+<div class="spec">
+<p><tt>alloc(Type::<a href="#type-type">type()</a>, X::term()) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Allocate memory for an object of type <code>Type</code> and initialize it to
+      the value <code>X</code>. Type checks the value before allocating the memory.</p>
+
+<h3 class="function"><a name="array_index-2">array_index/2</a></h3>
+<div class="spec">
+<p><tt>array_index(Ptr::<a href="#type-ptr">ptr()</a>, Index::integer()) -&gt; term()</tt><br/></p>
+</div><p>Return the value at the given index of an array. Equivalent to
+      the C code <code>Ptr[Index]</code>. Indexing starts at index 0.</p>
+
+<h3 class="function"><a name="array_index-3">array_index/3</a></h3>
+<div class="spec">
+<p><tt>array_index(Ptr::<a href="#type-ptr">ptr()</a>, Index::integer(), Val::term()) -&gt; ok</tt><br/></p>
+</div><p>Set the value at the given index of an array. Equivalent to
+      the C code <code>Ptr[Index] = Val</code>. Indexing starts at index 0.</p>
+
+<h3 class="function"><a name="cast_ptr-2">cast_ptr/2</a></h3>
+<div class="spec">
+<p><tt>cast_ptr(To::<a href="#type-type">type()</a>, Ptr::<a href="#type-ptr">ptr()</a>) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Change the type of a pointer. Equivalent to the C code <code>(Type *)Ptr</code>.
+      <b>Note</b>: This is unsafe and should be used with care.</p>
+
+<h3 class="function"><a name="create_array-2">create_array/2</a></h3>
+<div class="spec">
+<p><tt>create_array(Type::<a href="#type-type">type()</a>, Xs::[term()]) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p>Allocate an array of the given type containing the values <code>Xs</code>.
+      The values are type checked before allocation.</p>
+
+<h3 class="function"><a name="create_string-1">create_string/1</a></h3>
+<div class="spec">
+<p><tt>create_string(S::string()) -&gt; <a href="#type-ptr">ptr()</a></tt><br/></p>
+</div><p> Allocate a C string containing the given string.</p>
+
+<h3 class="function"><a name="deref-1">deref/1</a></h3>
+<div class="spec">
+<p><tt>deref(Ptr::<a href="#type-ptr">ptr()</a>) -&gt; term()</tt><br/></p>
+</div><p>Dereference a pointer.</p>
+
+<h3 class="function"><a name="expand_type-1">expand_type/1</a></h3>
+<div class="spec">
+<p><tt>expand_type(Type::<a href="#type-type">type()</a>) -&gt; <a href="#type-type">type()</a></tt><br/></p>
+</div><p>Expand all type definitions in a type.</p>
+
+<h3 class="function"><a name="free-1">free/1</a></h3>
+<div class="spec">
+<p><tt>free(Ptr::<a href="#type-ptr">ptr()</a>) -&gt; ok</tt><br/></p>
+</div><p>Free the memory pointed to by a pointer. Equivalent to the
+      C code <code>free(Ptr)</code>.</p>
+
+<h3 class="function"><a name="read_array-2">read_array/2</a></h3>
+<div class="spec">
+<p><tt>read_array(Ptr::<a href="#type-ptr">ptr()</a>, N::integer()) -&gt; [term()]</tt><br/></p>
+</div><p>Read the elements of an array. Since C arrays do not store their length,
+      the length has to be supplied separately.</p>
+
+<h3 class="function"><a name="read_string-1">read_string/1</a></h3>
+<div class="spec">
+<p><tt>read_string(Ptr::<a href="#type-ptr">ptr()</a>) -&gt; string()</tt><br/></p>
+</div><p>Read the value of a null terminated C string.</p>
+
+<h3 class="function"><a name="restart-0">restart/0</a></h3>
+<div class="spec">
+<p><tt>restart() -&gt; any()</tt></p>
+</div><p>Restart the C program. Just restarts the executable, no recompilation is
+      performed.</p>
+
+<h3 class="function"><a name="running-0">running/0</a></h3>
+<div class="spec">
+<p><tt>running() -&gt; any()</tt></p>
+</div><p>Check if the C program is running.</p>
+
+<h3 class="function"><a name="set_timeout-1">set_timeout/1</a></h3>
+<div class="spec">
+<p><tt>set_timeout(N) -&gt; any()</tt></p>
+</div><p>Set the timeout for C function calls to <code>N</code> milliseconds. Can also be
+ set from <a href="#start-2"><code>start/2</code></a>.</p>
+
+<h3 class="function"><a name="set_value-2">set_value/2</a></h3>
+<div class="spec">
+<p><tt>set_value(X::atom(), V::term()) -&gt; ok</tt><br/></p>
+</div><p>Equivalent to <a href="#store-2"><tt>store(address_of(X), V)</tt></a>.</p>
+<p>Set the value of a global variable.</p>
+
+<h3 class="function"><a name="sizeof-1">sizeof/1</a></h3>
+<div class="spec">
+<p><tt>sizeof(Type::<a href="#type-type">type()</a>) -&gt; integer()</tt><br/></p>
+</div><p>The size in bytes required to store an object of the given type. Equivalent
+      to <code>sizeof(Type)</code> in C.</p>
+
+<h3 class="function"><a name="start-1">start/1</a></h3>
+<div class="spec">
+<p><tt>start(Module) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="#start-2"><tt>start(Module, [definitions_only])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start-2">start/2</a></h3>
+<div class="spec">
+<p><tt>start(Module::atom(), Options::<a href="#type-proplist">proplist()</a>) -&gt; ok | failed | {error, string()}</tt><br/></p>
+</div><p><p>Set up an interface to a given C file.  Generates and loads an Erlang
+      wrapper <code>Module</code> for the C file specified by the <code>c_src</code> option
+      (<code>atom_to_list(Module) ++ ".c"</code> by default).  For instance, if
+      <code>foo.c</code> defines a function <code>int plus(int x, int y)</code>, calling
+      <code>eqc_c:start(foo, [])</code> allows <code>plus</code> to be called as
+      <code>foo:plus(1, 2)</code>.</p>
+
+      Interface generation options:
+      <dl>
+       <dt><code>{c_src, string()}</code></dt>
+       <dd>The name of the C source file (default: <code>atom_to_list(Module) ++ ".c"</code>).</dd>
+       <dt><code>definitions_only</code></dt>
+       <dd>Only generate wrappers for function definitions (and not function prototypes).</dd>
+       <dt><code>{exclude_functions, [atom() | string()]}</code></dt>
+       <dd>Do not generate wrappers for the specified functions.</dd>
+       <dt><code>{include_functions, [atom() | string()]}</code></dt>
+       <dd>Only generate wrappers for the specified functions.</dd>
+       <dt><code>keep_files</code></dt>
+       <dd>Don't remove temporary files</dd>
+       <dt><code>{hrl, string() | none}</code></dt>
+       <dd>The name of the Erlang header file to be created containing
+           generated record definitions, or <code>none</code> if no file should be
+           created (default: <code>atom_to_list(Module) ++ ".hrl"</code>).</dd>
+      </dl>
+      Runtime options:
+      <dl>
+       <dt><code>{timeout, integer()}</code></dt>
+       <dd>Specify the timeout (in milliseconds) for C function calls (default 500 ms).</dd>
+       <dt><code>{casts, atom() | [atom()]}</code></dt>
+       <dd>Specify callback modules for performing runtime conversions of C values. The given
+           modules should export two functions <code>to_c/2</code> and <code>from_c/2</code>, which given a C type
+           and a value performs the desired conversions. The functions should throw an exception
+           for types that are not to be converted.
+           <p/>
+           A typical use case is when the C program could have used an enum
+           type, but didn't. For instance, if the C code defines
+ <pre>
+ typedef int Answer;
+ #define YES 1
+ #define NO  0</pre>
+           a casts module might define
+ <pre>
+ to_c("Answer", yes) -&gt; 1;
+ to_c("Answer", no)  -&gt; 0.
+
+ from_c("Answer, 1) -&gt; yes;
+ from_c("Answer, 0) -&gt; no.</pre>
+           See also the <a href="eqc_c_enum.html"><code>eqc_c_enum</code></a> module for a tool to generate
+           <code>to_c</code> and <code>from_c</code> functions in cases like this one.
+       </dd>
+      </dl>
+      C compiler options:
+      <dl>
+       <dt><code>verbose</code></dt>
+       <dd>Print the commands used to build the C code.</dd>
+       <dt><code>silent</code></dt>
+       <dd>Don't print warnings and errors from the C compiler.</dd>
+       <dt><code>return_error</code></dt>
+       <dd>Return an error tuple with the error message from the C compiler
+           on failure.</dd>
+       <dt><code>{cc, string()}</code></dt>
+       <dd>Specifies how to call the C compiler (default: gcc).</dd>
+       <dt><code>{cpp, string()}</code></dt>
+       <dd>Specifies how to call the C preprocessor (default: gcc).</dd>
+       <dt><code>{coutput_flag, string()}</code></dt>
+       <dd>The flag to specify the output file of the C compiler (default: "-o").</dd>
+       <dt><code>{cmacro_flag, string()}</code></dt>
+       <dd>The flag to pass to the C compiler to define a preprocessing macro (default: "-D").</dd>
+       <dt><code>{cflags, string()}</code></dt>
+       <dd>Additional flags to the C compiler.</dd>
+       <dt><code>{cppflag, string()}</code></dt>
+       <dd>Specifies the flag to use when preprocessing (default: "-E").</dd>
+       <dt><code>{cppflags, string()}</code></dt>
+       <dd>Additional flags to the C preprocessor.</dd>
+       <dt><code>{wrapper_src, string()}</code></dt>
+       <dd>Specifies the location of the C wrapper library
+             (default: <code>filename:join(code:lib_dir(eqc,include),"eqc_c_lib.c")</code>.</dd>
+       <dt><code>{additional_files, [string()]}</code></dt>
+       <dd>Additional files (C sources or object files) to compile or link.</dd>
+       <dt><code>{exec_command_line, fun((string()) -&gt; {string(), [string()]})}</code></dt>
+       <dd>Specifies the command line to start up the C executable as a function
+           from the name of the generated executable to a pair of the program
+           to run and a list of its arguments (default: <tt>fun(Exe) -&gt; {Exe, []}
+           end</tt>). For instance, to start up the C program with Valgrind you can use
+           <tt>fun(Exe) -&gt; {os:find_executable("valgrind"), [Exe]} end</tt>.</dd>
+      </dl></p>
+
+<h3 class="function"><a name="start_functions-2">start_functions/2</a></h3>
+<div class="spec">
+<p><tt>start_functions(Module, Functions) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="#start-2"><tt>start(Module, [{include_functions, Functions}])</tt></a>.</p>
+
+
+<h3 class="function"><a name="stop-0">stop/0</a></h3>
+<div class="spec">
+<p><tt>stop() -&gt; any()</tt></p>
+</div><p>Stop the C program.</p>
+
+<h3 class="function"><a name="store-2">store/2</a></h3>
+<div class="spec">
+<p><tt>store(Ptr::<a href="#type-ptr">ptr()</a>, Val::term()) -&gt; ok</tt><br/></p>
+</div><p>Store a value at the location pointed to by a pointer. Equivalent to
+      the C code <code>*Ptr = Val</code>. The value is type checked against the
+      type of the pointer.</p>
+
+<h3 class="function"><a name="type_info-1">type_info/1</a></h3>
+<div class="spec">
+<p><tt>type_info(Type::Defined | Datatype) -&gt; Definition | Fields | Tags</tt>
+<ul class="definitions"><li><tt>Defined = string()</tt></li><li><tt>Datatype = {struct, atom()} | {union, atom()} | {enum, atom()}</tt></li><li><tt>Definition = <a href="#type-type">type()</a></tt></li><li><tt>Fields = [{<a href="#type-type">type()</a>, string()}]</tt></li><li><tt>Tags = [atom()]</tt></li></ul></p>
+</div><p>Get information on a type. For defined types,
+ <code>type_info</code> returns the definition without expanding nested typedefs
+ (to get the fully expanded type use <a href="#expand_type-1"><code>expand_type/1</code></a>). For struct and
+ union types, the list of fields is returned, where each field is a pair of a
+ type and a field name. For enum types, the list of tags is returned.</p>
+
+<h3 class="function"><a name="type_of-1">type_of/1</a></h3>
+<div class="spec">
+<p><tt>type_of(X::atom()) -&gt; <a href="#type-type">type()</a></tt><br/></p>
+</div><p>Equivalent to <a href="#type_of-2"><tt>type_of(X, false)</tt></a>.</p>
+<p>Get the type of a C function or global variable.</p>
+
+<h3 class="function"><a name="type_of-2">type_of/2</a></h3>
+<div class="spec">
+<p><tt>type_of(X::atom(), Expand::bool()) -&gt; <a href="#type-type">type()</a></tt><br/></p>
+</div><p>Get the type of a C function or global variable. If <code>Expand</code> is true,
+ type definitions are unfolded. For instance, given the C program
+ <pre>
+ typedef unsigned int UINT;
+ UINT some_int = 42;
+ </pre>
+ we would get the following results from <code>type_of</code>:
+ <pre>
+ 2&gt; eqc_c:type_of(some_int, true).
+ unsigned_int
+ 3&gt; eqc_c:type_of(some_int, false).
+ "UINT"
+ </pre></p>
+
+<h3 class="function"><a name="value_of-1">value_of/1</a></h3>
+<div class="spec">
+<p><tt>value_of(X::atom()) -&gt; term()</tt><br/></p>
+</div><p>Equivalent to <a href="#deref-1"><tt>deref(address_of(X))</tt></a>.</p>
+<p>Get the value of a global variable.</p>
+
+<h3 class="function"><a name="write_array-2">write_array/2</a></h3>
+<div class="spec">
+<p><tt>write_array(Ptr::<a href="#type-ptr">ptr()</a>, List::term()) -&gt; ok</tt><br/></p>
+</div><p>Store values in the array pointed to be the first argument.
+      The values are type checked against the type of the pointer.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

@@ -1,0 +1,458 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_mocking_c</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_mocking_c</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functionality for mocking C modules/function.
+<p>Copyright © Quviq AB, 2013-2017
+ </p>
+
+<p><b>Version:</b> 1.41.2</p>
+<p><b>Behaviours:</b> <a href="gen_server.html"><tt>gen_server</tt></a>.</p>
+<p><b>Authors:</b> Hans Svensson (<a href="mailto:hans.svensson@quviq.com"><tt>hans.svensson@quviq.com</tt></a>).</p>
+
+<h2><a name="description">Description</a></h2><p>This module provides functionality for mocking C modules/function. It is designed
+  to work together with <a href="eqc_component.html"><code>eqc_component</code></a> (+ <a href="eqc_c.html"><code>eqc_c</code></a> and <a href="eqc_mocking.html"><code>eqc_mocking</code></a>),  
+so that callouts can be mocked conveniently using the functionality in these  
+modules. It is also possible to use this module for traditional mocking. We first show  
+how mocking can be used standalone, while the later part of the documentation focus on  
+the eqc_component use-case.</p>
+ 
+  Mocking C functionality and Erlang functionality uses the same underlying mocking
+  language, as described in <a href="eqc_mocking.html"><code>eqc_mocking</code></a>, and thus mocked modules are described in
+  very much the same way. However, since Erlang and C are fundamentally different
+  languages there are, of course, things that are different when mocking. Starting in
+  the API specification; to mock a C function, we need to know its type signature, as
+  well as the <em>direction</em> (in, out, or in-out) of its arguments. If we use the
+  same example as in <a href="eqc_mocking.html"><code>eqc_mocking</code></a>, a stack; where its API consists of three
+  functions <tt>new/0</tt>, <tt>push/2</tt>, and <tt>pop/1</tt>. The C version of the API
+  specification looks like:
+  <pre>
+  api_spec_c() -&gt; #api_spec{
+    language = c,
+    mocking = eqc_mocking_c,
+    modules  = [ #api_module{
+      name = stack,
+      functions = [
+        #api_fun_c{ name = new,  ret = 'Stack', args = []},
+        #api_fun_c{ name = push, ret = void,
+                    args = [#api_arg_c{ type = 'Stack', name = s, dir = in },
+                            #api_arg_c{ type = int, name = val, dir = in }]},
+        #api_fun_c{ name = pop,  ret = int,
+                    args = [#api_arg_c{ type = 'Stack', name = s, dir = in }] }]
+    }]}.
+  </pre>
+ 
+  Mocking a C module is sligtly more involved than mocking an Erlang module, but only
+  slightly. In addition to the mocking specification we need a C header file defining all
+  data types used in mocking. In this simple example only the <tt>Stack</tt> type is
+  needed; and since we could consider the Stack type as an abstract data type from the
+  outside perspective it is enough to put the following line in a file (stack.h):
+  <pre>
+  typedef int Stack;
+  </pre>
+  i.e. we use an integer as an abstract identifier of a stack. In the example test case
+  we expect the stack to be called four times; (1) creating a new stack, (2) pushing the
+  integer 4 onto the stack, (3) pushing 6 onto the stack, and (4) popping one element
+  from the stack expecting 6 to be returned. This could be expressed as:
+  <pre>
+  -define(STACK, 123456). %% Abstract stack reference
+  lang() -&gt; ?SEQ([?EVENT(stack, new,  [],          ?STACK),
+                  ?EVENT(stack, push, [?STACK, 4], ok),
+                  ?EVENT(stack, push, [?STACK, 6], ok),
+                  ?EVENT(stack, pop,  [?STACK],    6)
+                 ]).
+  </pre>
+  Where we use 123456 as an abstract stack reference during the execution. Also note that
+  the Erlang atom 'ok' corresponds to void. Given this, the stack can now be 'used' as
+  follows (assuming that the functions defined above reside in the module
+  <tt>stack_mock_c</tt>):
+  <pre>
+  2&gt; eqc_mocking_c:start_mocking(c_stack, stack_mock_c:api_spec(), ["stack.h"], [], [{cppflags, "-I ."}]).
+  ok
+  3&gt; eqc_mocking_c:init_lang(stack_mock_c:lang(), stack_mock_c:api_spec()).
+  ok
+  4&gt; S = c_stack:new(), c_stack:push(S, 4), c_stack:push(S, 6), c_stack:pop(S).
+  6
+  5&gt; eqc_mocking_c:check_callouts(stack_mock_c:lang()).
+  true
+  6&gt; eqc_mocking_c:(stack_mock_c:lang(), stack_mock_c:api_spec()).
+  ok
+  7&gt; S = stack_c:new(), stack_c:push(S, 4), stack_c:push(S, 6).
+  ok
+  8&gt; eqc_mocking_c:check_callouts(stack_mock_c:lang()).
+  {expected,{call,stack,pop,[123456]}}
+  9&gt; eqc_mocking_c:init_lang(stack_mock_c:lang(), stack_mock_c:api_spec()).
+  ok
+  10&gt; S = stack_c:new(), stack_c:pop(S).
+  ** exception exit: 'Unexpected call to pop!'
+       in function  eqc_c:call_external/4 (../src/eqc_c.erl, line 1401)
+       in call from stack_c:pop/1 (/tmp/__eqc_tmp1400506259837699_stack_c_wrap.erl, line 80)
+       in call from stack_mock_c:run_lang3/0 (stack_mock_c.erl, line 66)
+  </pre>
+  Noteable in the usage above is that we can call <tt>init_lang/2</tt> many times without
+  restarting the mocking framework in between. Also note that the check
+  <tt>check_callouts/1</tt> checks both that all expected calls where made, and that the
+  calls were made with the expected arguments. If a call is made out of order a failure
+  is reported immediately. Finally, we should note that the arguments are normally not
+  checked until <tt>check_callouts</tt> is called (this is useful not to abort tests
+  prematurely):
+  <pre>
+  19&gt; eqc_mocking_c:init_lang(stack_mock_c:lang(), stack_mock_c:api_spec()).
+  ok
+  20&gt; S = stack_c:new(), stack_c:push(S, 7), stack_c:push(S, -3), stack_c:pop(S).
+  6
+  21&gt; eqc_mocking_c:check_callouts(stack_mock_c:lang()).
+  {unexpected,{call,stack,push,[123456,7]},
+   expected,{call,stack,push,[123456,4]}}
+  </pre>
+ 
+  <h3>Advanced usage - matching arguments</h3>
+  As we saw in the example above, argument checking is deferred until
+  post-execution. This default behaviour is not always the wanted one, instead it is
+  possible in the API specifiction to define that arguments should be checked for
+  equality:
+  <pre>
+  ... #api_arg_c{ type = int, name = val, dir = in, matched = true }]},
+  </pre><p>
+  where we are going to match on the argument <tt>val</tt> during execution. It is  
+currently not possible to check for equality of anything that is not a simple type  
+(i.e. pointers, composed structures, etc.)</p>
+ 
+  <h3>Advanced usage - out arguments</h3>
+ 
+  An important difference to Erlang mocking is the usage of out-arguments in C, where a
+  pointer is passed to a function and the function is expected to fill it with
+  content. In principle this corresponds to the function possibly returning several
+  things. As an example consider a function <tt>get_curr_speed</tt>. This API function
+  should return the current speed if successful, and indicate an error otherwise. In
+  Erlang we would simply write a function like:
+  <pre>
+    get_curr_speed() -&gt;
+      ...
+        {ok, Speed}
+      ...
+        [error, Reason}
+  </pre>
+  However, in C it would be awkward to return such a structure, instead the normal way to
+  do this in C is to give <tt>get_curr_speed</tt> the following type signature:
+  <pre>
+    bool get_curr_speed(int *speed);
+  </pre>
+  where the returned value indicates whether the speed is provided (following the
+  pointer) or not. To mock such a function we first need to declare the argument as
+  having direction out:
+  <pre>
+    #api_fun_c{
+      ret = bool, name = get_curr_speed,
+      args = [#api_arg_c{ type = 'int *', name = speed, dir = out }] }
+  </pre>
+  Thereafter, whenever we expect a call of this function we need to provide not one, but
+  two, return values in our <tt>?EVENT</tt> like:
+  <pre>
+    ?EVENT(sensor, get_curr_speed, [], {42, true})
+  </pre><p>  
+where the returned things are tupled --- first the out-arguments in order of  
+appearance in the API specification and lastly the actual return value.</p>
+ 
+  <h3>Advanced usage - stored type </h3>
+  Sometimes a function takes a complex type as parameter, but there is only a single
+  field in the complex type that is intereresting from a mocking perspective. To handle
+  this case it is possible to declare a <b>stored type</b> for a given
+  argument. Suppose ComplexType is declared as:
+  <pre>
+    typedef struct _ComplexType{
+      ...
+      int field;
+      ...
+    } ComplexType;
+  </pre>
+  now the API specification could look like:
+  <pre>
+    #api_fun_c{
+      ret = void, name = f,
+      args = [#api_arg_c{ type = 'ComplexType *', name = arg,
+                          stored_type = int, code = "_stored_-&gt;arg = arg-&gt;field;" }] }
+  </pre>
+  Here <tt>type</tt> is the actual type of the argument, while the <tt>stored_type</tt>
+  is the type that is visible from a mocking perspective. I.e. the code that calls the
+  mocked function will provide a (pointer to a) ComplexType, but in the expected behavior
+  (and in the subsequent check) only the simple type (int) is visible. <b>Note</b> it is
+  impossible for the framework to guess what part of the complex type that is
+  interesting, thus the user has to provide a snippet of C code that extracts the
+  necessary data. This code snippet has access to all actual arguments passed to the
+  function (here: <tt>arg</tt>), and is supposed to fill the correspondingly named field
+  in the struct (containing all input-arguments) named <tt>_stored_</tt>.  Thereafter,
+  whenever we expect a call of this function we only specify the value of the integer
+  field:
+  <pre>
+    ?EVENT(module, f, [23], ok)
+  </pre>
+ 
+  <p>Note that <tt>stored_type = void</tt> is a valid construction, meaning that the
+  argument is not used at all (and should therefore not be in the <tt>?EVENT</tt>).</p>
+ 
+  <h3>Advanced usage - arrays </h3>
+  Another rather common situation is when an argument represents an array. There is
+  custom support to handle this case. Imagine that we are mocking the C function
+  <pre>
+    bool get_last_speeds(int n, int *speeds);
+  </pre>
+  This function is supposed to return the last N registered speeds. The function should
+  return true if it successfully copies N items to the provided (out)-array. To mock it
+  we need the following API specification:
+  <pre>
+  #api_fun_c{ ret = bool, name = get_last_speeds,
+              args = [#api_arg_c{ type = int, name = n},
+                      #api_arg_c{ type = 'int *', name = speeds, dir = out,
+                                  buffer = {true, "n"} }] }
+  </pre><p>
+  The <tt>"n"</tt> is a again a snippet of C code, namely code that calculates the length
+  of the array. If there is need for a custom copy function it is possible to use
+  <tt>buffer = true, code = "..."</tt> instead.</p>
+ 
+  A correseponding <tt>?EVENT</tt> could be:
+  <pre>
+  ?EVENT(sensor, get_last_speeds, [4], {[42,44,47,49], true})
+  </pre>
+ 
+  <p><b>Caveat:</b> for out arguments the "pointer to single value" is the default, and it
+  is necessary to say <tt>buffer = true</tt> to consider the other case.</p>
+ 
+  <h3>Advanced usage - phantom in argument </h3>
+ 
+  <p>This is related to the stored type example above, but consider if there is a small  
+number (but larger than 1) of fields that are interesting for a complex data type:</p>
+ 
+  <pre>
+    typedef struct _ComplexType{
+      ...
+      int field;
+      ...
+      int field2;
+      ...
+    } ComplexType;
+  </pre>
+  now the API specification could look like:
+  <pre>
+    #api_fun_c{
+      ret = void, name = f,
+      args = [#api_arg_c{ type = 'ComplexType *', name = arg,
+                          stored_type = int, code = "_stored_-&gt;arg = arg-&gt;field;" },
+              #api_arg_c{ type = 'int', name = arg2, phantom = true,
+                          code = "_stored_-&gt;arg2 = arg-&gt;field2;" }] }
+  </pre>
+ 
+  Phantom here means an argument that is only visible on the mocking specification side,
+  when giving the expected behavior and checking the mocked calls. I.e. calls to the
+  mocked function takes one argument, but the in the mocking specification it takes two
+  arguments, like:
+  <pre>
+    ?EVENT(module, f, [23, 42], ok)
+  </pre>
+ 
+  <h3>Advanced usage - phantom out argument </h3>
+ 
+  To handle in/out parameters it is sometimes necessary to resort to a phantom out
+  argument. Consider the same function as before for getting the N last speeds, but
+  with a slightly different API:
+  <pre>
+  typedef struct SpeedsType {
+    int n;
+    int *speeds;
+  } SpeedsType;
+ 
+  bool get_last_speeds2(SpeedsType *speeds);
+  </pre>
+ 
+  This functions is used by providing a (pointer to) a <tt>SpeedsType</tt> where
+  <tt>n</tt> is set to the number of elements to fetch, and <tt>speeds</tt> has room for
+  these values. The corresponding API specification would use a phantom out argument to
+  hold the actual data:
+  <pre>
+  #api_fun_c{ ret = bool, name = get_last_speeds2,
+              args = [#api_arg_c{ type = 'SpeedsType *', name = speeds,
+                                  stored_type = int,
+                                  code = "_stored_-&gt;speeds = speeds-&gt;n;"},
+                      #api_arg_c{ type = 'int *', name = the_speeds, buffer = true,
+                                  dir = out, phantom = true,
+                                  code = "memcpy(speeds-&gt;speeds, _return_-&gt;the_speeds,"
+                                         " speeds-&gt;n * sizeof(int));"}] }
+  </pre>
+  A correseponding <tt>?EVENT</tt> could be:
+  <pre>
+  ?EVENT(sensor, get_last_speeds2, [4], {[42,44,47,49], true})
+  </pre>
+ 
+  <h3>Advanced usage - silent functions </h3>
+ 
+  We have also introduced something that we call silent functions. Consider for example a
+  simplified verision of the <tt>get_curr_speed</tt> function:
+  <pre>
+  int get_curr_speed2();
+  </pre>
+ 
+  Suppose that it is called very often throughout the test and that the speed changes
+  in-frequently. In this case it is possible to define it silent like:
+  <pre>
+  #api_fun_c{
+       name = get_curr_speed2, ret = int,
+       args = [], silent = {true, "17"} }.
+  </pre>
+ 
+  This specifies that the function is always callable, and that calls to this function is
+  not checked against an expected behavior. The C snippet (here <tt>"17"</tt>) computes
+  the starting value of the function. Whenever the speed should change, we call (via
+  eqc_c):
+  <pre>
+  set_get_curr_speed2__return(N);
+  </pre>
+  where <tt>_return</tt> specifies that it is the return value that we change. (Had it
+  had out parameters they are changed by a set function suffixed by the name of the out
+  parameter respectively.)
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-api_arg_c">api_arg_c()</a></h3>
+<p><tt>api_arg_c() = #api_arg_c{type = atom() | string(), stored_type = atom() | string(), name = atom() | string() | {atom(), string()}, dir = in | out, buffer = false | true | {true, non_neg_integer()} | {true, non_neg_integer(), string()}, phantom = boolean(), matched = boolean(), default_val = no | string(), code = no | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_c">api_fun_c()</a></h3>
+<p><tt>api_fun_c() = #api_fun_c{name = atom(), classify = any(), ret = atom() | <a href="#type-api_arg_c">api_arg_c()</a>, args = [<a href="#type-api_arg_c">api_arg_c()</a>], silent = false | {true, any()}}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_fun_erl">api_fun_erl()</a></h3>
+<p><tt>api_fun_erl() = #api_fun{name = atom(), classify = any(), arity = non_neg_integer(), fallback = boolean(), matched = [non_neg_integer()] | fun((any(), any()) -&gt; boolean()) | all}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_module">api_module()</a></h3>
+<p><tt>api_module() = #api_module{name = atom(), fallback = atom(), functions = [<a href="#type-api_fun_erl">api_fun_erl()</a>] | [<a href="#type-api_fun_c">api_fun_c()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-api_spec">api_spec()</a></h3>
+<p><tt>api_spec() = #api_spec{language = erlang | c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-path">path()</a></h3>
+<p><tt>path() = string()</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#c_code-1">c_code/1</a></td><td>Equivalent to <a href="#c_code-2"><tt>c_code([], API)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#c_code-2">c_code/2</a></td><td>Generates C-code for the mocked API.</td></tr>
+<tr><td valign="top"><a href="#check_callouts-1">check_callouts/1</a></td><td>Checks that the correct callouts have been made.</td></tr>
+<tr><td valign="top"><a href="#gen_headers-1">gen_headers/1</a></td><td>Generates C function prototypes for the given API specification.</td></tr>
+<tr><td valign="top"><a href="#init_lang-2">init_lang/2</a></td><td>Initialize the mocking language.</td></tr>
+<tr><td valign="top"><a href="#merge_spec_modules-1">merge_spec_modules/1</a></td><td>Safely merge multiple specifications of the same module.</td></tr>
+<tr><td valign="top"><a href="#start_mocking-3">start_mocking/3</a></td><td>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(c_code, APISpec, HdrFiles, ObjFiles, [],
+	      [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-4">start_mocking/4</a></td><td>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(CMod, APISpec, HdrFiles, ObjFiles, [], [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-5">start_mocking/5</a></td><td>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(CMod, APISpec, HdrFiles, ObjFiles, COpts,
+	      [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#start_mocking-6">start_mocking/6</a></td><td>Initialize mocking, mocked modules are created as specified in the supplied
+  callout specification.</td></tr>
+<tr><td valign="top"><a href="#stop_mocking-0">stop_mocking/0</a></td><td>Gracefully stop mocking.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="c_code-1">c_code/1</a></h3>
+<div class="spec">
+<p><tt>c_code(APISpec::#api_spec{language = c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}) -&gt; string()</tt><br/></p>
+</div><p>Equivalent to <a href="#c_code-2"><tt>c_code([], API)</tt></a>.</p>
+
+
+<h3 class="function"><a name="c_code-2">c_code/2</a></h3>
+<div class="spec">
+<p><tt>c_code(Headers, APISpec) -&gt; string()</tt>
+<ul class="definitions"><li><tt>Headers = [string()]</tt></li><li><tt>APISpec = #api_spec{language = c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]}</tt></li></ul></p>
+</div><p>Generates C-code for the mocked API. If additional definitions are needed, for
+  example type definitions, a list of include files may be given as an argument to this
+  function.</p>
+
+<h3 class="function"><a name="check_callouts-1">check_callouts/1</a></h3>
+<div class="spec">
+<p><tt>check_callouts(MockLang) -&gt; true | Error</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="eqc_mocking.html#type-lang">eqc_mocking:lang</a>(_Action, Result)</tt></li><li><tt>Error = {expected, Call} | {expected_one_of, [Call]} | {unexpected, Call} | {unexpected, Call, expected, Call} | {unexpected, Call, expected_one_of, [Call]} | {ambiguous, Call, cant_choose_between, [{Call, '-&gt;', Result}]}</tt></li><li><tt>Call = {call, module(), atom(), [any()]}</tt></li></ul></p>
+</div><p>Checks that the correct callouts have been made. Given a language, checks that the
+  mocked functions called so far matches the language (the argument checking during
+  execution is normaly relaxed, so errors could be undiscovered until here). Also checks
+  that the language is in an "accepting state", i.e. a state where it is ok to stop.</p>
+
+<h3 class="function"><a name="gen_headers-1">gen_headers/1</a></h3>
+<div class="spec">
+<p><tt>gen_headers(API) -&gt; string()</tt>
+<ul class="definitions"><li><tt>API = #api_spec{language = c, mocking = atom(), config = any(), modules = [<a href="#type-api_module">api_module()</a>]} | #api_module{name = atom(), fallback = atom(), functions = [<a href="#type-api_fun_c">api_fun_c()</a>]}</tt></li></ul></p>
+</div><p>Generates C function prototypes for the given API specification. These can then be
+  used while building the system under test.</p>
+
+<h3 class="function"><a name="init_lang-2">init_lang/2</a></h3>
+<div class="spec">
+<p><tt>init_lang(MockLang, APISpec) -&gt; ok | no_return()</tt>
+<ul class="definitions"><li><tt>MockLang = <a href="eqc_mocking.html#type-lang">eqc_mocking:lang</a>(_Action, _Result)</tt></li><li><tt>APISpec = <a href="#type-api_spec">api_spec()</a></tt></li></ul></p>
+</div><p>Initialize the mocking language. This sets the language describing how the mocked
+  modules should behave. Calling this function also resets the collected trace. Some
+  sanity checks are made, throws an error if the language and the callout specification
+  are inconsistent or if the c-code is not available.</p>
+
+<h3 class="function"><a name="merge_spec_modules-1">merge_spec_modules/1</a></h3>
+<div class="spec">
+<p><tt>merge_spec_modules(ModSpecs::[<a href="#type-api_module">api_module()</a>]) -&gt; [<a href="#type-api_module">api_module()</a>] | no_return()</tt><br/></p>
+</div><p>Safely merge multiple specifications of the same module.</p>
+
+<h3 class="function"><a name="start_mocking-3">start_mocking/3</a></h3>
+<div class="spec">
+<p><tt>start_mocking(APISpec, HeaderFiles, ObjectFiles) -&gt; Result</tt>
+<ul class="definitions"><li><tt>APISpec = <a href="#type-api_spec">api_spec()</a></tt></li><li><tt>HeaderFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>ObjectFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(c_code, APISpec, HdrFiles, ObjFiles, [],
+	      [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-4">start_mocking/4</a></h3>
+<div class="spec">
+<p><tt>start_mocking(Module, APISpec, HeaderFiles, ObjectFiles) -&gt; Result</tt>
+<ul class="definitions"><li><tt>Module = atom()</tt></li><li><tt>APISpec = <a href="#type-api_spec">api_spec()</a></tt></li><li><tt>HeaderFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>ObjectFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(CMod, APISpec, HdrFiles, ObjFiles, [], [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-5">start_mocking/5</a></h3>
+<div class="spec">
+<p><tt>start_mocking(Module, APISpec, HeaderFiles, ObjectFiles, COptions) -&gt; Result</tt>
+<ul class="definitions"><li><tt>Module = atom()</tt></li><li><tt>APISpec = <a href="#type-api_spec">api_spec()</a></tt></li><li><tt>HeaderFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>ObjectFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>COptions = <a href="proplists.html#type-proplist">proplists:proplist()</a></tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Equivalent to <a href="#start_mocking-6"><tt>start_mocking(CMod, APISpec, HdrFiles, ObjFiles, COpts,
+	      [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="start_mocking-6">start_mocking/6</a></h3>
+<div class="spec">
+<p><tt>start_mocking(Module, APISpec, HeaderFiles, ObjectFiles, COptions, Components) -&gt; Result</tt>
+<ul class="definitions"><li><tt>Module = atom()</tt></li><li><tt>APISpec = <a href="#type-api_spec">api_spec()</a></tt></li><li><tt>HeaderFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>ObjectFiles = [<a href="#type-path">path()</a>]</tt></li><li><tt>COptions = <a href="proplists.html#type-proplist">proplists:proplist()</a></tt></li><li><tt>Components = [atom()]</tt></li><li><tt>Result = {ok, pid()} | ignore | {error, term()} | no_return()</tt></li></ul></p>
+</div><p>Initialize mocking, mocked modules are created as specified in the supplied
+  callout specification. The C-Module wrapper is loaded as <tt>CMod</tt>.
+  <tt>HdrFiles</tt> is a list of C header files containing type definitions necessary for
+  generate mocking stubs. <tt>ObjFiles</tt> is the compiled C object files, which
+  constitute the SUT. It is possible to provide options for <a href="eqc_c.html#start-2"><code>eqc_c:start/2</code></a>
+  that is called by <tt>start_mocking</tt> (for example <tt>cppflags, verbose,
+  keep_files</tt>, etc. Finally if we are mocking for a cluster, the cluster components
+  should be given in <tt>Components</tt> so that internal calls can be filtered away
+  properly.</p>
+
+<h3 class="function"><a name="stop_mocking-0">stop_mocking/0</a></h3>
+<div class="spec">
+<p><tt>stop_mocking() -&gt; ok</tt><br/></p>
+</div><p>Gracefully stop mocking</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

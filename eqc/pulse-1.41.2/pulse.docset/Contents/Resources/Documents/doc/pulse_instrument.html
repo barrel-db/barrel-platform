@@ -1,0 +1,145 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module pulse_instrument</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module pulse_instrument</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>A User Level Scheduler of Erlang resulting from the ProTest project.
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p>A User Level Scheduler of Erlang resulting from the ProTest project.  
+Copyright Developer Team, see licence conditions</p>
+ 
+  <p>This module defined the parse transformation necessary to instrument  
+Erlang code for scheduling with PULSE.</p>
+ 
+  <p>
+  This parse transformation is automatically applied to the module that
+  you want to instrument by adding the compile flag
+  {parse_transform,pulse_instrument} when you compile the file.
+  For example, from Erlang shell:<br/>
+  <tt>c(YourModule,[{parse_transform,pulse_instrument}]).</tt>
+  </p>
+ 
+  <p>
+  You can provide a number of options to the compiler (see below) that
+  this parse transformation takes care of. These can either be supplied as compiler
+  options in the -compile attribute or as additional options in the
+  compile command. Option specified in the erlang module with -compile attribute
+  take precedence over the options provided when the compiler is called.
+  </p>
+ 
+  <p>
+  Note that parse transformation adds explicit module names to the
+  function calls. Thus testing hot code loading with the scheduler may
+  give unexpected results. The semantics of imported functions has changed.
+  </p>
+ 
+  <h3>Compiler options</h3>
+ 
+  <h4>pulse_skip</h4><p>
+  You can skip the instrumentation of certain functions in the module by
+  providing the compiler option <tt>pulse_skip</tt>, for example,
+  <tt>{pulse_skip,[{f,3},{g,1}]}</tt>  
+will not instrument the source code for f/3 and g/1.</p>
+ 
+  <h4>pulse_side_effect</h4><p>
+  Certain functions in your modules may contain side-effects that you
+  want to observe. For example, you may be interested in calls to the
+  <tt>ets</tt> module or calls to the <tt>file</tt> module.
+  The way to give the scheduler control over calls to these side-effect
+  functions is to provide a compiler option to specify them:
+  <tt>{pulse_side_effect,[MatchSpec]}</tt> with a list of match
+  specifications. Each match specification <tt>MatchSpec</tt> is of the form
+  <tt>{Module,'_','_'}</tt>, <tt>{Module,Function,'_'}</tt> or <tt>{Module,Function,Arity}</tt> .  
+In the first case any function in the specified module is replaced  
+by a call to pulse:side_effect/3.  
+In the second case, any function application Module:Function(A1,...,An)  
+in the source code is  
+replaced by pulse:side_effect(Module,Function,[A1,...,An]).  
+In the last case, only functions with the specified arity are replaced by  
+a call to pulse side_effect.</p>
+ 
+  <p>
+  The function pulse:side_effect/3 ensures that the scheduler randomly
+  chooses to either directly execute the side-effect or to yield and let
+  another process execute first. In addition, it generates an event that
+  visualizes that a side-effect function has been evaluated.
+  </p>
+ 
+  <h4>pulse_no_side_effect</h4><p>
+  This option can be used to override the option pulse_side_effect. For example
+  if you would mark all calls to the <tt>ets</tt> module as side effects, but you
+  do not want to consider the function <tt>ets:delete/2</tt> as side effect, you
+  could exclude it from instrumentation as side effect by using the option
+  <tt>{pulse_no_side_effect,[{ets,delete,2}]}</tt>. The match specifications are the
+  same as used for the <tt>pulse_side_effect</tt> option.</p>
+ 
+ 
+  <h4>pulse_replace_module</h4><p>  
+Alternatively, some external modules may contain side-effects, but they are in fact  
+part of your application, typically the otp library modules such as application,  
+supervisor or  
+generic server. Thus, your application has a supervisor callback module and you  
+would like to instrument the supervisor to be able to schedule restarts with pulse_instrument.  
+However, instrumenting the supervisor is  
+not possible, since other software uses this module as well. Instead you should  
+replace the supervisor module by an instrumented supervisor version, e.g., pulse_supervisor.  
+All calls to the supervisor have to be replaced  
+by calls to pulse_supervisor instead of masking the calls as side-effects.</p>
+ 
+  <p>
+  The compiler option <tt>{pulse_replace_module,[{old(),new()}]}</tt> gets a list of atom pairs as
+  second argument which specifies which module to replace by what other module. Calls to old are
+  replaced by calls to new in the instrumented module.
+  </p>
+ 
+  <p>The pulse_otp application provides instrumented versions of many
+  common OTP behaviours; you can use these versions by including
+  <pre>
+  -include_lib("pulse_otp/include/pulse_otp.hrl").
+  </pre>
+  in the file that you instrument with PULSE.
+  </p>
+ 
+ 
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#source-1">source/1</a></td><td>  
+Prints the source code produced by the instrumenter, provided that the  
+debug_info flag has been used when compiling.</td></tr>
+<tr><td valign="top"><a href="#transformed-1">transformed/1</a></td><td>
+  Return the source code produced by the instrumenter, provided that the
+  debug_info flag has been used when compiling.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="source-1">source/1</a></h3>
+<div class="spec">
+<p><tt>source(Module::atom()) -&gt; <a href="#type-void">void()</a></tt><br/></p>
+</div><p><p>  
+Prints the source code produced by the instrumenter, provided that the  
+debug_info flag has been used when compiling.</p>
+ 
+  Note that there is a compiler flag 'P' that can be used to save the
+  source code in a file with extension .P in the working directory. By
+  using that, the function source is superfluous.</p>
+
+<h3 class="function"><a name="transformed-1">transformed/1</a></h3>
+<div class="spec">
+<p><tt>transformed(Module::atom()) -&gt; string()</tt><br/></p>
+</div><p>
+  Return the source code produced by the instrumenter, provided that the
+  debug_info flag has been used when compiling.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:25.</i></p>
+</body>
+</html>
