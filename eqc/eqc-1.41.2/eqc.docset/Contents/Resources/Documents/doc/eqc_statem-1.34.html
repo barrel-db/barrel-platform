@@ -1,0 +1,681 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module eqc_statem</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module eqc_statem</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module provides functions for testing operations with side-effects,
+ which are specified via an abstract state machine.
+<p>Copyright © Quviq AB, 2004-2015</p>
+
+<p><b>Version:</b> 1.34.3</p>
+
+<h2><a name="description">Description</a></h2>This module provides functions for testing operations with side-effects,
+ which are specified via an abstract state machine. The state machine is in turn
+ specified by a client module (which implements the behaviour eqc_statem).
+ Given such a client, this module can generate and run command sequences, checking that
+ all postconditions are satisfied, and shrinking failing sequences by discarding
+ commands which do not contribute to the failure. Thus it can be used to find
+ minimal command sequences which elicit an unexpected
+ behaviour.
+ <p>
+ It can also generate parallel test cases from the same client
+ module, which are used to test for race conditions.
+ </p>
+ <p>
+ Modules which use this one should
+ <tt>-include_lib("eqc/include/eqc_statem")</tt> to import the
+ functions that <tt>eqc_statem</tt> provides.
+ </p>
+ <h3>Symbolic Commands</h3>
+ Generated test cases are lists of symbolic commands (<a href="#type-command"><code>command()</code></a>), each
+ of which binds a symbolic variable to the result of a symbolic function call (except,
+ possibly, for a first command which initializes the <i>state</i>, see below).
+ For example,
+ <pre>{set,{var,1},{call,erlang,whereis,[a]}}</pre>
+ is a command to set variable 1 to the result of calling <tt>erlang:whereis(a)</tt>.
+ When a test case is run, then symbolic variables (<a href="#type-var"><code>var()</code></a>) are replaced
+ by the values they were set to, and symbolic calls (<a href="#type-call"><code>call()</code></a>) are
+ performed. In addition, the post-condition of each command is checked. Running
+ a list of commands generates a result which indicates whether
+ any post-condition failed, or any command raised an exception, or whether all
+ commands and checks completed successfully.
+ <p>
+ It is very important to keep in mind the difference between <i>symbolic</i>
+ calls and variables, which are used during test case generation, and the
+ values they represent, which are computed during test execution. We refer to
+ the latter as <i>dynamic</i> values. The reason we use
+ symbolic representations (rather than just working with their dynamic values)
+ is to enable us to display, save, analyze,
+ and above all simplify test cases before they are run.
+ </p>
+ <h3>States</h3>
+ The client module defines an initial state in which test cases begin, and how each
+ command changes that state. For example, if test cases spawn a number of processes,
+ then the state might be a list of the pids that have been spawned. The state is
+ used both during test case <i>generation</i> and during test <i>execution</i>.
+ Obviously, at generation time the actual values returned by commands are not
+ known--they must be represented symbolically. Thus during test
+ generation a <i>symbolic state</i> is constructed---in this case it might be
+ <pre>[{var,1},{var,2},{var,3}]</pre>
+ if the first three commands all spawned processes. During test execution the
+ corresponding <i>dynamic state</i> is computed--in this case a list of three
+ pids returned by the first three commands in the test case. Dynamic states always
+ have the same structure as the corresponding symbolic states--the difference is
+ just that symbolic variables and calls are replaced by their values.
+ <p>
+ Symbolic states are
+ used to generate symbolic commands, or to decide whether a given symbolic command
+ can be included in a test case. Dynamic states are used to check postconditions.
+ </p>
+ <p>It is not usually necessary to track <i>all</i> relevant state information in
+ the test case state--there is no need to include more information in the state
+ than is necessary to generate and execute the command sequences we are interested in.</p>
+ <h3>Callback Functions</h3>
+ The client module specifies an abstract state machine by defining the following
+ functions:
+ <ul>
+ <li> <h3>initial_state/0</h3>
+ <tt>initial_state() :: <a href="#type-symbolic_state"><code>symbolic_state()</code></a></tt>.
+ <p>Returns the state in which each test case starts (unless a different initial
+ state is supplied explicitly). This symbolic state is evaluated to
+ construct the initial dynamic state before each test case is executed.</p>
+ </li>
+ <li> <h3>precondition/2</h3>
+ <tt>precondition(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>,C::<a href="#type-call"><code>call()</code></a>) :: bool()</tt>
+ <p>Returns <tt>true</tt> if the symbolic call <tt>C</tt> can be performed in the
+ state <tt>S</tt>. Preconditions are used to decide whether or not to include
+ candidate commands in test cases, which is why only the <i>symbolic</i> state
+ information is available when preconditions are checked.</p>
+ </li>
+ <li><h3>adapt/2</h3>
+ <tt>adapt(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>, C::<a href="#type-call"><code>call()</code></a>) :: gen(<a href="#type-call"><code>call()</code></a>)</tt>
+ <p> This is an <i>optional</i> call-back used during
+ shrinking; when a precondition does not hold, adapt is called to try to repair/patch a
+ call before it is discarded. Typically metadata in the call tuple can be adjusted.
+ This function may be <i>partial</i>, i.e. if it crashes it
+ is interpreted as no adaptation is possible. After adapt is finished, the precondition
+ is checked again to see whether the changes were sufficient.</p>
+ </li>
+ <li> <h3>command/1</h3>
+ <tt>command :: (S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>) :: gen(<a href="#type-call"><code>call()</code></a></tt>
+ <p>Generates an appropriate symbolic function call to appear next
+ in a test case, if the symbolic state is <tt>S</tt>. Test sequences are generated
+ by using <tt>command(S)</tt> repeatedly. However, generated calls are only included in test sequences if
+ their precondition is also <tt>true</tt>.</p></li>
+ <li><h3>postcondition/3</h3>
+ <tt>postcondition(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>,C::<a href="#type-call"><code>call()</code></a>,R::term()) :: bool()</tt>
+ <p>Checks the postcondition of symbolic call <tt>C</tt>, executed in <i>dynamic</i>
+ state <tt>S</tt>, with result <tt>R</tt>. The arguments of the symbolic call  are the
+ actual values passed, not any symbolic expressions from which they were computed.
+ Thus when a postcondition is checked, we know the function called, the values it
+ was passed, the value it returned, and the state in which it was called.</p>
+ <p>Of course, postconditions are checked during test execution, not test
+ generation.</p></li>
+ <li><h3>call_features/3</h3>
+ <tt>call_features(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>,C::<a href="#type-call"><code>call()</code></a>,R::term()) :: list(any())</tt>
+ <p>Collects the <i>features</i> of a symbolic call <tt>C</tt>, executed in <i>dynamic</i>
+ state <tt>S</tt>, with result <tt>R</tt>. The arguments of the symbolic call  are the
+ actual values passed, not any symbolic expressions from which they were computed.
+ The result is a list of features, which can later be retrieved from
+ the test execution history by using <a href="#call_features-1"><code>call_features/1</code></a>.</p>
+ <p>Features are collected during test execution, not test
+ generation.</p></li>
+ <li><h3>next_state/3</h3>
+ <tt>next_state(S::<a href="#type-symbolic_state"><code>symbolic_state()</code></a>,R::<a href="#type-var"><code>var()</code></a>,C::<a href="#type-call"><code>call()</code></a>) :: <a href="#type-symbolic_state"><code>symbolic_state()</code></a></tt>
+ <p>This is the state transition function of the abstract state machine,
+ and it is used during <i>both</i> test generation and test
+ execution. The type above refers to calls during test generation.</p>
+ <p>In this case, it computes the symbolic state after symbolic
+ call <tt>C</tt>, performed in
+ symbolic state <tt>S</tt>, with result <tt>R</tt>. Because it is applied
+ to symbolic states and symbolic calls, the result of the call must also be symbolic--
+ in fact, <tt>R</tt> is the symbolic variable which will be set to the result
+ of the call. <tt>R</tt> can then be included in the next state if necessary.
+ For example, if the state were a list
+ of pids, and <tt>C</tt> spawned a new process, then the variable <tt>R</tt>
+ could be added to the state to refer to the pid of the process just spawned.
+ Symbolic function calls can also be included in the next state, to construct parts
+ whose values will only be known during test execution.</p>
+ <p>The same function is used to compute the next <i>dynamic</i> state during
+ test execution. In this case <tt>S</tt> is the previous dynamic state,
+ <tt>C</tt> is a symbolic call in which the arguments are the actual values
+ passed (not symbolic argument expressions), and <tt>R</tt> is the actual
+ value returned--in other words, all the symbolic inputs are replaced by
+ their values. A correctly written next_state function does not inspect
+ symbolic inputs--it just includes them as symbolic parts of the result.
+ Thus the same code can construct a dynamic state of the same shape,
+ given actual values instead of symbolic ones. The only difficulty is that
+ next_state may itself introduce symbolic function calls into its result,
+ which would then be a kind of mixture of a symbolic and dynamic state.
+ To ensure that the state remains dynamic during test execution, any
+ such symbolic calls are performed, and replaced by their values,
+ before test execution continues.</p></li>
+ <li><h3>invariant/1</h3>
+ <tt>invariant(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>) :: bool()</tt>
+ <p>
+ This is an <i>optional</i> call-back which can be used to check an
+ invariant during test execution. It is called at the beginning of
+ each command sequence with the initial state as argument, and then
+ after each command is executed with the resulting state as
+ argument. Its argument is always a <i>dynamic</i> state; it is not
+ used during test case generation.  If <tt>invariant</tt> returns
+ anything other than <tt>true</tt>, the test fails. Its intended use
+ is to compare the model state <tt>S</tt> with the actual state of
+ the system under test.
+ </p><p>
+ If <tt>invariant</tt> is not defined by the user, then it is assumed
+ to be <tt>true</tt>.
+ </p>
+ </li>
+ <li><h3>dynamic_precondition/2</h3>
+ <tt>dynamic_precondition(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>,C::<a href="#type-call"><code>call()</code></a>) :: bool()</tt>
+ <p>
+ This is an <i>optional</i> call-back which can be used to check a
+ precondition during test <i>execution</i>. Its argument is a
+ dynamic state, and a call with the <i>actual</i> argument values
+ (even for calls which are generated with symbolic arguments). If it
+ returns <tt>false</tt>, then the command is not executed during the test.
+
+ Dynamic preconditions may be easier to write than the normal
+ preconditions, because they need not work with symbolic
+ values. However, they have significant disadvantages:
+ <ul>
+ <li>Because they cannot be tested during test case
+ <i>generation</i>, then they lead to invalid test cases being
+ generated which must be "patched up" during execution. This can
+ affect both testing efficiency and test case distribution negatively.
+ </li>
+ <li>They cannot be used in parallel testing, so if a
+ dynamic_precondition call-back is used, then race condition testing
+ with <a href="#parallel_commands-1"><code>parallel_commands/1</code></a> is not possible.
+ </li>
+ </ul>
+ For these reasons, it is almost always better to enrich the model
+ state so that a static precondition can be defined, than to use a
+ dynamic one. In rare cases, and especially when the dynamic
+ precondition will usually be <tt>true</tt>, then using this
+ call-back can be the best approach.
+ </p>
+ </li>
+ </ul>
+
+ <h3>Grouping Callbacks</h3><p>
+ Typically each function appearing in generated tests is specified by
+ a generator in the <tt>command/1</tt> callback, a clause in the
+ <tt>precondition/2</tt> callback, a clause in the
+ <tt>next_state</tt> callback, and so on. Thus the specification of
+ one function is divided into fragments that appear in different
+ places in the model. This can become unwieldy for complex state
+ machines, and so <tt>eqc_statem</tt> also supports "grouped"
+ specifications, in which all the aspects of a function are specified
+ together. The grouped syntax is documented under <a href="eqc_group_commands.html"><code>eqc_group_commands</code></a>.</p>
+
+ <h3>What Property Should We Test?</h3>
+ This module does <i>not</i> define any properties to test, it only provides
+ functions to make defining such properties easy. A client module will
+ normally contain a property resembling this one, which generates a
+ command sequence using the client state machine, and then tests it:
+ <pre>prop_statem_correct() -&gt;
+   ?FORALL(Cmds,commands(client),
+     begin {H,S,Res} = run_commands(client,Cmds),
+           check_commands(client,Cmds,{H,S,Res}).
+     end).</pre><p> 
+However, in any particular case we may wish to add a little to this 
+basic form, for example to collect statistics, to clean up after 
+test execution, or to print more information in the event of failure. 
+It is to allow this flexibility that the properties to test are 
+placed in the client module, rather than in this one.</p>
+
+ <h3>Parallel Testing</h3>
+ Parallel test cases are generated using <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>
+ instead of <a href="#commands-1"><code>commands/1</code></a>. Instead of just one list of commands,
+ a parallel test case consists of a sequential prefix, followed by a
+ list of concurrent tasks. The prefix and each task are lists
+ of commands, just like a sequential test case. A parallel test case
+ is run using <a href="#run_parallel_commands-2"><code>run_parallel_commands/2</code></a>, by first executing the
+ prefix in the normal way, then executing the concurrent tasks in
+ newly spawned processes. The test passes if every command behaves
+ <i>atomically</i>--that is, if the results we actually see could
+ have been produced by some serialization of the concurrent
+ tasks.
+ <p>
+ <i>Blocking</i> operations can be specified using the optional
+ <tt>blocking/2</tt> callback:
+ <pre>
+ blocking(S::<a href="#type-dynamic_state"><code>dynamic_state()</code></a>,C::<a href="#type-call"><code>call()</code></a>) :: bool()</pre>
+ If <tt>blocking/2</tt> is not defined in the state machine
+ specification, then it is assumed always to return <tt>false</tt>.
+ If <tt>blocking</tt> returns <tt>true</tt>, then QuickCheck assumes
+ that the given call blocks in that state, allowing concurrent non-blocking
+ calls to proceed first. Hopefully one of these will change the state
+ so as to allow the blocking call to proceed. If not, QuickCheck
+ expects the blocking call to <i>time out</i> eventually, allowing
+ the test case to finish. Blocking operations can be included in test
+ cases even if the <tt>blocking/2</tt> call-back is not defined, but
+ QuickCheck can find more bugs given the additional information that
+ <tt>blocking/2</tt> represents. </p>
+ <p>
+ The properties for parallel testing are very similar to those for
+ sequential testing: we just replace the <a href="#commands-1"><code>commands/1</code></a> and
+ <a href="#run_commands-2"><code>run_commands/2</code></a> functions by their parallel versions. Often,
+ though, the race conditions we are testing for only occur sometimes,
+ and so we need to repeat each test several times using
+ <b>?ALWAYS</b> to be reasonably sure of provoking it. It is only
+ really necessary to do this during shrinking (since otherwise
+ shrinking is likely to stop before the test case is properly
+ simplified). Using this idea, a property that tests each case once
+ while initially searching for a failure, then ten times at each
+ shrinking step, could be written as
+ <pre>prop_atomic() -&gt;
+   ?FORALL(Repetitions,?SHRINK(1,[10]),
+     ?FORALL(ParCmds,parallel_commands(client),
+       ?ALWAYS(Repetitions,
+         begin {H,S,Result} = run_parallel_commands(client,ParCmds),
+               check_commands(client,ParCmds,{H,S,Result})
+         end))).</pre>
+ Note also that the results from <a href="#run_parallel_commands-2"><code>run_parallel_commands/2</code></a> are
+ a little different from those of <a href="run_commands.html"><code>run_commands</code></a>.
+ </p>
+
+ <p>One difference to be aware of is that postconditions and
+ invariants are not checked <i>during</i> a parallel test, they are
+ checked <i>afterwards</i> using the results collected from the
+ concurrent tasks. This means that the postcondition and invariant
+ callbacks cannot inspect the <i>current state</i> of the software 
+under test, when they are used in parallel testing.</p>
+
+ <tt>linearizable(ParCmds)</tt> can be used to insert calls to
+ <tt>now()</tt> into the generated test case, giving more information
+ to be used when deciding whether tests passed or failed.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-call">call()</a></h3>
+<p><tt>call() = {call, atom(), atom(), [<a href="#type-expr">expr()</a>]} | {call, atom(), atom(), [<a href="#type-expr">expr()</a>], <a href="#type-proplist">proplist()</a>}</tt></p>
+<p> A symbolic function call:
+ {call,M,F,Args} represents a call of function F in module M, with arguments Args.
+ {call,M,F,Args,Meta} represents a call with metadata (which may be symbolic).
+ Metadata does not affect the way the call is executed, but is passed
+ (as part of the call) to all the <tt>eqc_statem</tt> call-backs that
+ take a call as an argument.</p>
+
+<h3 class="typedecl"><a name="type-command">command()</a></h3>
+<p><tt>command() = {set, <a href="#type-var">var()</a>, <a href="#type-call">call()</a>} | {init, <a href="#type-symbolic_state">symbolic_state()</a>}</tt></p>
+<p> A symbolic command, which when run either
+ performs a call and binds the result to a variable, or initialises
+ the state of the test case. (The latter appears only when <a href="#commands-2"><code>commands/2</code></a>
+ in used to generate a command sequence starting in a state other than
+ initial_state()).</p>
+
+<h3 class="typedecl"><a name="type-command_history">command_history()</a></h3>
+<p><tt>command_history() = [{<a href="#type-command">command()</a>, term()}]</tt></p>
+<p> A list of commands and their results. The arguments in each call are the
+ <i>evaluated</i> arguments, not the symbolic ones.</p>
+
+<h3 class="typedecl"><a name="type-dynamic_state">dynamic_state()</a></h3>
+<p><tt>dynamic_state() = any()</tt></p>
+<p> The type used by the client module to represent
+ the state of a test case during test execution. It is the same as
+ <a href="#type-symbolic_state"><code>symbolic_state()</code></a>, except that symbolic variables and calls
+ are replaced by their values.</p>
+
+<h3 class="typedecl"><a name="type-exit">exit()</a></h3>
+<p><tt>exit() = {'EXIT', term()}</tt></p>
+<p> The type of a caught exception.</p>
+
+<h3 class="typedecl"><a name="type-expr">expr()</a></h3>
+<p><tt>expr() = term()</tt></p>
+<p> A symbolic expression, which is evaluated by
+ replacing any symbolic variables (<a href="#type-var"><code>var()</code></a>) or function calls
+ (<a href="#type-call"><code>call()</code></a>) in the term by their values.</p>
+
+<h3 class="typedecl"><a name="type-history">history()</a></h3>
+<p><tt>history() = [{<a href="#type-dynamic_state">dynamic_state()</a>, term()}]</tt></p>
+<p> The history of a
+ test execution, with one element for each command that was
+ executed without an exception, containing the state before the
+ command and the value it returned.</p>
+
+<h3 class="typedecl"><a name="type-parallel_test_case">parallel_test_case()</a></h3>
+<p><tt>parallel_test_case() = {[<a href="#type-command">command()</a>], [[<a href="#type-command">command()</a>]]}</tt></p>
+<p> A sequential prefix, and a list of concurrent child tasks.</p>
+
+<h3 class="typedecl"><a name="type-proplist">proplist()</a></h3>
+<p><tt>proplist() = [{atom(), <a href="#type-expr">expr()</a>}]</tt></p>
+<p> A property list, where each property is a tuple containing a tag and an expression.</p>
+
+<h3 class="typedecl"><a name="type-reason">reason()</a></h3>
+<p><tt>reason() = ok | initialization | {precondition, boolean()} | {postcondition, any()} | {invariant, any()} | {exception, <a href="#type-exit">exit()</a>}</tt></p>
+<p> The reason execution of a command sequence terminated.
+ <ul>
+ <li><h3>ok</h3>
+ <p>All commands completed normally, and all postconditions were true.</p>
+ </li>
+ <li><h3>initialization</h3>
+ <p>There was an exception when computing the initial state--that is, converting the
+ result of initial_state() to a <a href="#type-dynamic_state"><code>dynamic_state()</code></a>.</p></li>
+ <li><h3>precondition</h3>
+ <p>A precondition failed to return <tt>true</tt> <i>during test execution</i>.
+ Since preconditions are checked when tests are generated, this should not normally
+ happen. It is possible
+ when using <a href="eqc.html#check-2"><code>eqc:check/2</code></a> to rerun a saved test, after modifying the code,
+ or if one of the functions <tt>initial_state/0</tt>, <tt>next_state/3</tt>, or
+ <tt>precondition/2</tt> behaves differently at generation time and test execution
+ time. For example, a pattern match on a symbolic variable (<tt>{var,N}</tt>) will
+ behave differently during test case generation and execution--so any such pattern
+ matching is a warning sign.
+ </p>
+ </li>
+ <li><h3>postcondition</h3>
+ <p>A postcondition failed to return <tt>true</tt>.</p></li>
+ <li><h3>invariant</h3>
+ <p>An invariant failed to return <tt>true</tt>.</p></li>
+ <li><h3>exception</h3>
+ <p>One of the commands in the sequence raised an exception. In this case the
+ <a href="#type-history"><code>history()</code></a> contains all previous commands, and the final state is
+ the state just before the faulty command was executed.</p></li>
+ </ul></p>
+
+<h3 class="typedecl"><a name="type-symbolic_state">symbolic_state()</a></h3>
+<p><tt>symbolic_state() = any()</tt></p>
+<p> The type used by the client module to represent
+ the state of a test case during test case generation.</p>
+
+<h3 class="typedecl"><a name="type-var">var()</a></h3>
+<p><tt>var() = {var, integer()}</tt></p>
+<p> A symbolic variable, which is replace during test execution by the value bound
+ by the corresponding <a href="#type-command"><code>command()</code></a>.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#apply-3">apply/3</a></td><td>Equivalent to <a href="erlang.html#apply-3"><tt>erlang:apply(M, F, As)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#call_features-1">call_features/1</a></td><td>Returns a list of command features exercised in this test.</td></tr>
+<tr><td valign="top"><a href="#call_features-2">call_features/2</a></td><td>Returns a list of features exercised by calls to <tt>F</tt> (or
+ <tt>F/A</tt>, if the arity is also specified).</td></tr>
+<tr><td valign="top"><a href="#check_commands-3">check_commands/3</a></td><td>Check the result of run_commands.</td></tr>
+<tr><td valign="top"><a href="#check_commands-4">check_commands/4</a></td><td>Like <a href="#check_commands-3"><code>check_commands/3</code></a>, but also takes the environment
+  passed to <a href="#run_commands-3"><code>run_commands/3</code></a> as an additional parameter.</td></tr>
+<tr><td valign="top"><a href="#command_names-1">command_names/1</a></td><td>Returns a list of the command names used in <tt>Cmds</tt>.</td></tr>
+<tr><td valign="top"><a href="#commands-1">commands/1</a></td><td>Generates a list of commands, using the abstract state machine defined
+ in module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#commands-2">commands/2</a></td><td>Behaves like <a href="#commands-1"><code>commands/1</code></a>, but generates a list of
+ commands starting in state S.</td></tr>
+<tr><td valign="top"><a href="#eq-2">eq/2</a></td><td>Compare X and Y for equality, returns true if equal, and {X, '/=', Y}
+  otherwise.</td></tr>
+<tr><td valign="top"><a href="#get_metadata-2">get_metadata/2</a></td><td>Retreive a field from the MetaData component.</td></tr>
+<tr><td valign="top"><a href="#linearizable-1">linearizable/1</a></td><td>Adds calls of eqc_statem:now() before and after each command
+  in the parallel part of the test case, which enables us to
+  <i>observe</i> the order in which calls are made.</td></tr>
+<tr><td valign="top"><a href="#more_commands-2">more_commands/2</a></td><td>Increases the expected length of command sequences generated within Gen by
+ a factor N.</td></tr>
+<tr><td valign="top"><a href="#now-0">now/0</a></td><td>Equivalent to <a href="erlang.html#now-0"><tt>erlang:now()</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#parallel_commands-1">parallel_commands/1</a></td><td>Generate a parallel test case from the callbacks in the client
+  module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#parallel_commands-2">parallel_commands/2</a></td><td>Behaves like <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>, but generates a test
+  case starting in the state <tt>S</tt>.</td></tr>
+<tr><td valign="top"><a href="#postconditions-3">postconditions/3</a></td><td>Given the values returned by a list of
+ commands, checks that all pre- and postconditions are satisfied.</td></tr>
+<tr><td valign="top"><a href="#pretty_commands-4">pretty_commands/4</a></td><td>Pretty-prints the execution history of a failing test, showing
+  the calls made, the actual arguments and results, and (optionally)
+  the model states.</td></tr>
+<tr><td valign="top"><a href="#pretty_commands-5">pretty_commands/5</a></td><td>Like <a href="#pretty_commands-4"><code>pretty_commands/4</code></a>, but also takes the environment
+  passed to <a href="#run_commands-3"><code>run_commands/3</code></a> as an additional parameter.</td></tr>
+<tr><td valign="top"><a href="#run_commands-2">run_commands/2</a></td><td>Runs a list of commands specified by the abstract state machine
+ in client module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#run_commands-3">run_commands/3</a></td><td>Behaves like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases.</td></tr>
+<tr><td valign="top"><a href="#run_parallel_commands-2">run_parallel_commands/2</a></td><td>Runs a parallel test case, and returns the history of the
+  prefix, each of the parallel tasks, and the overall result.</td></tr>
+<tr><td valign="top"><a href="#run_parallel_commands-3">run_parallel_commands/3</a></td><td>Like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an
+  environment binding variables, like <a href="#run_commands-3"><code>run_commands/3</code></a>.</td></tr>
+<tr><td valign="top"><a href="#show_states-1">show_states/1</a></td><td>Causes a call of <a href="#pretty_commands-4"><code>pretty_commands/4</code></a> or <a href="#pretty_commands-5"><code>pretty_commands/5</code></a> in the property to display the test case states
+  as well as arguments and results.</td></tr>
+<tr><td valign="top"><a href="#state_after-2">state_after/2</a></td><td>Returns the symbolic state after a list of commands is run.</td></tr>
+<tr><td valign="top"><a href="#zip-2">zip/2</a></td><td>Zips two lists together,
+ but accepts lists of different lengths, stopping when the shorter
+ list stops.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="apply-3">apply/3</a></h3>
+<div class="spec">
+<p><tt>apply(M, F, As) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="erlang.html#apply-3"><tt>erlang:apply(M, F, As)</tt></a>.</p>
+
+
+<h3 class="function"><a name="call_features-1">call_features/1</a></h3>
+<div class="spec">
+<p><tt>call_features(H::<a href="#type-history">history()</a>) -&gt; [any()]</tt><br></p>
+</div><p>Returns a list of command features exercised in this test.</p>
+
+<h3 class="function"><a name="call_features-2">call_features/2</a></h3>
+<div class="spec">
+<p><tt>call_features(F::atom() | {atom(), <a href="#type-int">int()</a>}, H::<a href="#type-history">history()</a>) -&gt; [any()]</tt><br></p>
+</div><p>Returns a list of features exercised by calls to <tt>F</tt> (or
+ <tt>F/A</tt>, if the arity is also specified).</p>
+
+<h3 class="function"><a name="check_commands-3">check_commands/3</a></h3>
+<div class="spec">
+<p><tt>check_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], HSRes::{<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}) -&gt; <a href="#type-property">property()</a></tt><br></p>
+</div><p>Check the result of run_commands. The recommended way to write
+  an eqc_statem property is in the form
+  <pre>
+  X = run_commands(Mod,Cmds),
+  ...any clean-up code...
+  check_commands(Mod,Cmds,X)
+  </pre>
+  This:
+  <ul><li>Checks that the commands ran successfully (and all
+  postconditions were true),</li>
+  <li>Gathers statistics on the commands appearing in generated
+  tests, using <tt>aggregate(command_names(Cmds),...)</tt></li>
+  <li>Discards test cases in which a precondition failed.</li>
+  </ul>
+  Additional checks can be combined with <tt>check_commands</tt>
+  using <a href="eqc.html#conjunction-1"><code>eqc:conjunction/1</code></a>.</p>
+
+<h3 class="function"><a name="check_commands-4">check_commands/4</a></h3>
+<div class="spec">
+<p><tt>check_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], HSRes::{<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}, Env::[{atom(), term()}]) -&gt; <a href="#type-property">property()</a></tt><br></p>
+</div><p>Like <a href="#check_commands-3"><code>check_commands/3</code></a>, but also takes the environment
+  passed to <a href="#run_commands-3"><code>run_commands/3</code></a> as an additional parameter.</p>
+
+<h3 class="function"><a name="command_names-1">command_names/1</a></h3>
+<div class="spec">
+<p><tt>command_names(Cmds::[<a href="#type-command">command()</a>]) -&gt; [{atom(), atom(), integer()}]</tt><br></p>
+</div><p>Returns a list of the command names used in <tt>Cmds</tt>. This
+ function can be used in properties to measure the frequency with
+ which each command actually occurs in the generated test cases, as follows:
+ <pre>
+ ?FORALL(Cmds,commands(...),
+   begin
+     {H,S,Res} = run_commands(...,Cmds),
+     aggregate(command_names(Cmds),
+               Res==ok)
+   end)
+ </pre></p>
+
+<h3 class="function"><a name="commands-1">commands/1</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::atom()) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br></p>
+</div><p>Generates a list of commands, using the abstract state machine defined
+ in module <tt>Mod</tt>. The commands in the sequence are generated by
+ Mod:command/1, starting in the state Mod:initial_state(), and tracking
+ state changes using Mod:next_state/3. Commands are only included in the
+ sequence if their precondition (given by Mod:precondition/2) is satisfied.
+ Sequences are shrunk by discarding commands in such a way that
+ preconditions always hold, and all variables are set before they are used.</p>
+
+<h3 class="function"><a name="commands-2">commands/2</a></h3>
+<div class="spec">
+<p><tt>commands(Mod::atom(), S::<a href="#type-symbolic_state">symbolic_state()</a>) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br></p>
+</div><p>Behaves like <a href="#commands-1"><code>commands/1</code></a>, but generates a list of
+ commands starting in state S. To ensure the correct state when the
+ commands are run, the first command is <tt>{init,S}</tt>.</p>
+
+<h3 class="function"><a name="eq-2">eq/2</a></h3>
+<div class="spec">
+<p><tt>eq(X, Y) -&gt; true | {X, '/=', Y}</tt>
+<ul class="definitions"><li><tt>X = term()</tt></li><li><tt>Y = term()</tt></li></ul></p>
+</div><p>Compare X and Y for equality, returns true if equal, and {X, '/=', Y}
+  otherwise. Typically used in postcondition; since it will result in a more informative
+  counterexample.</p>
+
+<h3 class="function"><a name="get_metadata-2">get_metadata/2</a></h3>
+<div class="spec">
+<p><tt>get_metadata(Key::term(), Cmd::<a href="#type-call">call()</a>) -&gt; false | {ok, term()}</tt><br></p>
+</div><p>Retreive a field from the MetaData component. This function pre-suppose that the
+  meta data is organized in the form of a proplist with {Key, Value}-pairs.</p>
+
+<h3 class="function"><a name="linearizable-1">linearizable/1</a></h3>
+<div class="spec">
+<p><tt>linearizable(TestCase::<a href="#type-parallel_test_case">parallel_test_case()</a>) -&gt; <a href="#type-parallel_test_case">parallel_test_case()</a></tt><br></p>
+</div><p>Adds calls of eqc_statem:now() before and after each command
+  in the parallel part of the test case, which enables us to
+  <i>observe</i> the order in which calls are made. This gives us
+  more information with which to determine whether a test passed or
+  failed, which may improve the detection of races. On the other
+  hand, calling now() involves a global synchronization, and so may
+  make race conditions <i>less</i> likely to appear.</p>
+
+<h3 class="function"><a name="more_commands-2">more_commands/2</a></h3>
+<div class="spec">
+<p><tt>more_commands(N::<a href="#type-int">int()</a>, Gen::<a href="#type-gen">gen</a>(A)) -&gt; <a href="#type-gen">gen</a>(A)</tt><br></p>
+</div><p>Increases the expected length of command sequences generated within Gen by
+ a factor N.</p>
+
+<h3 class="function"><a name="now-0">now/0</a></h3>
+<div class="spec">
+<p><tt>now() -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="erlang.html#now-0"><tt>erlang:now()</tt></a>.</p>
+
+
+<h3 class="function"><a name="parallel_commands-1">parallel_commands/1</a></h3>
+<div class="spec">
+<p><tt>parallel_commands(Mod::atom()) -&gt; <a href="#type-gen">gen</a>(<a href="#type-parallel_test_case">parallel_test_case()</a>)</tt><br></p>
+</div><p>Generate a parallel test case from the callbacks in the client
+  module <tt>Mod</tt>. These test cases are used to test for race
+  conditions that make the commands in the tests behave non-atomically.</p>
+
+<h3 class="function"><a name="parallel_commands-2">parallel_commands/2</a></h3>
+<div class="spec">
+<p><tt>parallel_commands(Mod::atom(), S::<a href="#type-symbolic_state">symbolic_state()</a>) -&gt; <a href="#type-gen">gen</a>(<a href="#type-parallel_test_case">parallel_test_case()</a>)</tt><br></p>
+</div><p>Behaves like <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>, but generates a test
+  case starting in the state <tt>S</tt>.</p>
+
+<h3 class="function"><a name="postconditions-3">postconditions/3</a></h3>
+<div class="spec">
+<p><tt>postconditions(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], Vals::[term()]) -&gt; bool()</tt><br></p>
+</div><p>Given the values returned by a list of
+ commands, checks that all pre- and postconditions are satisfied. Mod
+ is a module defining a state machine, Cmds a list of commands
+ generated from it, and Vals the list of values returned by running
+ those commands. This function is useful when the list of commands
+ cannot be run just by calling <a href="#run_commands-2"><code>run_commands/2</code></a>, for example
+ because the commands represent calls to functions in a different
+ programming language.</p>
+
+<h3 class="function"><a name="pretty_commands-4">pretty_commands/4</a></h3>
+<div class="spec">
+<p><tt>pretty_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], HSRes::{<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}, P::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br></p>
+</div><p>Pretty-prints the execution history of a failing test, showing
+  the calls made, the actual arguments and results, and (optionally)
+  the model states. Like <tt>?WHENFAIL</tt>, <a href="pretty_commands.html"><code>pretty_commands</code></a>
+  takes the rest of the property as its last argument, and constructs
+  a new property that also pretty-prints. The argument <tt>Cmds</tt>
+  should be the list of commands passed to <a href="#run_commands-2"><code>run_commands/2</code></a>,
+  and <tt>HSRes</tt> should be its result. Alternatively
+  (notwithstanding the type signature above) a parallel test case
+  generated by <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>, and the result of
+  <a href="#run_parallel_commands-2"><code>run_parallel_commands/2</code></a>, can be passed instead.
+  <p>
+  The pretty-printing can be customized using
+  <a href="eqc_gen.html#with_parameter-3"><code>eqc_gen:with_parameter/3</code></a> to specify
+  <ul>
+  <li><tt>show_states</tt> (<tt>true</tt> or <tt>false</tt>), to
+  determine whether model states should be included in the output,</li>
+  <li><tt>pretty_width</tt> (an integer), to specify the width
+  available for pretty-printing.</li>
+  </ul>
+  Note that these parameters are parameters to the entire property,
+  and can be specified when <a href="eqc.html#quickcheck-1"><code>eqc:quickcheck/1</code></a> is called from the Erlang shell.</p>
+  <p>Alternatively, the simplest way to show the states when a property fails is to call
+  <pre>
+  eqc:quickcheck(eqc_statem:show_states(...property...)).
+  </pre>
+  from the shell.</p></p>
+
+<h3 class="function"><a name="pretty_commands-5">pretty_commands/5</a></h3>
+<div class="spec">
+<p><tt>pretty_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], HSRes::{<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}, Env::[{atom(), term()}], P::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br></p>
+</div><p>Like <a href="#pretty_commands-4"><code>pretty_commands/4</code></a>, but also takes the environment
+  passed to <a href="#run_commands-3"><code>run_commands/3</code></a> as an additional parameter.</p>
+
+<h3 class="function"><a name="run_commands-2">run_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>]) -&gt; {<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Runs a list of commands specified by the abstract state machine
+ in client module <tt>Mod</tt>. Before each command is run, its precondition is
+ checked by Mod:precondition/2, and after each command is executed, its
+ postcondition is checked by Mod:postcondition/3. The result contains the
+ <a href="#type-history"><code>history()</code></a> of execution, the state after the last command that was
+ executed successfully, and the <a href="#type-reason"><code>reason()</code></a> execution stopped.</p>
+
+<h3 class="function"><a name="run_commands-3">run_commands/3</a></h3>
+<div class="spec">
+<p><tt>run_commands(Mod::atom(), Cmds::[<a href="#type-command">command()</a>], Env::[{atom(), term()}]) -&gt; {<a href="#type-history">history()</a>, <a href="#type-dynamic_state">dynamic_state()</a>, <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Behaves like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases. For example, if <tt>Env</tt> is <tt>[{x,32}]</tt>,
+ then <tt>{var,x}</tt> may appear in the commands, and will evaluate
+ to 32. The variables names must be atoms (unlike generated variable
+ names, which are numbers).</p>
+
+<h3 class="function"><a name="run_parallel_commands-2">run_parallel_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_parallel_commands(Mod::atom(), ParCmds::<a href="#type-parallel_test_case">parallel_test_case()</a>) -&gt; {<a href="#type-command_history">command_history()</a>, [<a href="#type-command_history">command_history()</a>], <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Runs a parallel test case, and returns the history of the
+  prefix, each of the parallel tasks, and the overall result.</p>
+
+<h3 class="function"><a name="run_parallel_commands-3">run_parallel_commands/3</a></h3>
+<div class="spec">
+<p><tt>run_parallel_commands(Mod::atom(), ParCmds::<a href="#type-parallel_test_case">parallel_test_case()</a>, Env::[{atom(), term()}]) -&gt; {<a href="#type-command_history">command_history()</a>, [<a href="#type-command_history">command_history()</a>], <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an
+  environment binding variables, like <a href="#run_commands-3"><code>run_commands/3</code></a>.</p>
+
+<h3 class="function"><a name="show_states-1">show_states/1</a></h3>
+<div class="spec">
+<p><tt>show_states(Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br></p>
+</div><p>Causes a call of <a href="#pretty_commands-4"><code>pretty_commands/4</code></a> or <a href="#pretty_commands-5"><code>pretty_commands/5</code></a> in the property to display the test case states
+  as well as arguments and results.</p>
+
+<h3 class="function"><a name="state_after-2">state_after/2</a></h3>
+<div class="spec">
+<p><tt>state_after(Mod::atom(), Cmds::[<a href="#type-command">command()</a>]) -&gt; <a href="#type-symbolic_state">symbolic_state()</a></tt><br></p>
+</div><p>Returns the symbolic state after a list of commands is run. The
+ commands are not executed.</p>
+
+<h3 class="function"><a name="zip-2">zip/2</a></h3>
+<div class="spec">
+<p><tt>zip(Xs::[A], Ys::[B]) -&gt; [{A, B}]</tt><br></p>
+</div><p>Zips two lists together,
+ but accepts lists of different lengths, stopping when the shorter
+ list stops. This is useful to zip together a list of commands with
+ the history returned by <a href="#run_commands-2"><code>run_commands/2</code></a>, to display each
+ command together with its result in the output from QuickCheck.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, May 11 2015, 12:46:12.</i></p>
+</body>
+</html>
+

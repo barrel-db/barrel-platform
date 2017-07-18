@@ -1,0 +1,146 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_c_enum</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_c_enum</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+This module provides a tool for generating conversion functions for enum-like
+C types.
+<p>Copyright © Quviq AB, 2013-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2><p>
+This module provides a tool for generating conversion functions for enum-like
+C types.</p>
+
+ Example use: given the C header file <code>answer.h</code>:
+ <pre>
+ typedef int Answer;
+ #define YES 1
+ #define NO  0</pre>
+ we can define
+ <pre>
+ -module(enum_test).
+ -compile(export_all).
+ start() -&gt;
+   eqc_c_enum:load(answer_enum, ["answer.h"], {"Answer", ['YES', 'NO']}),
+   eqc_c:start(answer, [{c_src, "answer.h"}, {casts, answer_enum}]).</pre>
+ We can then work with <code>YES</code> and <code>NO</code> as values of type <code>Answer</code>:
+ <pre>
+ 1&gt; enum_test:start().
+ ok
+ 2&gt; Ans = eqc_c:alloc("Answer", 'YES').
+ {ptr, "Answer", 140243361595616}
+ 3&gt; eqc_c:deref(Ans).
+ 'YES'</pre>
+ <p>
+ You can also generate conversion functions for bitmask types, by giving the
+ <code>bitmask</code> option to <a href="eqc_c_enum.html#load-2"><code>eqc_c_enum:load/2</code></a>. In this case C values are
+ converted to and from lists of atoms. For example, given <code>bitmasks.h</code>:
+ <pre>
+ typedef int XYZ;
+
+ #define HAS_X 1
+ #define HAS_Y 2
+ #define HAS_Z 4
+ </pre>
+ we can load it as follows
+ <pre>
+ 1&gt; eqc_c_enum:load(xyz, ["bitmasks.h"], {"XYZ", ['HAS_X', 'HAS_Y', 'HAS_Z'], bitmask}).
+ ok
+ 2&gt; eqc_c:start(bitmasks, [{c_src, "bitmasks.h"}, {casts, xyz}]).
+ ok
+ 3&gt; eqc_c:alloc("XYZ", 5).
+ {ptr, "XYZ", 140567464902656}
+ 4&gt; eqc_c:deref(v(-1)).
+ ['HAS_X', 'HAS_Z']
+ </pre></p>
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#load-3">load/3</a></td><td>Equivalent to <a href="#load-4"><tt>load(Module, Includes, TypeSpecs, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#load-4">load/4</a></td><td>Generate and load a module <code>Module</code> suitable for use as a <code>casts</code>
+      module with <a href="eqc_c.html#start-2"><code>eqc_c:start/2</code></a>.</td></tr>
+<tr><td valign="top"><a href="#load_module-2">load_module/2</a></td><td>Equivalent to <a href="#load_module-3"><tt>load_module(Module, Callback, [])</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#load_module-3">load_module/3</a></td><td>Given a callback module a type_cast module is generated.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="load-3">load/3</a></h3>
+<div class="spec">
+<p><tt>load(Module::atom(), Includes::[string()], TypeSpecs) -&gt; ok</tt>
+<ul class="definitions"><li><tt>TypeSpecs = TypeSpec | [TypeSpec]</tt></li><li><tt>TypeSpec = {<a href="eqc_c.html#type-type">eqc_c:type()</a>, [atom() | {atom(), any()}]} | {<a href="eqc_c.html#type-type">eqc_c:type()</a>, [atom() | {atom(), any()}], TypeOptions}</tt></li><li><tt>TypeOptions = TypeOption | [TypeOption]</tt></li><li><tt>TypeOption = read_only | write_only | bitmask</tt></li></ul></p>
+</div><p>Equivalent to <a href="#load-4"><tt>load(Module, Includes, TypeSpecs, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="load-4">load/4</a></h3>
+<div class="spec">
+<p><tt>load(Module::atom(), Includes::[string()], TypeSpecs, Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; ok</tt>
+<ul class="definitions"><li><tt>TypeSpecs = TypeSpec | [TypeSpec]</tt></li><li><tt>TypeSpec = {<a href="eqc_c.html#type-type">eqc_c:type()</a>, [atom() | {atom(), any()}]} | {<a href="eqc_c.html#type-type">eqc_c:type()</a>, [atom() | {atom(), any()}], TypeOptions}</tt></li><li><tt>TypeOptions = TypeOption | [TypeOption]</tt></li><li><tt>TypeOption = read_only | write_only | read_write</tt></li></ul></p>
+</div><p><p>Generate and load a module <code>Module</code> suitable for use as a <code>casts</code>
+      module with <a href="eqc_c.html#start-2"><code>eqc_c:start/2</code></a>. Each <code>TypeSpec</code> in <code>TypeSpecs</code> is
+      a tuple, <code>{Type, Tags}</code>. The function creates the functions
+      <code>to_c/2</code> and <code>from_c/2</code> converting between C integers and the atoms given
+      in <code>Tags</code>. For each tag there should be a <code>#define</code> in the include
+      files <code>Includes</code> providing its value. If <code>Tags</code> is a list of pairs,
+the first component of each pair specifies the name of the #define and the
+second component the desired Erlang value.</p>
+
+      <p>The type options can be used to restrict the conversion to be oneway.
+      With the <code>read_only</code> option no conversion will take place from Erlang
+      to C, and with <code>write_only</code> there is no conversion from C to Erlang.
+      The <code>write_only</code> option is useful when there is no typedef on the C
+side indicating when conversion to Erlang should take place.</p>
+
+      <p>If the <code>bitmask</code> option is used, conversion from C produces a list of
+all the atoms whose corresponding bits are set in the value. Conversion
+from Erlang takes a list of atoms to the bitwise or of the corresponding
+values.</p>
+
+      The <code>Options</code> are passed to <a href="eqc_c.html#start-2"><code>eqc_c:start/2</code></a> when starting the C
+      program to retrieve the tag values.</p>
+
+<h3 class="function"><a name="load_module-2">load_module/2</a></h3>
+<div class="spec">
+<p><tt>load_module(Module::atom(), Callback::atom()) -&gt; ok</tt><br/></p>
+</div><p>Equivalent to <a href="#load_module-3"><tt>load_module(Module, Callback, [])</tt></a>.</p>
+
+
+<h3 class="function"><a name="load_module-3">load_module/3</a></h3>
+<div class="spec">
+<p><tt>load_module(Module::atom(), Callback::atom(), Options::<a href="proplists.html#type-proplist">proplists:proplist()</a>) -&gt; ok</tt><br/></p>
+</div><p>Given a callback module a type_cast module is generated.
+       A callback module contains one obligatory function includes/0, which
+       should return all C header files with #define's in it that one wants to
+       represent symbolically in Erlang tests.
+       <p>
+       All other 0-ary functions in the callback module are considered type
+       definitions for the symbols. For example, a function
+       <pre>
+         'ReturnType'() -&gt; [ 'OK', 'NOT_OK' ].
+       </pre>
+       Defines a type with two values which are defined in one of the specified header files.
+       This allows the user to use 'OK' and 'NOT_OK' in the Erlang test specifications, instead
+       of hard-coding their actual values.
+
+       Type options can be supplied by returning a pair from the function:
+       <pre>
+         'XYZ'() -&gt; {['HAS_X', 'HAS_Y', 'HAS_Z'], bitmask}.
+       </pre></p><p>
+       The provided Module is used by eqc_c as type cast module and should be added in
+       the compiler options to <a href="eqc_c.html#start-2"><code>eqc_c:start/2</code></a> as <code>{casts, Module}</code>.
+       </p></p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

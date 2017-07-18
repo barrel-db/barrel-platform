@@ -1,0 +1,150 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_erlang_program</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_erlang_program</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module defines a QuickCheck generator for Erlang programs.
+<p>Copyright © Quviq AB, 2014-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2>This module defines a QuickCheck generator for Erlang programs. It
+  generates Erlang source code for a well-formed Erlang module that should
+  compile without errors. The purpose is to test syntax manipulating tools,
+  like parse transforms or compilers. It does not try to generate a program
+  that has any interesting behaviour when run (the majority of generated
+  programs will crash instantly).<p/>
+ 
+  <h3>Usage</h3><p>  
+This program generator can for example be used to test the Erlang compiler.  
+Other application areas are syntax tools or coverage tools.</p>
+ 
+  A simple example of how to test the compiler is presented below:
+  <br/>
+  <pre>
+  compile(Code) -&gt;
+    compile(Code, []).
+ 
+  compile(Code, Options) -&gt;
+    File = lists:concat([?TEST_MODULE, ".erl"]),
+    file:write_file(File, Code),
+    compile:file(File, Options).
+ 
+  prop_compile() -&gt;
+    ?FORALL(Code, eqc_erlang_program:module(?TEST_MODULE),
+    begin
+      Res      = compile(Code),
+      Expected = {ok, ?TEST_MODULE},
+      ?WHENFAIL(
+        begin
+          eqc:format("~s\n", [Code]),
+          compile(Code, [report_errors])
+        end,
+        equals(Res, Expected))
+    end).
+  </pre>
+ 
+  <h3>Limitations</h3>
+  At the moment it does not generate the following:
+  <ul>
+   <li>binaries</li>
+   <li>binary comprehensions</li>
+   <li>number literals in different bases</li>
+   <li>escaped special characters in string literals</li>
+   <li>juxtaposed string literals</li>
+  </ul>
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#module-1">module/1</a></td><td>Erlang program generator.</td></tr>
+<tr><td valign="top"><a href="#module-2">module/2</a></td><td>Configurable Erlang program generator.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="module-1">module/1</a></h3>
+<div class="spec">
+<p><tt>module(Mod::atom()) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>(string())</tt><br/></p>
+</div><p>Equivalent to <a href="#module-2"><tt>module(Mod, [])</tt></a>.</p>
+<p>Erlang program generator. Generates the source code for a module
+       called <tt>Mod</tt>.</p>
+
+<h3 class="function"><a name="module-2">module/2</a></h3>
+<div class="spec">
+<p><tt>module(Mod::atom(), Options::[any()]) -&gt; <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>(string())</tt><br/></p>
+</div><p>Configurable Erlang program generator. Generates the source code for a
+       module called <tt>Mod</tt>.<p/>
+       <b>Options</b>
+       <ul>
+         <li><tt>{maps, bool()}</tt> - Generate map expressions (default:
+           <tt>false</tt>).</li>
+         <li><tt>{macros, bool()}</tt> - Generate macro definitions and calls
+           (default: <tt>false</tt>).</li>
+         <li><tt>{recursive_funs, bool()}</tt> - Generate recursive 'fun' expressions
+           (default: <tt>false</tt>).</li>
+         <li><tt>{parameterized_modules, bool()}</tt> - Generate parameterized modules
+           (default: <tt>false</tt>).</li>
+         <li><tt>{preamble, string()}</tt> - Code to insert after the module header (default: "").</li>
+         <li><tt>{words, list(string())}</tt> - List of words to use for
+           variables and atoms (default: 100 common english words).</li>
+         <li><tt>{forbidden_words, list(string())}</tt> - List of words to not use.</li>
+         <li><tt>{weight, Key :: atom(), Weight :: integer()}</tt> - Set the
+           weight for the given key (high weight =&gt; generated more
+           frequently). If weight is zero the correspoding construct is not
+           generated at all. In the list below the weights for a given key is
+           relative to the weights of the other keys in the same group, so
+           it's recommended to set all weights in a group when changing the
+           weights.<br/>
+           <ul>
+             <li>Atomic expressions: <tt>atom</tt>, <tt>bool</tt>,
+             <tt>int</tt>, <tt>string</tt>, <tt>char</tt>, <tt>float</tt>,
+             <tt>nil</tt>, <tt>pat_var</tt> (in patterns), <tt>var</tt>.</li>
+             <li>Compound expressions:
+               <tt>small</tt> (atomic expression), <tt>predef_macro</tt>, <tt>list</tt>,
+               <tt>tuple</tt>, <tt>map</tt>, <tt>match</tt>,
+               <tt>macrocall</tt>, <tt>binop</tt>, <tt>unop</tt>,
+               <tt>'case'</tt>, <tt>block</tt>, <tt>'if'</tt>,
+               <tt>'fun'</tt>, <tt>'receive'</tt>,
+               <tt>'try'</tt>, <tt>'catch'</tt>, <tt>try_of</tt>,
+               <tt>termcall</tt>, <tt>varcall</tt>, <tt>localcall</tt>, <tt>extcall</tt>.
+             </li>
+             <li>Operators: <tt>any_op</tt>, <tt>guard_op</tt>.
+             </li>
+             <li>Pattern variables: <tt>fresh_var</tt>, <tt>bound_var</tt>.
+             </li>
+             <li>Guards: <tt>no_guard</tt>, <tt>yes_guard</tt>.
+             </li>
+             <li>List expressions: <tt>plain_list</tt>, <tt>cons</tt>, <tt>lc</tt>.
+             </li>
+             <li>List comprehensions: <tt>lc_gen</tt>, <tt>lc_guard</tt>.
+             </li>
+             <li>Function expressions: <tt>lambda</tt> (<tt>fun(Args) -&gt; Body; ... end</tt>),
+               <tt>rec_lambda</tt> (<tt>fun F(Args) -&gt; Body; ... end</tt>),
+               <tt>local_mfa</tt> (<tt>fun f/N</tt>),
+               <tt>ext_mfa</tt> (<tt>fun m:f/N</tt>), <tt>any_mfa</tt>
+               (<tt>fun M:F/A</tt>).
+             </li>
+             <li>Map expressions: <tt>build_map</tt>, <tt>update_map</tt>.
+             </li>
+             <li>Catch clause exception types:
+               <tt>no_etype</tt>, <tt>lit_etype</tt> (<tt>exit</tt>,
+               <tt>error</tt>, or <tt>throw</tt>), <tt>any_etype</tt> (<tt>_</tt>),
+               <tt>var_etype</tt>, <tt>bad_etype</tt> (any atom).
+             </li>
+             <li>Try after: <tt>try_after</tt>, <tt>no_try_after</tt>.
+             </li>
+             <li>Receive timeouts: <tt>lit_timeout</tt>, <tt>inf_timeout</tt>, <tt>var_timeout</tt>.
+             </li>
+           </ul>
+         </li>
+       </ul></p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:29.</i></p>
+</body>
+</html>

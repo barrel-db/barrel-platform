@@ -1,0 +1,32 @@
+Quviq
+Electronic End User License Agreement
+
+NOTICE TO USER:  THIS IS A CONTRACT. BY INDICATING YOUR ACCEPTANCE BELOW, YOU ACCEPT ALL THE TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE WITH THE TERMS AND CONDITIONS OF THIS AGREEMENT, YOU WILL NOT BE ABLE TO USE THE SOFTWARE.
+
+This Quviq End User License Agreement (the "Agreement") accompanies software ("Software") and related explanatory written materials ("Documentation"). 
+
+The term "Software" shall also include any upgrades, modified versions, updates, additions, and copies of the Software licensed to you by Quviq. Quviq grants to you a nonexclusive license to use the Software and Documentation, provided that you agree to the following:
+
+1.	Copyright.  
+The Software is owned by Quviq, and its structure, organization and code are the valuable trade secrets of Quviq. The Software is protected by copyright laws and international treaty provisions. Therefore, you must treat the Software just as you would any other copyrighted material, such as a book. You may not copy the Software or the Documentation, except as set forth in the "Use of the Software" section. Any copies that you are permitted to make pursuant to this Agreement must contain the same copyright and other proprietary notices that appear on or in the Software. You agree not to modify, adapt or translate the Software. You also agree not to reverse engineer, decompile, disassemble or otherwise attempt to discover the source code of the Software. 
+
+2.	Transfer.  
+You may not rent, lease, sublicence or lend the Software or Documentation.
+
+3.	Upgrades.
+If you receive an upgrade or update for Software, your previous version of the software is only support for thirty (30) days after you receive the new version in order to assist you in the transition to the new version.
+
+4. 	Support. 
+User Support is provided by this licence agreement for questions regarding installation and basic operation of the software. Questions may be emailed to support@quviq.com. This support does not included any education or explanation of available functionality.
+
+5.	Limited Warranty. 
+Quviq guarantees that the software will correspond in general terms to the description given in the user documentation for 30 days from the date the product was purchased. Quviq does not warrant that the software will operate without interruptions or be bug-free. The warranty stated above is the only warranty given and replaces all other warranties, regardless of whether express or implied, including implied warranties of commercial aptitude and fitness for a specific purpose. In case you make a warranty claim within the 30-day warranty period, the liability of Quviq is limited to replacing the product or refunding the licence fee paid, at Quviq?s option.
+
+6.	Limitation of Liability.  
+IN NO EVENT WILL QUVIQ BE LIABLE TO YOU FOR ANY CONSEQUENTIAL, INCIDENTAL OR SPECIAL DAMAGES, INCLUDING ANY LOST PROFITS, BUSINESS INTERRUPTION, OR LOST SAVINGS, ARISING OUT OF THE USE OF, OR INABILITY TO USE, THE SOFTWARE, EVEN IF A QUVIQ REPRESENTATIVE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES, OR FOR ANY CLAIM BY ANY THIRD PARTY. 
+
+
+7.	Open source components.
+If Software is purchased with a number of open source modules, such as for automotive software, then these modules may be used for inspection and increased understanding in failure analysis. No warranty is given that these modules are the only possible implementation of the underlying specification. Modules modified by the user loose immediately all guarantee and support.
+The use of all source code included in Software is strictly limited to the use with QuickCheck. None of the code may be included as part of a different product or service than the Software.
+

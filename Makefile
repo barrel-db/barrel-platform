@@ -3,11 +3,11 @@ SUPPORTDIR = $(BASEDIR)/support
 REBAR ?= $(SUPPORTDIR)/rebar3
 
 OTP_VERSION?=19.3
-BUILD_NAME?=dirty
+BUILD_NAME?=dirty-1
 KERL_DEFAULT_INSTALL_DIR?=$(HOME)/.kerl/local/$(BUILD_NAME)/otp
 KERL_CONFIGURE_OPTIONS?=" --disable-hipe --enable-smp-support --enable-threads --enable-kernel-poll --with-wx --without-odbc --enable-dirty-schedulers"
 
-.PHONY: help all rel tar store apply
+.PHONY: help all rel tar store apply eqc
 
 all: compile
 
@@ -39,11 +39,12 @@ cleantest:
 erlclean:
 	kerl delete build $(BUILD_NAME)
 
-
-install_erlang:
+build_erlang:
 	KERL_CONFIGURE_OPTIONS=$(KERL_CONFIGURE_OPTIONS) \
 	KERL_DEFAULT_INSTALL_DIR=$(KERL_DEFAULT_INSTALL_DIR) \
 	kerl build $(OTP_VERSION) $(BUILD_NAME)
+
+install_erlang: build_erlang
 	kerl install $(BUILD_NAME) $(KERL_DEFAULT_INSTALL_DIR)
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
@@ -63,6 +64,10 @@ eunit:
 
 ct:
 	@$(REBAR) as dev ct
+
+eqc:
+		@$(REBAR) as eqc eqc
+
 
 cover:
 	@$(REBAR) cover

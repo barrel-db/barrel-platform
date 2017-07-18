@@ -1,0 +1,237 @@
+<?xml version="1.0"?><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Module eqc_suite</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc"/>
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<hr/>
+
+<h1>Module eqc_suite</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+  This module provides functions to <i>generate</i> and
+  <i>execute</i> fixed test suites from QuickCheck properties.
+<p>Copyright © Quviq AB, 2010-2017</p>
+
+<p><b>Version:</b> 1.41.2</p>
+
+<h2><a name="description">Description</a></h2>
+  This module provides functions to <i>generate</i> and
+  <i>execute</i> fixed test suites from QuickCheck properties. There are two
+  reasons to do so:
+  <ul>
+  <li>Generated test suites can be run without a QuickCheck licence, so
+  licencees can distribute their properties and generated test suites
+  to their own users, or to other
+  developers, who can then run them in their own context, using a compatible
+  version of QuickCheck Mini.</li>
+  <li>If a large number of random tests are needed to reach every
+  line of the code under test, then it may be useful to
+  generate a <i>fixed</i> test suite that rapidly covers all the
+  code, and run it as part of regular testing together with the usual
+  random tests. This guarantees high coverage, while retaining the
+  advantages of random testing.</li>
+  </ul>
+  Generated test suites should not be used as a substitute for
+  QuickCheck's usual testing. Their main disadvantages are:
+  <ul>
+  <li>They are not as effective at revealing errors.</li>
+  <li>Failing tests cannot be shrunk (because the set of tests is fixed).</li>
+  </ul>
+  <h2>Example</h2>
+  Suppose a module <tt>mut</tt> is tested by a property
+  <tt>mut_eqc:prop_ok()</tt>, and we want to generate a set of test
+  cases for <tt>prop_ok()</tt> that covers the reachable code. Suppose
+  also we believe that 1000 random tests are enough to cover all the
+  reachable code, with a high probability. Then we can generate the
+  test suite as follows:
+  <ul>
+  <li><tt>cover:compile(mut)</tt>, so that QuickCheck can measure
+  coverage of this module.</li>
+  <li><tt>eqc_suite:coverage_based(mut,eqc:numtests(1000,mut_eqc:prop_ok()))</tt>,
+  to generate the test suite.</li>
+  <li><tt>eqc_suite:write(mut,v(-1))</tt>, to save the generated
+  suite in a file <tt>mut.suite</tt>.</li>
+  <li><tt>cover:reset()</tt>, to clear the coverage data.</li>
+  <li><tt>eqc_suite:run(mut_eqc:prop_ok(),mut)</tt>, to run the tests
+  in <tt>mut.suite</tt>.</li>
+  <li><tt>cover:analyse_to_file(mut)</tt>, to examine the line
+  coverage achieved by the generated tests.</li>
+  </ul>
+  Note that <tt>mut.suite</tt> and <a href="#run-2"><code>run/2</code></a> can be distributed
+  and used <i>without a QuickCheck licence</i>, to repeat the tests
+  later on any platform.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-file_name">file_name()</a></h3>
+<p><tt>file_name() = atom() | string()</tt></p>
+<p>The name of a file used to
+  store a test suite. Such files have the extension <tt>.suite</tt>,
+  so for example the atom <tt>foo</tt> would refer to the file
+  <tt>foo.suite</tt>.</p>
+
+<h3 class="typedecl"><a name="type-property">property()</a></h3>
+<p><b>abstract datatype</b>: <tt>property()</tt></p>
+<p>A QuickCheck property.</p>
+
+<h3 class="typedecl"><a name="type-test_case">test_case()</a></h3>
+<p><tt>test_case() = [any()]</tt></p>
+<p>A test case for a QuickCheck property,
+  consisting of a list of values, with one value for each
+  <tt>?FORALL</tt> in the property. This is the same kind of value as
+  <a href="eqc.html#counterexample-0"><code>eqc:counterexample/0</code></a> returns.</p>
+
+<h3 class="typedecl"><a name="type-test_suite">test_suite()</a></h3>
+<p><tt>test_suite() = <a href="#type-file_name">file_name()</a> | <a href="#type-test_suite_representation">test_suite_representation()</a></tt></p>
+
+
+<h3 class="typedecl"><a name="type-test_suite_representation">test_suite_representation()</a></h3>
+<p><b>abstract datatype</b>: <tt>test_suite_representation()</tt></p>
+<p>A structure containing a list of
+  test cases, and optionally additional implementation dependent information.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#cases-1">cases/1</a></td><td>Extract the list of test cases from a test suite.</td></tr>
+<tr><td valign="top"><a href="#code_coverage-1">code_coverage/1</a></td><td>Use <tt>eqc_cover</tt> tool to determine code coverage
+  for each test case, and use this as the features.</td></tr>
+<tr><td valign="top"><a href="#coverage-3">coverage/3</a></td><td>Use a coverage tool to determine which parts of the code is covered, and
+  use this information as features.</td></tr>
+<tr><td valign="top"><a href="#coverage_based-2">coverage_based/2</a></td><td>Generate a test suite for <tt>Prop</tt> that covers the
+  reachable code in the given modules.</td></tr>
+<tr><td valign="top"><a href="#feature_based-1">feature_based/1</a></td><td>Given a property, generate a test suite that exercises all the
+  <i>features</i> that are exercised while QuickChecking the
+  property.</td></tr>
+<tr><td valign="top"><a href="#line_coverage-2">line_coverage/2</a></td><td>Use the <tt>cover</tt> tool to determine which lines of code in the
+  specified modules are covered by each test case, and use these
+  lines as features.</td></tr>
+<tr><td valign="top"><a href="#random-1">random/1</a></td><td>Generate a suite of random tests from a property.</td></tr>
+<tr><td valign="top"><a href="#run-2">run/2</a></td><td>Equivalent to <a href="#run-3"><tt>run(Prop, Suite, quiet)</tt></a>.
+</td></tr>
+<tr><td valign="top"><a href="#run-3">run/3</a></td><td>Run a previously generated test suite for a property.</td></tr>
+<tr><td valign="top"><a href="#split-2">split/2</a></td><td>Run a previously generated test suite for a property.</td></tr>
+<tr><td valign="top"><a href="#write-2">write/2</a></td><td>Save a generated test suite in a file.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="cases-1">cases/1</a></h3>
+<div class="spec">
+<p><tt>cases(File::<a href="#type-test_suite">test_suite()</a>) -&gt; [<a href="#type-test_case">test_case()</a>]</tt><br/></p>
+</div><p>Extract the list of test cases from a test suite.</p>
+
+<h3 class="function"><a name="code_coverage-1">code_coverage/1</a></h3>
+<div class="spec">
+<p><tt>code_coverage(Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br/></p>
+</div><p>Use <tt>eqc_cover</tt> tool to determine code coverage
+  for each test case, and use this as the features.
+  Of course, modules must be compiled with the <tt>eqc_cover</tt> parse
+  transform to get any coverage data.</p>
+
+<h3 class="function"><a name="coverage-3">coverage/3</a></h3>
+<div class="spec">
+<p><tt>coverage(ResetCoverage::fun(() -&gt; ok), GetCoverage::fun(() -&gt; [any()]), Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br/></p>
+</div><p>Use a coverage tool to determine which parts of the code is covered, and
+  use this information as features. When using a property constructed by this
+  function the necessary modules must (if necessary) be coverage compiled.
+  The first argument is a function that resets coverage measurement, this function
+  is run before checking each test case. The second argument is a function that
+  provides the coverage information collected. Third argument is the property for
+  which coverage should be measured.</p>
+
+<h3 class="function"><a name="coverage_based-2">coverage_based/2</a></h3>
+<div class="spec">
+<p><tt>coverage_based(Modules::[atom()], Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-test_suite">test_suite()</a></tt><br/></p>
+</div><p>Generate a test suite for <tt>Prop</tt> that covers the
+  reachable code in the given modules. If only a single module is to
+  be covered, then the list of module names may be replaced by an
+  atom. Coverage is determined using the <tt>cover</tt> tool, and all
+  the modules to be covered must be <tt>cover:compile</tt>d
+  first. The generated test suite contains a mixture of minimized
+  test cases to reach all the lines of code, and larger more random
+  test cases (which are better at revealing errors).</p>
+
+<h3 class="function"><a name="feature_based-1">feature_based/1</a></h3>
+<div class="spec">
+<p><tt>feature_based(Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-test_suite">test_suite()</a></tt><br/></p>
+</div><p>Given a property, generate a test suite that exercises all the
+  <i>features</i> that are exercised while QuickChecking the
+  property. Features are user-defined, allowing any values to be used as
+  features--for example, lines of code covered, or names of commands
+  executed, might be suitable features to define. Any features can be
+  associated with a test case using <a href="eqc.html#features-2"><code>eqc:features/2</code></a>; line
+  coverage features can be defined using <a href="#line_coverage-2"><code>line_coverage/2</code></a>. The
+  generated test suite contains <i>minimised test cases</i> that
+  reach a new feature; test suite generation stops when QuickChecking
+  the property fails to exercise any new features. Thus, if the
+  number of tests specified using <a href="eqc.html#numtests-2"><code>eqc:numtests/2</code></a> is <i>N</i>,
+  then test suite generation will continue until <i>N</i> consecutive
+  tests fail to exercise any new features.
+  <p>
+  For example, to generate a minimal test suite that covers
+  <tt>my_mod</tt>, we could use
+  <pre>
+  eqc_suite:feature_based(
+    eqc_suite:line_coverage(my_mod,
+      eqc:numtests(10000,
+        my_mod:prop_ok()))).
+  </pre>
+  Here we use <a href="#line_coverage-2"><code>line_coverage/2</code></a> to use the lines covered in
+  <tt>my_mod</tt> as features, and <a href="eqc.html#numtests-2"><code>eqc:numtests/2</code></a> to specify
+  that the property must be tested 10000 times without covering any
+  new lines, for test suite generation to stop. The idea is to choose
+  a large enough number here, that we are unlikely to miss covering
+  any reachable lines of code in the generated test suite. Of course,
+  <tt>prop_ok()</tt> is the property for which we are generating a
+  test suite.
+  </p></p>
+
+<h3 class="function"><a name="line_coverage-2">line_coverage/2</a></h3>
+<div class="spec">
+<p><tt>line_coverage(Mod::[atom()], Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-property">property()</a></tt><br/></p>
+</div><p>Use the <tt>cover</tt> tool to determine which lines of code in the
+  specified modules are covered by each test case, and use these
+  lines as features. Of course, the specified modules must be
+  <tt>cover:compile</tt>d first. If only one module is to be covered, then the
+  first parameter may be an atom rather than a list.</p>
+
+<h3 class="function"><a name="random-1">random/1</a></h3>
+<div class="spec">
+<p><tt>random(Prop::<a href="#type-property">property()</a>) -&gt; <a href="#type-test_suite">test_suite()</a></tt><br/></p>
+</div><p>Generate a suite of random tests from a property. The size of
+  the test suite can be controlled by applying <a href="eqc.html#numtests-2"><code>eqc:numtests/2</code></a>
+  to the property. The test cases are generated in the same way as
+  <a href="eqc.html#quickcheck-1"><code>eqc:quickcheck/1</code></a> does, with the exception that duplicate
+  tests are never included in the generated suite.</p>
+
+<h3 class="function"><a name="run-2">run/2</a></h3>
+<div class="spec">
+<p><tt>run(Prop, Suite) -&gt; any()</tt></p>
+</div><p>Equivalent to <a href="#run-3"><tt>run(Prop, Suite, quiet)</tt></a>.</p>
+
+
+<h3 class="function"><a name="run-3">run/3</a></h3>
+<div class="spec">
+<p><tt>run(Prop::<a href="#type-property">property()</a>, Suite::<a href="#type-test_suite">test_suite()</a>, Option::quiet | verbose) -&gt; [<a href="#type-test_case">test_case()</a>]</tt><br/></p>
+</div><p>Run a previously generated test suite for a property. The
+  result is the list of <i>failing</i> test cases. <b>This function
+  can be used without a QuickCheck licence.</b></p>
+
+<h3 class="function"><a name="split-2">split/2</a></h3>
+<div class="spec">
+<p><tt>split(Prop::<a href="#type-property">property()</a>, Suite::<a href="#type-test_suite">test_suite()</a>) -&gt; {[<a href="#type-test_case">test_case()</a>], [<a href="#type-test_case_">test_case_()</a>]}</tt><br/></p>
+</div><p>Run a previously generated test suite for a property. The
+  result is two lists, the first with <i>failing</i> test cases, the second with <i>passing</i> test cases.</p>
+
+<h3 class="function"><a name="write-2">write/2</a></h3>
+<div class="spec">
+<p><tt>write(File, Suite) -&gt; any()</tt></p>
+</div><p>Save a generated test suite in a file. Test suites are saved
+  in files with the extension <tt>.suite</tt>. The result is the
+  result returned by <tt>file:write_file</tt>.</p>
+<hr/>
+
+<div class="navbar"><a name="#navbar_bottom"/><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"/></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jun 13 2017, 10:20:28.</i></p>
+</body>
+</html>

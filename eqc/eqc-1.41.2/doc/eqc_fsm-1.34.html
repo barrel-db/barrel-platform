@@ -1,0 +1,794 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module eqc_fsm</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module eqc_fsm</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>This module is designed for testing software with a finite
+  number of abstract states--for example software described by UML
+  statecharts.
+<p>Copyright © Quviq AB, 2006-2015</p>
+
+<p><b>Version:</b> 1.34.3</p>
+
+<h2><a name="description">Description</a></h2><p>This module is designed for testing software with a finite
+  number of abstract states--for example software described by UML
+  statecharts. It allows users to specify a collection of <i>named
+  states</i> and the <i>transitions</i> between them, along with pre-
+  and post-conditions and state transition functions. Users can
+  assign <i>weights</i> to transitions, to achieve a good statistical
+  distribution of test cases, and <tt>eqc_fsm</tt> can help users do
+  so by generating <i>visualizations</i> of the state diagram, and by
+  <i>automated weight assignment</i>.</p>
+ 
+ <p> <tt>eqc_fsm</tt> is closely related to <a href="eqc_statem.html"><code>eqc_statem</code></a>, and
+  generates test cases of precisely the same form. (One way to think
+  of <tt>eqc_fsm</tt> is that it is to <a href="eqc_statem.html"><code>eqc_statem</code></a> as
+  <tt>gen_fsm</tt> is to <tt>gen_server</tt>). We assume that readers
+  are already familiar with <a href="eqc_statem.html"><code>eqc_statem</code></a>; if not, study the
+  <a href="eqc_statem.html"><code>eqc_statem</code></a> documentation before reading further.  </p>
+ 
+  <h2>Contents</h2>
+  <ul>
+  <li><a href="#SpecifyingStateMachines">Specifying State Machines</a>
+  <ul><li><a href="#TheeqcfsmHeaderFile">The eqc_fsm Header File</a></li>
+      <li><a href="#StateNamesandStateData">State Names and State Data</a></li>
+      <li><a href="#SpecifyingNamedStates">Specifying Named States</a>
+          <ul><li><a href="#SpecifyingTransitionsfromeachState">
+                  Specifying Transitions from each State</a></li>
+              <li><a href="#RestrictionsonStateData">
+                  Restrictions on State Data</a></li>
+              <li><a href="#AvoidingExceptionsinGenerators">
+                  Avoiding Exceptions in Generators</a></li>
+              <li><a href="#historyasaTargetState">
+                  history as a Target State</a></li>
+          </ul></li>
+      <li><a href="#StateAttributes">State Attributes</a></li>
+      <li><a href="#Specifyingtheinitialstate">
+          Specifying the initial state</a></li>
+      <li><a href="#Specifyingstatetransitions">
+          Specifying state transitions</a></li>
+      <li><a href="#Specifyingpreconditions">
+          Specifying preconditions</a></li>
+      <li><a href="#Specifyingpostconditions">
+          Specifying postconditions</a></li>
+      <li><a href="#Specifyinginvariants">
+          Specifying invariants</a></li>
+      <li><a href="#Specifyingdynamicpreconditions">
+          Specifying dynamic preconditions</a></li>
+      <li><a href="#Specifyingfeatures">
+          Specifying features</a></li>
+      <li><a href="#ThePropertytoTest">
+          The Property to Test</a></li>
+      </ul></li>
+  <li><a href="#WeightingTransitions">Weighting Transitions</a></li>
+  <li><a href="#VisualizingStateMachines">Visualizing State Machines</a>
+      <ul>
+    <li><a href="#VisualizationTools">Visualization Tools</a></li>
+      <li><a href="#GraphDrawingUsingGraphViz">Graph Drawing Using GraphViz</a></li>
+      <li><a href="#ConfiguringaJPEGviewer">Configuring a JPEG viewer</a></li>
+    <li><a href="#Creatingvisualizations">Creating visualizations</a></li>
+      </ul></li>
+  <li><a href="#AnalysingStateMachines">Analysing State Machines</a><ul>
+    <li><a href="#AnalyzingTransitionFrequencies">Analyzing Transition Frequencies</a></li>
+    <li><a href="#Compensatingforfailedpreconditions">Compensating for failed preconditions</a></li>
+    <li><a href="#Automaticweightassignment">Automatic weight assignment</a></li>
+    <li><a href="#PrioritizingTransitions">Prioritizing Transitions</a></li>
+    </ul></li>
+  </ul>
+ 
+  <a name="SpecifyingStateMachines"></a><h2>Specifying State Machines</h2>
+ 
+  <p>State machines are specified by a module defining call-back
+  functions that are invoked to test the state machine. The
+  call-backs closely resemble those used by <a href="eqc_statem.html"><code>eqc_statem</code></a> (and
+  are actually implemented in terms of them). The main differences
+  are that the command generation call-back <tt>command(S)</tt> is
+  replaced by a collection of functions corresponding to named
+  states, and that the other call-backs are simpler to define, since
+  QuickCheck can derive some of the information that the
+  <a href="eqc_statem.html"><code>eqc_statem</code></a> call-backs provide from the named state  
+definitions.</p>
+ 
+  <a name="TheeqcfsmHeaderFile"></a><h3>The eqc_fsm Header File</h3>
+  Modules using <tt>eqc_fsm</tt>
+  should begin by including the <tt>eqc_fsm</tt> header file:
+  <pre>
+  -include_lib("eqc/include/eqc_fsm.hrl"). </pre><p>
+  (If QuickCheck is not installed in your Erlang library directory,
+  then you will need to use <tt>-include</tt> and give a different path).
+  This imports all the exported functions from <tt>eqc_fsm</tt>,
+  together with those functions from <tt>eqc_statem</tt> that are
+  usable with <tt>eqc_fsm</tt> too. Note that you should <b>not</b>
+  include <tt>eqc_statem.hrl</tt> in the same module.</p>
+ 
+  <a name="StateNamesandStateData"></a><h3>State Names and State Data</h3>
+ 
+  <p><tt>eqc_fsm</tt> tracks the <i>state</i> of each test case, just as
+  <a href="eqc_statem.html"><code>eqc_statem</code></a> does, but <tt>eqc_fsm</tt> splits the state into
+  two parts: a <i>state name</i> (normally an atom), which
+  corresponds to one of the states in a finite-state machine diagram,
+  and <i>state data</i>, which may be any relevant information, but
+  is normally a record. This is a similar distinction to that made
+  between state names and state data by <tt>gen_fsm</tt> in the OTP  
+libraries. Complete states are represented by a pair of the state  
+name and the state data.</p>
+ 
+  <a name="SpecifyingNamedStates"></a><h3>Specifying Named States</h3>
+ 
+  <a name="SpecifyingTransitionsfromeachState"></a><h4>Specifying Transitions from each State</h4><p>
+  Each named state is defined by a function of the same name, taking
+  the state data as a parameter, which returns a list of <i>target
+  state names</i> to which a transition can be made, paired with
+  generators for <i>symbolic function calls</i> whose execution
+  follows that transition. For example, in a system with two named
+  states, <tt>locked</tt> and <tt>unlocked</tt>, the
+  <tt>unlocked</tt> state might be specified by</p>
+ 
+  <pre>
+  unlocked(S) -&gt;
+    [{unlocked,{call,locker,read,[]}},
+     {locked,  {call,locker,lock,[]}}].</pre>
+ 
+  <p>which specifies that a transition from the <tt>unlocked</tt> state
+  to the <tt>locked</tt> one can be made by calling
+  <tt>locker:lock()</tt>, or we can call <tt>locker:read()</tt> and
+  remain in the same state. <tt>eqc_fsm</tt> generates test cases
+  which follow the transitions specified in this way from state to
+  state. To a first approximation, we can think of an implicit
+  <a href="eqc_gen.html#oneof-1"><code>eqc_gen:oneof/1</code></a> being applied to the result of a state  
+function.</p>
+ 
+  <a name="RestrictionsonStateData"></a><h4>Restrictions on State Data</h4><p>
+  The <i>state data</i> may only be used in QuickCheck generators
+  in the parameters of the symbolic calls. It is an error for the
+  target states, and the names of the functions to be called, to
+  depend on the value of the state data. As a consequence, it is
+  <i>not</i> possible to use the usual QuickCheck trick of including
+  a transition only if the state data permits it. For example, if the
+  state data is a list, and <tt>read</tt> must be passed one of its
+  elements, then we <i>cannot</i> write</p>
+ 
+  <pre>
+  unlocked(S) -&gt;
+    [{unlocked,{call,locker,read,[elements(S)]}} || S/=[]] ++
+    [{locked,  {call,locker,lock,[]}}].</pre>
+ 
+  <p>because the transitions in the list returned now depend on the
+  value of <tt>S</tt>. The solution to this problem follows in the  
+next section.</p>
+ 
+  <p>A state function must return the same list of target states and
+  transition generators, even if the state data is invalid. More
+  precisely, it must do so for the initial state data, and all
+  possible values of the state data in any reachable state. This
+  means <i>it is invalid to pattern match on the state data</i> in  
+the head of a state function definition, unless the pattern matches  
+the initial state data, and all possible later values of the state  
+data. Otherwise, an exception may be raised when QuickCheck  
+analyses the state space.</p>
+ 
+  <a name="AvoidingExceptionsinGenerators"></a><h4>Avoiding Exceptions in Generators</h4>
+ 
+  <p>QuickCheck <i>avoids transitions whose generation raises an
+  exception</i>. This can be used to include "conditional
+  transitions" such as the <tt>read</tt> transition in the example  
+above. We write instead:</p>
+ 
+  <pre>
+  unlocked(S) -&gt;
+    [{unlocked,{call,locker,read,[elements(S)]}},
+     {locked,  {call,locker,lock,[]}}].</pre>
+ 
+  <p>If the first transition is chosen when <tt>S</tt> is the empty
+  list, then <a href="eqc_gen.html#elements-1"><code>eqc_gen:elements/1</code></a> will raise an exception when
+  QuickCheck tries to generate the call of <tt>read</tt>. This is  
+detected, and the other transition is chosen instead.</p>
+ 
+  <p>If necessary, an exception can be delayed until generation time by
+  enclosing the expression responsible in <tt>?LAZY(...)</tt>. For
+  example, if the argument to <tt>read</tt> were <tt>hd(S)</tt>
+  instead of <tt>elements(S)</tt>, then this would raise an exception
+  if <code>S</code> is the empty list <i>when <tt>unlocked</tt> is
+  called</i>--and before returning the list of transitions to
+  QuickCheck. To avoid this, we would write <tt>?LAZY(hd(S))</tt>
+  instead, to delay the exception until the moment when QuickCheck
+  has chosen the first transition, and tries to generate the argument
+  of <tt>read</tt>.</p>
+ 
+  <a name="historyasaTargetState"></a><h4>history as a Target State</h4><p>
+  If the target state name is the atom <tt>history</tt>, then this
+  represents a transition to the <i>same</i> state. This can be used  
+to abstract a set of transitions that can be used in several  
+different states. For example,</p>
+ 
+  <pre>
+  read_transition(S) -&gt;
+    [{history,{call,locker,read,[elements(S)]}}].</pre>
+ 
+  <p>could be used to define a <tt>read</tt> transition that can be
+  included in any other state by adding
+  <tt>read_transition(S)++...</tt> to the state definition; whatever
+  state it is used in, the <tt>read</tt> transition returns to the  
+same state.</p>
+ 
+  <a name="StateAttributes"></a><h3>State Attributes</h3><p>
+  State functions may take additional parameters before the state
+  data, called <i>attributes</i>. For example,</p>
+ 
+  <pre>
+  unlocked(N,S) -&gt;
+    [{{unlocked,N+1},{call,locker,add,[value()]}} || N&lt;4] ++
+    [...other transitions...].</pre>
+ 
+  <p>might represent a locker containing <tt>N</tt> values. When
+  attributes are used, then the state names are <i>tuples</i> of the
+  function name and the attribute values (all the parameters except
+  the last). States with different attribute values are considered to
+  be different states: <tt>{unlocked,0}</tt> and
+  <tt>{unlocked,1}</tt> are different states in this example. Since
+  QuickCheck enumerates every reachable state, then it is important
+  that there are only finitely many reachable attribute values--this
+  is why we only include an <tt>add</tt> transition when <tt>N</tt>
+  is less than 4 in the example above--this ensures that states
+  <tt>{unlocked,N}</tt> are not reachable for <tt>N</tt> greater than  
+or equal to 5.</p>
+ 
+  <p>It is perfectly allowable for the list of transitions to depend on
+  the values of attributes, as in this example--it is only the
+  <i>state data</i> whose use is restricted.</p>
+ 
+  <a name="Specifyingtheinitialstate"></a><h3>Specifying the initial state</h3>
+  Each test case normally starts in the same initial state. The
+  initial state is specified via two callback functions:
+  <ul>
+  <li> <tt>initial_state()</tt>, which returns the <i>state name</i>
+  of the initial state, as an atom, and</li>
+  <li> <tt>initial_state_data()</tt>, which returns the <i>state
+  data</i> in which each test case starts.</li>
+  </ul>
+ 
+  <a name="Specifyingstatetransitions"></a><h3>Specifying state transitions</h3><p>
+  <tt>eqc_fsm</tt> specifications need not specify separately how
+  each command changes the <i>state name</i>--this is already
+  specified by the definitions of each state. But it is necessary to
+  specify how each command changes the <i>state data</i>. This is  
+done via a call-back function</p>
+ 
+  <pre>
+  next_state_data(From,To,S,Res,Call) -&gt; state_data()</pre>
+ 
+  where
+  <ul>
+  <li><tt>From</tt> and <tt>To</tt> are the names of the states we
+  are making a transition between,</li>
+  <li><tt>S</tt> is the state data before the call,</li>
+  <li><tt>Res</tt> is the result returned by the call--just as in
+  <a href="eqc_statem.html"><code>eqc_statem</code></a>, this may be a symbolic variable,</li>
+  <li><tt>Call</tt> is the symbolic call <tt>{call,Mod,Fun,Args}</tt>
+  being performed.</li>
+  </ul>
+ 
+  <p>Just as in <a href="eqc_statem.html"><code>eqc_statem</code></a>, the result of this function may  
+contain symbolic variables and function calls, which are replaced  
+by their values when the test is run.</p>
+ 
+  <a name="Specifyingpreconditions"></a><h3>Specifying preconditions</h3>
+ 
+  <p>QuickCheck already knows that each call can only be made in a named
+  state with a corresponding transition, but some calls may have
+  preconditions that depend on the <i>state data</i>. These  
+preconditions are specified by defining the callback</p>
+ 
+  <pre>
+  precondition(From,To,S,Call) -&gt; bool()</pre>
+ 
+  <p>where the parameters are as described above for
+  <tt>next_state_data</tt>. This callback must be defined, and must
+  return <tt>true</tt> or <tt>false</tt> for each symbolic call  
+generated. No test cases are ever generated in which a call has a  
+false precondition.</p>
+ 
+  <p>It is allowable for <i>two</i> transitions from a state to call the
+  same function--for example, in a normal case, and in an error case
+  leading to an error state. In such a case, the
+  <tt>precondition</tt> callback may <i>only</i> return true for one  
+of the calls; otherwise QuickCheck would not be able to tell which  
+transition to follow.</p>
+ 
+  <a name="Specifyingpostconditions"></a><h3>Specifying postconditions</h3><p>  
+Postconditions are specified by defining the callback</p>
+ 
+  <pre>
+  postcondition(From,To,S,Call,Res) -&gt; bool()</pre>
+ 
+  <p>whose parameters are as described above for
+  <tt>next_state_data</tt>. Postconditions are checked as a test case
+  is run: any return value other than <tt>true</tt> is considered to  
+be a test failure.</p>
+ 
+  <a name="Specifyinginvariants"></a><h3>Specifying invariants</h3><p>  
+Invariants can be specified by defining the callback</p>
+ 
+  <pre>
+  invariant(StateName,S) -&gt; bool()</pre>
+ 
+  <p>whose parameters are the current state name and state
+  data. Invariants are checked as a test case is run: any return
+  value other than <tt>true</tt> is considered to be a test
+  failure. The intention is that <tt>invariant</tt> should check the
+  actual state of the software under test, and compare it to the
+  modelled state given by <tt>StateName</tt> and <tt>S</tt>.</p>
+ 
+  If no call-back with this name is defined, then the invariant is
+  assumed to be <tt>true</tt>.
+  <a name="Specifyingdynamicpreconditions"></a><h3>Specifying dynamic preconditions</h3><p>  
+Dynamic preconditions can be specified by defining the callback</p>
+ 
+  <pre>
+  dynamic_precondition(StateName,S,Call) -&gt; bool()</pre>
+ 
+  <p>whose parameters are the current state name and state
+  data, and the current call with <I>actual</I> (i.e. not symbolic) argument values.
+  Dynamic preconditions are checked as a test case is run: if the
+  return value is <tt>false</tt>, then the command is not executed.
+  If no call-back with this name is defined, then the precondition is
+  assumed to be <tt>true</tt>.</p>
+ 
+  <p><strong>Dynamic preconditions have significant disadvantages, and
+  should only be used if there is no reasonable alternative.</strong>
+  In particular, a dynamic precondition should <i>not</i> be used
+  just because it easier to do so, than to enrich the model state
+  with more information so
+  that preconditions can be decided during test case generation. See
+  the discussion in <a href="eqc_statem.html"><code>eqc_statem</code></a> of the disadvantages of
+  dynamic preconditions; in addition, in the context of <a href="eqc_fsm.html"><code>eqc_fsm</code></a>, dynamic preconditions cannot be used to disambiguate
+  transitions, while normal preconditions can. So <strong>DON'T USE
+  THEM</strong>, unless you really must.</p>
+ 
+  <a name="Specifyingfeatures"></a><h3>Specifying features</h3><p>  
+Features are specified by defining the callback</p>
+ 
+  <pre>
+  call_features(From,To,S,Call,Res) -&gt; bool()</pre>
+ 
+  <p>whose parameters are as described above for
+  <tt>postcondition</tt>. Features are recorded as a test case
+  is run, and can be recovered from the test history using <a href="eqc_statem.html#command_features-1"><code>eqc_statem:command_features/1</code></a>.</p>
+ 
+  <a name="ThePropertytoTest"></a><h3>The Property to Test</h3>
+ 
+  <p><tt>eqc_fsm</tt> specifications are tested using very similar
+  properties to <tt>eqc_statem</tt> specifications: the only
+  difference is that the <a href="#commands-1"><code>commands/1</code></a> and
+  <a href="#run_commands-2"><code>run_commands/2</code></a> functions are imported from <tt>eqc_fsm</tt>
+  instead (which is done by the <tt>eqc_fsm.hrl</tt> include  
+file). Thus a suitable propery might look something like this:</p>
+ 
+  <pre>
+  prop_locker() -&gt;
+      ?FORALL(Cmds,commands(?MODULE),
+  	    begin
+  		locker:start(),
+  		{H,S,Res} = run_commands(?MODULE,Cmds),
+  		locker:stop(),
+  		Res == ok
+  	    end).</pre>
+ 
+  <a name="WeightingTransitions"></a><h2>Weighting Transitions</h2>
+ 
+  <p>The definitions of <i>state functions</i> described above offer no
+  opportunity to specify <i>how often</i> each transition should be  
+chosen. This is done instead by a separate callback:</p>
+ 
+  <pre>
+  weight(From,To,Call) -&gt; integer()</pre>
+ 
+  <p>This callback is <i>optional</i>: if it is omitted (or not
+  exported), then the transitions from each state are chosen with
+  equal probability. If <tt>weight</tt> is defined, then the weights
+  it assigns to each transition are used in the same way as the
+  weights passed to the <a href="eqc_gen.html#frequency-1"><code>eqc_gen:frequency/1</code></a> function: the  
+probability of choosing a transition is proportional to the weight  
+assigned to it.</p>
+ 
+  <p>It is important to <i>measure the resulting distribution</i> of  
+transitions in the generated test data. This can be done during  
+testing by amending the last line of the property above to</p>
+ 
+  <pre>
+  aggregate(zip(state_names(H),command_names(Cmds)),
+            Res == ok)</pre>
+ 
+  <p>using the functions <a href="eqc.html#aggregate-2"><code>eqc:aggregate/2</code></a>, <a href="#state_names-1"><code>state_names/1</code></a>,
+  <a href="eqc_statem.html#command_names-1"><code>eqc_statem:command_names/1</code></a>, and
+  <a href="eqc_statem.html#zip-2"><code>eqc_statem:zip/2</code></a>. The output generated shows the proportion  
+of each state name/function name combination in the total set of  
+transitions run.</p>
+ 
+  <a name="VisualizingStateMachines"></a><h2>Visualizing State Machines</h2>
+ 
+  <p><tt>eqc_fsm</tt> can generate diagrams visualizing the state space  
+and the transitions between states, along with the frequency with  
+which each transition is tested.</p>
+ 
+  <a name="VisualizationTools"></a><h3>Visualization Tools</h3>
+ 
+  <p>QuickCheck uses external tools to generate and display  
+visualizations. Users need to install these tools separately, and  
+make them available to QuickCheck.</p>
+ 
+  <a name="GraphDrawingUsingGraphViz"></a><h4>Graph Drawing Using GraphViz</h4>
+ 
+  <p>QuickCheck generates visualizations of the state space in the
+  <i>dot</i> graph description language. These can be converted to a
+  wide variety of image formats using the GraphViz tools, which can
+  be downloaded from <a href="http://www.graphviz.org/">www.graphviz.org</a> for a wide  
+variety of platforms, under the open-source Common Public Licence.</p>
+ 
+  <p>Once installed on your system, ensure that <tt>dot</tt> (or
+  <tt>dot.exe</tt>) is accessible via your path. If you can invoke
+  <tt>dot</tt> in your shell by typing <tt>dot</tt>, then QuickCheck
+  should be able to make use of it. Alternatively, you can specify
+  the location of this file in the environment variable
+  <tt>EQC_DOT</tt>. QuickCheck will use <tt>dot</tt> to generate JPEG  
+visualizations (or another supported image type of your choice).</p>
+ 
+  <a name="ConfiguringaJPEGviewer"></a><h4>Configuring a JPEG
+  viewer</h4><p> If you provide QuickCheck with a JPEG viewer, then it
+  will use it to display visualizations automatically. Under Windows
+  XP and Vista, nothing needs to be done--your default JPEG viewer
+  will be used automatically. Under other operating systems (or if
+  you want to use a different viewer), you should set the environment
+  variable <tt>EQC_VIEWER</tt> to the location of the viewer of your
+  choice. QuickCheck displays images by running a shell command of
+  the form <tt>&lt;EQC_VIEWER&gt; &lt;filename&gt;.jpg</tt>. You can  
+specify another image type supported by GraphViz when generating  
+images; in this case, the viewer should of course be suitable for  
+the type of image you choose.</p>
+ 
+  <a name="Creatingvisualizations"></a><h3>Creating visualizations</h3>
+ 
+  <p>Visualizations are created and displayed by <a href="#visualize-1"><code>visualize/1</code></a>. If
+  only the dot file is required, then it can be generated by <a href="#dot-1"><code>dot/1</code></a>. The visualizations include the estimated frequency of each  
+transition when tests are run.</p>
+ 
+  <a name="AnalysingStateMachines"></a><h2>Analysing State Machines</h2>
+ 
+  <p>QuickCheck can predict the frequency with which each transition in  
+the state machine will be followed during testing, and can also use  
+these predictions to suggest a suitable choice of weights.</p>
+ 
+  <a name="AnalyzingTransitionFrequencies"></a><h3>Analyzing Transition Frequencies</h3>
+ 
+  <p>Calling <code>analyze(M)</code> builds the state space for the state machine
+ specified in <code>M</code>, and predicts the frequency with which each
+ transition is tested, taking into account the weights specified in
+ the <code>weight</code> callback. Calling <a href="#visualize-1"><code>visualize/1</code></a> performs the 
+analysis, and displays a visualization of the result, such as this  
+example:</p>
+ 
+  <p><img src="lock_eqc.jpg"></p>
+ 
+  <p>The percentages shown are the number of times the labelled  
+transition will be followed during testing, as a percentage of the  
+total number of transitions followed.  The result of the analysis  
+should agree with measured transition frequencies when sufficiently  
+any tests are run (several thousands)--but the analysis is much  
+quicker.</p>
+ 
+ <p>The results can be used to help assign appropriate weights to
+ transitions. Users should aim to avoid <i>orphan transitions</i>, 
+which are tested very rarely, because bugs which depend on such 
+orphans will take a very long time to find.</p>
+ 
+  <a name="Compensatingforfailedpreconditions"></a><h3>Compensating for failed preconditions</h3><p> 
+The analysis assumes that once a transition has been chosen, then a 
+suitable call can always be generated.  If attempts to generate a 
+call can fail--either because the generation raises an exception, or 
+because the precondition is false--then the analysis will 
+overestimate the frequency of that and subsequent transitions. It is 
+important to compare the analysis results with actual measured 
+transition frequencies, to see to what extent this is occuring.</p>
+ 
+ <p>To perform an accurate analysis, QuickCheck needs to know how often 
+the attempt to generate a suitable call fails--which cannot be 
+determined in advance. Users can provide an estimate of this by 
+defining the (optional) call-back</p>
+ 
+  <pre>
+  <code>precondition_probability(From,To,CallGen)</code></pre>
+ 
+  <p>where <code>From</code> and <code>To</code> are the source and target state names, and
+ <code>CallGen</code> is the generator for a symbolic function call specified in
+ the definition of the <code>From</code> state. The result should be a float 
+between 0 and 1, which is the estimated probability of succeeding to 
+generate a call satisfying the precondition for this transition. For 
+example, if we expect generation of a read call in an unlocked state 
+to fail half the time, then we could define</p>
+ 
+ <pre>
+ <code>precondition_probability(unlocked,_,{call,locker,read,_}) -&gt; 0.5;
+ precondition_probability(_,_,_) -&gt; 1.0.</code></pre>
+ 
+  <a name="Automaticweightassignment"></a><h3>Automatic weight assignment</h3>
+ 
+  <p>QuickCheck can assign weights to transitions automatically, taking
+  into account the user's estimates of precondition probabilities
+  specified above. QuickCheck compensates for a low precondition
+  probability by <i>trying</i> to choose that transition more
+  often. Weights are assigned so as to avoid orphan transitions, as
+  far as possible--although in most cases, <i>no</i> assignment of  
+weights can ensure an absolutely even distribution of testing  
+effort.</p>
+ 
+  <p>The weight assignment is computed by <a href="#automate_weights-1"><code>automate_weights/1</code></a>,
+  which outputs a candidate definition of the <code>weight</code> call-back, and
+  (if GraphViz and a JPEG viewer are available) visualizes the
+  resulting transition frequencies. The definition of <tt>weight</tt>
+  can be pasted back into the <tt>eqc_fsm</tt> specification, to  
+cause QuickCheck to use the computed weights.</p>
+ 
+  <p>The assigned weights are not necessarily "optimal" in any sense,
+  but are often better than a hand-assignment. It is still important
+  to <i>measure</i> actual transition distribution, and tune the  
+assigned weights if necessary.</p>
+ 
+  <a name="PrioritizingTransitions"></a><h3>Prioritizing Transitions</h3>
+ 
+  <p>Often, some transitions <i>should</i> be tested more often than  
+others: for example, one transition may call a function with no  
+arguments, while another may have many complex arguments, with a  
+wide variety of choices to explore. Of course, the latter needs to  
+be tested more often than the former. When weights are assigned  
+manually, then the user can take this into account by weighting the  
+latter transition more highly, but when they are assigned  
+automatically then a different mechanism is required.</p>
+ 
+  <p>Users can <i>prioritize</i> transitions by defining the optional  
+call-back</p>
+ 
+  <pre>
+  priority(From,To,CallGen) -&gt; integer() | float() </pre>
+ 
+  with the same parameters as <code>precondition_probability</code>. The
+  automated weight assignment will then choose weights that increase
+  the execution frequency of highly prioritized transitions. For
+  example, using the same state machine as in the diagram above, we
+  could increase the priority of <i>lock</i> transitions by defining
+  <pre>
+  priority(unlocked,_,{call,_,lock,_}) -&gt; 10;
+  priority(_,_,_) -&gt; 1.</pre>
+ 
+  <p>The resulting transition frequencies are as shown here:</p>
+ 
+  <p><img src="lock_eqc2.jpg"></p>
+ 
+  Note that <i>both</i> the <code>lock</code> and <code>unlock</code> transitions are
+  assigned a greater weight--the latter, because choosing <code>unlock</code> is
+  necessary to permit another <code>lock</code>, so unlocking more often permits
+  more tests of locking. Automated weight assignment takes into
+  account these kinds of interactions between transitions, which is
+  hard to do well by hand.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-callback_module">callback_module()</a></h3>
+<p><tt>callback_module() = atom()</tt></p>
+<p> The name of a module containing the eqc_fsm callbacks, as specified above.</p>
+
+<h3 class="typedecl"><a name="type-command">command()</a></h3>
+<p><tt>command() = <a href="eqc_statem.html#type-command">eqc_statem:command()</a></tt></p>
+<p>As in <a href="eqc_statem.html"><code>eqc_statem</code></a>.</p>
+
+<h3 class="typedecl"><a name="type-flows">flows()</a></h3>
+<p><tt>flows() = [{float(), <a href="#type-transition_pattern">transition_pattern()</a>}]</tt></p>
+<p> A list of transition patterns, paired with the proportion of executed
+ transitions that match that pattern. The proportions sum to 1.</p>
+
+<h3 class="typedecl"><a name="type-gen">gen()</a></h3>
+<p><tt>gen(A) = <a href="eqc_gen.html#type-gen">eqc_gen:gen</a>(A)</tt></p>
+<p>As in <a href="eqc_gen.html"><code>eqc_gen</code></a>.</p>
+
+<h3 class="typedecl"><a name="type-pattern">pattern()</a></h3>
+<p><tt>pattern() = any()</tt></p>
+<p> A term possibly containing the atom '_', which matches any similar term
+ where occurrences of '_' may match any value.</p>
+
+<h3 class="typedecl"><a name="type-state_data">state_data()</a></h3>
+<p><tt>state_data() = any()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-state_name">state_name()</a></h3>
+<p><tt>state_name() = atom() | tuple()</tt></p>
+
+
+<h3 class="typedecl"><a name="type-transition_pattern">transition_pattern()</a></h3>
+<p><tt>transition_pattern() = {<a href="#type-state_name">state_name()</a>, <a href="#type-state_name">state_name()</a>, <a href="#type-pattern">pattern()</a>}</tt></p>
+<p> A pattern matching a transition from the first state to the second,
+ making a symbolic call matching the pattern.</p>
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#analyze-1">analyze/1</a></td><td>Analyzes the state machine specified in <code>M</code>, to predict the
+  frequency with which each transition is tested, taking into account
+  the weights specified in the <code>weight</code> callback and the probability
+  of preconditions failing specified in the
+  <code>precondition_probability</code> call-back.</td></tr>
+<tr><td valign="top"><a href="#automate_weights-1">automate_weights/1</a></td><td>Computes an appropriate set of transition weights for the
+  transitions in a callback module, using the <code>priority</code> callback to
+  guide the distribution of transitions.</td></tr>
+<tr><td valign="top"><a href="#automate_weights-2">automate_weights/2</a></td><td>Like <a href="#automate_weights-1"><code>automate_weights/1</code></a>, but takes the image type as a parameter.</td></tr>
+<tr><td valign="top"><a href="#commands-1">commands/1</a></td><td>Generates a list of commands, just like <a href="eqc_statem.html#commands-1"><code>eqc_statem:commands/1</code></a>.</td></tr>
+<tr><td valign="top"><a href="#commands-2">commands/2</a></td><td>Generates a list of commands, starting from the given initial
+  state with the given state data, just like <a href="eqc_statem.html#commands-2"><code>eqc_statem:commands/2</code></a>.</td></tr>
+<tr><td valign="top"><a href="#dot-1">dot/1</a></td><td>Visualizes the state graph of the callback module, creating a
+  file <tt>M.dot</tt> which can be viewed with GraphViz.</td></tr>
+<tr><td valign="top"><a href="#parallel_commands-1">parallel_commands/1</a></td><td>Generate a parallel test case from the callbacks in the client
+  module <tt>Mod</tt>.</td></tr>
+<tr><td valign="top"><a href="#parallel_commands-2">parallel_commands/2</a></td><td>Behaves like <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>, but generates a test
+  case starting in the state <tt>S</tt>.</td></tr>
+<tr><td valign="top"><a href="#run_commands-2">run_commands/2</a></td><td>Runs a list of commands generated using <a href="#commands-1"><code>commands/1</code></a>,
+  just as does <a href="eqc_statem.html#run_commands-2"><code>eqc_statem:run_commands/2</code></a>.</td></tr>
+<tr><td valign="top"><a href="#run_commands-3">run_commands/3</a></td><td>Behaves like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases.</td></tr>
+<tr><td valign="top"><a href="#run_parallel_commands-2">run_parallel_commands/2</a></td><td>Runs a parallel test case, and returns the history of the
+  prefix, each of the parallel tasks, and the overall result.</td></tr>
+<tr><td valign="top"><a href="#run_parallel_commands-3">run_parallel_commands/3</a></td><td>Like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an
+  environment binding variables, like <a href="#run_commands-3"><code>run_commands/3</code></a>.</td></tr>
+<tr><td valign="top"><a href="#state_after-2">state_after/2</a></td><td>Returns the symbolic state after a list of commands is run.</td></tr>
+<tr><td valign="top"><a href="#state_names-1">state_names/1</a></td><td>Extracts the state names from a history.</td></tr>
+<tr><td valign="top"><a href="#states-1">states/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#visualize-1">visualize/1</a></td><td>Visualizes the state graph of the callback module, and the
+  transition frequencies computed by <a href="#analyze-1"><code>analyze/1</code></a>.</td></tr>
+<tr><td valign="top"><a href="#visualize-2">visualize/2</a></td><td>Like <a href="#visualize-1"><code>visualize/1</code></a>, but takes the image type as a parameter.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="analyze-1">analyze/1</a></h3>
+<div class="spec">
+<p><tt>analyze(M::<a href="#type-callback_module">callback_module()</a>) -&gt; <a href="#type-flows">flows()</a></tt><br></p>
+</div><p>Analyzes the state machine specified in <code>M</code>, to predict the
+  frequency with which each transition is tested, taking into account
+  the weights specified in the <code>weight</code> callback and the probability
+  of preconditions failing specified in the
+  <code>precondition_probability</code> call-back. The result of the
+  analysis should agree with measured transition frequencies, when
+  several thousand tests are run.</p>
+
+<h3 class="function"><a name="automate_weights-1">automate_weights/1</a></h3>
+<div class="spec">
+<p><tt>automate_weights(M::<a href="#type-callback_module">callback_module()</a>) -&gt; any()</tt><br></p>
+</div><p>Computes an appropriate set of transition weights for the
+  transitions in a callback module, using the <code>priority</code> callback to
+  guide the distribution of transitions. Outputs a definition of the
+  <tt>weight</tt> callback that users can, if they wish, make use of
+  by pasting the definition into their callback module. Generates a
+  visualization of the resulting distribution of transitions in
+  Mod.dot, which can be visualized using GraphViz. Displays the
+  visualization immediately, if GraphViz and a JPEG viewer are available.
+  The weight assignment is based on the analysis implemented by
+  <a href="#analyze-1"><code>analyze/1</code></a> and <a href="#visualize-1"><code>visualize/1</code></a>.</p>
+
+<h3 class="function"><a name="automate_weights-2">automate_weights/2</a></h3>
+<div class="spec">
+<p><tt>automate_weights(M::<a href="#type-callback_module">callback_module()</a>, ImageType::atom()) -&gt; any()</tt><br></p>
+</div><p>Like <a href="#automate_weights-1"><code>automate_weights/1</code></a>, but takes the image type as a parameter. This permits
+  generation of other image types than JPEG.</p>
+
+<h3 class="function"><a name="commands-1">commands/1</a></h3>
+<div class="spec">
+<p><tt>commands(M::<a href="#type-callback_module">callback_module()</a>) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br></p>
+</div><p>Generates a list of commands, just like <a href="eqc_statem.html#commands-1"><code>eqc_statem:commands/1</code></a>. The form of commands generated is exactly
+  the same.</p>
+
+<h3 class="function"><a name="commands-2">commands/2</a></h3>
+<div class="spec">
+<p><tt>commands(M::<a href="#type-callback_module">callback_module()</a>, InitS::{<a href="#type-state_name">state_name()</a>, any()}) -&gt; <a href="#type-gen">gen</a>([<a href="#type-command">command()</a>])</tt><br></p>
+</div><p>Generates a list of commands, starting from the given initial
+  state with the given state data, just like <a href="eqc_statem.html#commands-2"><code>eqc_statem:commands/2</code></a>.</p>
+
+<h3 class="function"><a name="dot-1">dot/1</a></h3>
+<div class="spec">
+<p><tt>dot(M::<a href="#type-callback_module">callback_module()</a>) -&gt; <a href="#type-flows">flows()</a></tt><br></p>
+</div><p>Visualizes the state graph of the callback module, creating a
+  file <tt>M.dot</tt> which can be viewed with GraphViz. See <a href="#visualize-1"><code>visualize/1</code></a> for details. The result is the same as the result of
+  <a href="#analyze-1"><code>analyze/1</code></a>.</p>
+
+<h3 class="function"><a name="parallel_commands-1">parallel_commands/1</a></h3>
+<div class="spec">
+<p><tt>parallel_commands(Mod::atom()) -&gt; <a href="#type-gen">gen</a>(<a href="#type-parallel_test_case">parallel_test_case()</a>)</tt><br></p>
+</div><p>Generate a parallel test case from the callbacks in the client
+  module <tt>Mod</tt>. These test cases are used to test for race
+  conditions that make the commands in the tests behave non-atomically.
+  Blocking operations can be specified by defining the
+  <tt>blocking/4</tt> call-back:
+  <pre>
+  blocking(From,To,S,Call) -&gt; bool()
+  </pre>
+  See the documentation of <a href="eqc_statem.html"><code>eqc_statem</code></a> for details.</p>
+
+<h3 class="function"><a name="parallel_commands-2">parallel_commands/2</a></h3>
+<div class="spec">
+<p><tt>parallel_commands(Mod::atom(), S::<a href="#type-symbolic_state">symbolic_state()</a>) -&gt; <a href="#type-gen">gen</a>(<a href="#type-parallel_test_case">parallel_test_case()</a>)</tt><br></p>
+</div><p>Behaves like <a href="#parallel_commands-1"><code>parallel_commands/1</code></a>, but generates a test
+  case starting in the state <tt>S</tt>.</p>
+
+<h3 class="function"><a name="run_commands-2">run_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_commands(M::<a href="#type-callback_module">callback_module()</a>, Cmds::[<a href="#type-command">command()</a>]) -&gt; {<a href="#type-history">history()</a>, {<a href="#type-state_name">state_name()</a>, <a href="#type-dynamic_state">dynamic_state()</a>}, <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Runs a list of commands generated using <a href="#commands-1"><code>commands/1</code></a>,
+  just as does <a href="eqc_statem.html#run_commands-2"><code>eqc_statem:run_commands/2</code></a>. The result has the
+  same form, except that the <i>states</i> are represented as pairs
+  of state names and state data.</p>
+
+<h3 class="function"><a name="run_commands-3">run_commands/3</a></h3>
+<div class="spec">
+<p><tt>run_commands(M::<a href="#type-callback_module">callback_module()</a>, Cmds::[<a href="#type-command">command()</a>], Env::[{atom(), term()}]) -&gt; {<a href="#type-history">history()</a>, {<a href="#type-state_name">state_name()</a>, <a href="#type-dynamic_state">dynamic_state()</a>}, <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Behaves like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an environment
+ containing values for additional variables that may be referred
+ to in test cases. Cf <a href="eqc_statem.html#run_commands-3"><code>eqc_statem:run_commands/3</code></a>.</p>
+
+<h3 class="function"><a name="run_parallel_commands-2">run_parallel_commands/2</a></h3>
+<div class="spec">
+<p><tt>run_parallel_commands(Mod::atom(), ParCmds::<a href="#type-parallel_test_case">parallel_test_case()</a>) -&gt; {<a href="#type-command_history">command_history()</a>, [<a href="#type-command_history">command_history()</a>], <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Runs a parallel test case, and returns the history of the
+  prefix, each of the parallel tasks, and the overall result.</p>
+
+<h3 class="function"><a name="run_parallel_commands-3">run_parallel_commands/3</a></h3>
+<div class="spec">
+<p><tt>run_parallel_commands(Mod::atom(), ParCmds::<a href="#type-parallel_test_case">parallel_test_case()</a>, Env::[{atom(), term()}]) -&gt; {<a href="#type-command_history">command_history()</a>, [<a href="#type-command_history">command_history()</a>], <a href="#type-reason">reason()</a>}</tt><br></p>
+</div><p>Like <a href="#run_commands-2"><code>run_commands/2</code></a>, but also takes an
+  environment binding variables, like <a href="#run_commands-3"><code>run_commands/3</code></a>.</p>
+
+<h3 class="function"><a name="state_after-2">state_after/2</a></h3>
+<div class="spec">
+<p><tt>state_after(M::<a href="#type-callback_module">callback_module()</a>, Cmds::[<a href="#type-command">command()</a>]) -&gt; <a href="#type-symbolic_state">symbolic_state()</a></tt><br></p>
+</div><p>Returns the symbolic state after a list of commands is run. The
+ commands are not executed.</p>
+
+<h3 class="function"><a name="state_names-1">state_names/1</a></h3>
+<div class="spec">
+<p><tt>state_names(H::<a href="#type-history">history()</a>) -&gt; [<a href="#type-state_name">state_name()</a>]</tt><br></p>
+</div><p><p>Extracts the state names from a history. This is useful in
+  conjunction with <a href="eqc.html#aggregate-2"><code>eqc:aggregate/2</code></a>.</p>
+ 
+ <p>To collect statistics on transitions together with their source
+ states, use
+ 
+  <pre>aggregate(zip(state_names(H),command_names(Cmds)),...)</pre>
+ 
+  in your property.</p></p>
+
+<h3 class="function"><a name="states-1">states/1</a></h3>
+<div class="spec">
+<p><tt>states(M) -&gt; any()</tt></p>
+</div>
+
+<h3 class="function"><a name="visualize-1">visualize/1</a></h3>
+<div class="spec">
+<p><tt>visualize(M::<a href="#type-callback_module">callback_module()</a>) -&gt; ok</tt><br></p>
+</div><p>Visualizes the state graph of the callback module, and the
+  transition frequencies computed by <a href="#analyze-1"><code>analyze/1</code></a>. The graph is
+  saved in a file M.dot, which can be viewed using GraphViz. If
+  visualization tools are correctly installed, then a M.jpg file will
+  also be generated, and opened in a JPEG viewer.</p>
+
+<h3 class="function"><a name="visualize-2">visualize/2</a></h3>
+<div class="spec">
+<p><tt>visualize(M::<a href="#type-callback_module">callback_module()</a>, ImageType::atom()) -&gt; ok</tt><br></p>
+</div><p>Like <a href="#visualize-1"><code>visualize/1</code></a>, but takes the image type as a parameter. This permits
+  generation of other image types than JPEG.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, May 11 2015, 12:46:12.</i></p>
+</body>
+</html>
+
