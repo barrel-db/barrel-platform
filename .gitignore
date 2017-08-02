@@ -22,6 +22,7 @@ data
 barrel_platform_*_plt
 rebar3.crashdump
 *~
+eqc
 .eqc-info
 Compiling
 current_counterexample.eqc
