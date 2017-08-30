@@ -28,6 +28,8 @@ get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
     {ok, Info} ->
       Seq = maps:get(last_update_seq, Info),
       get_resource_since(Seq, Database, Req0, State);
+    {error, db_not_found} ->
+      barrel_http_reply:error(404, "database not found", Req, State);
     {error, _} ->
       barrel_http_reply:error(500, Req0, State)
   end;

@@ -26,8 +26,6 @@ new_snapshot(_) ->
   io:format("ERROR: invalid arguments.~n", []),
   error.
 
-
-
 restore_from_snapshot([DbName, Path]) ->
   case barrel_backup:restore_from_snapshot(list_to_binary(DbName), Path) of
     {ok, OldPath} ->

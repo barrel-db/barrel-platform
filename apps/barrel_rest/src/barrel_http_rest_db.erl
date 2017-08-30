@@ -50,17 +50,14 @@ route(Req, State) ->
   barrel_http_reply:error(405, Req, State).
 
 check_database_exist(Db, Req, State) ->
-  case barrel_http_lib:has_database(Db) of
-    true ->
-      get_resource(Req, State#state{database=Db});
-    false ->
-      barrel_http_reply:error(404, "database not found", Req, State)
-  end.
+  get_resource(Req, State#state{database=Db}).
 
 get_resource(Req, #state{database=Database}=State) ->
   case barrel:database_infos(Database) of
     {ok, Info} ->
       barrel_http_reply:doc(Info, Req, State);
+    {error, db_not_found} ->
+      barrel_http_reply:error(404, "database not found", Req, State);
     {error, Error} ->
       _ = lager:error("db_infos error=~p",[Error]),
       barrel_http_reply:error(500, Req, State)
