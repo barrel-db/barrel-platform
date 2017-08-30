@@ -31,7 +31,7 @@ new_snapshot(_) ->
 restore_from_snapshot([DbName, Path]) ->
   case barrel_backup:restore_from_snapshot(list_to_binary(DbName), Path) of
     {ok, OldPath} ->
-      io:format("SUCCESS: ~s", [binary_to_list(OldPath)]),
+      io:format("SUCCESS: ~s", [OldPath]),
       ok;
     {error, Reason} ->
       io:format("ERROR: ~p.~n", [Reason]),
