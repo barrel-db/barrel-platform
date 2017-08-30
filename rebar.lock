@@ -2,7 +2,7 @@
 [{<<"accept">>,{pkg,<<"accept">>,<<"0.3.3">>},1},
  {<<"barrel">>,
   {git,"https://gitlab.com/barrel-db/barrel.git",
-       {ref,"ca5748fafc31948115414229cb78032ba75ac8ca"}},
+       {ref,"174c99ae701e5cf21f017e4ea8ae5e24543dbdbc"}},
   0},
  {<<"certifi">>,{pkg,<<"certifi">>,<<"1.2.1">>},1},
  {<<"cowboy">>,
