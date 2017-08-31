@@ -23,15 +23,15 @@
 -include("barrel_http_rest_docs.hrl").
 
 
-get_resource(Database, Req0, #state{idmatch=undefined}=State) ->
+get_resource(Database, Req, #state{idmatch=undefined}=State) ->
   case barrel:database_infos(Database) of
     {ok, Info} ->
       Seq = maps:get(last_update_seq, Info),
-      get_resource_since(Seq, Database, Req0, State);
+      get_resource_since(Seq, Database, Req, State);
     {error, db_not_found} ->
       barrel_http_reply:error(404, "database not found", Req, State);
     {error, _} ->
-      barrel_http_reply:error(500, Req0, State)
+      barrel_http_reply:error(500, Req, State)
   end;
 
 get_resource(Database, Req0, #state{idmatch=DocIds}=State) when is_list(DocIds) ->
