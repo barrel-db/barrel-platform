@@ -52,7 +52,7 @@ start_link() ->
 init(_Args) ->
   %% init metrics
   %% TODO: make it optionnal
-  barrel_prometheus:init(),
+  barrel_prometheus:platform_init(),
 
   ListenPort = application:get_env(barrel_rest, listen_port, ?DEFAULT_PORT),
   NbAcceptors = application:get_env(barrel_rest, nb_acceptors, ?DEFAULT_NB_ACCEPTORS),
