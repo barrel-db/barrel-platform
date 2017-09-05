@@ -4,6 +4,10 @@
   {git,"https://gitlab.com/barrel-db/barrel.git",
        {ref,"d9713028f770fc6a8cfeba40886540b6511d7718"}},
   0},
+ {<<"barrel_prometheus">>,
+  {git,"https://gitlab.com/barrel-db/barrel_prometheus.git",
+       {ref,"39c6e52312719880e9fd49fdb1d7677fc4e7a8fe"}},
+  0},
  {<<"certifi">>,{pkg,<<"certifi">>,<<"1.2.1">>},1},
  {<<"cowboy">>,
   {git,"https://github.com/ninenines/cowboy.git",
@@ -32,10 +36,6 @@
   1},
  {<<"rocksdb">>,{pkg,<<"rocksdb">>,<<"0.11.0">>},1},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.1">>},1},
- {<<"triq">>,
-  {git,"git://github.com/triqng/triq.git",
-       {ref,"4fea56d30a24ce9ce0a93f3dd1301044d35513ed"}},
-  0},
  {<<"unicode_util_compat">>,{pkg,<<"unicode_util_compat">>,<<"0.2.0">>},2},
  {<<"uuid">>,{pkg,<<"uuid_erl">>,<<"1.7.1">>},0}]}.
 [
