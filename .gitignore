@@ -27,3 +27,4 @@ eqc
 Compiling
 current_counterexample.eqc
 .vagrant
+rebar.lock
