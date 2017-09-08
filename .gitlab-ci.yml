@@ -1,4 +1,4 @@
-image: erlang:19.3
+image: erlang:20.0
 
 before_script:
   - apt-get update -y
@@ -13,7 +13,7 @@ test:
     - _build/test/cover
 
   script:
-    - cd apps/barrel && make test
+    - make test
     - make test cover
 
   cache:
