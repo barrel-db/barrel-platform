@@ -33,7 +33,6 @@ distclean: clean ## Clean all build and releases artifacts
 
 cleantest:
 	@rm -rf _build/test
-	@rm -rf _build/dev+test
 
 
 erlclean:
@@ -49,7 +48,7 @@ install_erlang: build_erlang
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
 
 shell:
-	@$(REBAR) as dev shell --sname barrel@localhost
+	@$(REBAR) shell --sname barrel@localhost
 
 activate:
 	. $(KERL_DEFAULT_INSTALL_DIR)/activate
@@ -60,10 +59,10 @@ dialyzer:
 test: cleantest dialyzer eunit ct
 
 eunit:
-	@$(REBAR) as dev eunit
+	@$(REBAR) eunit
 
 ct:
-	@$(REBAR) as dev ct
+	@$(REBAR) ct
 
 eqc:
 		@$(REBAR) as eqc eqc
