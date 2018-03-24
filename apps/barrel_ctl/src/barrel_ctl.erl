@@ -10,7 +10,7 @@
 new_snapshot([DbName, Path]) ->
   case filelib:is_dir(Path) of
     true ->
-      io:format("ERROR: ~p alreaday exits.~n", [Path]),
+      io:format("ERROR: ~p already exists.~n", [Path]),
       error;
     false ->
       case barrel_backup:new_snapshot(list_to_binary(DbName), Path) of
